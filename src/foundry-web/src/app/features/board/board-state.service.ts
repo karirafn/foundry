@@ -15,7 +15,13 @@ import { DOCUMENT } from '@angular/common';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
-import { BoardCard, BoardCell, BoardColumn, CODE_STEP_LABELS, buildBoardColumns } from './board.model';
+import {
+  BoardCard,
+  BoardCell,
+  BoardColumn,
+  CODE_STEP_LABELS,
+  buildBoardColumns,
+} from './board.model';
 
 /** `confirm` shows a completed card's check mark; `collapse` folds it away before removal. */
 export type CardPhase = 'live' | 'confirm' | 'collapse';
@@ -73,7 +79,9 @@ function placementKeys(columns: readonly BoardColumn[]): Map<string, string> {
   const keys = new Map<string, string>();
   for (const column of columns) {
     for (const cell of CELLS) {
-      column[cell].forEach((card, index) => keys.set(card.issue.id, `${column.stage.id}|${cell}|${index}`));
+      column[cell].forEach((card, index) =>
+        keys.set(card.issue.id, `${column.stage.id}|${cell}|${index}`),
+      );
     }
   }
   return keys;
@@ -121,7 +129,9 @@ export class BoardStateService {
   /** Set by the page while the narrow sheet covers the board: a glide under it is never seen. */
   readonly sheetCoversBoard: WritableSignal<boolean> = signal(false);
 
-  readonly stale: Signal<boolean> = computed(() => this._signalR.connectionStatus() !== 'connected');
+  readonly stale: Signal<boolean> = computed(
+    () => this._signalR.connectionStatus() !== 'connected',
+  );
 
   /** Whether the latest batch glided, so a needs-you pulse waits for the glide to land. */
   readonly glided: Signal<boolean> = this._glided.asReadonly();
@@ -159,7 +169,9 @@ export class BoardStateService {
     });
   });
 
-  readonly cardCount: Signal<number> = computed(() => this._rendered().reduce((sum, c) => sum + c.count, 0));
+  readonly cardCount: Signal<number> = computed(() =>
+    this._rendered().reduce((sum, c) => sum + c.count, 0),
+  );
   readonly waitingCount: Signal<number> = computed(() =>
     this._rendered().reduce((sum, c) => sum + c.queue.length, 0),
   );
@@ -177,7 +189,8 @@ export class BoardStateService {
   private readonly _timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly _pendingCompletions: string[] = [];
   private readonly _warnedIds = new Set<string>();
-  private readonly _onIssueUpdated = (updated: IssueSummary): void => this._recordCompletion(updated);
+  private readonly _onIssueUpdated = (updated: IssueSummary): void =>
+    this._recordCompletion(updated);
 
   constructor() {
     effect(() => {
@@ -253,9 +266,11 @@ export class BoardStateService {
     const arrivals = nextCards.filter(
       (card) => card.cell === 'needs' && previousCards.get(card.issue.id)?.cell !== 'needs',
     );
-    const steps = nextCards.filter(
-      (card) => card.issue.codeStep !== null && previousCards.get(card.issue.id)?.issue.codeStep !== card.issue.codeStep,
-    );
+    const steps = nextCards.flatMap((card) => {
+      const step = card.issue.codeStep;
+      const changed = step !== null && previousCards.get(card.issue.id)?.issue.codeStep !== step;
+      return changed ? [`#${card.issue.issueNumber} ${CODE_STEP_LABELS[step]}`] : [];
+    });
 
     this._announce(arrivals, steps);
 
@@ -270,7 +285,12 @@ export class BoardStateService {
       this._markArrivals(arrivals);
     };
 
-    if (placementChanged && !snap && moved.length + left.length <= MAX_GLIDING_CARDS && this._canGlide()) {
+    if (
+      placementChanged &&
+      !snap &&
+      moved.length + left.length <= MAX_GLIDING_CARDS &&
+      this._canGlide()
+    ) {
       this._glided.set(true);
       await this._glide(update);
       return;
@@ -287,7 +307,9 @@ export class BoardStateService {
     for (const issue of batch.issues) {
       if (issue.stage === null && !this._warnedIds.has(issue.id)) {
         this._warnedIds.add(issue.id);
-        console.warn(`Board: left out issue #${issue.issueNumber}, whose stage this dashboard does not know`);
+        console.warn(
+          `Board: left out issue #${issue.issueNumber}, whose stage this dashboard does not know`,
+        );
       }
     }
     return buildBoardColumns(batch.issues, batch.queueIds);
@@ -305,7 +327,10 @@ export class BoardStateService {
 
   private _reducedMotion(): boolean {
     const view = this._document.defaultView;
-    return typeof view?.matchMedia === 'function' && view.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return (
+      typeof view?.matchMedia === 'function' &&
+      view.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
   }
 
   private _glide(update: () => void): Promise<void> {
@@ -330,10 +355,12 @@ export class BoardStateService {
     );
   }
 
-  private _announce(arrivals: readonly BoardCard[], steps: readonly BoardCard[]): void {
+  private _announce(arrivals: readonly BoardCard[], steps: readonly string[]): void {
     const parts = [
-      ...steps.map((card) => `#${card.issue.issueNumber} ${CODE_STEP_LABELS[card.issue.codeStep!]}`),
-      ...arrivals.map((card) => `#${card.issue.issueNumber} needs you: ${card.reason?.label ?? 'Needs you'}`),
+      ...steps,
+      ...arrivals.map(
+        (card) => `#${card.issue.issueNumber} needs you: ${card.reason?.label ?? 'Needs you'}`,
+      ),
       ...this._pendingCompletions.splice(0),
     ];
     if (parts.length > 0) {
@@ -410,4 +437,3 @@ export class BoardStateService {
     }
   }
 }
-

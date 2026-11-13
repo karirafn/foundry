@@ -16,24 +16,44 @@
 }
 
 @keyframes fd-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fd-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes fd-board-glide-lift {
-  0% { filter: none; }
-  50% { filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45)); }
-  100% { filter: none; }
+  0% {
+    filter: none;
+  }
+  50% {
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+  }
+  100% {
+    filter: none;
+  }
 }
 
 @keyframes fd-board-card-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 // Clicks pass through the animating snapshots to the live page underneath.
@@ -81,16 +101,29 @@
 
 // Board card loops and pulses, kept here to hold the card stylesheet inside its style budget.
 @keyframes fd-board-running-edge {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(250%); }
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(250%);
+  }
 }
 
 @keyframes fd-board-needs-pulse {
-  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fd-card-accent) 55%, transparent); }
-  to { box-shadow: 0 0 0 8px transparent; }
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fd-card-accent) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 8px transparent;
+  }
 }
 
 @keyframes fd-board-needs-glow {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 0.18; }
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.18;
+  }
 }

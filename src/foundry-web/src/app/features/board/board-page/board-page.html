@@ -9,7 +9,9 @@
   </header>
 
   @if (board.stale()) {
-    <p class="board-page__note board-page__note--stale">Connection lost — showing last known state</p>
+    <p class="board-page__note board-page__note--stale">
+      Connection lost — showing last known state
+    </p>
   }
 
   @if (issueService.queueOrderStale()) {
@@ -63,7 +65,12 @@
         }
       </div>
       @for (column of board.columns(); track column.stage.id; let i = $index) {
-        <fd-board-column [column]="column" [position]="i + 1" [loading]="loading()" (open)="openCard($event)" />
+        <fd-board-column
+          [column]="column"
+          [position]="i + 1"
+          [loading]="loading()"
+          (open)="openCard($event)"
+        />
       }
     </div>
   }

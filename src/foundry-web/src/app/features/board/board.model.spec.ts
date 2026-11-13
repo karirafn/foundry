@@ -29,7 +29,13 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
 }
 
 function queued(id: string, overrides: Partial<IssueSummary> = {}): IssueSummary {
-  return buildIssue({ id, state: 'queued', stage: 'implement', awaitsDispatch: true, ...overrides });
+  return buildIssue({
+    id,
+    state: 'queued',
+    stage: 'implement',
+    awaitsDispatch: true,
+    ...overrides,
+  });
 }
 
 describe('STAGES', () => {
@@ -92,7 +98,11 @@ describe('buildBoardColumns', () => {
 
   it('counts every card in a column', () => {
     // Arrange
-    const issues = [queued('q'), buildIssue({ id: 'f' }), buildIssue({ id: 'n', needsAction: true })];
+    const issues = [
+      queued('q'),
+      buildIssue({ id: 'f' }),
+      buildIssue({ id: 'n', needsAction: true }),
+    ];
 
     // Act
     const columns = buildBoardColumns(issues, ['q']);
@@ -133,12 +143,20 @@ describe('buildBoardColumns', () => {
     const columns = buildBoardColumns(issues, ['first']);
 
     // Assert
-    expect(columns[1].queue.map((c) => c.issue.id)).toEqual(['first', 'blocked', 'ineligible', 'unreachable']);
+    expect(columns[1].queue.map((c) => c.issue.id)).toEqual([
+      'first',
+      'blocked',
+      'ineligible',
+      'unreachable',
+    ]);
   });
 
   it('marks ineligible queued issues and gives them no position', () => {
     // Act
-    const [card] = buildBoardColumns([queued('x', { repositoryEligibilityStatus: 'ineligible' })], [])[1].queue;
+    const [card] = buildBoardColumns(
+      [queued('x', { repositoryEligibilityStatus: 'ineligible' })],
+      [],
+    )[1].queue;
 
     // Assert
     expect(card.ineligible).toBe(true);
@@ -162,7 +180,10 @@ describe('buildBoardColumns', () => {
 
   it('gives a card awaiting dispatch its stage as the next role', () => {
     // Act
-    const columns = buildBoardColumns([queued('t', { stage: 'triage', state: 'triage_queued' })], ['t']);
+    const columns = buildBoardColumns(
+      [queued('t', { stage: 'triage', state: 'triage_queued' })],
+      ['t'],
+    );
 
     // Assert
     expect(columns[0].queue[0].nextRole).toBe('triage');
@@ -180,21 +201,26 @@ describe('needsReason', () => {
 
   it('reads red checks for a review whose checks are still failing', () => {
     expect(
-      needsReason(buildIssue({ state: 'review', needsAction: true, checksOutcome: 'still_failing' })),
+      needsReason(
+        buildIssue({ state: 'review', needsAction: true, checksOutcome: 'still_failing' }),
+      ),
     ).toEqual({ label: 'Checks red', tone: 'error' });
   });
 
   it('reads a ready pull request for a GitHub review', () => {
-    expect(needsReason(buildIssue({ state: 'review', needsAction: true, providerType: 'github' }))).toEqual({
+    expect(
+      needsReason(buildIssue({ state: 'review', needsAction: true, providerType: 'github' })),
+    ).toEqual({
       label: 'PR ready',
       tone: 'ready',
     });
   });
 
   it('reads a ready merge request for a GitLab review', () => {
-    expect(needsReason(buildIssue({ state: 'review', needsAction: true, providerType: 'gitlab' }))?.label).toBe(
-      'MR ready',
-    );
+    expect(
+      needsReason(buildIssue({ state: 'review', needsAction: true, providerType: 'gitlab' }))
+        ?.label,
+    ).toBe('MR ready');
   });
 
   it.each([

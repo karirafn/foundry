@@ -4,7 +4,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
-import { ConnectionStatus, IssueSignalRService } from '../../../core/services/issue-signalr.service';
+import {
+  ConnectionStatus,
+  IssueSignalRService,
+} from '../../../core/services/issue-signalr.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { DispatchCapacityService } from '../../floor/dispatch-capacity.service';
@@ -47,11 +50,20 @@ async function setup(): Promise<Harness> {
       provideHttpClientTesting(),
       {
         provide: IssueSignalRService,
-        useValue: { on: () => {}, off: () => {}, onReconnected: () => {}, connectionStatus: status },
+        useValue: {
+          on: () => {},
+          off: () => {},
+          onReconnected: () => {},
+          connectionStatus: status,
+        },
       },
       {
         provide: WorkerSignalRService,
-        useValue: { activeAgentCount: signal(0), activityForIssue: () => null, agentActivityForIssue: () => null },
+        useValue: {
+          activeAgentCount: signal(0),
+          activityForIssue: () => null,
+          agentActivityForIssue: () => null,
+        },
       },
       {
         provide: DispatchCapacityService,
@@ -76,7 +88,12 @@ async function setup(): Promise<Harness> {
     await fixture.whenStable();
   };
   await render();
-  return { el: fixture.nativeElement as HTMLElement, httpMock: TestBed.inject(HttpTestingController), status, render };
+  return {
+    el: fixture.nativeElement as HTMLElement,
+    httpMock: TestBed.inject(HttpTestingController),
+    status,
+    render,
+  };
 }
 
 async function loaded(items: unknown[]): Promise<Harness> {
@@ -87,7 +104,9 @@ async function loaded(items: unknown[]): Promise<Harness> {
 }
 
 function cardIds(el: HTMLElement, selector: string): string[] {
-  return [...el.querySelectorAll(`${selector} fd-board-card`)].map((c) => c.getAttribute('data-issue-card')!);
+  return [...el.querySelectorAll(`${selector} fd-board-card`)].map((c) =>
+    c.getAttribute('data-issue-card')!,
+  );
 }
 
 describe('BoardPageComponent', () => {
@@ -136,7 +155,11 @@ describe('BoardPageComponent', () => {
     // Act
     const { el } = await loaded([
       item('blocked', 1, { state: 'blocked', awaitsDispatch: true }),
-      item('ineligible', 2, { state: 'queued', awaitsDispatch: true, repositoryEligibilityStatus: 'ineligible' }),
+      item('ineligible', 2, {
+        state: 'queued',
+        awaitsDispatch: true,
+        repositoryEligibilityStatus: 'ineligible',
+      }),
       item('second', 3, { state: 'queued', awaitsDispatch: true }),
       item('first', 4, { state: 'revision_queued', awaitsDispatch: true }),
     ]);
@@ -165,7 +188,9 @@ describe('BoardPageComponent', () => {
   it('mirrors the empty state into a status region', async () => {
     const { el } = await loaded([]);
     const regions = [...el.querySelectorAll('[role="status"]')].map((r) => r.textContent);
-    expect(regions).toContain('Nothing is in flight. Add the foundry label to an issue to start work.');
+    expect(regions).toContain(
+      'Nothing is in flight. Add the foundry label to an issue to start work.',
+    );
   });
 
   it('shows an alert with a retry when the issues fail to load', async () => {
@@ -221,7 +246,9 @@ describe('BoardPageComponent', () => {
     (h.el.querySelector('.board-summary__needs') as HTMLButtonElement).click();
 
     // Assert
-    expect(document.activeElement?.closest('[data-issue-card]')?.getAttribute('data-issue-card')).toBe('t');
+    expect(
+      document.activeElement?.closest('[data-issue-card]')?.getAttribute('data-issue-card'),
+    ).toBe('t');
     expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
   });
 
@@ -266,7 +293,9 @@ describe('BoardPageComponent', () => {
       h.httpMock.expectOne('/api/issues/f');
 
       // Act
-      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
       await h.render();
 
       // Assert
@@ -296,7 +325,9 @@ describe('BoardPageComponent', () => {
       h.httpMock.expectOne('/api/issues/a');
 
       // Act
-      h.el.querySelector('[data-issue-card="b"] button')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      h.el
+        .querySelector('[data-issue-card="b"] button')!
+        .dispatchEvent(new Event('pointerdown', { bubbles: true }));
       await openCard(h, 'b');
 
       // Assert

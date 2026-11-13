@@ -112,7 +112,10 @@ export function needsReason(issue: IssueSummary): NeedsReason | null {
     if (issue.checksOutcome === 'still_failing') {
       return { label: 'Checks red', tone: 'error' };
     }
-    return { label: `${providerTerminology(issue.providerType ?? 'github').prAbbrev} ready`, tone: 'ready' };
+    return {
+      label: `${providerTerminology(issue.providerType ?? 'github').prAbbrev} ready`,
+      tone: 'ready',
+    };
   }
   return STATE_REASONS[issue.state] ?? NEEDS_YOU;
 }
@@ -123,7 +126,10 @@ export function isRunning(issue: IssueSummary): boolean {
 }
 
 function isIneligible(issue: IssueSummary): boolean {
-  return issue.repositoryEligibilityStatus === 'ineligible' || issue.repositoryEligibilityStatus === 'unreachable';
+  return (
+    issue.repositoryEligibilityStatus === 'ineligible' ||
+    issue.repositoryEligibilityStatus === 'unreachable'
+  );
 }
 
 // Queue order (ADR 0067): dispatchable issues by position, then eligible ones that can't be queued

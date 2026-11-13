@@ -7,7 +7,12 @@ import { SideSheetComponent } from './side-sheet';
   template: `
     <button type="button" data-issue-card="a" class="card">Card</button>
     <button type="button" class="outside">Outside</button>
-    <fd-side-sheet [open]="open()" labelledBy="sheet-title" closeLabel="Close issue details" (dismissed)="dismissals = dismissals + 1">
+    <fd-side-sheet
+      [open]="open()"
+      labelledBy="sheet-title"
+      closeLabel="Close issue details"
+      (dismissed)="dismissals = dismissals + 1"
+    >
       <ng-template>
         <h2 id="sheet-title" tabindex="-1">#1 Title</h2>
         <button type="button" class="inside">Inside</button>
@@ -57,7 +62,9 @@ describe('SideSheetComponent', () => {
 
   it('names its close button', async () => {
     const { el } = await setup();
-    expect(el.querySelector('.side-sheet__close')?.getAttribute('aria-label')).toBe('Close issue details');
+    expect(el.querySelector('.side-sheet__close')?.getAttribute('aria-label')).toBe(
+      'Close issue details',
+    );
   });
 
   it('is dismissed by its close button', async () => {
@@ -76,7 +83,9 @@ describe('SideSheetComponent', () => {
     const { el, host } = await setup();
 
     // Act
-    el.querySelector('.inside')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    el.querySelector('.inside')!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
 
     // Assert
     expect(host.dismissals).toBe(1);
@@ -88,7 +97,9 @@ describe('SideSheetComponent', () => {
     el.querySelector('dialog')!.setAttribute('open', '');
 
     // Act
-    el.querySelector('.in-dialog')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    el.querySelector('.in-dialog')!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
 
     // Assert
     expect(host.dismissals).toBe(0);

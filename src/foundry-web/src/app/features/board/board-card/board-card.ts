@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, Signal, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  InputSignal,
+  OutputEmitterRef,
+  Signal,
+  computed,
+  input,
+  output,
+} from '@angular/core';
 import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 import { StepChipComponent } from '../../../shared/components/step-chip/step-chip';
 import { CODE_STEP_LABELS, codeStepTone } from '../board.model';
@@ -38,15 +47,23 @@ export class BoardCardComponent {
     return card.running ? 'running' : null;
   });
 
-  protected readonly step: Signal<{ label: string; tone: 'working' | 'warning' } | null> = computed(() => {
-    const codeStep = this.card().issue.codeStep;
-    return codeStep === null ? null : { label: CODE_STEP_LABELS[codeStep], tone: codeStepTone(codeStep) };
-  });
+  protected readonly step: Signal<{ label: string; tone: 'working' | 'warning' } | null> = computed(
+    () => {
+      const codeStep = this.card().issue.codeStep;
+      return codeStep === null
+        ? null
+        : { label: CODE_STEP_LABELS[codeStep], tone: codeStepTone(codeStep) };
+    },
+  );
 
   protected readonly hasMarkers: Signal<boolean> = computed(() => {
     const card = this.card();
     return (
-      card.nextRole !== null || this.step() !== null || card.reason !== null || card.ineligible || card.queueMarker !== null
+      card.nextRole !== null ||
+      this.step() !== null ||
+      card.reason !== null ||
+      card.ineligible ||
+      card.queueMarker !== null
     );
   });
 }

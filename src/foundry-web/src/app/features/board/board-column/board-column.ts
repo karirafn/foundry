@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, Signal, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  InputSignal,
+  OutputEmitterRef,
+  Signal,
+  computed,
+  input,
+  output,
+} from '@angular/core';
 import { BoardCardComponent } from '../board-card/board-card';
 import { BoardColumnView } from '../board-state.service';
 
@@ -31,7 +40,9 @@ export class BoardColumnComponent {
   readonly open: OutputEmitterRef<CardOpened> = output<CardOpened>();
 
   protected readonly skeletons = SKELETONS;
-  protected readonly headingId: Signal<string> = computed(() => `board-stage-${this.column().stage.id}`);
+  protected readonly headingId: Signal<string> = computed(
+    () => `board-stage-${this.column().stage.id}`,
+  );
   protected readonly label: Signal<string> = computed(() => this.column().stage.label);
   protected readonly countText: Signal<string> = computed(() => {
     const count = this.column().count;

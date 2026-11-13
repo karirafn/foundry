@@ -61,7 +61,9 @@ export class BoardPageComponent implements OnInit {
 
   private readonly _narrow: WritableSignal<boolean> = signal(false);
   /** On narrow screens the sheet covers the board, so the board leaves the tab order. */
-  protected readonly sheetCoversBoard: Signal<boolean> = computed(() => this._narrow() && this.selectedId() !== null);
+  protected readonly sheetCoversBoard: Signal<boolean> = computed(
+    () => this._narrow() && this.selectedId() !== null,
+  );
 
   protected readonly loading: Signal<boolean> = this.issueService.initialLoading;
 
@@ -72,7 +74,9 @@ export class BoardPageComponent implements OnInit {
       this.board.columns().every((c) => c.queue.length + c.flow.length + c.needs.length === 0),
   );
 
-  protected readonly emptyAnnouncement: Signal<string> = computed(() => (this.empty() ? EMPTY_MESSAGE : ''));
+  protected readonly emptyAnnouncement: Signal<string> = computed(() =>
+    this.empty() ? EMPTY_MESSAGE : '',
+  );
   protected readonly staleQueueAnnouncement: Signal<string> = computed(() =>
     this.issueService.queueOrderStale() ? STALE_QUEUE_MESSAGE : '',
   );

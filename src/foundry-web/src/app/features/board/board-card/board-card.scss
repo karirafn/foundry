@@ -6,12 +6,26 @@
 }
 
 // One tone sets the card's edge and the reason pill's border and text.
-[data-tone='running'] { --fd-tone: var(--fd-accent-working); }
-[data-tone='error'] { --fd-tone: var(--fd-state-failed); --fd-tone-text: var(--fd-text-error); }
-[data-tone='warning'] { --fd-tone: var(--fd-text-warning); --fd-tone-text: var(--fd-text-warning); }
+[data-tone='running'] {
+  --fd-tone: var(--fd-accent-working);
+}
+[data-tone='error'] {
+  --fd-tone: var(--fd-state-failed);
+  --fd-tone-text: var(--fd-text-error);
+}
+[data-tone='warning'] {
+  --fd-tone: var(--fd-text-warning);
+  --fd-tone-text: var(--fd-text-warning);
+}
 [data-tone='ready'],
-[data-tone='completed'] { --fd-tone: var(--fd-accent-ready); --fd-tone-text: var(--fd-text-success); }
-[data-tone='neutral'] { --fd-tone: var(--fd-border-control); --fd-tone-text: var(--fd-text-secondary); }
+[data-tone='completed'] {
+  --fd-tone: var(--fd-accent-ready);
+  --fd-tone-text: var(--fd-text-success);
+}
+[data-tone='neutral'] {
+  --fd-tone: var(--fd-border-control);
+  --fd-tone-text: var(--fd-text-secondary);
+}
 
 .board-card {
   --fd-card-base: var(--fd-bg-card);
@@ -27,10 +41,13 @@
   font: inherit;
   min-height: 44px;
   overflow: hidden;
-  padding: var(--fd-spacing-sm) var(--fd-spacing-md) var(--fd-spacing-sm) calc(var(--fd-spacing-md) + 3px);
+  padding: var(--fd-spacing-sm) var(--fd-spacing-md) var(--fd-spacing-sm)
+    calc(var(--fd-spacing-md) + 3px);
   position: relative;
   text-align: start;
-  transition: background 150ms ease, border-color 150ms ease;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
   width: 100%;
 
   &::before,

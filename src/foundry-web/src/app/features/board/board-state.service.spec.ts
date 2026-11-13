@@ -46,7 +46,9 @@ function setup(): Harness {
   const issueService = {
     issues,
     initialLoading,
-    eligibleQueuedIssues: computed(() => issues().filter((i) => i.awaitsDispatch && i.state !== 'blocked')),
+    eligibleQueuedIssues: computed(() =>
+      issues().filter((i) => i.awaitsDispatch && i.state !== 'blocked'),
+    ),
   };
   TestBed.configureTestingModule({
     providers: [
@@ -62,7 +64,13 @@ function setup(): Harness {
       },
     ],
   });
-  return { service: TestBed.inject(BoardStateService), issues, initialLoading, status, hubHandlers };
+  return {
+    service: TestBed.inject(BoardStateService),
+    issues,
+    initialLoading,
+    status,
+    hubHandlers,
+  };
 }
 
 function load(h: Harness, issues: IssueSummary[]): void {
@@ -90,7 +98,11 @@ function stubViewTransition(make: () => FakeTransition = resolvedTransition) {
 }
 
 function resolvedTransition(): FakeTransition {
-  return { ready: Promise.resolve(), updateCallbackDone: Promise.resolve(), finished: Promise.resolve() };
+  return {
+    ready: Promise.resolve(),
+    updateCallbackDone: Promise.resolve(),
+    finished: Promise.resolve(),
+  };
 }
 
 describe('BoardStateService', () => {
@@ -173,7 +185,10 @@ describe('BoardStateService', () => {
     const start = stubViewTransition();
 
     // Act
-    change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' }), buildIssue({ id: 'b' })]);
+    change(h, [
+      buildIssue({ id: 'a', needsAction: true, state: 'failed' }),
+      buildIssue({ id: 'b' }),
+    ]);
     change(h, [
       buildIssue({ id: 'a', needsAction: true, state: 'failed' }),
       buildIssue({ id: 'b', stage: 'awaiting_review', state: 'review', needsAction: true }),
@@ -206,7 +221,9 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a' })]);
 
     // Act
-    change(h, [buildIssue({ id: 'a', stage: 'awaiting_review', state: 'review', needsAction: true })]);
+    change(h, [
+      buildIssue({ id: 'a', stage: 'awaiting_review', state: 'review', needsAction: true }),
+    ]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
@@ -336,7 +353,9 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a', issueNumber: 60 })]);
 
     // Act
-    change(h, [buildIssue({ id: 'a', issueNumber: 60, state: 'rebase_pending', codeStep: 'rebasing' })]);
+    change(h, [
+      buildIssue({ id: 'a', issueNumber: 60, state: 'rebase_pending', codeStep: 'rebasing' }),
+    ]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
@@ -349,7 +368,9 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a', state: 'checks_pending', codeStep: 'checks' })]);
 
     // Act
-    change(h, [buildIssue({ id: 'a', state: 'checks_pending', codeStep: 'checks', title: 'Renamed' })]);
+    change(h, [
+      buildIssue({ id: 'a', state: 'checks_pending', codeStep: 'checks', title: 'Renamed' }),
+    ]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
@@ -358,16 +379,32 @@ describe('BoardStateService', () => {
 
   describe('completion', () => {
     function complete(h: Harness, issue: IssueSummary): void {
-      const completed = { ...issue, state: 'completed' as const, stage: 'done' as const, needsAction: false };
+      const completed = {
+        ...issue,
+        state: 'completed' as const,
+        stage: 'done' as const,
+        needsAction: false,
+      };
       h.hubHandlers.get('IssueUpdated')?.(completed);
-      change(h, h.issues().filter((i) => i.id !== issue.id));
+      change(
+        h,
+        h.issues().filter((i) => i.id !== issue.id),
+      );
     }
 
     it('keeps a confirming ghost of a completed card where it was', async () => {
       // Arrange
       const h = setup();
-      const review = buildIssue({ id: 'a', stage: 'awaiting_review', state: 'review', needsAction: true });
-      load(h, [buildIssue({ id: 'z', stage: 'awaiting_review', state: 'review', needsAction: true }), review]);
+      const review = buildIssue({
+        id: 'a',
+        stage: 'awaiting_review',
+        state: 'review',
+        needsAction: true,
+      });
+      load(h, [
+        buildIssue({ id: 'z', stage: 'awaiting_review', state: 'review', needsAction: true }),
+        review,
+      ]);
 
       // Act
       complete(h, review);
@@ -384,7 +421,12 @@ describe('BoardStateService', () => {
     it('collapses the ghost after 1200 ms', async () => {
       // Arrange
       const h = setup();
-      const review = buildIssue({ id: 'a', stage: 'awaiting_review', state: 'review', needsAction: true });
+      const review = buildIssue({
+        id: 'a',
+        stage: 'awaiting_review',
+        state: 'review',
+        needsAction: true,
+      });
       load(h, [review]);
       complete(h, review);
 
@@ -398,7 +440,12 @@ describe('BoardStateService', () => {
     it('removes the card once the collapse has run', async () => {
       // Arrange
       const h = setup();
-      const review = buildIssue({ id: 'a', stage: 'awaiting_review', state: 'review', needsAction: true });
+      const review = buildIssue({
+        id: 'a',
+        stage: 'awaiting_review',
+        state: 'review',
+        needsAction: true,
+      });
       load(h, [review]);
       complete(h, review);
 
@@ -412,7 +459,13 @@ describe('BoardStateService', () => {
     it('announces the completion', async () => {
       // Arrange
       const h = setup();
-      const review = buildIssue({ id: 'a', issueNumber: 139, stage: 'awaiting_review', state: 'review', needsAction: true });
+      const review = buildIssue({
+        id: 'a',
+        issueNumber: 139,
+        stage: 'awaiting_review',
+        state: 'review',
+        needsAction: true,
+      });
       load(h, [review]);
 
       // Act

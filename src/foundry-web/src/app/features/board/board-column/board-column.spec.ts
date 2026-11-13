@@ -21,10 +21,20 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
   };
 }
 
-function columnOf(issues: IssueSummary[], stageIndex = 1, queueIds: string[] = []): BoardColumnView {
+function columnOf(
+  issues: IssueSummary[],
+  stageIndex = 1,
+  queueIds: string[] = [],
+): BoardColumnView {
   const column = buildBoardColumns(issues, queueIds)[stageIndex];
-  const view = (cards: typeof column.queue) => cards.map((c) => ({ ...c, phase: 'live' as const, arrived: false, moved: false }));
-  return { ...column, queue: view(column.queue), flow: view(column.flow), needs: view(column.needs) };
+  const view = (cards: typeof column.queue) =>
+    cards.map((c) => ({ ...c, phase: 'live' as const, arrived: false, moved: false }));
+  return {
+    ...column,
+    queue: view(column.queue),
+    flow: view(column.flow),
+    needs: view(column.needs),
+  };
 }
 
 function render(column: BoardColumnView, loading = false) {
@@ -70,7 +80,12 @@ describe('BoardColumnComponent', () => {
 
   it('lists in-flow and needs-you cards in labelled lists', () => {
     // Act
-    const { el } = render(columnOf([buildIssue({ id: 'f' }), buildIssue({ id: 'n', needsAction: true, state: 'failed' })]));
+    const { el } = render(
+      columnOf([
+        buildIssue({ id: 'f' }),
+        buildIssue({ id: 'n', needsAction: true, state: 'failed' }),
+      ]),
+    );
 
     // Assert
     const labels = [...el.querySelectorAll('ul')].map((ul) => ul.getAttribute('aria-label'));
@@ -88,10 +103,17 @@ describe('BoardColumnComponent', () => {
 
   it('has no queue cell for a stage without a queue', () => {
     // Arrange
-    const issues = [buildIssue({ id: 'r', stage: 'awaiting_review', state: 'review', awaitsDispatch: true })];
+    const issues = [
+      buildIssue({ id: 'r', stage: 'awaiting_review', state: 'review', awaitsDispatch: true }),
+    ];
 
     // Act
-    const { el } = render(columnOf(issues, STAGES.findIndex((s) => s.id === 'awaiting_review')));
+    const { el } = render(
+      columnOf(
+        issues,
+        STAGES.findIndex((s) => s.id === 'awaiting_review'),
+      ),
+    );
 
     // Assert
     expect(el.querySelector('ol')).toBeNull();

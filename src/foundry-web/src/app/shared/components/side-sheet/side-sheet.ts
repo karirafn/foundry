@@ -40,7 +40,8 @@ export class SideSheetComponent {
   readonly dismissed: OutputEmitterRef<void> = output<void>();
 
   protected readonly content: Signal<TemplateRef<unknown>> = contentChild.required(TemplateRef);
-  private readonly _panel: Signal<ElementRef<HTMLElement> | undefined> = viewChild<ElementRef<HTMLElement>>('panel');
+  private readonly _panel: Signal<ElementRef<HTMLElement> | undefined> =
+    viewChild<ElementRef<HTMLElement>>('panel');
   private readonly _injector = inject(Injector);
   private readonly _host: HTMLElement = inject(ElementRef<HTMLElement>).nativeElement;
 

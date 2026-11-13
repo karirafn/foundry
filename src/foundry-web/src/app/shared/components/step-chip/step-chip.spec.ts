@@ -21,10 +21,14 @@ describe('StepChipComponent', () => {
   });
 
   it('uses the warning tone when asked', () => {
-    expect(render('Retrying publish…', 'warning').querySelector('.step-chip--warning')).not.toBeNull();
+    expect(
+      render('Retrying publish…', 'warning').querySelector('.step-chip--warning'),
+    ).not.toBeNull();
   });
 
   it('hides its decorative dot from assistive technology', () => {
-    expect(render('Checks running…').querySelector('.step-chip__dot')?.getAttribute('aria-hidden')).toBe('true');
+    expect(
+      render('Checks running…').querySelector('.step-chip__dot')?.getAttribute('aria-hidden'),
+    ).toBe('true');
   });
 });

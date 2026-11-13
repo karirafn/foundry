@@ -6,7 +6,9 @@
           <span class="board-summary__pip" [class.board-summary__pip--busy]="busy"></span>
         }
       </span>
-      <span class="board-summary__strong">{{ capacity.occupiedSlots }} of {{ capacity.maxConcurrent }} slots busy</span>
+      <span class="board-summary__strong"
+        >{{ capacity.occupiedSlots }} of {{ capacity.maxConcurrent }} slots busy</span
+      >
     </span>
   } @else if (capacityError()) {
     <span class="board-summary__muted">Capacity unavailable</span>
@@ -15,7 +17,9 @@
   <span class="board-summary__waiting">{{ waitingCount() }} waiting</span>
 
   @if (needsCount() > 0) {
-    <button type="button" class="board-summary__needs" (click)="needsYou.emit()">{{ needsText() }}</button>
+    <button type="button" class="board-summary__needs" (click)="needsYou.emit()">
+      {{ needsText() }}
+    </button>
   } @else {
     <span class="board-summary__nothing">Nothing needs you</span>
   }

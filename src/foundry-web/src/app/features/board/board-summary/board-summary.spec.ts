@@ -8,7 +8,14 @@ import { DispatchCapacity, DispatchCapacityService } from '../../floor/dispatch-
 import { IssueService } from '../../issues/issue.service';
 import { BoardSummaryComponent } from './board-summary';
 
-function setup(options: { capacity?: DispatchCapacity | null; capacityError?: string | null; needs?: number; waiting?: number } = {}) {
+function setup(
+  options: {
+    capacity?: DispatchCapacity | null;
+    capacityError?: string | null;
+    needs?: number;
+    waiting?: number;
+  } = {},
+) {
   const load = vi.fn();
   TestBed.configureTestingModule({
     imports: [BoardSummaryComponent],
@@ -16,7 +23,11 @@ function setup(options: { capacity?: DispatchCapacity | null; capacityError?: st
       provideRouter([]),
       {
         provide: DispatchCapacityService,
-        useValue: { capacity: signal(options.capacity ?? null), loadError: signal(options.capacityError ?? null), load },
+        useValue: {
+          capacity: signal(options.capacity ?? null),
+          loadError: signal(options.capacityError ?? null),
+          load,
+        },
       },
       { provide: WorkerSignalRService, useValue: { activeAgentCount: signal(0) } },
       { provide: IssueService, useValue: { liveIssueCount: signal(0) } },
@@ -45,7 +56,9 @@ describe('BoardSummaryComponent', () => {
 
   it('shows the busy slots of the maximum', () => {
     const { el } = setup({ capacity: { maxConcurrent: 4, occupiedSlots: 3, freeSlots: 1 } });
-    expect(el.querySelector('.board-summary__capacity')?.textContent?.trim()).toBe('3 of 4 slots busy');
+    expect(el.querySelector('.board-summary__capacity')?.textContent?.trim()).toBe(
+      '3 of 4 slots busy',
+    );
   });
 
   it('draws one pip per slot, busy ones filled', () => {
@@ -74,12 +87,12 @@ describe('BoardSummaryComponent', () => {
 
   it('offers a button to the cards that need you', () => {
     const { el } = setup({ needs: 2 });
-    expect(el.querySelector('button.board-summary__needs')?.textContent).toBe('2 need you');
+    expect(el.querySelector('button.board-summary__needs')?.textContent?.trim()).toBe('2 need you');
   });
 
   it('reads one card that needs you in the singular', () => {
     const { el } = setup({ needs: 1 });
-    expect(el.querySelector('button.board-summary__needs')?.textContent).toBe('1 needs you');
+    expect(el.querySelector('button.board-summary__needs')?.textContent?.trim()).toBe('1 needs you');
   });
 
   it('emits when the needs-you button is activated', () => {

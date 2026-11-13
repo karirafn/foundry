@@ -3,7 +3,10 @@ import { IssueSummary } from '../../issues/issue.model';
 import { BoardCardView } from '../board-state.service';
 import { BoardCardComponent } from './board-card';
 
-function buildCard(overrides: Partial<BoardCardView> = {}, issue: Partial<IssueSummary> = {}): BoardCardView {
+function buildCard(
+  overrides: Partial<BoardCardView> = {},
+  issue: Partial<IssueSummary> = {},
+): BoardCardView {
   return {
     issue: {
       id: 'issue-1',
@@ -64,7 +67,9 @@ describe('BoardCardComponent', () => {
 
   it('shows its queue position', () => {
     const { button } = render(buildCard({ cell: 'queue', position: 3 }));
-    expect(button.querySelector('.board-card__position')?.textContent).toBe(', queue position #3 next');
+    expect(button.querySelector('.board-card__position')?.textContent).toBe(
+      ', queue position #3 next',
+    );
   });
 
   it('highlights the next card in the queue', () => {
@@ -80,7 +85,9 @@ describe('BoardCardComponent', () => {
     const position = button.querySelector('.board-card__position')!;
     expect(position.textContent).toBe('—');
     expect(position.getAttribute('aria-hidden')).toBe('true');
-    expect(button.querySelector('.board-card__ineligible')?.textContent?.trim()).toBe('Repo ineligible');
+    expect(button.querySelector('.board-card__ineligible')?.textContent?.trim()).toBe(
+      'Repo ineligible',
+    );
   });
 
   it('shows the next role of a queued card', () => {
@@ -95,11 +102,15 @@ describe('BoardCardComponent', () => {
 
   it('reads a publish retry as a warning step', () => {
     const { button } = render(buildCard({}, { codeStep: 'publish_retrying' }));
-    expect(button.querySelector('.step-chip--warning')?.textContent?.trim()).toBe('Retrying publish…');
+    expect(button.querySelector('.step-chip--warning')?.textContent?.trim()).toBe(
+      'Retrying publish…',
+    );
   });
 
   it('shows the needs-you reason', () => {
-    const { button } = render(buildCard({ cell: 'needs', reason: { label: 'Checks red', tone: 'error' } }));
+    const { button } = render(
+      buildCard({ cell: 'needs', reason: { label: 'Checks red', tone: 'error' } }),
+    );
     expect(button.querySelector('.board-card__reason')?.textContent).toBe('Checks red');
   });
 
@@ -116,7 +127,9 @@ describe('BoardCardComponent', () => {
 
   it('shows Completed while confirming a completion', () => {
     const { button } = render(buildCard({ phase: 'confirm', running: true }));
-    expect(button.querySelector('.board-card__markers--done')?.textContent?.trim()).toBe(', Completed');
+    expect(button.querySelector('.board-card__markers--done')?.textContent?.trim()).toBe(
+      ', Completed',
+    );
     expect(button.getAttribute('data-tone')).toBe('completed');
     expect(button.classList).not.toContain('board-card--running');
   });

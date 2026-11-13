@@ -15,7 +15,12 @@
     animate.leave="side-sheet--leave"
     (keydown)="onKeydown($event)"
   >
-    <button type="button" class="side-sheet__close" [attr.aria-label]="closeLabel()" (click)="dismissed.emit()">
+    <button
+      type="button"
+      class="side-sheet__close"
+      [attr.aria-label]="closeLabel()"
+      (click)="dismissed.emit()"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="16"
