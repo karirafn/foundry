@@ -9,6 +9,8 @@ function setup(hub = new FakeHubTransport()) {
 }
 
 describe('IssueSignalRService', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('should start the issues hub and report connected', async () => {
     // Arrange
     const { svc, hub } = setup();
@@ -21,37 +23,36 @@ describe('IssueSignalRService', () => {
     expect(svc.connectionStatus()).toBe('connected');
   });
 
-  it('should stay disconnected when the first start fails', async () => {
+  it('should report reconnecting and retry when the first start fails', async () => {
     // Arrange
     const hub = new FakeHubTransport();
     hub.startResult = () => Promise.reject(new Error('refused'));
+    vi.useFakeTimers();
 
     // Act
     const { svc } = setup(hub);
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1_000);
 
     // Assert
-    expect(svc.connectionStatus()).toBe('disconnected');
-    expect(hub.startCount).toBe(1);
+    expect(svc.connectionStatus()).toBe('reconnecting');
+    expect(hub.startCount).toBe(2);
   });
 
-  it('should track reconnecting, reconnected and close', async () => {
+  it('should report reconnecting after a drop and connected once back', async () => {
     // Arrange
+    vi.useFakeTimers();
     const { svc, hub } = setup();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     const seen: string[] = [];
 
     // Act
-    hub.reconnecting();
-    seen.push(svc.connectionStatus());
-    hub.reconnected();
-    seen.push(svc.connectionStatus());
     hub.close();
+    seen.push(svc.connectionStatus());
+    await vi.advanceTimersByTimeAsync(0);
     seen.push(svc.connectionStatus());
 
     // Assert
-    expect(seen).toEqual(['reconnecting', 'connected', 'disconnected']);
+    expect(seen).toEqual(['reconnecting', 'connected']);
   });
 
   it('should deliver hub messages to handlers registered with on until removed with off', () => {
@@ -70,15 +71,17 @@ describe('IssueSignalRService', () => {
     expect(received).toEqual(['first']);
   });
 
-  it('should run onReconnected callbacks once the status is connected again', () => {
+  it('should run onReconnected callbacks once the status is connected again', async () => {
     // Arrange
+    vi.useFakeTimers();
     const { svc, hub } = setup();
+    await vi.advanceTimersByTimeAsync(0);
     const seen: string[] = [];
     svc.onReconnected(() => seen.push(svc.connectionStatus()));
-    hub.reconnecting();
+    hub.close();
 
     // Act
-    hub.reconnected();
+    await vi.advanceTimersByTimeAsync(0);
 
     // Assert
     expect(seen).toEqual(['connected']);

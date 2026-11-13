@@ -14,25 +14,17 @@ public sealed class WorkerHub(
     internal const string AgentActivityMethod = "AgentActivity";
     internal const string AgentActivityEndedMethod = "AgentActivityEnded";
 
-    private const string WorkerActivityMethod = "WorkerActivity";
-
-    public override async Task OnConnectedAsync()
+    /// <summary>
+    /// The current activity of every active run (ADR 0063). A client invokes it after each connect and
+    /// replaces its state with the result, so a run that ended while it was disconnected is dropped
+    /// at once, and the client knows when it is up to date.
+    /// </summary>
+    public async Task<CurrentWorkerActivity> GetCurrentActivity()
     {
-        IReadOnlyCollection<WorkerActivity> activities =
+        IReadOnlyCollection<WorkerActivity> workerActivities =
             await workerRunQueries.GetActiveRunActivityAsync(Context.ConnectionAborted);
 
-        foreach (WorkerActivity activity in activities)
-        {
-            await Clients.Caller.SendAsync(WorkerActivityMethod, activity, Context.ConnectionAborted);
-        }
-
-        // Replay the in-memory Agent Activity projection for every active run (ADR 0063).
-        foreach (AgentActivity agentActivity in agentActivityQueries.GetCurrent())
-        {
-            await Clients.Caller.SendAsync(AgentActivityMethod, agentActivity, Context.ConnectionAborted);
-        }
-
-        await base.OnConnectedAsync();
+        return new CurrentWorkerActivity(workerActivities, agentActivityQueries.GetCurrent());
     }
 
     public IAsyncEnumerable<string> StreamLog(Guid workerRunId, CancellationToken cancellationToken) =>

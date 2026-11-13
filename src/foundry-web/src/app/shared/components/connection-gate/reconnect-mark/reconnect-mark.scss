@@ -1,0 +1,61 @@
+:host {
+  display: block;
+}
+
+.reconnect-mark {
+  display: block;
+  height: auto;
+  overflow: visible;
+  width: 7.5rem;
+}
+
+.reconnect-mark__arc {
+  animation: fd-reconnect-sweep var(--fd-motion-reconnect) ease-in-out infinite;
+  fill: none;
+  stroke: var(--fd-border-default);
+  stroke-linecap: round;
+  stroke-width: 8;
+
+  &--lit {
+    animation: none;
+    stroke: var(--fd-text-link);
+  }
+}
+
+.reconnect-mark__base {
+  fill: var(--fd-text-link);
+}
+
+.reconnect-mark__ring {
+  animation: fd-reconnect-ring 1.4s ease-out infinite;
+  fill: none;
+  stroke: var(--fd-text-link);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reconnect-mark__arc {
+    animation: none;
+  }
+
+  .reconnect-mark__ring {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .reconnect-mark__arc {
+    animation: none;
+    stroke: GrayText;
+
+    &--lit {
+      stroke: CanvasText;
+    }
+  }
+
+  .reconnect-mark__base {
+    fill: CanvasText;
+  }
+}

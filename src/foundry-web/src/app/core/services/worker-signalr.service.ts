@@ -1,22 +1,34 @@
-import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, Observer, Subject } from 'rxjs';
 import { WorkerActivity } from '../models/worker-activity.model';
 import { AgentActivity, AgentActivityEnded, InFlightTool } from '../models/agent-activity.model';
+import { LoadOutcome } from '../models/load-outcome';
 import { ConnectionStatus, HubConnections, SharedHubConnection } from './hub-connection';
 
 /** How many recent tool calls the Floor's tool ticker keeps per run. */
 export const RECENT_TOOL_LIMIT = 5;
 
-/**
- * After a reconnect the hub replays the payload of every active run. Entries not re-sent within
- * this window belong to runs that ended while the connection was down (their AgentActivityEnded
- * was missed) and are pruned.
- */
-export const RECONNECT_REPLAY_GRACE_MS = 10_000;
+/** The workers hub method that returns the current activity of every active run. */
+export const GET_CURRENT_ACTIVITY = 'GetCurrentActivity';
+
+/** What `GetCurrentActivity` returns. */
+export interface CurrentWorkerActivity {
+  readonly workerActivities: readonly WorkerActivity[];
+  readonly agentActivities: readonly AgentActivity[];
+}
+
+/** Live messages that arrive while the current activity is loading; they may be newer than it. */
+interface ArrivedDuringLoad {
+  readonly agentActivities: Map<string, AgentActivity>;
+  readonly endedRunIds: Set<string>;
+}
+
+function eventTime(activity: AgentActivity): number {
+  return activity.lastEventAt === null ? 0 : Date.parse(activity.lastEventAt);
+}
 
 @Injectable({ providedIn: 'root' })
 export class WorkerSignalRService {
-  private readonly _destroyRef = inject(DestroyRef);
   private readonly _hub: SharedHubConnection = inject(HubConnections).get('workers');
 
   private readonly _workerActivitySignal: WritableSignal<WorkerActivity | null> = signal(null);
@@ -39,9 +51,8 @@ export class WorkerSignalRService {
 
   readonly connectionStatus: Signal<ConnectionStatus> = this._hub.status;
 
-  // Issue ids held when the connection dropped and not yet re-sent by the reconnect replay.
-  private _unconfirmedIssueIds: Set<string> | null = null;
-  private _replayGraceHandle: ReturnType<typeof setTimeout> | null = null;
+  private _activityLoad: Promise<LoadOutcome> | null = null;
+  private _arrivedDuringLoad: ArrivedDuringLoad | null = null;
 
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
@@ -60,7 +71,7 @@ export class WorkerSignalRService {
     });
 
     this._hub.on<AgentActivity>('AgentActivity', (activity) => {
-      this._unconfirmedIssueIds?.delete(activity.issueId);
+      this._arrivedDuringLoad?.agentActivities.set(activity.issueId, activity);
       const current = this._agentActivityByIssueIdSignal();
       const replacedRunId = current.get(activity.issueId)?.workerRunId;
       const next = new Map(current);
@@ -70,6 +81,7 @@ export class WorkerSignalRService {
     });
 
     this._hub.on<AgentActivityEnded>('AgentActivityEnded', (ended) => {
+      this._arrivedDuringLoad?.endedRunIds.add(ended.workerRunId);
       const current = this._agentActivityByIssueIdSignal();
       // A newer run for the same issue may already have replaced the entry.
       if (current.get(ended.issueId)?.workerRunId !== ended.workerRunId) {
@@ -81,29 +93,27 @@ export class WorkerSignalRService {
       this._forgetTools(ended.workerRunId);
     });
 
-    this._hub.onReconnecting(() => {
-      // A prune scheduled by an earlier reconnect must not fire while the connection is down again.
-      if (this._replayGraceHandle !== null) {
-        clearTimeout(this._replayGraceHandle);
-        this._replayGraceHandle = null;
-      }
-      this._unconfirmedIssueIds ??= new Set(this._agentActivityByIssueIdSignal().keys());
-    });
-
-    this._hub.onReconnected(() => {
-      this._scheduleUnconfirmedPrune();
+    // Events may have been missed while disconnected, so every connect replaces the state.
+    this._hub.onConnected(() => {
+      void this.loadActivity();
       this._reconnected.next();
     });
 
-    this._destroyRef.onDestroy(() => {
-      if (this._replayGraceHandle !== null) {
-        clearTimeout(this._replayGraceHandle);
-      }
-    });
+    this._hub.start().then(
+      () => void this.loadActivity(),
+      () => console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers'),
+    );
+  }
 
-    this._hub.start().catch(() => {
-      console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers');
+  /**
+   * Replaces the held activity with the hub's current activity, so a run that ended while disconnected
+   * is dropped. A load already in flight is shared rather than repeated.
+   */
+  loadActivity(): Promise<LoadOutcome> {
+    this._activityLoad ??= this._fetchActivity().finally(() => {
+      this._activityLoad = null;
     });
+    return this._activityLoad;
   }
 
   /** Recent tool calls for the run, newest last, accumulated from successive in-flight tools. */
@@ -154,28 +164,46 @@ export class WorkerSignalRService {
     this._recentToolsByRunIdSignal.set(next);
   }
 
-  private _scheduleUnconfirmedPrune(): void {
-    if (this._replayGraceHandle !== null) {
-      clearTimeout(this._replayGraceHandle);
+  private async _fetchActivity(): Promise<LoadOutcome> {
+    const arrived: ArrivedDuringLoad = { agentActivities: new Map(), endedRunIds: new Set() };
+    this._arrivedDuringLoad = arrived;
+    try {
+      const current = await this._hub.invoke<CurrentWorkerActivity>(GET_CURRENT_ACTIVITY);
+      this._applyCurrent(current, arrived);
+      return 'loaded';
+    } catch (error: unknown) {
+      console.warn('[WorkerSignalRService] Failed to load the current activity', error);
+      return 'failed';
+    } finally {
+      this._arrivedDuringLoad = null;
     }
-    this._replayGraceHandle = setTimeout(() => {
-      this._replayGraceHandle = null;
-      const unconfirmed = this._unconfirmedIssueIds;
-      this._unconfirmedIssueIds = null;
-      if (unconfirmed === null || unconfirmed.size === 0) {
-        return;
+  }
+
+  private _applyCurrent(current: CurrentWorkerActivity, arrived: ArrivedDuringLoad): void {
+    this._activityByRunIdSignal.set(new Map(current.workerActivities.map((a) => [a.workerRunId, a.lastActivityAt])));
+    this._activityByIssueIdSignal.set(new Map(current.workerActivities.map((a) => [a.issueId, a.lastActivityAt])));
+
+    const next = new Map(current.agentActivities.map((a) => [a.issueId, a]));
+    // A message that arrived during the load may be newer than the snapshot.
+    for (const [issueId, activity] of arrived.agentActivities) {
+      const loaded = next.get(issueId);
+      if (loaded === undefined || loaded.workerRunId !== activity.workerRunId || eventTime(activity) >= eventTime(loaded)) {
+        next.set(issueId, activity);
       }
-      const current = this._agentActivityByIssueIdSignal();
-      const next = new Map(current);
-      for (const issueId of unconfirmed) {
-        const stale = next.get(issueId);
-        if (stale !== undefined) {
-          next.delete(issueId);
-          this._forgetTools(stale.workerRunId);
-        }
+    }
+    for (const [issueId, activity] of next) {
+      if (arrived.endedRunIds.has(activity.workerRunId)) {
+        next.delete(issueId);
       }
-      this._agentActivityByIssueIdSignal.set(next);
-    }, RECONNECT_REPLAY_GRACE_MS);
+    }
+    this._agentActivityByIssueIdSignal.set(next);
+
+    const liveRunIds = new Set([...next.values()].map((a) => a.workerRunId));
+    for (const workerRunId of this._recentToolsByRunIdSignal().keys()) {
+      if (!liveRunIds.has(workerRunId)) {
+        this._forgetTools(workerRunId);
+      }
+    }
   }
 
   streamLog(workerRunId: string): Observable<string> {

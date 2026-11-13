@@ -19,6 +19,9 @@
   --fd-border-default: #30363d;
   --fd-border-control: #6e7681; /* deliberate separate literal — control boundary ≠ text colour; currently equals --fd-text-tertiary but must be updated independently */
   --fd-border-muted: #21262d;
+  /* Top-bar placeholders while the live pages wait for the connection (#894) */
+  --fd-text-placeholder: #8b949e; /* 5.62:1 on --fd-bg-card */
+  --fd-border-placeholder: #484f58;
 
   /* State badge colors (WCAG AA compliant, white text) */
   --fd-state-detected: #656d76;

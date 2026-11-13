@@ -80,6 +80,21 @@ describe('AccountService', () => {
     expect(service.conflicts()).toEqual([]);
   });
 
+  it('should report the accounts load as loaded, or failed when the request fails', async () => {
+    // Arrange
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    const loaded = service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    const failed = service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush('boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(await loaded).toBe('loaded');
+    expect(await failed).toBe('failed');
+  });
+
   // Cycle 2: loadAccounts populates accounts signal
   it('should populate accounts after loadAccounts succeeds', () => {
     // Arrange / Act

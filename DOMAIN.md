@@ -1092,8 +1092,9 @@ This loop is reached only for a run whose container the tick has already confirm
 
 ## SignalR Worker Activity Replay
 
-`WorkerHub.OnConnectedAsync` replays a `WorkerActivity` payload for every active run to the connecting client, so a dashboard reload or reconnect renders the current last-activity time without waiting for the next observation tick.
-Live pushes and connect-replay use the same `WorkerActivity` client method — the frontend makes no distinction between them.
+After each connect the dashboard invokes `WorkerHub.GetCurrentActivity()`, which returns the `WorkerActivity` and [Agent Activity](#agent-activity) payloads of every active run, and replaces what it holds with the result.
+A dashboard reload or reconnect therefore renders the current last-activity time without waiting for the next observation tick, a run that ended while the client was disconnected is dropped at once, and the client knows when it is up to date.
+The hub pushes nothing on connect; live updates arrive through the same `WorkerActivity` and `AgentActivity` client methods as before.
 
 **Dashboard display.**
 Log silence is a frontend-only signal derived from the [Agent Activity](#agent-activity) `LastEventAt` — the time of the last stream-json event the agent emitted — shown only past a 5-minute threshold. While a run publishes, the card shows `Publishing commits` (or `Publish failed, retrying`) instead of the activity line.
@@ -1113,7 +1114,7 @@ A repeated `system/init` or the `claude -c` transient retry continues the projec
 When the run leaves `ActiveRun` its follower is cancelled, its projection disposed, and an `AgentActivityEnded` payload is broadcast; a follower whose log stream faults is re-attached with a fresh projection on the next reconcile.
 
 **Broadcast and replay.**
-Changed snapshots are broadcast as an `AgentActivity` payload via the `WorkerHub` `AgentActivity` client method, and `WorkerHub.OnConnectedAsync` replays the current payload for every active run after the `WorkerActivity` replay ([ADR 0063](docs/adr/0063-replay-live-worker-state-over-signalr-instead-of-the-issue-read-model.md)).
+Changed snapshots are broadcast as an `AgentActivity` payload via the `WorkerHub` `AgentActivity` client method, and `WorkerHub.GetCurrentActivity()` returns the current payload for every active run to a client that has just connected ([ADR 0063](docs/adr/0063-replay-live-worker-state-over-signalr-instead-of-the-issue-read-model.md), [replay](#signalr-worker-activity-replay)).
 The projection is presentation-only: it is never persisted, and text fields are redacted summaries — never tool result bodies.
 
 **Dashboard display.**
@@ -1125,10 +1126,10 @@ The worker system prompt carries one workflow-neutral line asking the agent to t
 The dashboard's factory-floor view (`/floor`): one lane per active run showing its live [Agent Activity](#agent-activity), followed by the dispatch slots that hold no lane and the next queued issues.
 
 **Lanes.**
-Lanes come from the `WorkerHub` Agent Activity payloads, so a page reload repopulates them from the connect replay.
+Lanes come from the `WorkerHub` Agent Activity payloads, so a page reload repopulates them from `GetCurrentActivity`.
 Each lane shows the issue number, title and repository; the task list with the current task highlighted and "N of M done"; active subagents (parallel and nested listed separately, collapsed beyond a visible limit) and the active skill; a tool ticker of the most recent in-flight tools (accumulated client-side from successive payloads, so it restarts on reload); token totals; and the time since `LastEventAt`, styled as silent past the same 5-minute threshold as the issue card.
 A lane leaves the Floor when `AgentActivityEnded` arrives or its issue leaves the working states; the run's cost then appears on the issue via `RunResultSummary`.
-While the worker hub is disconnected lanes show stale styling; after a reconnect, runs the replay does not re-send within a short grace window are pruned, covering an `AgentActivityEnded` missed while disconnected.
+The Floor never shows lanes that may be out of date: it sits behind the [Connection Gate](#connection-gate).
 
 **Slots and queue.**
 Free and starting slots come from the server's [Worker Slot Occupancy](#worker-slot-occupancy) via `GET /api/workers/capacity`: occupied slots without a lane (reservations, starting runs) render as *Starting*, the remaining `FreeSlots` as empty lanes.
@@ -1137,6 +1138,14 @@ The queue lists the next eligible queued issues in [Dispatch Order](#dispatch-or
 **Active-agents chip.**
 The top bar shows `● N agents working` (the count of active runs reporting Agent Activity), or an idle state at zero, linking to the Floor.
 Count changes are announced through the shell's single polite announcer; per-lane step changes are announced politely by the lane, and token or clock ticks are never announced.
+
+## Connection Gate
+
+The dashboard's guard against showing live data that may be out of date. The Board and the Floor are gated; Settings and History are not.
+When any of the three SignalR hubs (issues, system, workers) has been down for 2 s, the gated page is destroyed and a reconnect screen takes its place; a drop that recovers within those 2 s leaves the page as it is.
+Each hub retries on its own, with no limit: at once, then after 1, 2, 5 and 10 s, then every 30 s ± 20 %; **Try now** cuts the wait short.
+Once every hub is back the page refetches what it shows (Board: issues, capacity, dispatch settings and repositories; Floor: `GetCurrentActivity`, issues and capacity) and renders afresh only when that has loaded; a failed refetch is retried on the same schedule.
+While the gate is up the top bar's agent count and usage show placeholders instead of their last-known values.
 
 ## Worker Outcome Detection
 

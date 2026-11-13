@@ -1,12 +1,24 @@
-<a
-  class="agents-chip"
-  [class.agents-chip--idle]="idle()"
-  routerLink="/floor"
-  routerLinkActive="agents-chip--active"
-  [title]="text()"
-  [attr.aria-label]="ariaLabel()"
->
-  <span class="agents-chip__dot" aria-hidden="true"></span>
-  <span class="agents-chip__count" aria-hidden="true">{{ count() }}</span>
-  <span class="agents-chip__text" aria-hidden="true">{{ text() }}</span>
-</a>
+@if (unavailable()) {
+  <span
+    class="agents-chip agents-chip--placeholder"
+    role="img"
+    aria-label="Agent count unavailable while reconnecting"
+  >
+    <span class="agents-chip__dot" aria-hidden="true"></span>
+    <span class="agents-chip__count" aria-hidden="true">—</span>
+    <span class="agents-chip__text" aria-hidden="true">— agents working</span>
+  </span>
+} @else {
+  <a
+    class="agents-chip"
+    [class.agents-chip--idle]="idle()"
+    routerLink="/floor"
+    routerLinkActive="agents-chip--active"
+    [title]="text()"
+    [attr.aria-label]="ariaLabel()"
+  >
+    <span class="agents-chip__dot" aria-hidden="true"></span>
+    <span class="agents-chip__count" aria-hidden="true">{{ count() }}</span>
+    <span class="agents-chip__text" aria-hidden="true">{{ text() }}</span>
+  </a>
+}

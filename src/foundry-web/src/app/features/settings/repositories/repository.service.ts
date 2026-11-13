@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
+import { LoadOutcome } from '../../../core/models/load-outcome';
 import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
@@ -65,31 +66,35 @@ export class RepositoryService {
     });
   }
 
-  loadAllRepositories(accountIds: string[]): void {
+  loadAllRepositories(accountIds: string[]): Promise<LoadOutcome> {
     this._loadErrorSignal.set(null);
     this._loadingSignal.set(true);
 
     if (accountIds.length === 0) {
       this._repositoriesSignal.set([]);
       this._loadingSignal.set(false);
-      return;
+      return Promise.resolve('loaded');
     }
 
     const requests = accountIds.map(accountId =>
       this._http.get<RepositorySummary[]>(this._repositoriesUrl(accountId))
     );
 
-    forkJoin(requests).subscribe({
-      next: (results) => {
-        const sorted = results.flat().sort((a, b) => a.position - b.position);
-        this._repositoriesSignal.set(sorted);
-        this._loadingSignal.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._loadErrorSignal.set(extractErrorMessage(err) ?? err.message);
-        this._loadingSignal.set(false);
-      },
+    return new Promise<LoadOutcome>((resolve) => {
+      forkJoin(requests).subscribe({
+        next: (results) => {
+          const sorted = results.flat().sort((a, b) => a.position - b.position);
+          this._repositoriesSignal.set(sorted);
+          this._loadingSignal.set(false);
+          resolve('loaded');
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._loadErrorSignal.set(extractErrorMessage(err) ?? err.message);
+          this._loadingSignal.set(false);
+          resolve('failed');
+        },
+      });
     });
   }
 

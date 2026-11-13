@@ -182,6 +182,45 @@ describe('IssueSelection', () => {
     expect(selection.summary()?.id).toBe('a');
   });
 
+  it('keeps the pane open on a recheck while its issue is still on the board', async () => {
+    // Arrange
+    const { el, render, selection, router } = await setup();
+    selection.open('a', el.querySelector('.card-a') as HTMLElement);
+    await render();
+
+    // Act
+    const result = selection.recheck();
+    await render();
+
+    // Assert
+    expect(result).toEqual({ closed: false });
+    expect(selection.openId()).toBe('a');
+    expect(router.url).toBe('/?issue=a');
+  });
+
+  it('closes the pane on a recheck once its issue left the board, replacing the URL', async () => {
+    // Arrange
+    const { el, stub, render, selection, router } = await setup();
+    selection.open('a', el.querySelector('.card-a') as HTMLElement);
+    await render();
+    stub.issues.set([summary('b')]);
+    const location = TestBed.inject(Location);
+    const back = vi.spyOn(location, 'back');
+    const replace = vi.spyOn(location, 'replaceState');
+
+    // Act
+    const result = selection.recheck();
+    await render();
+
+    // Assert
+    expect(result).toEqual({ closed: true, issueNumber: 1 });
+    expect(selection.openId()).toBeNull();
+    expect(stub.selectedIssueId()).toBeNull();
+    expect(router.url).toBe('/');
+    expect(back).not.toHaveBeenCalled();
+    expect(replace).toHaveBeenCalled();
+  });
+
   it('returns focus to the card button when the invoker is gone', async () => {
     // Arrange
     const { el, render, selection } = await setup();

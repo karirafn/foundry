@@ -65,14 +65,6 @@
   width: 6px;
 }
 
-// A stale board pauses every loop; the chip sits inside .board--stale.
-:host-context(.board--stale) {
-  .step-chip::after,
-  .step-chip__dot {
-    animation-play-state: paused;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .step-chip::after {
     animation: none;

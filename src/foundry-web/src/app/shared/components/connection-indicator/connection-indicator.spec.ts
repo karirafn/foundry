@@ -24,7 +24,7 @@ describe('ConnectionIndicatorComponent', () => {
 
   it('should have role="status" without redundant aria-live', () => {
     // Arrange / Act
-    const fixture = createComponent('connected');
+    const fixture = createComponent('reconnecting');
     const el = fixture.nativeElement as HTMLElement;
     const host = el.querySelector('.connection-indicator') as HTMLElement;
 
@@ -33,16 +33,17 @@ describe('ConnectionIndicatorComponent', () => {
     expect(host?.getAttribute('aria-live')).toBeNull();
   });
 
-  // Cycle 2: label text for each connection status
-  it('should display "Connected" label when status is connected', () => {
+  it('should render nothing while connected', () => {
     // Arrange / Act
     const fixture = createComponent('connected');
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(el.querySelector('.connection-indicator__label')?.textContent?.trim()).toBe('Connected');
+    expect(el.querySelector('.connection-indicator')).toBeNull();
+    expect(el.textContent?.trim()).toBe('');
   });
 
+  // Cycle 2: label text for each connection status
   it('should display "Reconnecting..." label when status is reconnecting', () => {
     // Arrange / Act
     const fixture = createComponent('reconnecting');
@@ -62,15 +63,6 @@ describe('ConnectionIndicatorComponent', () => {
   });
 
   // Cycle 3: CSS class on dot reflects current status
-  it('should apply dot--connected class when status is connected', () => {
-    // Arrange / Act
-    const fixture = createComponent('connected');
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    expect(el.querySelector('.connection-indicator__dot')?.classList.contains('dot--connected')).toBe(true);
-  });
-
   it('should apply dot--reconnecting class when status is reconnecting', () => {
     // Arrange / Act
     const fixture = createComponent('reconnecting');
@@ -90,16 +82,6 @@ describe('ConnectionIndicatorComponent', () => {
   });
 
   // Cycle 4: aria-label is descriptive
-  it('should set descriptive aria-label for connected status', () => {
-    // Arrange / Act
-    const fixture = createComponent('connected');
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const host = el.querySelector('.connection-indicator') as HTMLElement;
-    expect(host?.getAttribute('aria-label')).toBe('Connection status: Connected');
-  });
-
   it('should set descriptive aria-label for reconnecting status', () => {
     // Arrange / Act
     const fixture = createComponent('reconnecting');

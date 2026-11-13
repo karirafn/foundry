@@ -33,6 +33,17 @@
   &--active {
     border-color: var(--fd-text-link);
   }
+
+  &--placeholder {
+    border-color: var(--fd-border-placeholder);
+    border-style: dashed;
+    color: var(--fd-text-placeholder);
+
+    &:hover {
+      background: transparent;
+      color: var(--fd-text-placeholder);
+    }
+  }
 }
 
 .agents-chip__dot {
@@ -42,7 +53,8 @@
   background: var(--fd-accent-working);
   flex-shrink: 0;
 
-  .agents-chip--idle & {
+  .agents-chip--idle &,
+  .agents-chip--placeholder & {
     background: transparent;
     border: 1px solid var(--fd-text-tertiary);
   }

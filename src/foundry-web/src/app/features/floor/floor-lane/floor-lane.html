@@ -1,7 +1,6 @@
 <article
   class="floor-lane"
   [class.floor-lane--silent]="lastEvent()?.silent"
-  [class.floor-lane--stale]="stale()"
   [attr.aria-labelledby]="headingId()"
 >
   <header class="floor-lane__header">
@@ -22,9 +21,6 @@
         }
         {{ issue.repositorySlug }}
       </p>
-    }
-    @if (stale()) {
-      <p class="floor-lane__stale-note">Connection lost — showing last known state</p>
     }
   </header>
 

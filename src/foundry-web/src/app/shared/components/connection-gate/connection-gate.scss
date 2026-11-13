@@ -1,0 +1,76 @@
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+.connection-gate {
+  align-content: center;
+  display: grid;
+  gap: var(--fd-spacing-md);
+  justify-items: center;
+  margin: 0 auto;
+  max-width: 36rem;
+  min-height: 60vh;
+  padding: var(--fd-spacing-xl);
+  text-align: center;
+}
+
+.connection-gate__mark {
+  margin-bottom: var(--fd-spacing-sm);
+}
+
+.connection-gate__heading {
+  color: var(--fd-text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.connection-gate__status {
+  color: var(--fd-text-primary);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+.connection-gate__hint {
+  color: var(--fd-text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.connection-gate__try {
+  background: transparent;
+  border: 1px solid var(--fd-border-control);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: var(--fd-spacing-sm);
+  min-height: 32px;
+  min-width: 6rem;
+  padding: 0 var(--fd-spacing-md);
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &:disabled {
+    color: var(--fd-text-secondary);
+    cursor: progress;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}

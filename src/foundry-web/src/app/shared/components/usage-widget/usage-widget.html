@@ -1,4 +1,20 @@
-@if (view(); as vm) {
+@if (unavailable()) {
+  <!-- Same size as the trigger; no popover while the figures may be out of date -->
+  <span class="usage-widget__placeholder" role="img" aria-label="Usage unavailable while reconnecting">
+    <span class="usage-widget__inline" aria-hidden="true">
+      @for (label of ['Session', 'Weekly']; track label) {
+        <span class="usage-meter">
+          <span class="usage-meter__label">{{ label }}</span>
+          <span class="usage-meter__track"></span>
+          <span class="usage-meter__percent">—</span>
+        </span>
+      }
+    </span>
+    <span class="usage-widget__collapsed" aria-hidden="true">
+      <span class="usage-meter__percent">—</span>
+    </span>
+  </span>
+} @else if (view(); as vm) {
   <div [class]="'usage-widget' + (vm.failed ? ' usage-widget--failed' : '')">
     <button
       type="button"

@@ -6,6 +6,7 @@ import { ToastHostComponent } from './shared/components/toast-host/toast-host';
 import { AccountChipComponent } from './shared/components/account-chip/account-chip';
 import { UsageWidgetComponent } from './shared/components/usage-widget/usage-widget';
 import { AgentsChipComponent, agentsWorkingText } from './shared/components/agents-chip/agents-chip';
+import { ConnectionGateService } from './core/services/connection-gate.service';
 import { WorkerSignalRService } from './core/services/worker-signalr.service';
 import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
@@ -29,6 +30,7 @@ export class App {
   private readonly _settingsService = inject(SettingsService);
   private readonly _accountService = inject(AccountService);
   private readonly _workerSignalR = inject(WorkerSignalRService);
+  private readonly _gate = inject(ConnectionGateService);
 
   readonly overlayBlocking: Signal<boolean> = this._settingsService.isColdBuildBlocking;
 
@@ -45,11 +47,13 @@ export class App {
     });
 
     // Announce agent-count step changes only — never the initial count — so page loads stay quiet.
+    // While the gate is up the count is a placeholder, and the gate announces the reconnect itself.
     effect(() => {
       const count = this._workerSignalR.activeAgentCount();
+      const gated = this._gate.up();
       const previous = this._previousAgentCount;
       this._previousAgentCount = count;
-      if (previous !== null && previous !== count) {
+      if (!gated && previous !== null && previous !== count) {
         untracked(() => this._srAnnouncementSignal.set(agentsWorkingText(count)));
       }
     });

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, Signal, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { ConnectionGateService } from '../../../core/services/connection-gate.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 
 /** "1 agent working" / "3 agents working", or "Agents idle" when nothing is running. */
@@ -11,7 +12,8 @@ export function agentsWorkingText(count: number): string {
 }
 
 /**
- * Top-bar chip showing how many agents are working, linking to the Floor. Count changes are announced
+ * Top-bar chip showing how many agents are working, linking to the Floor. While the connection gate
+ * is up the count may be out of date, so a same-sized placeholder stands in for it. Count changes are announced
  * through the shell's single polite announcer (see App), not a live region of its own.
  */
 @Component({
@@ -24,6 +26,7 @@ export function agentsWorkingText(count: number): string {
 export class AgentsChipComponent {
   private readonly _workerSignalR = inject(WorkerSignalRService);
 
+  protected readonly unavailable: Signal<boolean> = inject(ConnectionGateService).up;
   protected readonly count: Signal<number> = this._workerSignalR.activeAgentCount;
   protected readonly idle: Signal<boolean> = computed(() => this.count() === 0);
   protected readonly text: Signal<string> = computed(() => agentsWorkingText(this.count()));

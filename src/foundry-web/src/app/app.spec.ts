@@ -14,6 +14,7 @@ import { CreditsService } from './core/services/credits.service';
 import { UsageService } from './core/services/usage.service';
 import { UsageSnapshot } from './core/models/usage.model';
 import { FakeHubTransport, provideFakeHubs } from './core/testing/fake-hub-transport';
+import { FakeConnectionGate, provideFakeConnectionGate } from './core/testing/fake-connection-gate';
 import { AgentActivity } from './core/models/agent-activity.model';
 
 function createMockSettingsService(isColdBuildBlocking = false) {
@@ -144,7 +145,11 @@ function buildAgentActivity(workerRunId: string, issueId: string): AgentActivity
   };
 }
 
-function setupApp(isColdBuildBlocking = false, usageSnapshot: UsageSnapshot | null = buildTestSnapshot()) {
+function setupApp(
+  isColdBuildBlocking = false,
+  usageSnapshot: UsageSnapshot | null = buildTestSnapshot(),
+  gate = new FakeConnectionGate(),
+) {
   const mockAccountService = createMockAccountService();
   const workerHub = new FakeHubTransport();
   TestBed.configureTestingModule({
@@ -154,6 +159,7 @@ function setupApp(isColdBuildBlocking = false, usageSnapshot: UsageSnapshot | nu
       provideHttpClient(),
       provideHttpClientTesting(),
       provideFakeHubs({ workers: workerHub }),
+      provideFakeConnectionGate(gate),
       { provide: SettingsService, useValue: createMockSettingsService(isColdBuildBlocking) },
       { provide: AccountService, useValue: mockAccountService },
       { provide: DispatchService, useValue: createMockDispatchService() },
@@ -450,6 +456,20 @@ describe('App', () => {
 
       // Assert
       expect(announcer?.textContent?.trim()).toBe('1 agent working');
+    });
+
+    it('should not announce count changes while the connection gate is up', () => {
+      // Arrange
+      const gate = new FakeConnectionGate();
+      gate.phase.set('reloading');
+      const { fixture, workerHub } = setupApp(false, buildTestSnapshot(), gate);
+
+      // Act
+      workerHub.emit('AgentActivity', buildAgentActivity('run-1', 'issue-1'));
+      fixture.detectChanges();
+
+      // Assert
+      expect((fixture.nativeElement as HTMLElement).querySelector('.app__sr-announcer')?.textContent?.trim()).toBe('');
     });
 
     it('should not announce token-only updates for an already counted run', () => {

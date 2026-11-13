@@ -1,6 +1,7 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { components } from '../../api/schema';
+import { LoadOutcome } from '../../core/models/load-outcome';
 
 type GeneratedDispatchCapacity = components['schemas']['DispatchCapacity'];
 
@@ -24,31 +25,41 @@ export class DispatchCapacityService {
   readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
 
   private _requestToken = 0;
+  private _latest: Promise<LoadOutcome> = Promise.resolve('loaded');
 
-  load(): void {
+  /** Loads the capacity; a load overtaken by a newer one reports the newer one's outcome. */
+  load(): Promise<LoadOutcome> {
     this._requestToken += 1;
     const token = this._requestToken;
 
-    this._http.get<GeneratedDispatchCapacity>('/api/workers/capacity').subscribe({
-      next: (response) => {
-        if (token !== this._requestToken) {
-          return;
-        }
-        this._capacitySignal.set({
-          maxConcurrent: toCount(response.maxConcurrent),
-          occupiedSlots: toCount(response.occupiedSlots),
-          freeSlots: toCount(response.freeSlots),
-        });
-        this._loadErrorSignal.set(null);
-      },
-      error: (err: HttpErrorResponse) => {
-        if (token !== this._requestToken) {
-          return;
-        }
-        console.error(err);
-        this._loadErrorSignal.set(LOAD_CAPACITY_ERROR);
-      },
+    const outcome = new Promise<LoadOutcome>((resolve) => {
+      this._http.get<GeneratedDispatchCapacity>('/api/workers/capacity').subscribe({
+        next: (response) => {
+          if (token !== this._requestToken) {
+            resolve(this._latest);
+            return;
+          }
+          this._capacitySignal.set({
+            maxConcurrent: toCount(response.maxConcurrent),
+            occupiedSlots: toCount(response.occupiedSlots),
+            freeSlots: toCount(response.freeSlots),
+          });
+          this._loadErrorSignal.set(null);
+          resolve('loaded');
+        },
+        error: (err: HttpErrorResponse) => {
+          if (token !== this._requestToken) {
+            resolve(this._latest);
+            return;
+          }
+          console.error(err);
+          this._loadErrorSignal.set(LOAD_CAPACITY_ERROR);
+          resolve('failed');
+        },
+      });
     });
+    this._latest = outcome;
+    return outcome;
   }
 }
 

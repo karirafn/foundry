@@ -61,7 +61,7 @@ export class SystemSignalRService {
       this._usageSnapshotUpdated.next(snapshot);
     });
 
-    this._hub.onReconnected(() => {
+    this._hub.onConnected(() => {
       this._reconnected.next();
     });
 

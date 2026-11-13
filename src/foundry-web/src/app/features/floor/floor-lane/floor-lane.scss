@@ -19,11 +19,6 @@
     border-left-color: var(--fd-text-warning);
   }
 
-  &--stale {
-    border-style: dashed;
-    opacity: 0.7;
-  }
-
 }
 
 .floor-lane__header {
@@ -73,12 +68,6 @@
   align-items: center;
   gap: var(--fd-spacing-sm);
   flex-wrap: wrap;
-}
-
-.floor-lane__stale-note {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--fd-text-warning);
 }
 
 .floor-lane__section {

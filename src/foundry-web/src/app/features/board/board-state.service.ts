@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { AGENT_SILENCE_THRESHOLD_MINUTES } from '../../core/models/agent-activity.model';
+import { ConnectionGateService } from '../../core/services/connection-gate.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
 import { IssueSummary } from '../issues/issue.model';
@@ -122,6 +123,7 @@ export class BoardStateService {
   private readonly _repositoryService = inject(RepositoryService);
   private readonly _signalR = inject(IssueSignalRService);
   private readonly _workerSignalR = inject(WorkerSignalRService);
+  private readonly _gate = inject(ConnectionGateService);
   private readonly _injector = inject(Injector);
   private readonly _document = inject(DOCUMENT) as ViewTransitionDocument;
 
@@ -139,9 +141,11 @@ export class BoardStateService {
   /** Set by the page while the narrow sheet covers the board: a glide under it is never seen. */
   readonly sheetCoversBoard: WritableSignal<boolean> = signal(false);
 
-  readonly stale: Signal<boolean> = computed(
-    () => this._signalR.connectionStatus() !== 'connected',
-  );
+  /**
+   * Until the gate is live the board may be hidden or about to render afresh, so batches apply at
+   * once: no glide, arrival pulse or announcement for changes nobody watched happen.
+   */
+  private readonly _live: Signal<boolean> = computed(() => this._gate.phase() === 'live');
 
   /** Whether the latest batch glided, so a needs-you pulse waits for the glide to land. */
   readonly glided: Signal<boolean> = this._glided.asReadonly();
@@ -192,7 +196,6 @@ export class BoardStateService {
   });
 
   private _firstApplied = false;
-  private _snapNext = false;
   private _flushing = false;
   private _destroyed = false;
   private _pending: Batch | null = null;
@@ -208,19 +211,11 @@ export class BoardStateService {
 
   constructor() {
     effect(() => {
-      const issues = this._issueService.issues();
-      const queueIds = this._issueService.eligibleQueuedIssues().map((i) => i.id);
-      const repositories = this._repositoryService.repositories();
+      const batch = this._currentBatch();
       if (this._issueService.initialLoading()) {
         return;
       }
-      untracked(() => this._enqueue({ issues, queueIds, repositories }));
-    });
-
-    effect(() => {
-      if (this.stale()) {
-        this._snapNext = true;
-      }
+      untracked(() => this._enqueue(batch));
     });
 
     effect(() => {
@@ -251,10 +246,28 @@ export class BoardStateService {
     });
   }
 
+  /**
+   * Renders the latest data at once, without motion. The connection gate's reload calls it as its
+   * last step, so the board that reappears is never the one from before the connection dropped,
+   * however its effects are timed against the gate going live.
+   */
+  resync(): void {
+    this._firstApplied = true;
+    this._snapTo(untracked(() => this._currentBatch()));
+  }
+
+  private _currentBatch(): Batch {
+    return {
+      issues: this._issueService.issues(),
+      queueIds: this._issueService.eligibleQueuedIssues().map((i) => i.id),
+      repositories: this._repositoryService.repositories(),
+    };
+  }
+
   private _enqueue(batch: Batch): void {
-    if (!this._firstApplied) {
+    if (!this._firstApplied || !this._live()) {
       this._firstApplied = true;
-      this._rendered.set(this._build(batch));
+      this._snapTo(batch);
       return;
     }
 
@@ -299,22 +312,13 @@ export class BoardStateService {
     this._announce(previous, next, previousItems, arrivals);
 
     const placementChanged = moved.length > 0 || left.length > 0;
-    const snap = this._snapNext;
-    if (!this.stale()) {
-      this._snapNext = false;
-    }
 
     const update = (): void => {
       this._rendered.set(next);
       this._markArrivals(arrivals);
     };
 
-    if (
-      placementChanged &&
-      !snap &&
-      moved.length + left.length <= MAX_GLIDING_CARDS &&
-      this._canGlide()
-    ) {
+    if (placementChanged && moved.length + left.length <= MAX_GLIDING_CARDS && this._canGlide()) {
       this._glided.set(true);
       await this._glide(update);
       return;
@@ -325,6 +329,23 @@ export class BoardStateService {
     if (placementChanged && this._reducedMotion()) {
       this._markMoved(moved);
     }
+  }
+
+  // Renders the batch as it is, dropping any motion and announcements still pending.
+  private _snapTo(batch: Batch): void {
+    this._clearBatchTimers();
+    // Ghost and arrival timers would bring back what the snap just cleared.
+    for (const handle of this._timers) {
+      clearTimeout(handle);
+    }
+    this._timers.clear();
+    this._pending = null;
+    this._pendingCompletions.length = 0;
+    this._glided.set(false);
+    this._arrived.set(new Set());
+    this._moved.set(new Set());
+    this._ghosts.set(new Map());
+    this._rendered.set(this._build(batch));
   }
 
   private _build(batch: Batch): BoardBands {
@@ -342,7 +363,7 @@ export class BoardStateService {
 
   private _canGlide(): boolean {
     return (
-      !this.stale() &&
+      this._live() &&
       typeof this._document.startViewTransition === 'function' &&
       this._document.visibilityState === 'visible' &&
       !this._reducedMotion() &&
@@ -441,7 +462,7 @@ export class BoardStateService {
   }
 
   private _recordCompletion(updated: IssueSummary): void {
-    if (updated.state !== 'completed' || this._ghosts().has(updated.id)) {
+    if (updated.state !== 'completed' || this._ghosts().has(updated.id) || !this._live()) {
       return;
     }
     const rendered = this._rendered();

@@ -15,6 +15,7 @@ import {
 import type { TokenTotal } from '../workers/run-totals.model';
 import { RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 import { components } from '../../api/schema';
+import { LoadOutcome } from '../../core/models/load-outcome';
 
 type PagedIssues = components['schemas']['PagedIssues'];
 // publishPhase (#787) is read defensively until the generated schema carries it.
@@ -234,7 +235,7 @@ export class IssueService {
     });
   }
 
-  loadIssues(repositoryId?: string): void {
+  loadIssues(repositoryId?: string): Promise<LoadOutcome> {
     this._loadErrorSignal.set(null);
 
     let params = new HttpParams();
@@ -242,17 +243,21 @@ export class IssueService {
       params = params.set('repositoryId', repositoryId);
     }
 
-    this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
-      next: (response) => {
-        this.issues.set(this._activeIssuesOnly(response.items));
-        this._loadErrorSignal.set(null);
-        this.initialLoading.set(false);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._loadErrorSignal.set(LOAD_ISSUES_ERROR);
-        this.initialLoading.set(false);
-      },
+    return new Promise<LoadOutcome>((resolve) => {
+      this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
+        next: (response) => {
+          this.issues.set(this._activeIssuesOnly(response.items));
+          this._loadErrorSignal.set(null);
+          this.initialLoading.set(false);
+          resolve('loaded');
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._loadErrorSignal.set(LOAD_ISSUES_ERROR);
+          this.initialLoading.set(false);
+          resolve('failed');
+        },
+      });
     });
   }
 

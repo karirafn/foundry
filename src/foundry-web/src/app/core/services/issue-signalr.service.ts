@@ -11,7 +11,7 @@ export class IssueSignalRService {
 
   constructor() {
     this._connection.start().catch(() => {
-      // The status already reads 'disconnected'; consumers show that instead of a log line.
+      // The status reads 'reconnecting' and the connection retries; the connection gate shows it.
     });
   }
 
@@ -25,6 +25,6 @@ export class IssueSignalRService {
   }
 
   onReconnected(callback: () => void): void {
-    this._connection.onReconnected(callback);
+    this._connection.onConnected(callback);
   }
 }

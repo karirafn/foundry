@@ -43,8 +43,6 @@ export class FloorLaneComponent {
   readonly lane: InputSignal<FloorLane> = input.required<FloorLane>();
   /** Epoch ms used for "time since last event"; driven by the page's clock so lanes tick together. */
   readonly now: InputSignal<number> = input.required<number>();
-  /** True while the worker hub is disconnected: the lane shows its last known state. */
-  readonly stale: InputSignal<boolean> = input(false);
 
   protected readonly headingId: Signal<string> = computed(() => `floor-lane-${this.lane().issueId}`);
 

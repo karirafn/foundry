@@ -1,11 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { vi } from 'vitest';
-import { ConnectionStatus, IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
 import { AccountService } from '../settings/accounts/account.service';
 import { RepositoryService } from '../settings/repositories/repository.service';
+import { LoadOutcome } from '../../core/models/load-outcome';
 import { BoardRepositoriesService } from './board-repositories.service';
 
 function queued(overrides: Partial<IssueSummary> = {}): IssueSummary {
@@ -32,29 +32,26 @@ function queued(overrides: Partial<IssueSummary> = {}): IssueSummary {
 interface Harness {
   service: BoardRepositoriesService;
   issues: WritableSignal<IssueSummary[]>;
-  status: WritableSignal<ConnectionStatus>;
   loadAll: ReturnType<typeof vi.fn>;
 }
 
-function setup(): Harness {
+function setup(accountsOutcome: LoadOutcome = 'loaded'): Harness {
   const issues = signal<IssueSummary[]>([]);
-  const status = signal<ConnectionStatus>('connected');
-  const loadAll = vi.fn();
+  const loadAll = vi.fn(() => Promise.resolve<LoadOutcome>('loaded'));
   TestBed.configureTestingModule({
     providers: [
       BoardRepositoriesService,
       { provide: IssueService, useValue: { issues, initialLoading: signal(false) } },
-      { provide: IssueSignalRService, useValue: { connectionStatus: status } },
       {
         provide: AccountService,
-        useValue: { loadAccounts: () => Promise.resolve(), accounts: signal([{ id: 'acc-1' }]) },
+        useValue: { loadAccounts: () => Promise.resolve(accountsOutcome), accounts: signal([{ id: 'acc-1' }]) },
       },
       { provide: RepositoryService, useValue: { loadAllRepositories: loadAll } },
     ],
   });
   const service = TestBed.inject(BoardRepositoriesService);
   TestBed.tick();
-  return { service, issues, status, loadAll };
+  return { service, issues, loadAll };
 }
 
 async function settle(): Promise<void> {
@@ -69,11 +66,11 @@ describe('BoardRepositoriesService', () => {
     const h = setup();
 
     // Act
-    h.service.reload();
-    await settle();
+    const outcome = await h.service.reload();
 
     // Assert
     expect(h.loadAll).toHaveBeenCalledWith(['acc-1']);
+    expect(outcome).toBe('loaded');
   });
 
   it('reloads when a queued issue becomes held by an ineligible repository', async () => {
@@ -105,17 +102,27 @@ describe('BoardRepositoriesService', () => {
     expect(h.loadAll).not.toHaveBeenCalled();
   });
 
-  it('reloads after a reconnect', async () => {
+  it('reports the repositories load outcome', async () => {
     // Arrange
     const h = setup();
-    h.status.set('reconnecting');
-    await settle();
+    h.loadAll.mockReturnValue(Promise.resolve('failed'));
 
     // Act
-    h.status.set('connected');
-    await settle();
+    const outcome = await h.service.reload();
 
     // Assert
-    expect(h.loadAll).toHaveBeenCalledTimes(1);
+    expect(outcome).toBe('failed');
+  });
+
+  it('reports a failed accounts load without loading repositories', async () => {
+    // Arrange
+    const h = setup('failed');
+
+    // Act
+    const outcome = await h.service.reload();
+
+    // Assert
+    expect(outcome).toBe('failed');
+    expect(h.loadAll).not.toHaveBeenCalled();
   });
 });

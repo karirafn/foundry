@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
+import { LoadOutcome } from '../../../core/models/load-outcome';
 import { AccountSummary, AffectedRepository, CreateAccountConflictResponse, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountConflictResponse, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
@@ -69,23 +70,23 @@ export class AccountService {
     effect(() => this._accountPresence.setHasAccounts(this.accounts().length > 0));
   }
 
-  loadAccounts(): Promise<void> {
+  loadAccounts(): Promise<LoadOutcome> {
     this._loadErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
     this._loadingSignal.set(true);
 
-    return new Promise<void>((resolve) => {
+    return new Promise<LoadOutcome>((resolve) => {
       this._http.get<AccountSummary[]>(API_BASE).subscribe({
         next: (accounts) => {
           this._accountsSignal.set(accounts);
           this._loadingSignal.set(false);
-          resolve();
+          resolve('loaded');
         },
         error: (err: HttpErrorResponse) => {
           console.error(err);
           this._loadErrorSignal.set(extractErrorMessage(err) ?? err.message);
           this._loadingSignal.set(false);
-          resolve();
+          resolve('failed');
         },
       });
     });

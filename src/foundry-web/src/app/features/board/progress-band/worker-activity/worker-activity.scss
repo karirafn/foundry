@@ -89,11 +89,6 @@
   color: var(--fd-text-secondary);
 }
 
-// A stale board pauses every loop.
-:host-context(.board--stale) .worker-activity__segment--current::after {
-  animation-play-state: paused;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .worker-activity__segment--current::after {
     animation: none;

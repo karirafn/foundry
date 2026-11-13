@@ -1,14 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, take, toArray } from 'rxjs';
-import { RECENT_TOOL_LIMIT, RECONNECT_REPLAY_GRACE_MS, WorkerSignalRService } from './worker-signalr.service';
+import { CurrentWorkerActivity, RECENT_TOOL_LIMIT, WorkerSignalRService } from './worker-signalr.service';
 import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 import { WorkerActivity } from '../models/worker-activity.model';
 import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
 
-function setup() {
+const NO_ACTIVITY: CurrentWorkerActivity = { workerActivities: [], agentActivities: [] };
+
+function setup(current: CurrentWorkerActivity = NO_ACTIVITY) {
   TestBed.resetTestingModule();
 
   const hub = new FakeHubTransport();
+  hub.invokeResult = () => Promise.resolve(current);
 
   TestBed.configureTestingModule({
     providers: [
@@ -116,52 +119,117 @@ describe('WorkerSignalRService', () => {
       expect(svc.recentToolsForRun('run-1')).toEqual([]);
     });
 
-    it('should report connected after the hub starts and track reconnecting and close', async () => {
-      // Arrange
-      const { svc, hub } = setup();
-      await Promise.resolve();
-
-      // Act / Assert
-      expect(svc.connectionStatus()).toBe('connected');
-      hub.reconnecting();
-      expect(svc.connectionStatus()).toBe('reconnecting');
-      hub.reconnected();
-      expect(svc.connectionStatus()).toBe('connected');
-      hub.close();
-      expect(svc.connectionStatus()).toBe('disconnected');
-    });
-
-    it('should prune runs the reconnect replay did not re-send', () => {
+    it('should report connected after the hub starts, and reconnecting after a drop', async () => {
       // Arrange
       vi.useFakeTimers();
       const { svc, hub } = setup();
-      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2' }));
+      hub.startResult = () => new Promise<void>(() => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      const afterStart = svc.connectionStatus();
 
-      // Act — run-2 ended while disconnected, so the replay only re-sends run-1.
-      hub.reconnecting();
-      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      hub.reconnected();
-      vi.advanceTimersByTime(RECONNECT_REPLAY_GRACE_MS);
+      // Act
+      hub.close();
+
+      // Assert
+      expect(afterStart).toBe('connected');
+      expect(svc.connectionStatus()).toBe('reconnecting');
+    });
+
+    it('should load the current activity once connected', async () => {
+      // Arrange / Act
+      const { svc, hub } = setup({
+        workerActivities: [{ workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-06-01T12:00:00Z' }],
+        agentActivities: [buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' })],
+      });
+      await vi.waitFor(() => expect(svc.activeAgentCount()).toBe(1));
+
+      // Assert
+      expect(hub.invocations.map((i) => i.methodName)).toEqual(['GetCurrentActivity']);
+      expect(svc.activityForIssue('issue-1')).toBe('2026-06-01T12:00:00Z');
+    });
+
+    it('should drop runs that ended while disconnected when it reconnects', async () => {
+      // Arrange
+      vi.useFakeTimers();
+      const { svc, hub } = setup();
+      await vi.advanceTimersByTimeAsync(0);
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1', inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2', inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
+      // run-2 ended while disconnected, so the hub reports only run-1.
+      hub.invokeResult = () => Promise.resolve({
+        workerActivities: [],
+        agentActivities: [buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' })],
+      });
+
+      // Act
+      hub.close();
+      await vi.advanceTimersByTimeAsync(0);
 
       // Assert
       expect(svc.agentActivities().map((a) => a.workerRunId)).toEqual(['run-1']);
+      expect(svc.recentToolsForRun('run-2')).toEqual([]);
     });
 
-    it('should not prune while the connection drops again before the grace window ends', () => {
+    it('should keep a message that arrives during the load when it is newer than the snapshot', async () => {
       // Arrange
-      vi.useFakeTimers();
       const { svc, hub } = setup();
-      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      hub.reconnecting();
-      hub.reconnected();
+      let resolveLoad!: (current: CurrentWorkerActivity) => void;
+      hub.invokeResult = () => new Promise((resolve) => { resolveLoad = resolve as (c: CurrentWorkerActivity) => void; });
+      const load = svc.loadActivity();
+      const newer = buildAgentActivity({ issueId: 'issue-1', lastEventAt: '2026-01-01T00:05:00Z', completedTaskCount: 3 });
 
       // Act
-      vi.advanceTimersByTime(RECONNECT_REPLAY_GRACE_MS / 2);
-      hub.reconnecting();
-      vi.advanceTimersByTime(RECONNECT_REPLAY_GRACE_MS);
+      hub.emit('AgentActivity', newer);
+      resolveLoad({ workerActivities: [], agentActivities: [buildAgentActivity({ issueId: 'issue-1', lastEventAt: '2026-01-01T00:01:00Z' })] });
+      await load;
 
       // Assert
+      expect(svc.agentActivityForIssue('issue-1')).toEqual(newer);
+    });
+
+    it('should drop a run whose end arrives during the load', async () => {
+      // Arrange
+      const { svc, hub } = setup();
+      let resolveLoad!: (current: CurrentWorkerActivity) => void;
+      hub.invokeResult = () => new Promise((resolve) => { resolveLoad = resolve as (c: CurrentWorkerActivity) => void; });
+      const load = svc.loadActivity();
+
+      // Act
+      hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
+      resolveLoad({ workerActivities: [], agentActivities: [buildAgentActivity()] });
+      await load;
+
+      // Assert
+      expect(svc.activeAgentCount()).toBe(0);
+    });
+
+    it('should share a load already in flight and report its outcome', async () => {
+      // Arrange
+      const { svc, hub } = setup();
+      hub.invokeResult = () => Promise.resolve(NO_ACTIVITY);
+
+      // Act
+      const first = svc.loadActivity();
+      const second = svc.loadActivity();
+
+      // Assert
+      expect(second).toBe(first);
+      expect(await first).toBe('loaded');
+      expect(hub.invocations.filter((i) => i.methodName === 'GetCurrentActivity').length).toBe(1);
+    });
+
+    it('should report a failed load and keep what it holds', async () => {
+      // Arrange
+      const { svc, hub } = setup();
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      hub.emit('AgentActivity', buildAgentActivity());
+      hub.invokeResult = () => Promise.reject(new Error('down'));
+
+      // Act
+      const outcome = await svc.loadActivity();
+
+      // Assert
+      expect(outcome).toBe('failed');
       expect(svc.activeAgentCount()).toBe(1);
     });
   });
@@ -266,17 +334,21 @@ describe('WorkerSignalRService', () => {
   });
 
   // Cycle 5: reconnected emits when hub reconnects
-  it('should emit on reconnected when hub reconnects', () => {
+  it('should emit on reconnected when hub reconnects', async () => {
     // Arrange
+    vi.useFakeTimers();
     const { svc, hub } = setup();
+    await vi.advanceTimersByTimeAsync(0);
     let count = 0;
     svc.reconnected.subscribe(() => count++);
+    hub.close();
 
     // Act
-    hub.reconnected();
+    await vi.advanceTimersByTimeAsync(0);
 
     // Assert
     expect(count).toBe(1);
+    vi.useRealTimers();
   });
 
   // Cycle 7: activityFor returns null for unknown workerRunId

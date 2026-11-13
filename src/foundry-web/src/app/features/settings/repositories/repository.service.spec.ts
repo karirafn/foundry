@@ -644,6 +644,24 @@ describe('RepositoryService', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush([MOCK_REPOSITORY_2]);
   });
 
+  it('should report loadAllRepositories as loaded, or failed when any request fails', async () => {
+    // Arrange
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
+
+    // Act
+    const loaded = service.loadAllRepositories([ACCOUNT_ID]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+    const failed = service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush('boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(await loaded).toBe('loaded');
+    expect(await failed).toBe('failed');
+    expect(await service.loadAllRepositories([])).toBe('loaded');
+  });
+
   it('should sort combined repositories by position after loadAllRepositories succeeds', () => {
     // Arrange
     const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';

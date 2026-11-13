@@ -13,97 +13,39 @@ using Xunit;
 
 namespace Foundry.UnitTests.Hubs.WorkerHubTests;
 
-public sealed class OnConnectedAsync
+public sealed class GetCurrentActivity
 {
     [Fact]
-    public async Task WhenNoActiveRuns_SendsNoMessages()
+    public async Task WhenNoActiveRuns_ReturnsEmptyActivity()
     {
         // Arrange
-        SpyHubCallerClients clients = new();
-        NullWorkerRunQueries queries = new();
-        StubWorkerLogStream logStream = new([]);
-        WorkerHub sut = CreateHub(logStream, queries, clients);
+        WorkerHub sut = CreateHub(new NullWorkerRunQueries());
 
         // Act
-        await sut.OnConnectedAsync();
+        CurrentWorkerActivity result = await sut.GetCurrentActivity();
 
         // Assert
-        clients.CallerProxy.SentActivities.ShouldBeEmpty();
+        result.WorkerActivities.ShouldBeEmpty();
+        result.AgentActivities.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenActiveRunsExist_SendsWorkerActivityForEachActiveRunToCaller()
+    public async Task WhenActiveRunsExist_ReturnsTheWorkerActivityOfEachActiveRun()
     {
         // Arrange
-        WorkerActivity activity1 = new(
-            WorkerRunId: WorkerRunId.New(),
-            IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow);
-
-        WorkerActivity activity2 = new(
-            WorkerRunId: WorkerRunId.New(),
-            IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow);
-
-        SpyWorkerRunQueries queries = new([activity1, activity2]);
-        SpyHubCallerClients clients = new();
-        StubWorkerLogStream logStream = new([]);
-        WorkerHub sut = CreateHub(logStream, queries, clients);
+        WorkerActivity activity1 = CreateWorkerActivity();
+        WorkerActivity activity2 = CreateWorkerActivity();
+        WorkerHub sut = CreateHub(new SpyWorkerRunQueries([activity1, activity2]));
 
         // Act
-        await sut.OnConnectedAsync();
+        CurrentWorkerActivity result = await sut.GetCurrentActivity();
 
         // Assert
-        clients.CallerProxy.SentActivities.Count.ShouldBe(2);
-        clients.CallerProxy.SentActivities.ShouldContain(activity1);
-        clients.CallerProxy.SentActivities.ShouldContain(activity2);
+        result.WorkerActivities.ShouldBe([activity1, activity2], ignoreOrder: true);
     }
 
     [Fact]
-    public async Task WhenActiveRunsExist_SendsUsingWorkerActivityMethodName()
-    {
-        // Arrange
-        WorkerActivity activity = new(
-            WorkerRunId: WorkerRunId.New(),
-            IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow);
-
-        SpyWorkerRunQueries queries = new([activity]);
-        SpyHubCallerClients clients = new();
-        StubWorkerLogStream logStream = new([]);
-        WorkerHub sut = CreateHub(logStream, queries, clients);
-
-        // Act
-        await sut.OnConnectedAsync();
-
-        // Assert
-        clients.CallerProxy.SentMethods.ShouldAllBe(m => m == "WorkerActivity");
-    }
-
-    [Fact]
-    public async Task WhenActiveRunsExist_SendsOnlyToCaller_NotAllClients()
-    {
-        // Arrange
-        WorkerActivity activity = new(
-            WorkerRunId: WorkerRunId.New(),
-            IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow);
-
-        SpyWorkerRunQueries queries = new([activity]);
-        SpyHubCallerClients clients = new();
-        StubWorkerLogStream logStream = new([]);
-        WorkerHub sut = CreateHub(logStream, queries, clients);
-
-        // Act
-        await sut.OnConnectedAsync();
-
-        // Assert
-        clients.AllProxy.SentActivities.ShouldBeEmpty();
-        clients.CallerProxy.SentActivities.ShouldNotBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenAgentActivityProjectionsExist_ReplaysEachToCallerAsAgentActivity()
+    public async Task WhenAgentActivityProjectionsExist_ReturnsEachProjection()
     {
         // Arrange
         AgentActivityStore store = new();
@@ -111,37 +53,38 @@ public sealed class OnConnectedAsync
         AgentActivity second = CreateAgentActivity();
         store.Set(first);
         store.Set(second);
-        SpyHubCallerClients clients = new();
-        WorkerHub sut = CreateHub(new StubWorkerLogStream([]), new NullWorkerRunQueries(), clients, store);
+        WorkerHub sut = CreateHub(new NullWorkerRunQueries(), store);
 
         // Act
-        await sut.OnConnectedAsync();
+        CurrentWorkerActivity result = await sut.GetCurrentActivity();
 
         // Assert
-        clients.CallerProxy.SentMethods.ShouldBe(["AgentActivity", "AgentActivity"]);
-        clients.CallerProxy.SentArguments.ShouldContain(first);
-        clients.CallerProxy.SentArguments.ShouldContain(second);
-        clients.AllProxy.SentMethods.ShouldBeEmpty();
+        result.AgentActivities.ShouldBe([first, second], ignoreOrder: true);
     }
 
     [Fact]
-    public async Task WhenBothActivityKindsExist_ReplaysWorkerActivityBeforeAgentActivity()
+    public async Task WhenAClientConnects_PushesNoActivity()
     {
         // Arrange
-        WorkerActivity activity = new(
-            WorkerRunId: WorkerRunId.New(),
-            IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow);
         AgentActivityStore store = new();
         store.Set(CreateAgentActivity());
         SpyHubCallerClients clients = new();
-        WorkerHub sut = CreateHub(new StubWorkerLogStream([]), new SpyWorkerRunQueries([activity]), clients, store);
+        WorkerHub sut = CreateHub(new SpyWorkerRunQueries([CreateWorkerActivity()]), store, clients);
 
         // Act
         await sut.OnConnectedAsync();
 
         // Assert
-        clients.CallerProxy.SentMethods.ShouldBe(["WorkerActivity", "AgentActivity"]);
+        clients.CallerProxy.SentMethods.ShouldBeEmpty();
+        clients.AllProxy.SentMethods.ShouldBeEmpty();
+    }
+
+    private static WorkerActivity CreateWorkerActivity()
+    {
+        return new WorkerActivity(
+            WorkerRunId: WorkerRunId.New(),
+            IssueId: Guid.NewGuid(),
+            LastActivityAt: DateTimeOffset.UtcNow);
     }
 
     private static AgentActivity CreateAgentActivity()
@@ -161,13 +104,12 @@ public sealed class OnConnectedAsync
     }
 
     private static WorkerHub CreateHub(
-        StubWorkerLogStream logStream,
         IWorkerRunQueries queries,
-        SpyHubCallerClients clients,
-        AgentActivityStore? agentActivityStore = null)
+        AgentActivityStore? agentActivityStore = null,
+        SpyHubCallerClients? clients = null)
     {
-        WorkerHub hub = new(logStream, queries, agentActivityStore ?? new AgentActivityStore());
-        hub.Clients = clients;
+        WorkerHub hub = new(new StubWorkerLogStream(), queries, agentActivityStore ?? new AgentActivityStore());
+        hub.Clients = clients ?? new SpyHubCallerClients();
         hub.Context = new StubHubCallerContext();
         return hub;
     }
@@ -185,18 +127,10 @@ public sealed class OnConnectedAsync
         public override void Abort() { }
     }
 
-    private sealed class StubWorkerLogStream(IReadOnlyList<string> lines) : IWorkerLogStream
+    private sealed class StubWorkerLogStream : IWorkerLogStream
     {
-        public async IAsyncEnumerable<string> StreamAsync(
-            Guid workerRunId,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
-        {
-            foreach (string line in lines)
-            {
-                yield return line;
-                await Task.Yield();
-            }
-        }
+        public IAsyncEnumerable<string> StreamAsync(Guid workerRunId, CancellationToken cancellationToken)
+            => AsyncEnumerable.Empty<string>();
     }
 
     private sealed class SpyWorkerRunQueries(IReadOnlyCollection<WorkerActivity> activities)
@@ -264,8 +198,6 @@ public sealed class OnConnectedAsync
     private sealed class SpyClientProxy : IClientProxy
     {
         public List<string> SentMethods { get; } = [];
-        public List<WorkerActivity> SentActivities { get; } = [];
-        public List<object?> SentArguments { get; } = [];
 
         public Task SendCoreAsync(
             string method,
@@ -273,13 +205,6 @@ public sealed class OnConnectedAsync
             CancellationToken cancellationToken = default)
         {
             SentMethods.Add(method);
-            SentArguments.Add(args.Length > 0 ? args[0] : null);
-
-            if (args.Length > 0 && args[0] is WorkerActivity activity)
-            {
-                SentActivities.Add(activity);
-            }
-
             return Task.CompletedTask;
         }
     }

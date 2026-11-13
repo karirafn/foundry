@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -6,10 +6,10 @@ import { Router, provideRouter } from '@angular/router';
 import { Location } from '@angular/common';
 import { provideLocationMocks } from '@angular/common/testing';
 import { vi } from 'vitest';
-import {
-  ConnectionStatus,
-  IssueSignalRService,
-} from '../../../core/services/issue-signalr.service';
+import { LoadOutcome } from '../../../core/models/load-outcome';
+import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
+import { SettingsService } from '../../../core/services/settings.service';
+import { FakeConnectionGate, provideFakeConnectionGate } from '../../../core/testing/fake-connection-gate';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { AgentActivity, InFlightTool } from '../../../core/models/agent-activity.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
@@ -48,7 +48,8 @@ const hubHandlers = new Map<string, (payload: unknown) => void>();
 interface Harness {
   el: HTMLElement;
   httpMock: HttpTestingController;
-  status: WritableSignal<ConnectionStatus>;
+  gate: FakeConnectionGate;
+  loadSettings: ReturnType<typeof vi.fn>;
   repositories: WritableSignal<RepositorySummary[]>;
   capacity: WritableSignal<{
     maxConcurrent: number;
@@ -59,10 +60,12 @@ interface Harness {
   activities: WritableSignal<ReadonlyMap<string, AgentActivity>>;
   tools: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>>;
   render: () => Promise<void>;
+  fixture: ComponentFixture<BoardPageComponent>;
 }
 
 async function setup(url = '/'): Promise<Harness> {
-  const status = signal<ConnectionStatus>('connected');
+  const gate = new FakeConnectionGate();
+  const loadSettings = vi.fn(() => Promise.resolve<LoadOutcome>('loaded'));
   const repositories = signal<RepositorySummary[]>([]);
   const capacity = signal<{
     maxConcurrent: number;
@@ -79,13 +82,14 @@ async function setup(url = '/'): Promise<Harness> {
       provideLocationMocks(),
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideFakeConnectionGate(gate),
+      { provide: SettingsService, useValue: { loadSettings } },
       {
         provide: IssueSignalRService,
         useValue: {
           on: (name: string, handler: (payload: unknown) => void) => hubHandlers.set(name, handler),
           off: () => {},
           onReconnected: () => {},
-          connectionStatus: status,
         },
       },
       {
@@ -99,15 +103,15 @@ async function setup(url = '/'): Promise<Harness> {
       },
       {
         provide: DispatchCapacityService,
-        useValue: { capacity, loadError: capacityError, load: () => {} },
+        useValue: { capacity, loadError: capacityError, load: () => Promise.resolve('loaded') },
       },
       {
         provide: AccountService,
-        useValue: { loadAccounts: () => Promise.resolve(), accounts: signal([]) },
+        useValue: { loadAccounts: () => Promise.resolve('loaded'), accounts: signal([]) },
       },
       {
         provide: RepositoryService,
-        useValue: { repositories, loadAllRepositories: () => {} },
+        useValue: { repositories, loadAllRepositories: () => Promise.resolve('loaded') },
       },
       {
         provide: DispatchService,
@@ -138,13 +142,15 @@ async function setup(url = '/'): Promise<Harness> {
   return {
     el: fixture.nativeElement as HTMLElement,
     httpMock: TestBed.inject(HttpTestingController),
-    status,
+    gate,
+    loadSettings,
     repositories,
     capacity,
     capacityError,
     activities,
     tools,
     render,
+    fixture,
   };
 }
 
@@ -861,18 +867,137 @@ describe('BoardPageComponent', () => {
     expect(document.activeElement?.id).toBe('board-heading');
   });
 
-  it('keeps its last state, marked stale, while the connection is lost', async () => {
-    // Arrange
-    const h = await loaded([item('f', 2)]);
+  describe('connection gate', () => {
+    /** Raises the gate, runs the page's reload with `items` as the fresh issues, and lowers it. */
+    async function reconnect(h: Harness, items: unknown[]): Promise<LoadOutcome> {
+      h.gate.phase.set('reconnecting');
+      await h.render();
+      h.gate.phase.set('reloading');
+      await h.render();
+      const reloading = h.gate.registered!();
+      h.httpMock.expectOne('/api/issues').flush({ items, nextCursor: null });
+      const outcome = await reloading;
+      h.gate.phase.set('live');
+      await h.render();
+      return outcome;
+    }
 
-    // Act
-    h.status.set('reconnecting');
-    await h.render();
+    function announced(h: Harness): string {
+      return text(h.el.querySelector('fd-connection-gate > [aria-live="polite"]'));
+    }
 
-    // Assert
-    expect(h.el.querySelector('.board')?.classList).toContain('board--stale');
-    expect(h.el.textContent).toContain('Connection lost — showing last known state');
-    expect(idsIn(h.el, '.board')).toEqual(['f']);
+    it('hides the board, keeping no last state, while the gate is up', async () => {
+      // Arrange
+      const h = await loaded([item('f', 2)]);
+
+      // Act
+      h.gate.phase.set('reconnecting');
+      await h.render();
+
+      // Assert
+      expect(h.el.querySelector('.board')).toBeNull();
+      expect(h.el.querySelector('#board-heading')).toBeNull();
+      expect(text(h.el.querySelector('.connection-gate__heading'))).toBe('Reconnecting to Foundry…');
+      expect(h.el.textContent).not.toContain('showing last known state');
+    });
+
+    it('reloads the issues, capacity, dispatch settings and repositories, then renders afresh', async () => {
+      // Arrange
+      const h = await loaded([item('f', 2)]);
+
+      // Act
+      const outcome = await reconnect(h, [item('g', 3)]);
+
+      // Assert
+      expect(outcome).toBe('loaded');
+      expect(h.loadSettings).toHaveBeenCalledTimes(1);
+      expect(idsIn(h.el, '.board')).toEqual(['g']);
+    });
+
+    it('reports a failed reload when any of its loads fails', async () => {
+      // Arrange
+      const h = await loaded([item('f', 2)]);
+      h.loadSettings.mockReturnValue(Promise.resolve('failed'));
+
+      // Act
+      const outcome = await reconnect(h, [item('f', 2)]);
+
+      // Assert
+      expect(outcome).toBe('failed');
+    });
+
+    it('says the board is up to date and how many need you', async () => {
+      // Arrange
+      const h = await loaded([item('f', 2)]);
+
+      // Act
+      await reconnect(h, [
+        item('f', 2, { needsAction: true, state: 'failed' }),
+        item('g', 3, { needsAction: true, state: 'failed' }),
+      ]);
+
+      // Assert
+      expect(announced(h)).toBe('Board is up to date. 2 need you.');
+    });
+
+    it('says nothing needs you when nothing does', async () => {
+      // Arrange
+      const h = await loaded([item('f', 2)]);
+
+      // Act
+      await reconnect(h, [item('f', 2)]);
+
+      // Assert
+      expect(announced(h)).toBe('Board is up to date. Nothing needs you.');
+    });
+
+    it('reopens the pane when its issue is still on the board', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142)], '/?issue=f');
+      h.httpMock.match('/api/issues/f');
+
+      // Act
+      await reconnect(h, [item('f', 142)]);
+
+      // Assert
+      h.httpMock.match('/api/issues/f');
+      expect(TestBed.inject(Router).url).toBe('/?issue=f');
+      expect(h.el.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    it('leaves the URL alone when the board is left while it reloads', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142), item('g', 7)], '/?issue=f');
+      h.httpMock.match('/api/issues/f');
+      h.gate.phase.set('reconnecting');
+      await h.render();
+      h.gate.phase.set('reloading');
+      await h.render();
+      const reloading = h.gate.registered!();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate');
+
+      // Act
+      h.fixture.destroy();
+      h.httpMock.expectOne('/api/issues').flush({ items: [item('g', 7)], nextCursor: null });
+      await reloading;
+
+      // Assert
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('closes the pane and says so when its issue left the board', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142), item('g', 7)], '/?issue=f');
+      h.httpMock.match('/api/issues/f');
+
+      // Act
+      await reconnect(h, [item('g', 7)]);
+
+      // Assert
+      expect(TestBed.inject(Router).url).toBe('/');
+      expect(h.el.querySelector('[role="dialog"].side-sheet:not(.side-sheet--leave)')).toBeNull();
+      expect(announced(h)).toBe('Issue #142 is no longer on the board. Board is up to date. Nothing needs you.');
+    });
   });
 
   describe('pane', () => {
