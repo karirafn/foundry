@@ -22,7 +22,11 @@ public sealed class BroadcastAsync
             Url: "https://github.com/owner/repo/issues/42",
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
-            RunStats: null);
+            RunStats: null,
+            Stage: "triage",
+            NeedsAction: false,
+            AwaitsDispatch: true,
+            CodeStep: null);
 
         StubIssueBroadcaster sut = new();
 

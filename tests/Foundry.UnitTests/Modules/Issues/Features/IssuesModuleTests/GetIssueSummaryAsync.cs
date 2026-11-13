@@ -191,6 +191,114 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         result.ShouldHaveSingleItem().PublishPhase.ShouldBe("retrying");
     }
 
+    [Theory]
+    [InlineData("review", "awaiting_review")]
+    [InlineData("rebase_pending", "implement")]
+    [InlineData("completed", "done")]
+    public async Task WhenInState_SummaryCarriesTheStateStage(string state, string expectedStage)
+    {
+        // Arrange
+        Issue issue = BuildState(new IssueBuilder(), state);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().Stage.ShouldBe(expectedStage);
+    }
+
+    [Fact]
+    public async Task WhenDetected_SummaryIsInTriageAwaitingDispatch()
+    {
+        // Arrange
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(MonitoredRepositoryId.New());
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(detected.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.Stage.ShouldBe("triage"),
+            () => summary.NeedsAction.ShouldBeFalse(),
+            () => summary.AwaitsDispatch.ShouldBeTrue(),
+            () => summary.CodeStep.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenReview_SummaryNeedsAction()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.NeedsAction.ShouldBeTrue(),
+            () => summary.AwaitsDispatch.ShouldBeFalse());
+    }
+
+    [Theory]
+    [InlineData("rebase_pending", "rebasing")]
+    [InlineData("checks_pending", "checks")]
+    public async Task WhenStateRunsACodeStep_SummaryCarriesTheCodeStep(string state, string expectedCodeStep)
+    {
+        // Arrange
+        Issue issue = BuildState(new IssueBuilder(), state);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().CodeStep.ShouldBe(expectedCodeStep);
+    }
+
+    [Theory]
+    [InlineData(WorkerRunPublishPhase.Publishing, "publishing")]
+    [InlineData(WorkerRunPublishPhase.Retrying, "publish_retrying")]
+    public async Task WhenRunIsPublishing_SummaryCodeStepIsThePublishStep(
+        WorkerRunPublishPhase phase,
+        string expectedCodeStep)
+    {
+        // Arrange
+        InProgressIssue inProgress = new IssueBuilder().InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _workerRunQueries.SetPublishPhase(inProgress.Id.Value, phase);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(inProgress.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().CodeStep.ShouldBe(expectedCodeStep);
+    }
+
+    [Fact]
+    public async Task WhenInProgressRunIsNotPublishing_SummaryHasNoCodeStep()
+    {
+        // Arrange
+        InProgressIssue inProgress = new IssueBuilder().InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(inProgress.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().CodeStep.ShouldBeNull();
+    }
+
     [Fact]
     public async Task WhenIssueHasNoWorkerRuns_RunStatsIsNull()
     {

@@ -11,6 +11,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class RevisionQueuedIssue : QueuedIssue
 {
+    public override IssueStage Stage => IssueStage.Implement;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => true;
+
+    public override IssueCodeStep? CodeStep => null;
+
     // Private parameterless constructor for EF Core materialization.
     private RevisionQueuedIssue()
     {

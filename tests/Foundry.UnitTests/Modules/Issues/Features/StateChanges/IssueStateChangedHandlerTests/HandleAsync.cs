@@ -41,7 +41,11 @@ public sealed class HandleAsync
             Url: "https://github.com/owner/repo/issues/1",
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
-            RunStats: null);
+            RunStats: null,
+            Stage: "implement",
+            NeedsAction: false,
+            AwaitsDispatch: true,
+            CodeStep: null);
         _issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -68,7 +72,11 @@ public sealed class HandleAsync
             Url: "https://github.com/owner/repo/issues/1",
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
-            RunStats: null);
+            RunStats: null,
+            Stage: "implement",
+            NeedsAction: false,
+            AwaitsDispatch: true,
+            CodeStep: null);
         _issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -96,6 +104,10 @@ public sealed class HandleAsync
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
             RunStats: null,
+            Stage: "implement",
+            NeedsAction: false,
+            AwaitsDispatch: false,
+            CodeStep: "publishing",
             PublishPhase: "publishing");
         _issueQueries.SetSummary(issueId, expectedSummary);
         IIntegrationEventHandler<WorkerRunPublishPhaseChanged> handler = new WorkerRunPublishPhaseChangedHandler(_sut);

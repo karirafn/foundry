@@ -16,6 +16,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// </summary>
 public sealed class TriageBlockedIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.Triage;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => true;
+
+    public override IssueCodeStep? CodeStep => null;
+
     /// <summary>The longest failure reason the failed issue stores; the provider's text is cut to fit.</summary>
     public const int FailureReasonMaxLength = 500;
 

@@ -12,6 +12,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// </summary>
 public sealed class TriageInProgressIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.Triage;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => false;
+
+    public override IssueCodeStep? CodeStep => null;
+
     // Private parameterless constructor for EF Core materialization.
     private TriageInProgressIssue()
     {
