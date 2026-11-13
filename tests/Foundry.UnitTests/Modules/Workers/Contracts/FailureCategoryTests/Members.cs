@@ -189,6 +189,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void IssueClosed_ValueIsIssueClosed()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.IssueClosed;
+
+        // Assert
+        category.Value.ShouldBe("issue_closed");
+    }
+
+    [Fact]
     public void WhenTwoInstancesHaveSameToken_AreEqual()
     {
         // Arrange

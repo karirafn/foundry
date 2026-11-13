@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -76,6 +77,7 @@ public static class WorkersModule
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
+        services.AddIntegrationEventHandler<IssueClosedWithUnpublishedRun, IssueClosedWithUnpublishedRunHandler>();
         services.AddIntegrationEventHandler<WorkerImageSettingsChanged, WorkerImageSettingsChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();

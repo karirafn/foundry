@@ -143,4 +143,18 @@ public sealed class Summary
         // Assert
         summary.ShouldNotStartWith("Usage limit reached");
     }
+
+    [Fact]
+    public void WhenIssueClosed_SummarySaysTheIssueClosedBeforeTheWorkWasPublished()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.IssueClosed();
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldBe(
+            "The issue was closed on the provider before the run's work was published: its unpublished commits were deleted and nothing was pushed");
+    }
 }
