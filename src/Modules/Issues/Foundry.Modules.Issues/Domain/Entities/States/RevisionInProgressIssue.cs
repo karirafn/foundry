@@ -112,30 +112,7 @@ public sealed class RevisionInProgressIssue : Issue
         return diverged;
     }
 
-    // MarkInReview and MarkUnchanged perform the same state transition — both return the issue to ReviewIssue
-    // carrying the existing BranchName and PullRequestUrl forward. The two-name distinction is intentional:
-    // MarkInReview signals that the revision produced (or updated) a PR; MarkUnchanged signals that the worker
-    // found nothing to change but the PR still stands. Callers pick the name that matches what the worker
-    // reported, which preserves the semantic distinction in logs and domain events without diverging the cutoff
-    // logic. Do NOT merge them into one method.
-
-    public ReviewIssue MarkInReview(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
-    {
-        DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
-        return review;
-    }
-
-    public ReviewIssue MarkUnchanged(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
-    {
-        DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
-        return review;
-    }
-
-    // MarkRebasePending and MarkUnchangedRebasePending mirror the MarkInReview/MarkUnchanged split:
+    // MarkRebasePending and MarkUnchangedRebasePending perform the same transition under two names:
     // MarkRebasePending signals the revision produced (or updated) a PR whose branch is now rebased before checks;
     // MarkUnchangedRebasePending signals the worker found nothing to change but the branch may still be behind
     // the default branch, so it is rebased all the same (ADR 0087).

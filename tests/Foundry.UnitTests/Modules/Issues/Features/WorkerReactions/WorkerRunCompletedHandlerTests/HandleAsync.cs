@@ -494,7 +494,7 @@ public sealed class HandleAsync : IAsyncDisposable
     [Fact]
     public async Task WhenInProgressIssueWithOpenStateAndNullBranchName_DoesNotTransition()
     {
-        // Arrange — an Open event with null BranchName must not be null-suppressed into MarkInReview
+        // Arrange — an Open event with null BranchName must not be null-suppressed into MarkRebasePending
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
 
@@ -520,7 +520,7 @@ public sealed class HandleAsync : IAsyncDisposable
     [Fact]
     public async Task WhenInProgressIssueWithOpenStateAndNullPrUrl_DoesNotTransition()
     {
-        // Arrange — an Open event with null PullRequestUrl must not be null-suppressed into MarkInReview
+        // Arrange — an Open event with null PullRequestUrl must not be null-suppressed into MarkRebasePending
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
 

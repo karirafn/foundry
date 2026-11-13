@@ -98,7 +98,7 @@ public sealed class PersistRebaseOutcome : IAsyncDisposable
     public async Task WhenReview_RebaseOutcomeRoundTrips(RebaseOutcome outcome)
     {
         // Arrange
-        ReviewIssue review = new IssueBuilder().WithIssueNumber(202).WithRebaseOutcome(outcome).ReviewFromChecksPending();
+        ReviewIssue review = new IssueBuilder().WithIssueNumber(202).WithRebaseOutcome(outcome).Review();
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -108,21 +108,5 @@ public sealed class PersistRebaseOutcome : IAsyncDisposable
 
         // Assert
         result.ShouldBeOfType<ReviewIssue>().RebaseOutcome.ShouldBe(outcome);
-    }
-
-    [Fact]
-    public async Task WhenReviewHasNoRebaseStep_RebaseOutcomeIsNull()
-    {
-        // Arrange
-        ReviewIssue review = new IssueBuilder().WithIssueNumber(203).Review();
-        _dbContext.Set<Issue>().Add(review);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Act
-        Issue? result = await _dbContext.Set<Issue>().FindAsync([review.Id], TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<ReviewIssue>().RebaseOutcome.ShouldBeNull();
     }
 }

@@ -157,8 +157,7 @@ public sealed class IssueBuilder
 
     public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId, _transitionedAt);
 
-    public ReviewIssue Review() =>
-        InProgress().MarkInReview(_branchName, _pullRequestUrl, _feedbackCutoffAt, _transitionedAt);
+    public ReviewIssue Review() => ChecksPending().ToReview(_checksOutcome, _transitionedAt);
 
     public RevisionQueuedIssue RevisionQueued() =>
         Review().Revise(_reviewComments, _transitionedAt, _omittedCommentCount, _newestCommentAt);
@@ -244,8 +243,6 @@ public sealed class IssueBuilder
     /// </summary>
     public ChecksPendingIssue ChecksPendingAtCap() =>
         ChecksPendingFromFixChecks().FixChecks(_failingChecks, _transitionedAt).Claim(_workerRunId, _transitionedAt).MarkRebasePending(_runStartedAt, _transitionedAt).MarkChecksPending(_rebaseOutcome, _transitionedAt);
-
-    public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome, _transitionedAt);
 
     public UnchangedIssue Unchanged() => InProgress().MarkUnchanged(_transitionedAt);
 
