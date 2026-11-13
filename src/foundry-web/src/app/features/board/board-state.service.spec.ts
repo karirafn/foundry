@@ -4,6 +4,8 @@ import { vi } from 'vitest';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
 import { ConnectionStatus, IssueSignalRService } from '../../core/services/issue-signalr.service';
+import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
+import { AgentActivity } from '../../core/models/agent-activity.model';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { RepositoryService } from '../settings/repositories/repository.service';
 import { BoardBandsView, BoardStateService } from './board-state.service';
@@ -42,10 +44,29 @@ interface Harness {
   status: WritableSignal<ConnectionStatus>;
   hubHandlers: Map<string, (data: IssueSummary) => void>;
   repositories: WritableSignal<RepositorySummary[]>;
+  activities: WritableSignal<ReadonlyMap<string, AgentActivity>>;
+}
+
+function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
+  return {
+    workerRunId: 'run-1',
+    issueId: 'issue-1',
+    role: 'implement',
+    lastEventAt: null,
+    tasks: [],
+    currentTask: null,
+    completedTaskCount: 0,
+    subagents: [],
+    activeSkill: null,
+    inFlightTool: null,
+    tokens: { inputTokens: 0, outputTokens: 0 },
+    ...overrides,
+  };
 }
 
 function setup(): Harness {
   const issues = signal<IssueSummary[]>([]);
+  const activities = signal<ReadonlyMap<string, AgentActivity>>(new Map());
   const initialLoading = signal(true);
   const status = signal<ConnectionStatus>('connected');
   const hubHandlers = new Map<string, (data: IssueSummary) => void>();
@@ -63,6 +84,10 @@ function setup(): Harness {
       { provide: IssueService, useValue: issueService },
       { provide: RepositoryService, useValue: { repositories } },
       {
+        provide: WorkerSignalRService,
+        useValue: { agentActivityForIssue: (id: string) => activities().get(id) ?? null },
+      },
+      {
         provide: IssueSignalRService,
         useValue: {
           connectionStatus: status,
@@ -79,6 +104,7 @@ function setup(): Harness {
     status,
     hubHandlers,
     repositories,
+    activities,
   };
 }
 
@@ -688,5 +714,124 @@ describe('BoardStateService', () => {
 
     // Assert
     expect(h.hubHandlers.has('IssueUpdated')).toBe(false);
+  });
+
+  describe('clock and silence', () => {
+    const START = Date.parse('2026-01-01T12:00:00Z');
+
+    function silentRun(
+      h: Harness,
+      issueId: string,
+      workerRunId: string,
+      lastEventAt: string,
+    ): void {
+      h.activities.update((current) =>
+        new Map(current).set(issueId, buildActivity({ issueId, workerRunId, lastEventAt })),
+      );
+      TestBed.tick();
+    }
+
+    beforeEach(() => vi.setSystemTime(START));
+
+    it('ticks the shared clock every second', async () => {
+      // Arrange
+      const h = setup();
+
+      // Act
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // Assert
+      expect(h.service.now()).toBe(START + 1000);
+    });
+
+    it('announces a worker that goes silent', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a', issueNumber: 7 })]);
+      silentRun(h, 'a', 'run-a', new Date(START - 299_000).toISOString());
+
+      // Act
+      await vi.advanceTimersByTimeAsync(1000);
+      TestBed.tick();
+
+      // Assert
+      expect(h.service.announcement()).toBe('#7 worker silent for 5 minutes');
+    });
+
+    it('does not announce a worker under the silence threshold', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a', issueNumber: 7 })]);
+      silentRun(h, 'a', 'run-a', new Date(START - 60_000).toISOString());
+
+      // Act
+      await vi.advanceTimersByTimeAsync(1000);
+      TestBed.tick();
+
+      // Assert
+      expect(h.service.announcement()).toBe('');
+    });
+
+    it('announces a silence episode once', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [
+        buildIssue({ id: 'a', issueNumber: 7 }),
+        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true }),
+      ]);
+      silentRun(h, 'a', 'run-a', new Date(START - 300_000).toISOString());
+      expect(h.service.announcement()).toBe('#7 worker silent for 5 minutes');
+      change(h, [
+        buildIssue({ id: 'a', issueNumber: 7 }),
+        buildIssue({ id: 'b', issueNumber: 8, state: 'in_progress' }),
+      ]);
+      await vi.advanceTimersByTimeAsync(150);
+      expect(h.service.announcement()).toBe('#8 started: implement');
+
+      // Act
+      await vi.advanceTimersByTimeAsync(5000);
+      TestBed.tick();
+
+      // Assert
+      expect(h.service.announcement()).toBe('#8 started: implement');
+    });
+
+    it('announces a new silence episode after the run reports again', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [
+        buildIssue({ id: 'a', issueNumber: 7 }),
+        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true }),
+      ]);
+      silentRun(h, 'a', 'run-a', new Date(START - 300_000).toISOString());
+      change(h, [
+        buildIssue({ id: 'a', issueNumber: 7 }),
+        buildIssue({ id: 'b', issueNumber: 8, state: 'in_progress' }),
+      ]);
+      await vi.advanceTimersByTimeAsync(150);
+      expect(h.service.announcement()).toBe('#8 started: implement');
+      silentRun(h, 'a', 'run-a', new Date(START).toISOString());
+
+      // Act
+      await vi.advanceTimersByTimeAsync(300_000);
+      TestBed.tick();
+
+      // Assert
+      expect(h.service.announcement()).toBe('#7 worker silent for 5 minutes');
+    });
+
+    it('does not announce silence for a run whose issue is not running', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true })]);
+      silentRun(h, 'a', 'run-a', new Date(START - 600_000).toISOString());
+
+      // Act
+      await vi.advanceTimersByTimeAsync(1000);
+      TestBed.tick();
+
+      // Assert
+      expect(h.service.announcement()).toBe('');
+    });
   });
 });

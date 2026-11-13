@@ -251,6 +251,17 @@ describe('buildBoardBands', () => {
     ]);
   });
 
+  it('gives a triage run the triage role from its state, whatever its stage', () => {
+    // Arrange
+    const issues = [buildIssue({ id: 't', stage: 'implement', state: 'triage_in_progress' })];
+
+    // Act
+    const bands = buildBoardBands(issues, [], []);
+
+    // Assert
+    expect(bands.workers[0].role).toBe('triage');
+  });
+
   it('lists the pipeline in global dispatch order across stages', () => {
     // Arrange
     const issues = [

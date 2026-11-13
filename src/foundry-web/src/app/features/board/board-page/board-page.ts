@@ -30,8 +30,6 @@ import { ProgressBandComponent } from '../progress-band/progress-band';
 const NARROW_QUERY = '(width < 900px)';
 const EMPTY_MESSAGE = `Nothing is in flight. Add the ${TRIGGER_LABEL} label to an issue to start work.`;
 const STALE_QUEUE_MESSAGE = 'Queue order may be out of date';
-// Cadence of "waiting 12m" and "running 3m"; coarse enough to stay quiet, fine enough to read live.
-const CLOCK_INTERVAL_MS = 5_000;
 
 /**
  * The landing page: active issues in priority bands (Needs you, In progress, Pipeline, Blocked),
@@ -64,8 +62,8 @@ export class BoardPageComponent implements OnInit {
   protected readonly triggerLabel = TRIGGER_LABEL;
   protected readonly paneTitleId = ISSUE_PANE_TITLE_ID;
 
-  private readonly _now: WritableSignal<number> = signal(Date.now());
-  protected readonly now: Signal<number> = this._now.asReadonly();
+  /** The board's one shared clock, so every card ticks together. */
+  protected readonly now: Signal<number> = this.board.now;
 
   private readonly _narrow: WritableSignal<boolean> = signal(false);
   /** On narrow screens the sheet covers the board, so the board leaves the tab order. */
@@ -89,8 +87,6 @@ export class BoardPageComponent implements OnInit {
   constructor() {
     effect(() => this.board.sheetCoversBoard.set(this.sheetCoversBoard()));
     this._watchNarrow();
-    const clock = setInterval(() => this._now.set(Date.now()), CLOCK_INTERVAL_MS);
-    inject(DestroyRef).onDestroy(() => clearInterval(clock));
   }
 
   ngOnInit(): void {
