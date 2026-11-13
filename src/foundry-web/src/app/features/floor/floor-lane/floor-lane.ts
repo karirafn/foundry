@@ -2,12 +2,11 @@ import { ChangeDetectionStrategy, Component, InputSignal, Signal, computed, inpu
 import { AGENT_SILENCE_THRESHOLD_MINUTES, ActiveSubagent, AgentTaskItem } from '../../../core/models/agent-activity.model';
 import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
+import { formatElapsed, laneStepText } from '../../../shared/utils/agent-activity-format';
 import {
   FLOOR_SUBAGENT_VISIBLE_LIMIT,
   FloorLane,
-  formatElapsed,
   formatTokenCount,
-  laneStepText,
   splitSubagents,
 } from '../floor.model';
 
