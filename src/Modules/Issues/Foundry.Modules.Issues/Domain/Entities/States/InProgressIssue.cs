@@ -168,6 +168,14 @@ public sealed class InProgressIssue : Issue
         return diverged;
     }
 
+    internal static InProgressIssue FromPublishBlocked(PublishBlockedIssue source, DateTimeOffset transitionedAt)
+    {
+        InProgressIssue inProgress = new(source.Id, transitionedAt);
+        inProgress.CopySharedPropertiesFrom(source);
+        inProgress.WorkerRunId = source.WorkerRunId;
+        return inProgress;
+    }
+
     internal static InProgressIssue FromPublishFailed(PublishFailedIssue source, DateTimeOffset transitionedAt)
     {
         InProgressIssue inProgress = new(source.Id, transitionedAt);

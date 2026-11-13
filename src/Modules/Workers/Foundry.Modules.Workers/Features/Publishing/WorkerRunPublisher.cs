@@ -129,7 +129,15 @@ internal sealed class WorkerRunPublisher(
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
 
         PublishResult result = await publisher.PublishAsync(
-            new PublishRequest(run.Id, dispatchInfo.CloneUrl, gitPat, run.BranchName, runBase, identity, limits),
+            new PublishRequest(
+                run.Id,
+                dispatchInfo.CloneUrl,
+                gitPat,
+                run.BranchName,
+                runBase,
+                identity,
+                limits,
+                run.ConfirmedFindings),
             cancellationToken);
 
         if (result is PublishResult.Failed { Unreachable: true } unreachable)
@@ -227,7 +235,8 @@ internal sealed class WorkerRunPublisher(
             issue.Title,
             issue.IssueNumber,
             run.PublishedCommitSubjects,
-            run.RevertedFiles);
+            run.RevertedFiles,
+            run.FalsePositiveConfirmation);
 
         Result<string> opened = await runPublishingCommands.OpenPullRequestAsync(
             run.MonitoredRepositoryId,
@@ -254,7 +263,8 @@ internal sealed class WorkerRunPublisher(
         string body = PullRequestText.SummaryComment(
             PullRequestDescription.TryCreate(run.PullRequestBody),
             run.PublishedCommitSubjects,
-            run.RevertedFiles);
+            run.RevertedFiles,
+            run.FalsePositiveConfirmation);
 
         Result posted = await runPublishingCommands.PostRunSummaryAsync(
             run.MonitoredRepositoryId,

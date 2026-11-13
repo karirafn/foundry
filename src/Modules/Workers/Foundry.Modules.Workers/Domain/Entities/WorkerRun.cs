@@ -90,6 +90,22 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     public IReadOnlyList<RevertedFile> RevertedFiles { get; private set; } = [];
 
     /// <summary>
+    /// The secret findings an operator confirmed as false positives (#899), so the Publisher suppresses exactly these;
+    /// empty when the run was never confirmed. Each confirmation adds to the set, so a re-block never un-suppresses an
+    /// earlier finding.
+    /// </summary>
+    public IReadOnlyList<SecretFinding> ConfirmedFindings { get; private set; } = [];
+
+    /// <summary>When an operator last confirmed the run's findings as false positives; <see langword="null"/> when never.</summary>
+    public DateTimeOffset? FalsePositivesConfirmedAt { get; private set; }
+
+    /// <summary>The run's confirmation, or <see langword="null"/> when no finding was ever confirmed.</summary>
+    public FalsePositiveConfirmation? FalsePositiveConfirmation =>
+        FalsePositivesConfirmedAt is { } confirmedAt && ConfirmedFindings.Count > 0
+            ? new FalsePositiveConfirmation(ConfirmedFindings, confirmedAt)
+            : null;
+
+    /// <summary>
     /// The numbers of the open issues Foundry supplied in the run's Tracker Context at dispatch, before prompt fitting;
     /// <see langword="null"/> for a run that recorded none.
     /// </summary>
@@ -113,6 +129,27 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         DivergedSideBranch = divergence?.SideBranch;
         DivergenceReason = divergence?.Reason;
         RevertedFiles = revertedFiles;
+    }
+
+    /// <summary>Adds <paramref name="findings"/> to the confirmed set, keeping each finding once.</summary>
+    protected void ConfirmFindings(IReadOnlyList<SecretFinding> findings, DateTimeOffset confirmedAt)
+    {
+        ArgumentNullException.ThrowIfNull(findings);
+        if (findings.Count == 0)
+        {
+            throw new ArgumentException("A confirmation confirms at least one finding.", nameof(findings));
+        }
+
+        ConfirmedFindings = [.. ConfirmedFindings.Concat(findings).Distinct()];
+        FalsePositivesConfirmedAt = confirmedAt;
+    }
+
+    protected void CarryConfirmationFrom(WorkerRun source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        ConfirmedFindings = source.ConfirmedFindings;
+        FalsePositivesConfirmedAt = source.FalsePositivesConfirmedAt;
     }
 
     protected void RecordBase(RunBase? runBase, MonitoredRepositoryId? preparedRepositoryId)

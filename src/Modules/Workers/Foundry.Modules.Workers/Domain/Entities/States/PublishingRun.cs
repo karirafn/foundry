@@ -61,6 +61,20 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
         return publishing;
     }
 
+    /// <summary>
+    /// An operator confirmed a blocked run's findings as false positives (#899): publish again with those findings
+    /// added to the confirmed set, on a fresh set of attempts.
+    /// </summary>
+    internal static PublishingRun FromPublishBlocked(PublishBlockedRun blocked, DateTimeOffset confirmedAt)
+    {
+        PublishingRun publishing = new(blocked)
+        {
+            FailedPublishAttempts = 0,
+        };
+        publishing.ConfirmFindings(blocked.SecretFindings, confirmedAt);
+        return publishing;
+    }
+
     /// <summary>Records what the Publisher pushed; a failed publish goes through <see cref="FailPublish"/> instead.</summary>
     public void RecordPublished(PublishResult result, DateTimeOffset publishedAt)
     {

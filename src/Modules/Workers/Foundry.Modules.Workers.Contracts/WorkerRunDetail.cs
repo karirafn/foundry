@@ -35,10 +35,22 @@ public sealed record WorkerRunDetail(
 
     /// <summary>The files the Diff gate reverted before it pushed the run (#788); empty when it reverted none.</summary>
     public IReadOnlyList<WorkerRunRevertedFile> RevertedFiles { get; init; } = [];
+
+    /// <summary>When the Diff gate blocked the run's publish; set only while its state is <c>publish_blocked</c>. A confirmation echoes it.</summary>
+    public DateTimeOffset? PublishBlockedAt { get; init; }
+
+    /// <summary>When an operator last confirmed the run's secret findings as false positives (#899); <see langword="null"/> when never.</summary>
+    public DateTimeOffset? FalsePositivesConfirmedAt { get; init; }
+
+    /// <summary>Every finding an operator confirmed as a false positive on this run (#899); empty when none.</summary>
+    public IReadOnlyList<WorkerRunConfirmedFinding> ConfirmedFindings { get; init; } = [];
 }
 
 /// <summary>Where the Diff gate found a possible secret. There is deliberately no member for the matched value.</summary>
 public sealed record WorkerRunSecretFinding(string Path, int Line, string CommitSha, string RuleId);
+
+/// <summary>A finding an operator confirmed as a false positive. There is deliberately no member for the matched value.</summary>
+public sealed record WorkerRunConfirmedFinding(string Path, int Line, string RuleId);
 
 /// <summary>A file the Diff gate reverted; <c>Reason</c> is <c>oversized</c> or <c>binary</c>.</summary>
 public sealed record WorkerRunRevertedFile(string Path, string Reason, long SizeBytes);
