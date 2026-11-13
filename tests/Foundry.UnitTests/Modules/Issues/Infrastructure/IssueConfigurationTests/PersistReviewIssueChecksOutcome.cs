@@ -46,7 +46,7 @@ public sealed class PersistReviewIssueChecksOutcome : IAsyncDisposable
             .WithIssueNumber(100)
             .WithTitle("Review with passed outcome")
             .WithChecksOutcome(ChecksOutcomeBuilder.Passed())
-            .ReviewFromChecksPending();
+            .Review();
 
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -70,7 +70,7 @@ public sealed class PersistReviewIssueChecksOutcome : IAsyncDisposable
             .WithIssueNumber(101)
             .WithTitle("Review with none detected outcome")
             .WithChecksOutcome(ChecksOutcomeBuilder.NoneDetected())
-            .ReviewFromChecksPending();
+            .Review();
 
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -94,7 +94,7 @@ public sealed class PersistReviewIssueChecksOutcome : IAsyncDisposable
             .WithIssueNumber(102)
             .WithTitle("Review with unfinished outcome")
             .WithChecksOutcome(ChecksOutcomeBuilder.Unfinished())
-            .ReviewFromChecksPending();
+            .Review();
 
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -125,7 +125,7 @@ public sealed class PersistReviewIssueChecksOutcome : IAsyncDisposable
             .WithIssueNumber(103)
             .WithTitle("Review with still failing outcome")
             .WithChecksOutcome(outcome)
-            .ReviewFromChecksPending();
+            .Review();
 
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -156,29 +156,6 @@ public sealed class PersistReviewIssueChecksOutcome : IAsyncDisposable
             .WithIssueNumber(104)
             .WithTitle("Review with unreadable outcome")
             .WithChecksOutcome(ChecksOutcomeBuilder.Unreadable())
-            .ReviewFromChecksPending();
-
-        _dbContext.Set<Issue>().Add(review);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Act
-        Issue? result = await _dbContext
-            .Set<Issue>()
-            .FindAsync([review.Id], TestContext.Current.CancellationToken);
-
-        // Assert
-        ReviewIssue reloaded = result.ShouldBeOfType<ReviewIssue>();
-        reloaded.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Unreadable>();
-    }
-
-    [Fact]
-    public async Task WhenReviewCreatedFromInProgress_ChecksOutcomeDefaultsToPassedAndRoundTrips()
-    {
-        // Arrange
-        ReviewIssue review = new IssueBuilder()
-            .WithIssueNumber(105)
-            .WithTitle("Review created from in-progress")
             .Review();
 
         _dbContext.Set<Issue>().Add(review);
@@ -192,6 +169,6 @@ public sealed class PersistReviewIssueChecksOutcome : IAsyncDisposable
 
         // Assert
         ReviewIssue reloaded = result.ShouldBeOfType<ReviewIssue>();
-        reloaded.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
+        reloaded.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Unreadable>();
     }
 }

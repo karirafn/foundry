@@ -212,3 +212,14 @@ describe('discard failure category (#788)', () => {
     expect(display?.cssClass).toBe('badge--failure-cancelled');
   });
 });
+
+describe('issue-closed failure category (#909)', () => {
+  it('should map issue_closed to "ISSUE CLOSED" with the provider-closed badge', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('issue_closed');
+
+    // Assert
+    expect(display?.label).toBe('ISSUE CLOSED');
+    expect(display?.cssClass).toBe('badge--failure-pr-closed');
+  });
+});

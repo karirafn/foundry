@@ -78,6 +78,23 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         return issue;
     }
 
+    private async Task<ReviewIssue> ReviewThroughChecksGateAsync(InProgressIssue inProgress, DateTimeOffset feedbackCutoffAt)
+    {
+        RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
+            branchName: "feat/issue-1",
+            pullRequestUrl: "https://github.com/owner/repo/pull/42",
+            feedbackCutoffAt: feedbackCutoffAt,
+            DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, rebasePending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(rebasePending, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        return review;
+    }
+
     [Fact]
     public async Task WhenIssueDoesNotExist_ReturnsNotFoundError()
     {
@@ -166,12 +183,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
-        ReviewIssue review = inProgress.MarkInReview(
-            branchName: "feat/issue-1",
-            pullRequestUrl: "https://github.com/owner/repo/pull/42",
-            feedbackCutoffAt: feedbackCutoffAt,
-            DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ReviewIssue review = await ReviewThroughChecksGateAsync(inProgress, feedbackCutoffAt);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -235,12 +247,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = inProgress.MarkInReview(
-            branchName: "feat/issue-1",
-            pullRequestUrl: "https://github.com/owner/repo/pull/42",
-            feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(1),
-            DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ReviewIssue review = await ReviewThroughChecksGateAsync(inProgress, DateTimeOffset.UtcNow.AddDays(1));
 
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
         CompletedIssue completed = review.Complete(completedAt);

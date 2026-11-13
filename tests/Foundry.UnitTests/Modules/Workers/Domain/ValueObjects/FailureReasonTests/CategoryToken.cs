@@ -138,4 +138,17 @@ public sealed class CategoryToken
         // Assert
         token.ShouldBe("cancelled");
     }
+
+    [Fact]
+    public void WhenIssueClosed_CategoryTokenIsIssueClosed()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.IssueClosed();
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("issue_closed");
+    }
 }

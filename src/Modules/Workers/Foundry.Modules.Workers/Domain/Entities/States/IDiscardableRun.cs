@@ -11,4 +11,10 @@ public interface IDiscardableRun
 
     /// <summary>An operator discarded the run: its unpublished work is deleted and nothing is pushed.</summary>
     FailedRun DiscardOnRequest();
+
+    /// <summary>
+    /// The run's issue was closed on the provider (#909): its work can never be published, so it is deleted and nothing
+    /// is pushed.
+    /// </summary>
+    FailedRun DiscardOnIssueClosed();
 }
