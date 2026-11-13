@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DispatchService } from './dispatch.service';
-import { GlobalSettingsResponse } from '../models/settings.model';
+import { GlobalSettingsResponse, PausedHost } from '../models/settings.model';
 
 function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalSettingsResponse {
   return {
@@ -28,7 +28,8 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     memoryLimitMb: 8192,
     cpuLimit: 2,
     pidsLimit: 512,
-      additionalDenyRules: [],
+    additionalDenyRules: [],
+    pausedHosts: [],
     ...overrides,
   };
 }
@@ -73,6 +74,50 @@ describe('DispatchService', () => {
     expect(service.pausing()).toBe(false);
     expect(service.resuming()).toBe(false);
     expect(service.pauseResumeError()).toBeNull();
+    expect(service.pausedHosts()).toEqual([]);
+  });
+
+  it('should set pausedHosts from updateFromSettings response', () => {
+    // Arrange
+    const pausedHost: PausedHost = {
+      host: 'gitlab.com',
+      pausedAt: '2026-07-01T07:39:00Z',
+      nextProbeAt: '2026-07-01T07:52:00Z',
+      probeAttempts: 2,
+    };
+
+    // Act
+    service.updateFromSettings(buildResponse({ pausedHosts: [pausedHost] }));
+
+    // Assert
+    expect(service.pausedHosts()).toEqual([pausedHost]);
+  });
+
+  it('should clear pausedHosts when updateFromSettings response lists none', () => {
+    // Arrange
+    service.updateFromSettings(buildResponse({
+      pausedHosts: [{ host: 'gitlab.com', pausedAt: '2026-07-01T07:39:00Z', nextProbeAt: '2026-07-01T07:52:00Z', probeAttempts: 0 }],
+    }));
+
+    // Act
+    service.updateFromSettings(buildResponse({ pausedHosts: [] }));
+
+    // Assert
+    expect(service.pausedHosts()).toEqual([]);
+  });
+
+  it('should treat a response without pausedHosts as no paused hosts', () => {
+    // Arrange
+    service.updateFromSettings(buildResponse({
+      pausedHosts: [{ host: 'gitlab.com', pausedAt: '2026-07-01T07:39:00Z', nextProbeAt: '2026-07-01T07:52:00Z', probeAttempts: 0 }],
+    }));
+    const { pausedHosts: _omitted, ...withoutPausedHosts } = buildResponse();
+
+    // Act
+    service.updateFromSettings(withoutPausedHosts as GlobalSettingsResponse);
+
+    // Assert
+    expect(service.pausedHosts()).toEqual([]);
   });
 
   // Cycle 2: updateFromSettings populates isDispatchPaused

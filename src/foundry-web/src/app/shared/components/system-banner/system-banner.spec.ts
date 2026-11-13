@@ -11,6 +11,7 @@ import { SettingsService } from '../../../core/services/settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { SystemStatusService } from '../../../core/services/system-status.service';
 import { CreditsService } from '../../../core/services/credits.service';
+import { PausedHost } from '../../../core/models/settings.model';
 
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
@@ -42,11 +43,13 @@ function createMockDispatchService() {
   const isPausedSignal = signal(false);
   const usageLimitSignal = signal<string | null>(null);
   const resumingSignal = signal(false);
+  const pausedHostsSignal = signal<readonly PausedHost[]>([]);
 
   return {
     isDispatchPaused: isPausedSignal.asReadonly(),
     usageLimitResetsAt: usageLimitSignal.asReadonly(),
     resuming: resumingSignal.asReadonly(),
+    pausedHosts: pausedHostsSignal.asReadonly(),
     resumeDispatch: vi.fn(),
   };
 }
@@ -165,6 +168,18 @@ describe('SystemBannerComponent', () => {
       const creditsIndex = children.indexOf('fd-credits-banner');
       const dispatchIndex = children.indexOf('fd-dispatch-banner');
       expect(creditsIndex).toBeLessThan(dispatchIndex);
+    });
+
+    it('should render fd-host-pause-banner right after fd-dispatch-banner', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
+      const dispatchIndex = children.indexOf('fd-dispatch-banner');
+      expect(dispatchIndex).toBeGreaterThanOrEqual(0);
+      expect(children[dispatchIndex + 1]).toBe('fd-host-pause-banner');
     });
   });
 
