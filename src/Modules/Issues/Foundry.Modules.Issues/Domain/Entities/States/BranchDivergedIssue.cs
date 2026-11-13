@@ -6,9 +6,11 @@ using Foundry.Modules.Workers.Contracts;
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 /// <summary>
-/// Someone pushed to the issue branch while the run worked, and merging the run's work into it conflicted, so the
-/// Publisher pushed the run's work to <see cref="SideBranchName"/> instead (ADR 0100). The issue waits for a person to
-/// merge the side branch; it resumes on its own once the merge lands, or through Retry Issue.
+/// The Publisher pushed the run's work to <see cref="SideBranchName"/> instead of the issue branch, for
+/// <see cref="DivergenceReason"/>: someone pushed to the issue branch while the run worked and the work could not join it
+/// (ADR 0100), or the provider refused the lease push of a rebased tip because the branch is protected from force pushes
+/// (ADR 0101). The issue waits for a person to bring the side branch into the issue branch; it resumes on its own once
+/// the issue branch contains it, or through Retry Issue.
 /// </summary>
 public sealed class BranchDivergedIssue : Issue
 {
@@ -35,6 +37,8 @@ public sealed class BranchDivergedIssue : Issue
 
     public string SideBranchName { get; private set; } = string.Empty;
 
+    public BranchDivergenceReason DivergenceReason { get; private set; }
+
     public string PullRequestUrl { get; private set; } = string.Empty;
 
     public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
@@ -45,6 +49,7 @@ public sealed class BranchDivergedIssue : Issue
         InProgressIssue source,
         string branchName,
         string sideBranchName,
+        BranchDivergenceReason divergenceReason,
         string? pullRequestUrl)
     {
         BranchDivergedIssue diverged = new(source.Id);
@@ -52,17 +57,22 @@ public sealed class BranchDivergedIssue : Issue
         diverged.WorkerRunId = source.WorkerRunId;
         diverged.BranchName = branchName;
         diverged.SideBranchName = sideBranchName;
+        diverged.DivergenceReason = divergenceReason;
         diverged.PullRequestUrl = pullRequestUrl ?? string.Empty;
         return diverged;
     }
 
-    internal static BranchDivergedIssue FromRevisionInProgress(RevisionInProgressIssue source, string sideBranchName)
+    internal static BranchDivergedIssue FromRevisionInProgress(
+        RevisionInProgressIssue source,
+        string sideBranchName,
+        BranchDivergenceReason divergenceReason)
     {
         BranchDivergedIssue diverged = new(source.Id);
         diverged.CopySharedPropertiesFrom(source);
         diverged.WorkerRunId = source.WorkerRunId;
         diverged.BranchName = source.BranchName;
         diverged.SideBranchName = sideBranchName;
+        diverged.DivergenceReason = divergenceReason;
         diverged.PullRequestUrl = source.PullRequestUrl;
         diverged.FromRevision = true;
         return diverged;

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
@@ -66,13 +67,19 @@ internal static partial class PublishOutputParser
     {
         if (!TryBranch(values.GetValueOrDefault("branch"), out BranchName branch)
             || !TryBranch(values.GetValueOrDefault("side_branch"), out BranchName sideBranch)
-            || !CommitSha.TryFrom(values.GetValueOrDefault("head"), out CommitSha head))
+            || !CommitSha.TryFrom(values.GetValueOrDefault("head"), out CommitSha head)
+            || ReadDivergenceReason(values.GetValueOrDefault("reason")) is not { } reason)
         {
             return null;
         }
 
-        return new PublishResult.Diverged(branch, sideBranch, head, ReadRevertedFiles(log));
+        return new PublishResult.Diverged(branch, sideBranch, head, reason, ReadRevertedFiles(log));
     }
+
+    // No reason is a branch that moved during the run; the Publisher names only a refused force push (ADR 0101).
+    private static BranchDivergenceReason? ReadDivergenceReason(string? reason) => reason is null
+        ? BranchDivergenceReason.BranchMoved
+        : BranchDivergenceReasonTokens.FromToken(reason.Trim());
 
     // Nothing was pushed, so a finding count that disagrees with the finding lines is never taken as a result.
     private static PublishResult.SecretDetected? ReadSecretDetected(Dictionary<string, string> values, string log)

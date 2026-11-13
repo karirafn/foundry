@@ -45,9 +45,10 @@ public sealed record TriageVerdictDetails(
 }
 
 /// <summary>
-/// The current state's fields. <paramref name="BranchUrl"/>, <paramref name="SideBranchName"/> and
-/// <paramref name="SideBranchUrl"/> are set only for <c>branch_diverged</c>: the issue branch and the side branch the
-/// run's work was pushed to, with their web URLs on the provider.
+/// The current state's fields. <paramref name="BranchUrl"/>, <paramref name="SideBranchName"/>,
+/// <paramref name="SideBranchUrl"/> and <paramref name="DivergenceReason"/> are set only for <c>branch_diverged</c>: the
+/// issue branch and the side branch the run's work was pushed to, with their web URLs on the provider, and why
+/// (<c>branch-moved</c> or <c>force-push-protected</c>).
 /// </summary>
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
@@ -68,7 +69,8 @@ public sealed record IssueStateDetails(
     AwaitingInputDetails? AwaitingInput = null,
     string? BranchUrl = null,
     string? SideBranchName = null,
-    string? SideBranchUrl = null);
+    string? SideBranchUrl = null,
+    string? DivergenceReason = null);
 
 /// <summary>
 /// An awaiting-input issue's open questions and how their post stands (ADR 0096): <paramref name="PostStatus"/> is

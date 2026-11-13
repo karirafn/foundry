@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
@@ -38,7 +39,9 @@ public sealed class RecordPublished
         BranchName side = BranchName.From("feat/42-add-retry-run-1");
 
         // Act
-        run.RecordPublished(new PublishResult.Diverged(PublishingRunFixture.Branch, side, Head, []), PublishingRunFixture.ExitedAt);
+        run.RecordPublished(
+            new PublishResult.Diverged(PublishingRunFixture.Branch, side, Head, BranchDivergenceReason.BranchMoved, []),
+            PublishingRunFixture.ExitedAt);
 
         // Assert
         run.ShouldSatisfyAllConditions(
@@ -73,5 +76,51 @@ public sealed class RecordPublished
             () => completed.PublishedBranchCommitCount.ShouldBe(2),
             () => completed.VerdictStatus.ShouldBe(RunVerdictStatus.Done),
             () => completed.Base.ShouldBe(PublishingRunFixture.Base));
+    }
+
+    [Fact]
+    public void ARefusedForcePush_KeepsTheSideBranchWithItsReason()
+    {
+        // Arrange
+        PublishingRun run = PublishingRunFixture.Publishing();
+        BranchName side = BranchName.From("feat/42-add-retry-run-1");
+
+        // Act
+        run.RecordPublished(
+            new PublishResult.Diverged(PublishingRunFixture.Branch, side, Head, BranchDivergenceReason.ForcePushProtected, []),
+            PublishingRunFixture.ExitedAt);
+
+        // Assert
+        run.Divergence.ShouldBe(new BranchDivergence(side, BranchDivergenceReason.ForcePushProtected));
+    }
+
+    [Fact]
+    public void APush_HasNoDivergence()
+    {
+        // Arrange
+        PublishingRun run = PublishingRunFixture.Publishing();
+
+        // Act
+        run.RecordPublished(new PublishResult.Published(Head, 1, [], []), PublishingRunFixture.ExitedAt);
+
+        // Assert
+        run.Divergence.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Completing_CarriesTheDivergenceReasonToTheCompletedRun()
+    {
+        // Arrange
+        PublishingRun run = PublishingRunFixture.Publishing();
+        BranchName side = BranchName.From("feat/42-add-retry-run-1");
+        run.RecordPublished(
+            new PublishResult.Diverged(PublishingRunFixture.Branch, side, Head, BranchDivergenceReason.ForcePushProtected, []),
+            PublishingRunFixture.ExitedAt);
+
+        // Act
+        CompletedRun completed = run.Complete(0, PublishingRunFixture.Branch, pullRequestUrl: null);
+
+        // Assert
+        completed.Divergence.ShouldBe(new BranchDivergence(side, BranchDivergenceReason.ForcePushProtected));
     }
 }

@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -83,7 +84,25 @@ public sealed class GetIssueDetailAsync_PublishStates : IAsyncDisposable
             () => stateDetails.BranchName.ShouldBe("feat/42-add-retry"),
             () => stateDetails.BranchUrl.ShouldBe("https://github.com/owner/repo/tree/feat/42-add-retry"),
             () => stateDetails.SideBranchName.ShouldBe("feat/42-add-retry-run-abc"),
-            () => stateDetails.SideBranchUrl.ShouldBe("https://github.com/owner/repo/tree/feat/42-add-retry-run-abc"));
+            () => stateDetails.SideBranchUrl.ShouldBe("https://github.com/owner/repo/tree/feat/42-add-retry-run-abc"),
+            () => stateDetails.DivergenceReason.ShouldBe("branch-moved"));
+    }
+
+    // ADR 0101: the issue detail names a refused force push, which a person resolves differently from a moved branch.
+    [Fact]
+    public async Task WhenBranchDivergedOnAForcePushProtectedBranch_ReturnsTheReason()
+    {
+        // Arrange
+        Issue diverged = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithBranchName("feat/42-add-retry")
+            .BranchDiverged("feat/42-add-retry-run-abc", BranchDivergenceReason.ForcePushProtected);
+
+        // Act
+        IssueDetail detail = await SaveAndGetDetailAsync(diverged);
+
+        // Assert
+        detail.StateDetails.ShouldNotBeNull().DivergenceReason.ShouldBe("force-push-protected");
     }
 
     [Fact]
@@ -129,7 +148,8 @@ public sealed class GetIssueDetailAsync_PublishStates : IAsyncDisposable
             () => stateDetails.FailedAt.ShouldNotBeNull(),
             () => stateDetails.BranchUrl.ShouldBeNull(),
             () => stateDetails.SideBranchName.ShouldBeNull(),
-            () => stateDetails.SideBranchUrl.ShouldBeNull());
+            () => stateDetails.SideBranchUrl.ShouldBeNull(),
+            () => stateDetails.DivergenceReason.ShouldBeNull());
     }
 
     [Fact]

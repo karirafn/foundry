@@ -109,7 +109,7 @@ public sealed class PersistPublishStates : IAsyncDisposable
             .WithWorkerRunId(workerRunId)
             .WithBranchName("feat/73-x")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/73")
-            .BranchDivergedFromRevision("feat/73-x-run-abc");
+            .BranchDivergedFromRevision("feat/73-x-run-abc", BranchDivergenceReason.ForcePushProtected);
 
         // Act
         Issue? result = await SaveAndReloadAsync(diverged);
@@ -120,6 +120,7 @@ public sealed class PersistPublishStates : IAsyncDisposable
             () => reloaded.WorkerRunId.ShouldBe(workerRunId),
             () => reloaded.BranchName.ShouldBe("feat/73-x"),
             () => reloaded.SideBranchName.ShouldBe("feat/73-x-run-abc"),
+            () => reloaded.DivergenceReason.ShouldBe(BranchDivergenceReason.ForcePushProtected),
             () => reloaded.LinkedPullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/73"),
             () => reloaded.FromRevision.ShouldBeTrue());
     }

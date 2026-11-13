@@ -85,7 +85,7 @@ public sealed class CompletedRun : WorkerRun
         completed.RecordPublishFacts(
             publishing.PublishedHead,
             publishing.PublishedBranchCommitCount,
-            publishing.DivergedSideBranch,
+            publishing.Divergence,
             publishing.RevertedFiles);
         return completed;
     }

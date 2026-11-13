@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -23,6 +24,7 @@ public sealed class Transitions
         BranchDivergedIssue diverged = inProgress.MarkBranchDiverged(
             "feat/1-test",
             "feat/1-test-run-abc",
+            BranchDivergenceReason.BranchMoved,
             "https://github.com/owner/repo/pull/1");
 
         // Assert
@@ -33,6 +35,7 @@ public sealed class Transitions
             () => diverged.BranchName.ShouldBe("feat/1-test"),
             () => diverged.SideBranchName.ShouldBe("feat/1-test-run-abc"),
             () => diverged.LinkedPullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/1"),
+            () => diverged.DivergenceReason.ShouldBe(BranchDivergenceReason.BranchMoved),
             () => diverged.FromRevision.ShouldBeFalse(),
             () => domainEvent.IssueId.ShouldBe(inProgress.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
@@ -45,7 +48,11 @@ public sealed class Transitions
         InProgressIssue inProgress = new IssueBuilder().InProgress();
 
         // Act
-        BranchDivergedIssue diverged = inProgress.MarkBranchDiverged("feat/1-test", "feat/1-test-run-abc", null);
+        BranchDivergedIssue diverged = inProgress.MarkBranchDiverged(
+            "feat/1-test",
+            "feat/1-test-run-abc",
+            BranchDivergenceReason.BranchMoved,
+            pullRequestUrl: null);
 
         // Assert
         diverged.LinkedPullRequestUrl.ShouldBeNull();
@@ -61,7 +68,7 @@ public sealed class Transitions
             .RevisionInProgress();
 
         // Act
-        BranchDivergedIssue diverged = revision.MarkBranchDiverged("feat/2-fix-run-abc");
+        BranchDivergedIssue diverged = revision.MarkBranchDiverged("feat/2-fix-run-abc", BranchDivergenceReason.ForcePushProtected);
 
         // Assert
         revision.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueBranchDiverged>();
@@ -70,6 +77,7 @@ public sealed class Transitions
             () => diverged.BranchName.ShouldBe("feat/2-fix"),
             () => diverged.SideBranchName.ShouldBe("feat/2-fix-run-abc"),
             () => diverged.LinkedPullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"),
+            () => diverged.DivergenceReason.ShouldBe(BranchDivergenceReason.ForcePushProtected),
             () => diverged.FromRevision.ShouldBeTrue());
     }
 
@@ -95,6 +103,25 @@ public sealed class Transitions
             () => context.BranchName.ShouldBe("feat/1-test"),
             () => context.FailureReason.ShouldNotBeNull().ShouldContain("feat/1-test-run-abc"),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
+    }
+
+    [Fact]
+    public void WhenRetriedAfterARefusedForcePush_TheContinuationSaysTheBranchIsProtected()
+    {
+        // Arrange
+        BranchDivergedIssue diverged = new IssueBuilder()
+            .WithBranchName("feat/1-test")
+            .BranchDiverged("feat/1-test-run-abc", BranchDivergenceReason.ForcePushProtected);
+
+        // Act
+        ContinuationQueuedIssue queued = diverged.Retry();
+
+        // Assert
+        string? failureReason = queued.Context.ShouldBeOfType<DispatchContext.Continuation>().FailureReason;
+        failureReason.ShouldNotBeNull().ShouldSatisfyAllConditions(
+            reason => reason.ShouldContain("protected from force pushes"),
+            reason => reason.ShouldContain("feat/1-test-run-abc"),
+            reason => reason.ShouldNotContain("conflicted"));
     }
 
     [Fact]
