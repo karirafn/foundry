@@ -13,35 +13,13 @@ import {
   QUEUED_TIER_STATES,
 } from './issue.model';
 import type { TokenTotal } from '../workers/run-totals.model';
-import {
-  DEFAULT_SELECTED_GROUPS,
-  RESOLVED_GROUP_ID,
-  STATE_GROUPS,
-  StateGroup,
-  StateGroupId,
-  groupById,
-  groupFor,
-  groupRankFor,
-  isKnownState,
-  isResolvedState,
-  withinGroupRankFor,
-} from './issue-lifecycle.model';
+import { RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 import { components } from '../../api/schema';
 
 type PagedIssues = components['schemas']['PagedIssues'];
 // publishPhase (#787) is read defensively until the generated schema carries it.
 type GeneratedIssueSummary = components['schemas']['IssueSummary'] & { publishPhase?: string | null };
 type GeneratedTokenTotal = components['schemas']['TokenTotal'];
-
-interface IssueCountsResponse {
-  counts: Record<string, number>;
-}
-
-/** One rendered section of the active band: a selected, non-empty active group and its issues. */
-export interface IssueSection {
-  readonly group: StateGroup;
-  readonly issues: readonly IssueSummary[];
-}
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
 const LOAD_RESOLVED_ERROR = 'Failed to load resolved issues';
@@ -86,7 +64,8 @@ const TRIAGE_ACTIONS: Readonly<Record<TriageAction, TriageActionCopy>> = {
 };
 // Issue ids are GUID-like; anything else (from the wire or a URL) is rejected before use.
 export const SAFE_ID_RE = /^[\w-]+$/;
-const COUNTS_DEBOUNCE_MS = 300;
+// Coalesces a burst of IssueUpdated events into one queue-order reconcile.
+const RECONCILE_DEBOUNCE_MS = 300;
 // Safety-net interval for queue-order reconcile — covers order inputs that raise no IssueUpdated
 // event (e.g. repository Position changes in Settings). ADR 0067: bounded staleness is acceptable
 // for these infrequent operator actions; 30 s is low enough to reflect a Position reorder within
@@ -177,14 +156,6 @@ export class IssueService {
   readonly triageActionSuccess: Signal<string | null> =
     this._triageActionSuccessSignal.asReadonly();
 
-  private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
-  readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
-
-  private readonly _selectedGroupsSignal: WritableSignal<ReadonlySet<StateGroupId>> = signal(DEFAULT_SELECTED_GROUPS);
-  readonly selectedGroups: Signal<ReadonlySet<StateGroupId>> = this._selectedGroupsSignal.asReadonly();
-
-  readonly resolvedSelected: Signal<boolean> = computed(() => this.selectedGroups().has(RESOLVED_GROUP_ID));
-
   private readonly _resolvedIssuesSignal: WritableSignal<IssueSummary[]> = signal([]);
   readonly resolvedIssues: Signal<IssueSummary[]> = this._resolvedIssuesSignal.asReadonly();
 
@@ -200,59 +171,23 @@ export class IssueService {
   readonly resolvedLoading: WritableSignal<boolean> = signal(false);
   readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
 
+  // Set once the first resolved page arrives; until then a live completion is left to that page.
+  private _resolvedLoaded = false;
+
   private readonly _queueOrderStaleSignal: WritableSignal<boolean> = signal(false);
   readonly queueOrderStale: Signal<boolean> = this._queueOrderStaleSignal.asReadonly();
 
   private _detailSub: Subscription | null = null;
-  private _countsDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private _reconcileDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private _reconcileIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private _resolvedRequestToken = 0;
   private _reconcileRequestToken = 0;
-
-  readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
-    const all = this.issues();
-    // Resolved states (currently only `completed`) never enter issues() — filtered in
-    // loadIssues/_upsertIssue — so this sort never encounters them.
-
-    // Build server-index map once so the comparator is O(1) per lookup (not O(n²) indexOf).
-    const serverIndex = new Map<string, number>(all.map((issue, i) => [issue.id, i]));
-
-    return [...all].sort((a, b) => {
-      const rankA = groupRankFor(a.state);
-      const rankB = groupRankFor(b.state);
-
-      // Primary: group rank ascending (In progress → Needs attention → Waiting → ungrouped last).
-      if (rankA !== rankB) {
-        return rankA - rankB;
-      }
-
-      const withinRankA = withinGroupRankFor(a.state);
-      const withinRankB = withinGroupRankFor(b.state);
-
-      // Secondary: within-group tier rank ascending (queued-tier → detected → blocked).
-      if (withinRankA !== withinRankB) {
-        return withinRankA - withinRankB;
-      }
-
-      // Tertiary (both queued-tier): preserve raw server order (dispatch priority).
-      if (QUEUED_TIER_STATES.has(a.state)) {
-        return (serverIndex.get(a.id) ?? 0) - (serverIndex.get(b.id) ?? 0);
-      }
-
-      // Tertiary (same non-queued-tier): sort by detectedAt descending.
-      return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
-    });
-  });
 
   readonly liveIssueCount: Signal<number> = computed(() =>
     this.issues().filter(i => LIVE_STATES.has(i.state)).length
   );
 
-  // Read issues() (raw server order = DispatchOrderKey) — NOT sortedIssues().
-  // The whole queued chain (queued, revision_queued, continuation_queued) sits in the Waiting
-  // bucket, but serverIndex preserves their dispatch priority within that bucket. Using
-  // sortedIssues() would still expose correct relative queue order within Waiting, but
-  // issues() is canonical because it is unaffected by any future group reclassifications.
+  // Read issues() (raw server order = DispatchOrderKey, ADR 0067).
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
     this.issues().filter(isDispatchableQueued)
   );
@@ -265,50 +200,6 @@ export class IssueService {
   readonly nextUpIssueId: Signal<string | null> = computed(() => {
     const first = this.eligibleQueuedIssues()[0];
     return first?.id ?? null;
-  });
-
-  readonly activeBandIssues: Signal<IssueSummary[]> = computed(() => {
-    const selected = this.selectedGroups();
-    return this.sortedIssues().filter(i => selected.has(groupFor(i.state).id));
-  });
-
-  // Splits the active band into one section per selected, non-empty active group, in STATE_GROUPS
-  // order. sortedIssues() is already ordered by group rank, so concatenating the sections yields
-  // exactly activeBandIssues() — queuePositions keeps indexing the rendered order.
-  readonly activeSections: Signal<readonly IssueSection[]> = computed(() => {
-    const byGroup = new Map<StateGroupId, IssueSummary[]>();
-    for (const issue of this.activeBandIssues()) {
-      const id = groupFor(issue.state).id;
-      const bucket = byGroup.get(id);
-      if (bucket === undefined) {
-        byGroup.set(id, [issue]);
-      } else {
-        bucket.push(issue);
-      }
-    }
-    const sections: IssueSection[] = [];
-    for (const group of STATE_GROUPS) {
-      const issues = byGroup.get(group.id);
-      if (issues !== undefined) {
-        sections.push({ group, issues });
-      }
-    }
-    return sections;
-  });
-
-  // Positions index the rendered activeBandIssues() array so the ordinal always matches the
-  // on-screen order (ADR 0067). Every queued-tier state lives in the Waiting group, so the queue is
-  // either fully visible or fully hidden; ordinals are numbered contiguously from the topmost
-  // visible queued card so it always shows "1".
-  readonly queuePositions: Signal<ReadonlyMap<string, number>> = computed(() => {
-    const positions = new Map<string, number>();
-    let position = 1;
-    for (const issue of this.activeBandIssues()) {
-      if (isDispatchableQueued(issue)) {
-        positions.set(issue.id, position++);
-      }
-    }
-    return positions;
   });
 
   readonly nextUpAnnouncement: Signal<string> = computed(() => {
@@ -332,8 +223,8 @@ export class IssueService {
       this._reconcileQueueOrder();
     }, RECONCILE_SAFETY_NET_MS);
     this._destroyRef.onDestroy(() => {
-      if (this._countsDebounceHandle !== null) {
-        clearTimeout(this._countsDebounceHandle);
+      if (this._reconcileDebounceHandle !== null) {
+        clearTimeout(this._reconcileDebounceHandle);
       }
       if (this._reconcileIntervalHandle !== null) {
         clearInterval(this._reconcileIntervalHandle);
@@ -363,46 +254,17 @@ export class IssueService {
     });
   }
 
-  loadCounts(repositoryId?: string): void {
-    let params = new HttpParams();
-    if (repositoryId !== undefined) {
-      params = params.set('repositoryId', repositoryId);
-    }
-
-    this._http.get<IssueCountsResponse>('/api/issues/counts', { params }).subscribe({
-      next: (response) => {
-        this._countsSignal.set(response.counts);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-      },
-    });
-  }
-
-  countFor(state: IssueState): number {
-    return this._countsSignal()[state] ?? 0;
-  }
-
-  /** Sum of the per-state counts of every state in the group. */
-  countForGroup(id: StateGroupId): number {
-    return groupById(id).states.reduce((sum, state) => sum + this.countFor(state), 0);
-  }
-
-  isGroupSelected(id: StateGroupId): boolean {
-    return this.selectedGroups().has(id);
-  }
-
-  toggleGroup(id: StateGroupId): void {
-    const next = new Set<StateGroupId>(this.selectedGroups());
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    this._selectedGroupsSignal.set(next);
-    if (id === RESOLVED_GROUP_ID) {
-      this._onResolvedSelectionChanged();
-    }
+  /** Fetches the first page of resolved issues, discarding any pages loaded before. */
+  loadResolved(): void {
+    this._resolvedIssuesSignal.set([]);
+    this._resolvedCursor.set(null);
+    this._resolvedErrorSignal.set(null);
+    this._resolvedLoadMoreErrorSignal.set(null);
+    this._resolvedLoaded = false;
+    this._resolvedRequestToken += 1;
+    this.resolvedLoadingMore.set(false);
+    this.resolvedLoading.set(true);
+    this._fetchResolvedPage(null, undefined, true, this._resolvedRequestToken);
   }
 
   loadMoreResolved(repositoryId?: string): void {
@@ -416,7 +278,7 @@ export class IssueService {
   }
 
   retryResolvedFetch(): void {
-    this._onResolvedSelectionChanged();
+    this.loadResolved();
   }
 
   loadDetail(id: string): void {
@@ -570,7 +432,7 @@ export class IssueService {
       if (index >= 0) {
         this.issues.set(current.filter((i) => i.id !== updated.id));
       }
-      this._prependToResolvedIfSelected(updated);
+      this._prependToResolvedIfLoaded(updated);
     } else {
       if (index >= 0) {
         const next = [...current];
@@ -586,11 +448,11 @@ export class IssueService {
       this.loadDetail(updated.id);
     }
 
-    this._scheduleDebouncedCountsRefetch();
+    this._scheduleDebouncedReconcile();
   }
 
-  private _prependToResolvedIfSelected(issue: IssueSummary): void {
-    if (!this.resolvedSelected() || groupFor(issue.state).id !== RESOLVED_GROUP_ID) {
+  private _prependToResolvedIfLoaded(issue: IssueSummary): void {
+    if (!this._resolvedLoaded) {
       return;
     }
     const existing = this._resolvedIssuesSignal();
@@ -606,15 +468,14 @@ export class IssueService {
     }
   }
 
-  private _scheduleDebouncedCountsRefetch(): void {
-    if (this._countsDebounceHandle !== null) {
-      clearTimeout(this._countsDebounceHandle);
+  private _scheduleDebouncedReconcile(): void {
+    if (this._reconcileDebounceHandle !== null) {
+      clearTimeout(this._reconcileDebounceHandle);
     }
-    this._countsDebounceHandle = setTimeout(() => {
-      this._countsDebounceHandle = null;
-      this.loadCounts();
+    this._reconcileDebounceHandle = setTimeout(() => {
+      this._reconcileDebounceHandle = null;
       this._reconcileQueueOrder();
-    }, COUNTS_DEBOUNCE_MS);
+    }, RECONCILE_DEBOUNCE_MS);
   }
 
   // Filters and narrows the server response to active (non-resolved) issues with valid IDs and
@@ -724,23 +585,6 @@ export class IssueService {
     });
   }
 
-  private _onResolvedSelectionChanged(): void {
-    this._resolvedIssuesSignal.set([]);
-    this._resolvedCursor.set(null);
-    this._resolvedErrorSignal.set(null);
-    this._resolvedLoadMoreErrorSignal.set(null);
-    this._resolvedRequestToken += 1;
-
-    if (!this.resolvedSelected()) {
-      this.resolvedLoading.set(false);
-      this.resolvedLoadingMore.set(false);
-      return;
-    }
-
-    this.resolvedLoading.set(true);
-    this._fetchResolvedPage(null, undefined, true, this._resolvedRequestToken);
-  }
-
   private _fetchResolvedPage(
     cursor: string | null,
     repositoryId: string | undefined,
@@ -748,7 +592,7 @@ export class IssueService {
     requestToken: number,
   ): void {
     let params = new HttpParams();
-    for (const s of groupById(RESOLVED_GROUP_ID).states) {
+    for (const s of RESOLVED_STATES) {
       params = params.append('states', s);
     }
     if (cursor !== null) {
@@ -775,6 +619,7 @@ export class IssueService {
         }
         this._resolvedCursor.set(page.nextCursor);
         if (isFirstPage) {
+          this._resolvedLoaded = true;
           this.resolvedLoading.set(false);
         } else {
           this.resolvedLoadingMore.set(false);

@@ -1,0 +1,81 @@
+<section class="history-page" aria-labelledby="history-heading">
+  <header class="history-page__header">
+    <div class="history-page__intro">
+      <h1 #heading id="history-heading" class="history-page__heading" tabindex="-1">Resolved history</h1>
+      <p class="history-page__lead">Issues Foundry has completed, most recent first.</p>
+    </div>
+    <a class="history-page__board-link" routerLink="/">Board</a>
+  </header>
+
+  <fd-run-stats-bar class="history-page__stats" />
+
+  <section class="history-page__resolved" aria-labelledby="resolved-heading">
+    <h2 #resolvedHeading id="resolved-heading" class="history-page__resolved-heading" tabindex="-1">
+      Completed issues
+    </h2>
+
+    @if (issueService.resolvedLoading()) {
+      <div class="history-page__skeletons" role="status" aria-busy="true">
+        <span class="sr-only">Loading resolved issues…</span>
+        @for (placeholder of skeletonPlaceholders; track placeholder) {
+          <fd-issue-card-skeleton />
+        }
+      </div>
+    } @else if (issueService.resolvedError()) {
+      <div class="history-page__error" role="alert">
+        <span class="history-page__error-message">Failed to load resolved issues</span>
+        <button class="history-page__retry" type="button" (click)="retryLoad()">Retry</button>
+      </div>
+    } @else if (issueService.resolvedIssues().length === 0) {
+      <p class="history-page__empty">{{ emptyMessage }}</p>
+    } @else {
+      <div class="history-page__grid">
+        @for (issue of issueService.resolvedIssues(); track issue.id) {
+          <div
+            class="history-page__item"
+            animate.enter="history-page__item--enter"
+            [attr.data-issue-id]="issue.id"
+          >
+            <fd-issue-card [issue]="issue" (open)="selection.open(issue.id, $event)" />
+          </div>
+        }
+      </div>
+    }
+
+    @if (issueService.resolvedLoadMoreError()) {
+      <div class="history-page__load-more-error" role="alert">
+        <span class="history-page__load-more-error-message">{{ issueService.resolvedLoadMoreError() }}</span>
+        <button class="history-page__retry" type="button" (click)="retryLoadMore()">Retry</button>
+      </div>
+    } @else if (issueService.hasMoreResolved()) {
+      <button
+        type="button"
+        class="history-page__load-more"
+        [disabled]="issueService.resolvedLoadingMore()"
+        (click)="loadMore()"
+      >
+        @if (issueService.resolvedLoadingMore()) {
+          <span class="sr-only">Loading more resolved issues…</span>
+        } @else {
+          Load more
+        }
+      </button>
+    }
+  </section>
+
+  <!-- Always mounted so a change of text is announced. -->
+  <span aria-live="polite" class="history-page__announcer sr-only">{{ announcement() }}</span>
+
+  <fd-side-sheet
+    [open]="selection.isOpen()"
+    [labelledBy]="paneTitleId"
+    [closeButton]="false"
+    (dismissed)="selection.close()"
+  >
+    <ng-template>
+      @if (selection.paneId(); as id) {
+        <fd-issue-pane [issueId]="id" [summary]="selection.summary()" (closed)="selection.close()" />
+      }
+    </ng-template>
+  </fd-side-sheet>
+</section>
