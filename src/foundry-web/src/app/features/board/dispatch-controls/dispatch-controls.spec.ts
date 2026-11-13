@@ -3,6 +3,7 @@ import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { DispatchControlsComponent } from './dispatch-controls';
 import { DispatchService } from '../../../core/services/dispatch.service';
+import { PausedHost } from '../../../core/models/settings.model';
 
 interface DispatchServiceOverrides {
   isDispatchPaused?: boolean;
@@ -10,6 +11,7 @@ interface DispatchServiceOverrides {
   pausing?: boolean;
   resuming?: boolean;
   pauseResumeError?: string | null;
+  pausedHosts?: readonly PausedHost[];
 }
 
 function createMockDispatchService(overrides: DispatchServiceOverrides = {}) {
@@ -18,6 +20,7 @@ function createMockDispatchService(overrides: DispatchServiceOverrides = {}) {
   const pausingSignal = signal(overrides.pausing ?? false);
   const resumingSignal = signal(overrides.resuming ?? false);
   const pauseResumeErrorSignal = signal(overrides.pauseResumeError ?? null);
+  const pausedHostsSignal = signal<readonly PausedHost[]>(overrides.pausedHosts ?? []);
   const pauseDispatch = vi.fn();
   const resumeDispatch = vi.fn();
 
@@ -27,6 +30,7 @@ function createMockDispatchService(overrides: DispatchServiceOverrides = {}) {
     pausing: pausingSignal.asReadonly(),
     resuming: resumingSignal.asReadonly(),
     pauseResumeError: pauseResumeErrorSignal.asReadonly(),
+    pausedHosts: pausedHostsSignal.asReadonly(),
     pauseDispatch,
     resumeDispatch,
     _isPausedSignal: isPausedSignal,
@@ -64,6 +68,18 @@ describe('DispatchControlsComponent', () => {
     // Assert
     const btn = getToggleBtn(fixture);
     expect(btn.textContent?.trim()).toBe('Pause all');
+  });
+
+  it('should still show "Pause all" and no status text when only provider hosts are paused', () => {
+    // Arrange / Act
+    const { fixture } = setup({
+      pausedHosts: [{ host: 'gitlab.com', pausedAt: '2026-07-01T07:39:00Z', nextProbeAt: '2026-07-01T07:52:00Z', probeAttempts: 1 }],
+    });
+
+    // Assert
+    const btn = getToggleBtn(fixture);
+    expect(btn.textContent?.trim()).toBe('Pause all');
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('gitlab.com');
   });
 
   it('should show "Resume all" when dispatch is paused', () => {

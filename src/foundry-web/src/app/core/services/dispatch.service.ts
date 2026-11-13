@@ -1,6 +1,6 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { GlobalSettingsResponse } from '../models/settings.model';
+import { GlobalSettingsResponse, PausedHost } from '../models/settings.model';
 
 const PAUSE_DISPATCH_ERROR = 'Failed to pause dispatch';
 const RESUME_DISPATCH_ERROR = 'Failed to resume dispatch';
@@ -15,6 +15,9 @@ export class DispatchService {
   private readonly _usageLimitResetsAtSignal: WritableSignal<string | null> = signal(null);
   readonly usageLimitResetsAt: Signal<string | null> = this._usageLimitResetsAtSignal.asReadonly();
 
+  private readonly _pausedHostsSignal: WritableSignal<readonly PausedHost[]> = signal([]);
+  readonly pausedHosts: Signal<readonly PausedHost[]> = this._pausedHostsSignal.asReadonly();
+
   private readonly _pausingSignal: WritableSignal<boolean> = signal(false);
   readonly pausing: Signal<boolean> = this._pausingSignal.asReadonly();
 
@@ -27,6 +30,7 @@ export class DispatchService {
   updateFromSettings(response: GlobalSettingsResponse): void {
     this._isDispatchPausedSignal.set(response.isDispatchPaused);
     this._usageLimitResetsAtSignal.set(response.usageLimitResetsAt);
+    this._pausedHostsSignal.set(response.pausedHosts ?? []);
   }
 
   pauseDispatch(): void {

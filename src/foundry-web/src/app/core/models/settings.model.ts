@@ -74,6 +74,14 @@ export interface ClaudeAccountSummary {
   nextProbeAt: string | null;
 }
 
+/** A provider host whose dispatch is held until a probe reaches it again. */
+export interface PausedHost {
+  host: string;
+  pausedAt: string;
+  nextProbeAt: string;
+  probeAttempts: number;
+}
+
 export interface GlobalSettingsResponse {
   maxConcurrent: number;
   timeoutMinutes: number;
@@ -98,6 +106,7 @@ export interface GlobalSettingsResponse {
   cpuLimit: number;
   pidsLimit: number;
   additionalDenyRules: string[];
+  pausedHosts: PausedHost[];
   /** Public https base URL the operator's tunnel forwards to the webhook port (ADR 0085). */
   webhookPublicBaseUrl?: string | null;
   /** Poll interval for repositories whose webhook is active. */
