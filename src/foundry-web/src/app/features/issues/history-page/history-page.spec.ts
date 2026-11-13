@@ -392,7 +392,7 @@ describe('HistoryPageComponent', () => {
       const dialog = el.querySelector('[role="dialog"]')!;
       expect(dialog.getAttribute('aria-labelledby')).toBe('issue-pane-title');
       expect(dialog.querySelector('h2#issue-pane-title')?.textContent?.trim()).toBe('#42 Enable dark mode');
-      expect(dialog.querySelector('fd-issue-detail')).not.toBeNull();
+      expect(dialog.querySelector('fd-pane-facts')).not.toBeNull();
       expect(TestBed.inject(Router).url).toBe('/?issue=abc123');
     });
 
