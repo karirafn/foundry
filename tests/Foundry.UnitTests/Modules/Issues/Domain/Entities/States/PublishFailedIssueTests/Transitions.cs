@@ -16,6 +16,8 @@ public sealed class Transitions
 {
     private static readonly DateTimeOffset FailedAt = new(2026, 11, 11, 12, 0, 0, TimeSpan.Zero);
 
+    private static readonly DateTimeOffset ClosedAt = new(2026, 11, 13, 9, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public void WhenImplementRunPublishFails_KeepsRunBranchAndReason()
     {
@@ -154,5 +156,58 @@ public sealed class Transitions
 
         // Assert
         resting.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenProviderIssueClosesOnAnImplementRun_CompletesOnItsBranchWithNoPullRequest()
+    {
+        // Arrange
+        PublishFailedIssue publishFailed = new IssueBuilder().WithBranchName("feat/1-test").PublishFailed();
+
+        // Act
+        CompletedIssue completed = publishFailed.Complete(ClosedAt);
+
+        // Assert
+        completed.ShouldSatisfyAllConditions(
+            () => completed.Id.ShouldBe(publishFailed.Id),
+            () => completed.BranchName.ShouldBe("feat/1-test"),
+            () => completed.PullRequestUrl.ShouldBeEmpty(),
+            () => completed.CompletedAt.ShouldBe(ClosedAt),
+            () => completed.EnteredStateAt.ShouldBe(ClosedAt));
+    }
+
+    [Fact]
+    public void WhenProviderIssueClosesOnARevision_CompletesWithTheRevisedPullRequest()
+    {
+        // Arrange
+        PublishFailedIssue publishFailed = new IssueBuilder()
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/2")
+            .PublishFailedFromRevision();
+
+        // Act
+        CompletedIssue completed = publishFailed.Complete(ClosedAt);
+
+        // Assert
+        completed.ShouldSatisfyAllConditions(
+            () => completed.BranchName.ShouldBe(publishFailed.BranchName),
+            () => completed.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"));
+    }
+
+    [Fact]
+    public void WhenProviderIssueCloses_RaisesIssueCompletedAndIssueClosedWithUnpublishedRun()
+    {
+        // Arrange
+        PublishFailedIssue publishFailed = new IssueBuilder().PublishFailed();
+
+        // Act
+        publishFailed.Complete(ClosedAt);
+
+        // Assert
+        publishFailed.ShouldSatisfyAllConditions(
+            () => publishFailed.DomainEvents.Count.ShouldBe(2),
+            () => publishFailed.DomainEvents.OfType<IssueCompleted>().ShouldHaveSingleItem()
+                .IssueId.ShouldBe(publishFailed.Id),
+            () => publishFailed.DomainEvents.OfType<IssueClosedWithUnpublishedRun>().ShouldHaveSingleItem()
+                .WorkerRunId.ShouldBe(publishFailed.WorkerRunId));
     }
 }

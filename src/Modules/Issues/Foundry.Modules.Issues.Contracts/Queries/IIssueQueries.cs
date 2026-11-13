@@ -38,6 +38,15 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The numbers of the repository's issues whose run holds unpublished work (<c>publish_blocked</c> and
+    /// <c>publish_failed</c>). The listing pass asks the provider whether one is closed when it is missing from a
+    /// complete listing.
+    /// </summary>
+    Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
