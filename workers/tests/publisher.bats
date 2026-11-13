@@ -1163,6 +1163,122 @@ reverted_files() {
     [ -z "$(secret_findings)" ]
 }
 
+# Fixture values for the generic-api-key allowlists (#901), built at run time like the values above.
+FIXTURE_UUID="$(printf '%s-%s-%s-%s-%s' 3f2b8c1e 9d4a 4e7b a1c6 5f8e2d9b0a47)"
+RANDOM_KEY="$(printf '%s' Xq7vR2mK9pLw4ZtN8bYc3HsJ6dFg1QeA)"
+# gitleaks' stopwords already pass a name built from common words (app.recent-items.v1), so this stopword-free
+# name is the one that proves the versioned-name allowlist: gitleaks 8.30.1's default rules flag it as generic-api-key.
+VERSIONED_NAME="qz.wkfjhb-pyx.v1"
+DOTTED_VERSIONED_KEY="$(printf '%s.%s.%s.%s' rk live fq2lmzx81pwq v1)"
+DOTTED_RANDOM_KEY="$(printf '%s.%s.%s' rk live 9fq2lmzx81pwq7rtt0vb3ncye5)"
+
+# publish_one <path> <line> — a run whose one commit writes <line> to <path>, published.
+publish_one() {
+    start_run
+    mkdir -p "$(dirname "$WORKER/$1")"
+    wcommit "$1" "$2" "add $1"
+    worker_bundle
+    publish
+}
+
+assert_published() {
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+    [ -z "$(secret_findings)" ]
+}
+
+# assert_blocked <rule> <path-regex> — the publish is blocked by exactly one finding, of <rule> in <path-regex>.
+assert_blocked() {
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    secret_findings | grep -qE " rule=$1 path=$2\$"
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a versioned storage-key name is not a secret" {
+    publish_one src/store.ts "export const RECENT_KEY = 'app.recent-items.v1';"
+
+    assert_published
+}
+
+@test "publish: a versioned name the default rules flag is not a secret" {
+    publish_one src/store.ts "export const RECENT_KEY = '$VERSIONED_NAME';"
+
+    assert_published
+}
+
+@test "publish: a UUID fixture in a spec file is not a secret" {
+    publish_one src/mix.service.spec.ts "const key = '$FIXTURE_UUID';"
+
+    assert_published
+}
+
+@test "publish: a UUID fixture in a .NET test file under a tests directory is not a secret" {
+    publish_one tests/Api.Tests/IdempotencyTests.cs "var idempotencyKey = \"$FIXTURE_UUID\";"
+
+    assert_published
+}
+
+@test "publish: a UUID fixture in a .NET test project directory is not a secret" {
+    publish_one src/Foundry.UnitTests/Fixtures.cs "var idempotencyKey = \"$FIXTURE_UUID\";"
+
+    assert_published
+}
+
+@test "publish: an uppercase UUID fixture in a test file is not a secret" {
+    publish_one src/mix.service.spec.ts "const key = '$(tr 'a-f' 'A-F' <<< "$FIXTURE_UUID")';"
+
+    assert_published
+}
+
+@test "publish: a UUID assigned to an api key outside a test file blocks the push" {
+    publish_one src/store.ts "const apiKey = '$FIXTURE_UUID';"
+
+    assert_blocked generic-api-key 'src/store\.ts'
+}
+
+@test "publish: a UUID in a directory whose name merely ends in test blocks the push" {
+    publish_one src/Contest/Scores.cs "var apiKey = \"$FIXTURE_UUID\";"
+
+    assert_blocked generic-api-key 'src/Contest/Scores\.cs'
+}
+
+@test "publish: a UUID in a file whose name merely ends in test blocks the push" {
+    publish_one web/latest.ts "const apiKey = '$FIXTURE_UUID';"
+
+    assert_blocked generic-api-key 'web/latest\.ts'
+}
+
+@test "publish: a random key in a spec file blocks the push" {
+    publish_one src/mix.service.spec.ts "const apiKey = '$RANDOM_KEY';"
+
+    assert_blocked generic-api-key 'src/mix\.service\.spec\.ts'
+}
+
+@test "publish: a versioned name with digits inside a segment blocks the push" {
+    publish_one src/store.ts "const SESSION_KEY = '$DOTTED_VERSIONED_KEY';"
+
+    assert_blocked generic-api-key 'src/store\.ts'
+}
+
+@test "publish: a version suffix beyond three digits blocks the push" {
+    publish_one src/store.ts "const RECENT_KEY = '${VERSIONED_NAME}234';"
+
+    assert_blocked generic-api-key 'src/store\.ts'
+}
+
+@test "publish: a dotted value with a random segment blocks the push" {
+    publish_one src/store.ts "const STRIPE_SECRET = '$DOTTED_RANDOM_KEY';"
+
+    assert_blocked generic-api-key 'src/store\.ts'
+}
+
+@test "publish: a provider rule still flags a UUID in a test file" {
+    publish_one tests/x.spec.ts "const HEROKU_API_KEY = '$FIXTURE_UUID';"
+
+    assert_blocked heroku-api-key 'tests/x\.spec\.ts'
+}
+
 @test "publish: a scanner that fails is a failed publish, never a clean scan" {
     start_run
     wcommit a.txt a "first"
