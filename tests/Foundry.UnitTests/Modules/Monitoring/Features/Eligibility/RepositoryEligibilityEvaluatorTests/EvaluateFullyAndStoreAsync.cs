@@ -630,7 +630,7 @@ public sealed class EvaluateFullyAndStoreAsync
                 RepositorySlug slug,
                 string pullRequestUrl,
                 CancellationToken cancellationToken)
-                => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false)));
+                => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false, null)));
 
             public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
                 RepositorySlug slug,
@@ -734,7 +734,7 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,
@@ -817,7 +817,7 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,
@@ -902,7 +902,7 @@ public sealed class EvaluateFullyAndStoreAsync
                 RepositorySlug slug,
                 string pullRequestUrl,
                 CancellationToken cancellationToken)
-                => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+                => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
 
             public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
                 RepositorySlug slug,

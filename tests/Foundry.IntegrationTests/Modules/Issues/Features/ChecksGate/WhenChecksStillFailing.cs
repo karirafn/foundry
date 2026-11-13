@@ -97,7 +97,8 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "still_failing",
-            FailingChecks: failingChecks);
+            FailingChecks: failingChecks,
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         // Act
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -137,7 +138,8 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "still_failing",
-            FailingChecks: failingChecks);
+            FailingChecks: failingChecks,
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         using (IServiceScope scope = _factory.Services.CreateScope())
         {
@@ -176,7 +178,8 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "still_failing",
-            FailingChecks: [new FailingCheck("CI / build", "failure", null)]);
+            FailingChecks: [new FailingCheck("CI / build", "failure", null)],
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         using (IServiceScope scope = _factory.Services.CreateScope())
         {
@@ -214,7 +217,8 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "still_failing",
-            FailingChecks: failingChecks);
+            FailingChecks: failingChecks,
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         // Act
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -255,7 +259,8 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "still_failing",
-            FailingChecks: failingChecks);
+            FailingChecks: failingChecks,
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         // Act
         using IServiceScope scope = _factory.Services.CreateScope();

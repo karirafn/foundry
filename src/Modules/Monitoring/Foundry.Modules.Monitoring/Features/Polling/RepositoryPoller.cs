@@ -534,6 +534,15 @@ internal sealed class RepositoryPoller(
                     feedback.NewestCommentAt));
                 changed = true;
             }
+            else if (feedbackSuccess.Value.HeldBackUntil is null
+                && HasHeadMoved(reviewIssue.VerifiedHeadSha, prStatusSuccess.Value.HeadSha))
+            {
+                // Checked only after feedback: a fix run moves the feedback cutoff to its own start, so a comment
+                // posted with a push must be acted on first; that revision's own path re-checks the new head.
+                repository.RecordIntegrationEvent(
+                    new ProviderPullRequestHeadMoved(repository.Id, reviewIssue.IssueNumber));
+                changed = true;
+            }
         }
 
         return changed;
@@ -633,7 +642,8 @@ internal sealed class RepositoryPoller(
                 repository.Id,
                 checksPendingIssue.IssueNumber,
                 outcome,
-                failingChecks));
+                failingChecks,
+                prStatusSuccess.Value.HeadSha));
 
             // Only a provider-driven verdict counts as a webhook-mapped change; the grace-window and
             // upper-bound exits are time-based (deadline nudges), never announced by a delivery.
@@ -645,6 +655,15 @@ internal sealed class RepositoryPoller(
 
         return changed;
     }
+
+    /// <summary>
+    /// The checks verdict no longer describes the pull request when the provider reports a head other than the
+    /// stored one, or when none was stored (rows that predate the Verified Head). A read that returned no head is
+    /// never a move: there is nothing to compare until a later poll reads one.
+    /// </summary>
+    private static bool HasHeadMoved(string? verifiedHeadSha, string? currentHeadSha) =>
+        currentHeadSha is not null
+        && !string.Equals(currentHeadSha, verifiedHeadSha, StringComparison.Ordinal);
 
     private static bool IsProviderDrivenVerdict(Checks verdict) =>
         verdict is Checks.Green or Checks.Red or Checks.Unfinished;

@@ -411,7 +411,7 @@ internal sealed partial class GitLabHttpClient(
             string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
 
         return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
-            new PullRequestStatus(isClosed, isMerged),
+            new PullRequestStatus(isClosed, isMerged, dto?.Sha),
             dto?.HeadPipeline?.Id,
             dto?.HeadPipeline?.Status));
     }
@@ -1071,6 +1071,7 @@ internal sealed partial class GitLabHttpClient(
 
     private sealed record GitLabMergeRequestWithPipelineDto(
         string State,
+        string? Sha,
         GitLabPipelineDto? HeadPipeline);
 
     private sealed record GitLabPipelineDto(long? Id, string? Status);

@@ -37,6 +37,7 @@ public sealed class IssueBuilder
     private DateTimeOffset _enteredChecksPendingAt = DateTimeOffset.UtcNow;
     private ChecksOutcome _checksOutcome = new ChecksOutcome.Passed();
     private RebaseOutcome _rebaseOutcome = new RebaseOutcome.UpToDate();
+    private string? _verifiedHeadSha = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
     private DateTimeOffset _completedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _failedAt = DateTimeOffset.UtcNow;
     private string _failureReason = "Container exited with code 1";
@@ -85,6 +86,9 @@ public sealed class IssueBuilder
     public IssueBuilder WithChecksOutcome(ChecksOutcome value) { _checksOutcome = value; return this; }
 
     public IssueBuilder WithRebaseOutcome(RebaseOutcome value) { _rebaseOutcome = value; return this; }
+
+    /// <summary>The head commit the checks verdict that moved the issue into review was read against.</summary>
+    public IssueBuilder WithVerifiedHeadSha(string? value) { _verifiedHeadSha = value; return this; }
 
     public IssueBuilder WithCompletedAt(DateTimeOffset value) { _completedAt = value; return this; }
 
@@ -157,7 +161,7 @@ public sealed class IssueBuilder
 
     public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId, _transitionedAt);
 
-    public ReviewIssue Review() => ChecksPending().ToReview(_checksOutcome, _transitionedAt);
+    public ReviewIssue Review() => ChecksPending().ToReview(_checksOutcome, _verifiedHeadSha, _transitionedAt);
 
     public RevisionQueuedIssue RevisionQueued() =>
         Review().Revise(_reviewComments, _transitionedAt, _omittedCommentCount, _newestCommentAt);

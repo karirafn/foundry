@@ -43,5 +43,10 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
         builder.Property(i => i.RebaseConflictAttempts)
             .HasDefaultValue(0)
             .HasColumnName("rebase_conflict_attempts");
+
+        builder.Property(i => i.VerifiedHeadSha)
+            .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("verified_head_sha");
     }
 }

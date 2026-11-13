@@ -65,7 +65,8 @@ public sealed class WhenChecksPassed : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         // Act
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -92,7 +93,8 @@ public sealed class WhenChecksPassed : IAsyncDisposable
             RepositoryId: RepositoryId,
             IssueNumber: checksPending.IssueNumber,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807");
 
         using (IServiceScope scope = _factory.Services.CreateScope())
         {

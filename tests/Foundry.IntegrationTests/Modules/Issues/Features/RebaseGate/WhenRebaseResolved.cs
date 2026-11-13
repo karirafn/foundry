@@ -77,7 +77,7 @@ public sealed class WhenRebaseResolved : IAsyncDisposable
 
         // Act
         await HandleAsync(new RebaseResolved(RepositoryId, 1, "skipped", RebaseSkipReasons.Timeout));
-        await HandleAsync(new ChecksVerdictResolved(RepositoryId, 1, "passed", []));
+        await HandleAsync(new ChecksVerdictResolved(RepositoryId, 1, "passed", [], "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e"));
 
         // Assert
         ReviewIssue review = (await LoadAsync(rebasePending)).ShouldBeOfType<ReviewIssue>();

@@ -304,7 +304,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null);
 
         // Act
         await RunStepAsync();
@@ -317,7 +317,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         public bool IssueClosed { get; set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false);
+        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: null);
 
         public Result<ProviderCommentId> PostResult { get; set; } =
             Result<ProviderCommentId>.Fail(CommentPostErrors.Permanent("not scripted"));

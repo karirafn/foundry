@@ -132,6 +132,84 @@ public sealed class GetPullRequestStatusAsync
     }
 
     [Fact]
+    public async Task WhenResponseCarriesHeadRefOid_ReturnsItAsHeadSha()
+    {
+        // Arrange — field shape per GitHub's GraphQL PullRequest.headRefOid (GitObjectID), as GitHubHttpClient.Rebase reads it.
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": { "state": "OPEN", "merged": false, "headRefOid": "6dcb09b5b57875f334f61aebed695e2e4193db5e" }
+                }
+              }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: "https://github.com/owner/repo/pull/123",
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestStatus>.Success>()
+            .Value.HeadSha.ShouldBe("6dcb09b5b57875f334f61aebed695e2e4193db5e");
+    }
+
+    [Fact]
+    public async Task WhenResponseLacksHeadRefOid_ReturnsNullHeadSha()
+    {
+        // Arrange
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": { "state": "OPEN", "merged": false }
+                }
+              }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: "https://github.com/owner/repo/pull/123",
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestStatus>.Success>().Value.HeadSha.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenStatusIsRead_RequestsHeadRefOidInTheSameQuery()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "data": { "repository": { "pullRequest": { "state": "OPEN", "merged": false } } } }""");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: "https://github.com/owner/repo/pull/123",
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        handler.LastRequestBody.ShouldNotBeNull().ShouldContain("state merged headRefOid");
+    }
+
+    [Fact]
     public async Task WhenPrUrlCannotBeParsed_ReturnsInvalidUrlError()
     {
         // Arrange

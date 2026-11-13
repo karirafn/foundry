@@ -119,7 +119,7 @@ public sealed class Transitions
             .ChecksPending();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         review.RebaseOutcome.ShouldBeOfType<RebaseOutcome.Conflict>();

@@ -120,7 +120,7 @@ internal sealed class IssueQueries(
         return await db.Set<ReviewIssue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
-            .Select(i => new ReviewIssueInfo(i.IssueNumber, i.PullRequestUrl, i.FeedbackCutoffAt))
+            .Select(i => new ReviewIssueInfo(i.IssueNumber, i.PullRequestUrl, i.FeedbackCutoffAt, i.VerifiedHeadSha))
             .ToListAsync(cancellationToken);
     }
 

@@ -59,6 +59,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
+        services.AddIntegrationEventHandler<ProviderPullRequestHeadMoved, ProviderPullRequestHeadMovedHandler>();
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
         services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
         services.AddIntegrationEventHandler<AwaitingInputArrived, AwaitingInputArrivedHandler>();

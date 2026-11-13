@@ -20,7 +20,7 @@ public sealed class Map
     // 50 awaits input on PR 51.
     private static readonly WebhookTrackingContext Tracked = new(
         new HashSet<int> { 10, 20, 30, 40, 50 },
-        [new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At)],
+        [new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At, null)],
         [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)],
         new HashSet<int> { 77, 20 },
         [new AwaitingInputThread(40, null), new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51")]);

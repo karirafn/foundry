@@ -229,7 +229,7 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             .WithLabels([])
             .RebasePendingAfterConflicts(1)
             .MarkChecksPending(new RebaseOutcome.Disabled(), DateTimeOffset.UtcNow)
-            .ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+            .ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
 
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
