@@ -6,7 +6,6 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.StateChanges;
-using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -500,24 +499,18 @@ internal sealed class IssueQueries(
         Issue issue,
         CancellationToken cancellationToken)
     {
-        FailureCategory? failureCategory = issue switch
-        {
-            FailedIssue failed => failed.FailureCategory,
-            ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory,
-            TriageFailedIssue triageFailed => triageFailed.FailureCategory,
-            _ => null
-        };
-
-        if (failureCategory != FailureCategory.TransientApiError)
+        // The latest failure's category decides the schedule for the whole streak.
+        if (issue is not IAutoRetryableFailedState failure
+            || failure.FailureCategory.AutomaticRetry is not AutomaticRetrySchedule schedule)
         {
             return null;
         }
 
-        // Retrieve the count of consecutive transient runs from the worker run store.
+        // Retrieve the count of consecutive auto-retryable runs from the worker run store.
         // Returns 0 when the worker-run row is not yet visible (e.g. write not yet committed).
         int consecutiveRuns = await workerRunQueries.CountConsecutiveTransientRunsAsync(
             issue.Id.Value,
-            TransientRetrySchedule.MaxTransientRetries,
+            schedule.MaxRetries,
             cancellationToken);
 
         // Guard: worker-run row not yet visible — surface no retry block rather than "Attempt 0 of N".
@@ -526,23 +519,14 @@ internal sealed class IssueQueries(
             return null;
         }
 
-        int maxAttempts = TransientRetrySchedule.MaxTransientRetries;
-        bool isExhausted = consecutiveRuns >= maxAttempts;
+        bool isExhausted = schedule.IsExhausted(consecutiveRuns);
 
         // EF SQLite provider normalizes FailedAt to UTC — the derived NextAttemptDueAt relies on this.
-        DateTimeOffset failedAt = issue switch
-        {
-            FailedIssue failed => failed.FailedAt,
-            ContinuableFailedIssue continuableFailed => continuableFailed.FailedAt,
-            TriageFailedIssue triageFailed => triageFailed.FailedAt,
-            _ => throw new InvalidOperationException($"Unexpected transient issue type: {issue.GetType().Name}")
-        };
-
         return new TransientRetryDetails(
             AttemptNumber: consecutiveRuns,
-            MaxAttempts: maxAttempts,
+            MaxAttempts: schedule.MaxRetries,
             IsExhausted: isExhausted,
-            NextAttemptDueAt: isExhausted ? null : failedAt + TransientRetrySchedule.ComputeBackoff(consecutiveRuns));
+            NextAttemptDueAt: isExhausted ? null : failure.FailedAt + schedule.BackoffAfter(consecutiveRuns));
     }
 
     private static IssueKindDetails BuildKindDetails(Issue issue) =>
@@ -732,7 +716,7 @@ internal sealed class IssueQueries(
                 FailedAt: revisionFailed.FailedAt,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null,
+                TransientRetry: transientRetry,
                 RevisionTriggerKind: revisionFailed.Trigger.Discriminator,
                 ChecksFixAttempts: revisionFailed.ChecksFixAttempts,
                 RebaseConflictAttempts: revisionFailed.RebaseConflictAttempts),

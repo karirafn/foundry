@@ -342,7 +342,8 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         //   - Set<WorkerRun> excluding FailedRun: projects (created_at, null) — only the
         //     timestamp is needed for ordering; no payload fields are fetched.
         //
-        // A streak breaks on the first row that is not a transient failed run — including
+        // A streak counts failed runs of any auto-retryable category (FailureCategory.AutoRetryable) and
+        // breaks on the first row that is not one — including
         // CompletedRun, StartingRun, or ActiveRun — so all row types must be included.
         List<WorkerRunStreakRow> failedRows = await db.Set<FailedRun>()
             .AsNoTracking()
@@ -365,7 +366,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
         foreach (WorkerRunStreakRow row in recent)
         {
-            if (row.CategoryToken == FailureReason.TransientApiErrorToken)
+            if (FailureCategory.IsAutoRetryableToken(row.CategoryToken))
             {
                 count++;
             }

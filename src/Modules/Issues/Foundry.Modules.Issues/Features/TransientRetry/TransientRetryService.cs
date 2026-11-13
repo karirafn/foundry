@@ -14,13 +14,13 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Issues.Features.TransientRetry;
 
 /// <summary>
-/// Periodic background service that re-queues transient failed issues once their backoff has elapsed,
-/// up to a maximum of <see cref="TransientRetrySchedule.MaxTransientRetries"/> consecutive transient attempts.
+/// Periodic background service that re-queues failed issues whose <see cref="FailureCategory"/> retries
+/// automatically, once the category's <see cref="AutomaticRetrySchedule"/> backoff has elapsed and until
+/// its maximum streak of consecutive auto-retryable runs is reached.
 /// </summary>
 internal sealed class TransientRetryService : PeriodicBackgroundService
 {
-    internal const int MaxTransientRetries = TransientRetrySchedule.MaxTransientRetries;
-    internal static readonly TimeSpan InitialBackoff = TransientRetrySchedule.InitialBackoff;
+    private static readonly IReadOnlyList<FailureCategory> AutoRetryableCategories = [.. FailureCategory.AutoRetryable];
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TransientRetryService> _log;
@@ -38,7 +38,8 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         _nowOverride = nowOverride;
     }
 
-    protected override TimeSpan TickInterval => InitialBackoff;
+    // Ticking at the shortest first backoff keeps a retry late by at most one backoff of the fastest schedule.
+    protected override TimeSpan TickInterval => FailureCategory.ShortestFirstAutomaticRetryBackoff;
 
     protected override string ServiceName => nameof(TransientRetryService);
 
@@ -47,6 +48,14 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
     /// spinning up the full <see cref="PeriodicBackgroundService.ExecuteAsync"/> loop.
     /// </summary>
     internal Task TickForTest(CancellationToken cancellationToken) => TickAsync(cancellationToken);
+
+    /// <summary>
+    /// The auto-retryable failed-issue query for one failed state, exposed so an integration test can
+    /// confirm EF translates the category filter to SQL.
+    /// </summary>
+    internal static IQueryable<TIssue> WhereAutoRetryable<TIssue>(IQueryable<TIssue> issues)
+        where TIssue : Issue, IAutoRetryableFailedState =>
+        issues.Where(i => AutoRetryableCategories.Contains(i.FailureCategory));
 
     protected override async Task TickAsync(CancellationToken cancellationToken)
     {
@@ -72,40 +81,24 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // FailureCategory is SQL-translatable via the EF value converter: EF applies the converter to the
-        // constant on the right side and emits WHERE failure_category = 'transient_api_error'. Do not
-        // replace this with a string comparison — keeping the typed member preserves SQL translatability.
         // FailedAt is applied as a coarse in-memory cutoff — the SQLite EF provider cannot translate
         // DateTimeOffset comparisons server-side (stored as ISO 8601 TEXT). Exact per-candidate backoff
-        // computation happens in memory via CountConsecutiveTransientRunsAsync.
-        DateTimeOffset coarseCutoff = now - InitialBackoff;
+        // computation happens in memory against the candidate's own category schedule.
+        DateTimeOffset coarseCutoff = now - FailureCategory.ShortestFirstAutomaticRetryBackoff;
 
-        // SQLite stores DateTimeOffset as TEXT; the comparison is evaluated in memory after ToListAsync.
-        // Load transient FailedIssue, ContinuableFailedIssue and TriageFailedIssue candidates separately by typed set.
-        List<FailedIssue> failedCandidates = await db.Set<FailedIssue>()
-            .AsNoTracking()
-            .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
-            .ToListAsync(cancellationToken);
-
-        List<ContinuableFailedIssue> continuableCandidates = await db.Set<ContinuableFailedIssue>()
-            .AsNoTracking()
-            .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
-            .ToListAsync(cancellationToken);
-
-        List<TriageFailedIssue> triageCandidates = await db.Set<TriageFailedIssue>()
-            .AsNoTracking()
-            .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
-            .ToListAsync(cancellationToken);
-
-        // Apply coarse cutoff in memory (SQLite DateTimeOffset translation limitation).
         List<Issue> candidates = [
-            ..failedCandidates.Where(i => i.FailedAt <= coarseCutoff),
-            ..continuableCandidates.Where(i => i.FailedAt <= coarseCutoff),
-            ..triageCandidates.Where(i => i.FailedAt <= coarseCutoff),
+            ..await LoadAsync<FailedIssue>(db, cancellationToken),
+            ..await LoadAsync<ContinuableFailedIssue>(db, cancellationToken),
+            ..await LoadAsync<TriageFailedIssue>(db, cancellationToken),
+            ..await LoadAsync<RevisionFailedIssue>(db, cancellationToken),
         ];
 
-        return candidates;
+        return [.. candidates.Where(i => ((IAutoRetryableFailedState)i).FailedAt <= coarseCutoff)];
     }
+
+    private static async Task<List<TIssue>> LoadAsync<TIssue>(DbContext db, CancellationToken cancellationToken)
+        where TIssue : Issue, IAutoRetryableFailedState =>
+        await WhereAutoRetryable(db.Set<TIssue>().AsNoTracking()).ToListAsync(cancellationToken);
 
     private async Task TryRetryAsync(
         DbContext db,
@@ -117,33 +110,25 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
     {
         try
         {
-            Guid issueId = candidate.Id.Value;
+            IAutoRetryableFailedState failure = (IAutoRetryableFailedState)candidate;
 
-            // Candidates are sourced exclusively from FindDueTransientFailuresAsync, which returns
-            // only FailedIssue / ContinuableFailedIssue / TriageFailedIssue — the failed-state guard that
-            // matters for the manual-retry race is on the reloaded `live` instance below.
-            DateTimeOffset failedAt = candidate switch
-            {
-                FailedIssue failed => failed.FailedAt,
-                ContinuableFailedIssue continuableFailed => continuableFailed.FailedAt,
-                TriageFailedIssue triageFailed => triageFailed.FailedAt,
-                _ => throw new UnreachableException($"Unexpected transient retry candidate: {candidate.GetType().Name}"),
-            };
+            // The latest failure's category decides the schedule for the whole streak.
+            AutomaticRetrySchedule schedule = failure.FailureCategory.AutomaticRetry
+                ?? throw new UnreachableException(
+                    $"Candidate {candidate.Id.Value} has non-retryable category {failure.FailureCategory}.");
 
-            int attempt = await workerRunQueries.CountConsecutiveTransientRunsAsync(
-                issueId,
-                MaxTransientRetries,
+            int streak = await workerRunQueries.CountConsecutiveTransientRunsAsync(
+                candidate.Id.Value,
+                schedule.MaxRetries,
                 cancellationToken);
 
-            if (attempt >= MaxTransientRetries)
+            if (schedule.IsExhausted(streak))
             {
                 // Exhausted — let the issue stay failed; manual retry is still available.
                 return;
             }
 
-            TimeSpan backoff = ComputeBackoff(attempt);
-
-            if (failedAt + backoff > now)
+            if (failure.FailedAt + schedule.BackoffAfter(streak) > now)
             {
                 // Not yet due.
                 return;
@@ -153,7 +138,7 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             Issue? live = await db.Set<Issue>()
                 .FirstOrDefaultAsync(i => i.Id == candidate.Id, cancellationToken);
 
-            if (live is not (FailedIssue or ContinuableFailedIssue or TriageFailedIssue))
+            if (live is not IAutoRetryableFailedState)
             {
                 // Issue was concurrently transitioned by a manual retry — skip without error.
                 return;
@@ -165,6 +150,7 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
                 ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
                 // A transient triage failure retries triage, never skips it (ADR 0097).
                 TriageFailedIssue triageFailed => triageFailed.RetryTriage(),
+                RevisionFailedIssue revisionFailed => revisionFailed.Retry(),
                 _ => throw new UnreachableException($"Unexpected issue state after guard: {live.GetType().Name}"),
             };
 
@@ -184,11 +170,4 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
                 candidate.Id.Value);
         }
     }
-
-    /// <summary>
-    /// Computes the exponential backoff for a given attempt count.
-    /// Delegates to <see cref="TransientRetrySchedule.ComputeBackoff"/>.
-    /// </summary>
-    internal static TimeSpan ComputeBackoff(int attempt) =>
-        TransientRetrySchedule.ComputeBackoff(attempt);
 }

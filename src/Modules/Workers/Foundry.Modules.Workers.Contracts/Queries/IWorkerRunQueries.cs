@@ -21,6 +21,10 @@ public interface IWorkerRunQueries
         DateTimeOffset to,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The issue's newest consecutive failed runs whose category is auto-retryable (of any such
+    /// <see cref="FailureCategory"/>), up to <paramref name="maxAttempts"/> + 1; the streak breaks on the first run that is not.
+    /// </summary>
     Task<int> CountConsecutiveTransientRunsAsync(
         Guid issueId,
         int maxAttempts,

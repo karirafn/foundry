@@ -104,7 +104,7 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
     [Fact]
     public async Task WhenElapsedAndUnderCap_TransitionsToQueued()
     {
-        // Arrange — no prior transient worker runs (attempt=0 < MaxTransientRetries=2).
+        // Arrange — no prior transient worker runs (streak 0 < transient_api_error maximum 2).
         // NowOverride is 5 minutes after SeedFailedAt — clearly past the 1-minute backoff.
         FailedIssue failed = await SeedTransientFailedIssueAsync(SeedFailedAt);
 
@@ -123,7 +123,7 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
     [Fact]
     public async Task WhenTwoPriorTransientRuns_StaysFailedAndAutoRetrySkips()
     {
-        // Arrange — 2 prior transient worker runs (attempt=2 >= MaxTransientRetries=2 → skip).
+        // Arrange — 2 prior transient worker runs (streak 2 >= transient_api_error maximum 2 → skip).
         FailedIssue failed = await SeedTransientFailedIssueAsync(SeedFailedAt, issueNumber: 2);
         await SeedTransientFailedRunsAsync(failed.Id, count: 2);
 
@@ -158,5 +158,56 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
             TestContext.Current.CancellationToken);
         detail.ShouldNotBeNull();
         detail.State.ShouldBe("queued");
+    }
+
+    [Fact]
+    public async Task WhenRevisionFailedWithAnUnreachableProvider_RequeuesTheRevision()
+    {
+        // Arrange — one unreachable run; NowOverride is past its 2-minute backoff.
+        IssueId issueId;
+        using (IServiceScope seedScope = _factory.Services.CreateScope())
+        {
+            DbContext seedContext = seedScope.ServiceProvider.GetRequiredService<DbContext>();
+            RevisionFailedIssue revisionFailed = new IssueBuilder()
+                .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
+                .WithIssueNumber(4)
+                .WithLabels(["foundry"])
+                .WithDetectedAt(SeedFailedAt.AddHours(-2))
+                .WithFailureCategory(FailureCategory.ProviderUnreachable)
+                .WithFailedAt(SeedFailedAt)
+                .RevisionFailed();
+            seedContext.Set<Issue>().Add(revisionFailed);
+            await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            issueId = revisionFailed.Id;
+
+            StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
+            seedContext.Set<WorkerRun>().Add(starting.Fail(new FailureReason.ProviderUnreachable("dns")));
+            await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        TransientRetryService sut = _factory.Services.GetRequiredService<TransientRetryService>();
+        await sut.TickForTest(TestContext.Current.CancellationToken);
+
+        // Assert
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        Issue? persisted = await dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == issueId, TestContext.Current.CancellationToken);
+        persisted.ShouldBeOfType<RevisionQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenFilteringByAutoRetryableCategory_EfTranslatesItToSqlIn()
+    {
+        // Arrange
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        // Act
+        string sql = TransientRetryService.WhereAutoRetryable(dbContext.Set<RevisionFailedIssue>()).ToQueryString();
+
+        // Assert
+        sql.ShouldContain("\"failure_category\" IN (");
     }
 }
