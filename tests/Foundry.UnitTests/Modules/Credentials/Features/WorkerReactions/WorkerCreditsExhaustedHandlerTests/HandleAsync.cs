@@ -80,7 +80,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
+            => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

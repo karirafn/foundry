@@ -1406,3 +1406,141 @@ SCANNER
     [ "$output" = "$first" ]
     [ "$(push_lines | wc -l)" -eq 1 ]
 }
+
+# ---------------------------------------------------------------------------
+# Probe mode (host pause)
+#
+# One ls-remote HEAD; unreachable is exactly classify_error's unreachable and every other outcome is reachable.
+# ---------------------------------------------------------------------------
+
+probe_line() {
+    grep '^FOUNDRY_PROBE ' <<< "$output"
+}
+
+# probe_reports <result> <stderr> — the provider fails the probe's ls-remote once with <stderr>, and the probe
+# reports <result> carrying it, after exactly one attempt and no sleep.
+probe_reports() {
+    provider_errors "$2" "$2"
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [ "$(probe_line)" = "FOUNDRY_PROBE result=$1 detail=$2" ]
+    [ "$(ls_remote_count)" -eq 1 ]
+    [ -z "$(sleeps)" ]
+}
+
+@test "probe: a provider that answers is reachable, on one FOUNDRY_PROBE line" {
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^FOUNDRY_PROBE ' <<< "$output")" -eq 1 ]
+    [[ "$(probe_line)" == "FOUNDRY_PROBE result=reachable detail="* ]]
+}
+
+@test "probe: runs ls-remote HEAD once against CLONE_URL" {
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [ "$(ls_remote_count)" -eq 1 ]
+    grep -q " ls-remote $AUTH_URL HEAD\$" "$BATS_TEST_TMPDIR/git_args"
+}
+
+@test "probe: a DNS failure is unreachable, without a retry" {
+    probe_reports unreachable "$GIT_DNS_FAILURE"
+}
+
+@test "probe: a refused connection is unreachable" {
+    probe_reports unreachable "$GIT_CONNECTION_REFUSED"
+}
+
+@test "probe: an HTTP 503 is unreachable" {
+    probe_reports unreachable "$GIT_HTTP_503"
+}
+
+@test "probe: an HTTP 429 is unreachable" {
+    probe_reports unreachable "$GIT_HTTP_429"
+}
+
+@test "probe: an HTTP 403 is reachable: the provider answered" {
+    probe_reports reachable "$GIT_HTTP_403"
+}
+
+@test "probe: git finding no credentials is reachable" {
+    probe_reports reachable "$GIT_NO_CREDENTIALS"
+}
+
+@test "probe: a rate limit without git's transport prefix is reachable" {
+    probe_reports reachable "remote: API rate limit exceeded"
+}
+
+@test "probe: an authentication failure is reachable" {
+    export FAKE_GIT_AUTH_FAILED=1
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [[ "$(probe_line)" == "FOUNDRY_PROBE result=reachable detail=fatal: Authentication failed"* ]]
+}
+
+@test "probe: the token reaches git only through GIT_ASKPASS, never an argument or the output" {
+    export FAKE_GIT_UNREACHABLE=1
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/askpass_answer")" = "ghp_publisher_token" ]
+    ! grep -q "ghp_publisher_token" "$BATS_TEST_TMPDIR/git_args"
+    [[ "$output" != *"ghp_publisher_token"* ]]
+}
+
+@test "probe: an error naming the token prints it masked" {
+    provider_errors "fatal: unable to access 'https://oauth2:ghp_publisher_token@git.example.test/': Could not resolve host"
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"ghp_publisher_token"* ]]
+    [[ "$(probe_line)" == "FOUNDRY_PROBE result=unreachable detail="*"***"* ]]
+}
+
+@test "probe: git runs with no inherited configuration, in a fresh scratch repository with hooks off" {
+    printf '[url "https://evil.example.test/"]\n\tinsteadOf = https://\n' > "$BATS_TEST_TMPDIR/gitconfig"
+    export GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/gitconfig"
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [ "$(sort -u "$BATS_TEST_TMPDIR/git_env")" = "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null" ]
+    grep -q -- "-c core.hooksPath=/dev/null -c credential.helper= ls-remote" "$BATS_TEST_TMPDIR/git_args"
+}
+
+@test "probe: the askpass helper is removed when the probe exits" {
+    export TMPDIR="$BATS_TEST_TMPDIR/tmp"
+    mkdir -p "$TMPDIR"
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -eq 0 ]
+    [ -z "$(ls -A "$TMPDIR")" ]
+}
+
+@test "probe: a missing GIT_PAT prints no FOUNDRY_PROBE line and makes no git transfer" {
+    unset GIT_PAT
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"FOUNDRY_PROBE"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+@test "probe: a CLONE_URL that is not https prints no FOUNDRY_PROBE line and makes no git transfer" {
+    export CLONE_URL="git@git.example.test:owner/repo.git"
+
+    run sh "$PUBLISHER" probe
+
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"FOUNDRY_PROBE"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}

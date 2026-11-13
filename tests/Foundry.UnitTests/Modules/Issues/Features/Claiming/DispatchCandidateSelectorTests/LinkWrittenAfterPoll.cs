@@ -30,7 +30,8 @@ public sealed class LinkWrittenAfterPoll : IAsyncDisposable
         new Uri("https://github.com/owner/repo.git"),
         "GITHUB_PAT",
         new WorkerProvider.GitHub(),
-        "https://api.github.com/repos/owner/repo/issues");
+        "https://api.github.com/repos/owner/repo/issues",
+        "github.com");
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -83,6 +84,7 @@ public sealed class LinkWrittenAfterPoll : IAsyncDisposable
             new InFlightWorkerCountQuery(_dbContext),
             new StubIssueBlockerQueries().WithBlockers(IssueNumber, BlockerNumber),
             IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
         // Act
@@ -106,7 +108,7 @@ public sealed class LinkWrittenAfterPoll : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select((Guid id) => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select((Guid id) => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }

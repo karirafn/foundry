@@ -15,6 +15,10 @@ internal static class PublisherContainerSpec
     /// </summary>
     public const string TransientLabelKey = "foundry.transient";
 
+    private const int ProbeMemoryLimitMb = 256;
+    private const double ProbeCpuLimit = 0.5;
+    private const int ProbePidsLimit = 128;
+
     public static WorkerContainerSpec ForPrepare(PrepareRequest request)
     {
         Dictionary<string, string> environment = new()
@@ -50,6 +54,35 @@ internal static class PublisherContainerSpec
         }
 
         return Build(request.RunId, environment, "publish", request.Limits);
+    }
+
+    /// <summary>
+    /// A probe needs no Hand-off volume and no run: one <c>ls-remote</c> under the same hardening as Prepare, with
+    /// limits sized for it rather than for a run.
+    /// </summary>
+    public static WorkerContainerSpec ForProbe(HostProbeRequest request)
+    {
+        Dictionary<string, string> environment = new()
+        {
+            ["CLONE_URL"] = request.CloneUrl.ToString(),
+            ["GIT_PAT"] = request.GitPat,
+        };
+
+        Dictionary<string, string> labels = new()
+        {
+            [TransientLabelKey] = "true",
+        };
+
+        return WorkerHardeningSpec.ApplyToPublisher(new(
+            WorkerImageNames.PublisherImageName,
+            environment,
+            labels,
+            ["probe"])
+        {
+            MemoryLimitMb = ProbeMemoryLimitMb,
+            CpuLimit = ProbeCpuLimit,
+            PidsLimit = ProbePidsLimit,
+        });
     }
 
     private static WorkerContainerSpec Build(

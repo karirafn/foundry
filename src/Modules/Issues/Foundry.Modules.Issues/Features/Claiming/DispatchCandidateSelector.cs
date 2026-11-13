@@ -4,6 +4,8 @@ using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.Dependencies;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +18,8 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
 /// memoization. Each <see cref="FreshQueuedIssue"/> and <see cref="TriageQueuedIssue"/> candidate's open blockers are re-read from the
 /// provider before it is selected; a candidate that gained a blocker is transitioned to <see cref="BlockedIssue"/> or
-/// <see cref="TriageBlockedIssue"/> and the next candidate in dispatch order is tried.
+/// <see cref="TriageBlockedIssue"/> and the next candidate in dispatch order is tried. Repositories on a paused provider host
+/// (<see cref="DispatchPauseState.PausedHosts"/>) are dropped before any candidate is considered.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
     DbContext db,
@@ -25,6 +28,7 @@ internal sealed class DispatchCandidateSelector(
     InFlightWorkerCountQuery inFlightWorkerCountQuery,
     IIssueBlockerQueries issueBlockerQueries,
     IssueDependencyApplier dependencyApplier,
+    IGlobalSettingsQueries settingsQueries,
     ILogger<DispatchCandidateSelector> logger)
 {
     public async Task<SelectionOutcome> SelectAsync(CancellationToken cancellationToken)
@@ -39,14 +43,29 @@ internal sealed class DispatchCandidateSelector(
             return new SelectionOutcome.NoCandidates();
         }
 
-        IReadOnlyList<EligibleRepository> eligibleRepos = await repositoryEligibilityQuery
+        IReadOnlyList<EligibleRepository> allEligibleRepos = await repositoryEligibilityQuery
             .GetEligibleRepositoriesAsync(
                 claimableRepoIds.Select(id => id.Value).ToList(),
                 cancellationToken);
 
-        if (eligibleRepos.Count == 0)
+        if (allEligibleRepos.Count == 0)
         {
             return new SelectionOutcome.NoEligibleRepositories();
+        }
+
+        // A host pause holds every queued kind on its host: they wait in the queue rather than each dispatching
+        // into an unreachable provider and failing.
+        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+        List<EligibleRepository> eligibleRepos = allEligibleRepos
+            .Where(repo => !IsOnPausedHost(repo, pauseState.PausedHosts))
+            .ToList();
+
+        if (eligibleRepos.Count == 0)
+        {
+            logger.LogDebug(
+                "Every repository with queued work is on a paused provider host ({PausedHosts}); nothing to claim.",
+                string.Join(", ", pauseState.PausedHosts.Select(h => h.Host)));
+            return new SelectionOutcome.NoCandidates();
         }
 
         List<MonitoredRepositoryId> eligibleIds = eligibleRepos
@@ -187,6 +206,9 @@ internal sealed class DispatchCandidateSelector(
             blockersSuccess.Value);
         return BlockerCheck.Blocked;
     }
+
+    private static bool IsOnPausedHost(EligibleRepository repo, IReadOnlyList<PausedHost> pausedHosts) =>
+        pausedHosts.Any(paused => string.Equals(paused.Host, repo.Host, StringComparison.OrdinalIgnoreCase));
 
     private enum BlockerCheck
     {

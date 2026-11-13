@@ -54,6 +54,21 @@ public sealed class ResumeAllDispatch
     }
 
     [Fact]
+    public void WhenHostsArePaused_ClearsEveryHostPause()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.PauseHost("gitlab.com", DateTimeOffset.UtcNow);
+        settings.PauseHost("github.com", DateTimeOffset.UtcNow);
+
+        // Act
+        settings.ResumeAllDispatch();
+
+        // Assert
+        settings.HostPauses.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void WhenCalled_UpdatesUpdatedAt()
     {
         // Arrange

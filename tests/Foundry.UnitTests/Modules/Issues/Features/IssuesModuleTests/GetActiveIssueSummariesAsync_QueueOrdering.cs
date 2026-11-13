@@ -161,7 +161,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedRevisionQueuedIssue(repoA, issueNumber: 3, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repoA.Value, Position: 1, MaxConcurrentWorkers: 1)],
+            [new EligibleRepository(repoA.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com")],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -192,8 +192,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
 
         StubEligibilityQuery eligibilityQuery = new(
             [
-                new EligibleRepository(repoAtPosition2.Value, Position: 2, MaxConcurrentWorkers: 1),
-                new EligibleRepository(repoAtPosition1.Value, Position: 1, MaxConcurrentWorkers: 1),
+                new EligibleRepository(repoAtPosition2.Value, Position: 2, MaxConcurrentWorkers: 1, Host: "github.com"),
+                new EligibleRepository(repoAtPosition1.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
             ],
             new Dictionary<Guid, string>());
 
@@ -224,7 +224,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(repo, issueNumber: 12, detectedAt: newer);
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1)],
+            [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com")],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -253,7 +253,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(eligibleRepo, issueNumber: 2, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(eligibleRepo.Value, Position: 1, MaxConcurrentWorkers: 1)],
+            [new EligibleRepository(eligibleRepo.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com")],
             new Dictionary<Guid, string>
             {
                 [ineligibleRepo.Value] = "ineligible",
@@ -327,7 +327,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         slugQueries.AddSlug(ineligibleEarlier, "owner/earlier", position: 1);
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(eligibleRepo.Value, Position: 2, MaxConcurrentWorkers: 1)],
+            [new EligibleRepository(eligibleRepo.Value, Position: 2, MaxConcurrentWorkers: 1, Host: "github.com")],
             new Dictionary<Guid, string>
             {
                 [ineligibleLater.Value] = "ineligible",
@@ -418,7 +418,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(repo, issueNumber: 2, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1)],
+            [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com")],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -479,7 +479,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(repoR, issueNumber: 4, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1)],
+            [new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com")],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -523,8 +523,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
 
         StubEligibilityQuery eligibilityQuery = new(
             [
-                new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1),
-                new EligibleRepository(repoS.Value, Position: 2, MaxConcurrentWorkers: 1),
+                new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
+                new EligibleRepository(repoS.Value, Position: 2, MaxConcurrentWorkers: 1, Host: "github.com"),
             ],
             new Dictionary<Guid, string>());
 
@@ -570,8 +570,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
 
         StubEligibilityQuery eligibilityQuery = new(
             [
-                new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1),
-                new EligibleRepository(repoS.Value, Position: 2, MaxConcurrentWorkers: 1),
+                new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
+                new EligibleRepository(repoS.Value, Position: 2, MaxConcurrentWorkers: 1, Host: "github.com"),
             ],
             new Dictionary<Guid, string>());
 

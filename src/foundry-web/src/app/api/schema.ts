@@ -1054,6 +1054,7 @@ export interface components {
             /** Format: int32 */
             pidsLimit: number | string;
             additionalDenyRules: string[];
+            pausedHosts: components["schemas"]["PausedHost"][];
             webhookPublicBaseUrl?: null | string;
             /**
              * Format: int32
@@ -1162,6 +1163,15 @@ export interface components {
         PagedIssues: {
             items: components["schemas"]["IssueSummary"][];
             nextCursor: null | string;
+        };
+        PausedHost: {
+            host: string;
+            /** Format: date-time */
+            pausedAt: string;
+            /** Format: int32 */
+            probeAttempts: number | string;
+            /** Format: date-time */
+            nextProbeAt: string;
         };
         ProblemDetails: {
             type?: null | string;

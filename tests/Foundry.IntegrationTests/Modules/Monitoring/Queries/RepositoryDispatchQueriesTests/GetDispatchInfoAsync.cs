@@ -51,7 +51,8 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         RepositoryDispatchInfo info = result.ShouldNotBeNull();
         info.ShouldSatisfyAllConditions(
             () => info.Provider.ShouldBeOfType<WorkerProvider.GitHub>(),
-            () => info.IssueApiUrlBase.ShouldBe("https://api.github.com/repos/owner/repo/issues"));
+            () => info.IssueApiUrlBase.ShouldBe("https://api.github.com/repos/owner/repo/issues"),
+            () => info.Host.ShouldBe("github.com"));
     }
 
     [Fact]
@@ -74,7 +75,8 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         RepositoryDispatchInfo info = result.ShouldNotBeNull();
         info.ShouldSatisfyAllConditions(
             () => info.Provider.ShouldBeOfType<WorkerProvider.GitLab>(),
-            () => info.IssueApiUrlBase.ShouldBe("https://gitlab.com/api/v4/projects/gitlab-owner%2Frepo/issues"));
+            () => info.IssueApiUrlBase.ShouldBe("https://gitlab.com/api/v4/projects/gitlab-owner%2Frepo/issues"),
+            () => info.Host.ShouldBe("gitlab.com"));
     }
 
     [Fact]

@@ -119,6 +119,20 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
         repo.MaxConcurrentWorkers.ShouldBe(5);
     }
 
+    [Fact]
+    public async Task WhenEligibleRepositoryExists_IncludesItsHost()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org 5");
+        Guid repoId = await SeedRepositoryAsync(accountId, "owner/hosted", new RepositoryEligibility.Eligible());
+
+        // Act
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync([repoId]);
+
+        // Assert
+        result.ShouldHaveSingleItem().Host.ShouldBe("github.com");
+    }
+
     private async Task<IReadOnlyList<EligibleRepository>> QueryEligibleRepositoriesAsync(
         IReadOnlyCollection<Guid> repositoryIds)
     {

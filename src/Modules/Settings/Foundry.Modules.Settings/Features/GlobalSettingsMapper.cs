@@ -41,6 +41,7 @@ internal static class GlobalSettingsMapper
             settings.WorkerResourceLimits.CpuLimit,
             settings.WorkerResourceLimits.PidsLimit,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
+            [.. settings.HostPauses.Select(HostPauseMapper.ToPausedHost)],
             settings.WebhookPublicBaseUrl,
             settings.BackstopIntervalMinutes);
     }

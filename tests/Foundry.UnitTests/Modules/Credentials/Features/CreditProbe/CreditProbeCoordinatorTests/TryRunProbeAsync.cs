@@ -185,7 +185,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
 
         public Task<Foundry.Modules.Settings.Contracts.Queries.DispatchPauseState> GetDispatchPauseStateAsync(
             CancellationToken cancellationToken)
-            => Task.FromResult(new Foundry.Modules.Settings.Contracts.Queries.DispatchPauseState(null, false, true));
+            => Task.FromResult(new Foundry.Modules.Settings.Contracts.Queries.DispatchPauseState(null, false, true, []));
 
         public Task<Foundry.Modules.Settings.Contracts.ImageBuildStatus> GetImageBuildStatusAsync(
             CancellationToken cancellationToken)

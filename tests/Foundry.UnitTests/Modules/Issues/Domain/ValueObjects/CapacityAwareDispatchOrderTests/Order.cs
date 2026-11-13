@@ -47,7 +47,7 @@ public sealed class Order
     private static DispatchHeadroom HeadroomOf(params (MonitoredRepositoryId Id, int Headroom)[] entries)
     {
         IReadOnlyList<EligibleRepository> repos = entries
-            .Select(e => new EligibleRepository(e.Id.Value, Position: 0, MaxConcurrentWorkers: HeadroomCeiling))
+            .Select(e => new EligibleRepository(e.Id.Value, Position: 0, MaxConcurrentWorkers: HeadroomCeiling, Host: "github.com"))
             .ToList();
 
         Dictionary<MonitoredRepositoryId, int> inFlight = entries
@@ -71,7 +71,7 @@ public sealed class Order
         FreshQueuedIssue issue = MakeIssue(RepoA, issueNumber: 1);
         IReadOnlyList<EligibleRepository> eligibleRepos =
         [
-            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1),
+            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
         ];
         List<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues =
         [
@@ -95,7 +95,7 @@ public sealed class Order
         FreshQueuedIssue issue = MakeIssue(RepoA, issueNumber: 1);
         IReadOnlyList<EligibleRepository> eligibleRepos =
         [
-            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1),
+            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
         ];
         List<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues =
         [
@@ -120,8 +120,8 @@ public sealed class Order
 
         IReadOnlyList<EligibleRepository> eligibleRepos =
         [
-            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1),
-            new EligibleRepository(RepoB.Value, Position: 1, MaxConcurrentWorkers: 1),
+            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+            new EligibleRepository(RepoB.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
         ];
 
         List<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues =
@@ -265,9 +265,9 @@ public sealed class Order
 
         IReadOnlyList<EligibleRepository> repos =
         [
-            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1),
-            new EligibleRepository(RepoB.Value, Position: 0, MaxConcurrentWorkers: 1),
-            new EligibleRepository(RepoC.Value, Position: 0, MaxConcurrentWorkers: 2),
+            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+            new EligibleRepository(RepoB.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+            new EligibleRepository(RepoC.Value, Position: 0, MaxConcurrentWorkers: 2, Host: "github.com"),
         ];
 
         Dictionary<MonitoredRepositoryId, int> inFlight = new()

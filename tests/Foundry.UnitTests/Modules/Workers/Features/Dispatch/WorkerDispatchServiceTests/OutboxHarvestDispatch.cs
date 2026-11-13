@@ -345,7 +345,8 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             => Task.FromResult(new DispatchPauseState(
                 usageLimitResetsAt,
                 IsDispatchPaused: false,
-                AutoResumeOnUsageReset: true));
+                AutoResumeOnUsageReset: true,
+                PausedHosts: []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

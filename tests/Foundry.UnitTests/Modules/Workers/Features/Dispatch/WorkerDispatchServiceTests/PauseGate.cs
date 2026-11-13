@@ -65,7 +65,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        DispatchPauseState pauseState = new(UsageLimitResetsAt: null, IsDispatchPaused: true, AutoResumeOnUsageReset: true);
+        DispatchPauseState pauseState = new(UsageLimitResetsAt: null, IsDispatchPaused: true, AutoResumeOnUsageReset: true, PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -84,7 +84,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         DateTimeOffset futureReset = DateTimeOffset.UtcNow.AddHours(1);
-        DispatchPauseState pauseState = new(UsageLimitResetsAt: futureReset, IsDispatchPaused: false, AutoResumeOnUsageReset: true);
+        DispatchPauseState pauseState = new(UsageLimitResetsAt: futureReset, IsDispatchPaused: false, AutoResumeOnUsageReset: true, PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -113,7 +113,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true);
+            AutoResumeOnUsageReset: true,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -142,7 +143,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true);
+            AutoResumeOnUsageReset: true,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -171,7 +173,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true);
+            AutoResumeOnUsageReset: true,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -204,7 +207,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: false);
+            AutoResumeOnUsageReset: false,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -233,7 +237,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: true,
-            AutoResumeOnUsageReset: true);
+            AutoResumeOnUsageReset: true,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -268,7 +273,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: true,
-            AutoResumeOnUsageReset: true);
+            AutoResumeOnUsageReset: true,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -297,7 +303,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: true,
-            AutoResumeOnUsageReset: true);
+            AutoResumeOnUsageReset: true,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
@@ -326,7 +333,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: false);
+            AutoResumeOnUsageReset: false,
+            PausedHosts: []);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,

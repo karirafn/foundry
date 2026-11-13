@@ -55,6 +55,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             new InFlightWorkerCountQuery(_dbContext),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher());
         _sut = new WorkerCapacityAvailableHandler(
@@ -191,7 +192,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }

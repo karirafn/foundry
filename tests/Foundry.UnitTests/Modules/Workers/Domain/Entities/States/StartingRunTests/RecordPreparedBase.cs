@@ -17,10 +17,12 @@ public sealed class RecordPreparedBase
         CommitSha.From("1111111111111111111111111111111111111111"),
         CommitSha.From("2222222222222222222222222222222222222222"));
 
+    private static readonly MonitoredRepositoryId Repository = MonitoredRepositoryId.New();
+
     private static StartingRun PreparedRun()
     {
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
-        starting.RecordPreparedBase(Prepared);
+        starting.RecordPreparedBase(Prepared, Repository);
         return starting;
     }
 
@@ -35,6 +37,42 @@ public sealed class RecordPreparedBase
 
         // Assert
         starting.Base.ShouldBe(Prepared);
+    }
+
+    [Fact]
+    public void WhenRecorded_TheRunNamesTheRepositoryItWasPreparedFrom()
+    {
+        // Act
+        StartingRun starting = PreparedRun();
+
+        // Assert
+        starting.PreparedRepositoryId.ShouldBe(Repository);
+    }
+
+    [Fact]
+    public void BeforeItIsRecorded_TheRunNamesNoPreparedRepository()
+    {
+        StartingRun.Begin(IssueId.New(), WorkerRunId.New()).PreparedRepositoryId.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenTheActiveRunCompletes_TheCompletedRunCarriesThePreparedRepository()
+    {
+        // Act
+        CompletedRun completed = ActivatedRun().Complete(0, BranchName.From("feat/1-x"), pullRequestUrl: null);
+
+        // Assert
+        completed.PreparedRepositoryId.ShouldBe(Repository);
+    }
+
+    [Fact]
+    public void WhenTheStartingRunFails_TheFailedRunCarriesThePreparedRepository()
+    {
+        // Act
+        FailedRun failed = PreparedRun().Fail(new FailureReason.ContainerError("start failed"));
+
+        // Assert
+        failed.PreparedRepositoryId.ShouldBe(Repository);
     }
 
     [Fact]

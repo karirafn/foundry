@@ -73,6 +73,7 @@ public static class MonitoringModule
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
+        services.AddScoped<IHostRepositoryQueries, HostRepositoryQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
         services.AddScoped<IRepositoryEligibilityQuery, RepositoryEligibilityQuery>();
         services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();

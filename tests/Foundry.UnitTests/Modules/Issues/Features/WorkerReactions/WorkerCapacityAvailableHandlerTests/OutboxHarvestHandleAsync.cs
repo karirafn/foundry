@@ -98,11 +98,13 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
@@ -151,11 +153,13 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
@@ -204,11 +208,13 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
@@ -259,6 +265,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new InFlightWorkerCountQuery(dbContext),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
@@ -321,7 +328,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }

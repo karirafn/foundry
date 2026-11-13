@@ -61,11 +61,13 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(_dbContext),
             issueBlockerQueries ?? new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
         IssueClaimer claimer = new(
@@ -104,7 +106,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -183,7 +185,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -232,7 +234,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -267,7 +269,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -302,7 +304,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -336,7 +338,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(continuationRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(continuationRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -553,7 +555,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -589,7 +592,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://gitlab.com/owner/repo.git"),
                 "GITLAB_PAT",
                 new WorkerProvider.GitLab(),
-                "https://gitlab.com/api/v4/projects/owner%2Frepo/issues")),
+                "https://gitlab.com/api/v4/projects/owner%2Frepo/issues",
+                "gitlab.com")),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -618,7 +622,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -647,7 +652,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -676,7 +682,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://gitlab.com/owner/repo.git"),
                 "GITLAB_PAT",
                 new WorkerProvider.GitLab(),
-                "https://gitlab.com/api/v4/projects/owner%2Frepo/issues")),
+                "https://gitlab.com/api/v4/projects/owner%2Frepo/issues",
+                "gitlab.com")),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -705,7 +712,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new Uri("https://gitlab.com/owner/repo.git"),
                 "GITLAB_PAT",
                 new WorkerProvider.GitLab(),
-                "https://gitlab.com/api/v4/projects/owner%2Frepo/issues")),
+                "https://gitlab.com/api/v4/projects/owner%2Frepo/issues",
+                "gitlab.com")),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -798,8 +806,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -836,7 +844,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -868,7 +876,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -901,8 +909,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(freshRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                    new EligibleRepository(revisionRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(freshRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                    new EligibleRepository(revisionRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -940,8 +948,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -979,8 +987,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -1025,8 +1033,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(repoAId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                    new EligibleRepository(repoBId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(repoAId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                    new EligibleRepository(repoBId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -1065,7 +1073,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // absentRepoId has a queued issue but no position entry in the dictionary.
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -1487,7 +1495,7 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }

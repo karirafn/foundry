@@ -20,7 +20,7 @@ internal static class PublishingRunFixture
     public static ActiveRun ActiveRun(BranchName? branch = null)
     {
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
-        starting.RecordPreparedBase(Base);
+        starting.RecordPreparedBase(Base, MonitoredRepositoryId.New());
         return starting.Activate(ContainerId.From("container-1"), branch ?? Branch, MonitoredRepositoryId.New());
     }
 

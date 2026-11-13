@@ -17,7 +17,7 @@ public sealed class ForClaim
     private static readonly MonitoredRepositoryId Unknown = MonitoredRepositoryId.New();
 
     private static EligibleRepository Repo(MonitoredRepositoryId id, int maxConcurrentWorkers, int position = 0) =>
-        new(id.Value, position, maxConcurrentWorkers);
+        new(id.Value, position, maxConcurrentWorkers, "github.com");
 
     // Cycle 1b: ForClaim gives max(0, MaxConcurrentWorkers - inFlight).
     [Fact]

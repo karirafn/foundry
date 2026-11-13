@@ -17,7 +17,8 @@ public sealed class StubRepositoryDispatchQueries(RepositoryDispatchInfo? info) 
         new Uri("https://github.com/owner/repo.git"),
         accountToken,
         new WorkerProvider.GitHub(),
-        "https://api.github.com/repos/owner/repo/issues"));
+        "https://api.github.com/repos/owner/repo/issues",
+        "github.com"));
 
     public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
         MonitoredRepositoryId repositoryId,

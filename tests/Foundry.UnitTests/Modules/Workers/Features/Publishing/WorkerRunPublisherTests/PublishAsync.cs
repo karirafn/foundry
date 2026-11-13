@@ -276,7 +276,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         using FoundryDbContext db = CreateDbContext();
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
-        starting.RecordPreparedBase(Base);
+        starting.RecordPreparedBase(Base, MonitoredRepositoryId.New());
         ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), MonitoredRepositoryId.New());
         PublishingRun publishing = active.BeginPublishing(
             exit,

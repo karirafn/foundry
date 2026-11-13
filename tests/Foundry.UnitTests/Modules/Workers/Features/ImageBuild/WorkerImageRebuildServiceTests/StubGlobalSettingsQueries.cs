@@ -39,7 +39,8 @@ internal sealed class StubGlobalSettingsQueries(
         MemoryLimitMb: 8192,
         CpuLimit: 2.0,
         PidsLimit: 512,
-        AdditionalDenyRules: []);
+        AdditionalDenyRules: [],
+        PausedHosts: []);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
@@ -58,7 +59,7 @@ internal sealed class StubGlobalSettingsQueries(
 
 
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-        => Task.FromResult(new DispatchPauseState(null, false, true));
+        => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
         => Task.FromResult(ImageBuildStatus.Idle);

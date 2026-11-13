@@ -24,5 +24,6 @@ public sealed record GlobalSettingsSummary(
     double CpuLimit,
     int PidsLimit,
     IReadOnlyList<string> AdditionalDenyRules,
+    IReadOnlyList<PausedHost> PausedHosts,
     string? WebhookPublicBaseUrl = null,
     int BackstopIntervalMinutes = 15);

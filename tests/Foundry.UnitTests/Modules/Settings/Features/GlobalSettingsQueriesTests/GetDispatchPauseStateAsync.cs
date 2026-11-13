@@ -1,3 +1,4 @@
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features;
@@ -63,6 +64,35 @@ public sealed class GetDispatchPauseStateAsync : IAsyncDisposable
             () => result.IsDispatchPaused.ShouldBeTrue(),
             () => result.AutoResumeOnUsageReset.ShouldBeTrue(),
             () => result.UsageLimitResetsAt.ShouldNotBeNull());
+    }
+
+    [Fact]
+    public async Task WhenHostsArePaused_ReturnsEachPausedHostAsStored()
+    {
+        // Arrange
+        DateTimeOffset pausedAt = new(2026, 11, 13, 7, 39, 0, TimeSpan.Zero);
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.PauseHost("gitlab.com", pausedAt);
+            settings.RecordProbeUnreachable("gitlab.com", pausedAt.AddMinutes(1));
+            settings.PauseHost("github.com", pausedAt.AddMinutes(2));
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GlobalSettingsQueries sut = new(dbContext);
+
+        // Act
+        DispatchPauseState result = await sut.GetDispatchPauseStateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PausedHosts.ShouldBe(
+        [
+            new PausedHost("gitlab.com", pausedAt, 1, pausedAt.AddMinutes(3)),
+            new PausedHost("github.com", pausedAt.AddMinutes(2), 0, pausedAt.AddMinutes(3)),
+        ]);
     }
 
     [Fact]

@@ -19,4 +19,10 @@ internal interface IPublisher
     /// provider failure; it returns <see cref="PublishResult.Failed"/>.
     /// </summary>
     Task<PublishResult> PublishAsync(PublishRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Probe mode: one <c>ls-remote HEAD</c> against the request's repository, to tell whether its provider host can be
+    /// reached again. Never throws for a Docker or provider failure; it returns <see cref="HostProbeOutcome.Inconclusive"/>.
+    /// </summary>
+    Task<HostProbeOutcome> ProbeAsync(HostProbeRequest request, CancellationToken cancellationToken);
 }

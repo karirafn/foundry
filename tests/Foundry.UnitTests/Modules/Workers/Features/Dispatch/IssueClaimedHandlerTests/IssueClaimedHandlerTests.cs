@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
@@ -69,7 +70,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
         IIssueContentQueries? issueContentQueries = null,
         ITrackerContextQueries? trackerContextQueries = null,
-        IPublisher? publisher = null)
+        IPublisher? publisher = null,
+        ISystemNotificationBroadcaster? broadcaster = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -84,6 +86,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryDispatchQueries ?? StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             issueContentQueries ?? new StubIssueContentQueries(),
             trackerContextQueries ?? new StubTrackerContextQueries(),
+            broadcaster ?? new CapturingSystemNotificationBroadcaster(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -1906,6 +1909,109 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPrepareFindsTheProviderUnreachable_PausesTheRepositorysHostInTheSameSave()
+    {
+        // Arrange
+        await SeedGlobalSettingsAsync();
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        StubRepositoryDispatchQueries dispatchQueries = new(new RepositoryDispatchInfo(
+            "owner/repo",
+            new Uri("https://gitlab.example.test/owner/repo.git"),
+            "glpat_test_token",
+            new WorkerProvider.GitLab(),
+            "https://gitlab.example.test/api/v4/projects/owner%2Frepo/issues",
+            "gitlab.example.test"));
+        FailureReason reason = new FailureReason.ProviderUnreachable("fatal: unable to access: Could not resolve host");
+        IssueClaimedHandler sut = BuildHandler(
+            repositoryDispatchQueries: dispatchQueries,
+            publisher: new FakePublisher(new PrepareOutcome.Failed(reason)),
+            broadcaster: broadcaster);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<FailedRun>().Reason.ShouldBe(reason);
+        settings.HostPauses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            pause => pause.Host.ShouldBe("gitlab.example.test"),
+            pause => pause.ProbeAttempts.ShouldBe(0));
+        broadcaster.SentNotifications.ShouldHaveSingleItem().Category.ShouldBe("dispatch");
+    }
+
+    [Fact]
+    public async Task WhenPrepareFindsAnAlreadyPausedHostUnreachable_LeavesItsPauseAndBroadcastsNothing()
+    {
+        // Arrange
+        DateTimeOffset pausedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        await SeedGlobalSettingsAsync(settings =>
+        {
+            settings.PauseHost("github.com", pausedAt);
+            settings.RecordProbeUnreachable("github.com", pausedAt.AddMinutes(1));
+        });
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        IssueClaimedHandler sut = BuildHandler(
+            publisher: new FakePublisher(new PrepareOutcome.Failed(new FailureReason.ProviderUnreachable("timed out"))),
+            broadcaster: broadcaster);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        HostPause pause = settings.HostPauses.ShouldHaveSingleItem();
+        pause.ShouldSatisfyAllConditions(
+            () => pause.PausedAt.ShouldBe(pausedAt),
+            () => pause.ProbeAttempts.ShouldBe(1));
+        broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPrepareFailsForAnotherReason_NoHostIsPaused()
+    {
+        // Arrange
+        await SeedGlobalSettingsAsync();
+        FailureReason reason = new FailureReason.WorkerBootstrapFailed("FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=403");
+        IssueClaimedHandler sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        settings.HostPauses.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPrepareSucceeds_TheRunRecordsTheRepositoryItWasPreparedFrom()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        IssueClaimedHandler sut = BuildHandler();
+
+        // Act
+        await sut.HandleAsync(BuildEvent(monitoredRepositoryId: repositoryId), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.PreparedRepositoryId.ShouldBe(repositoryId);
+    }
+
+    private async Task SeedGlobalSettingsAsync(Action<GlobalSettings>? configure = null)
+    {
+        GlobalSettings settings = GlobalSettings.Create();
+        configure?.Invoke(settings);
+        _dbContext.Set<GlobalSettings>().Add(settings);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    [Fact]
     public async Task WhenTheAccountHasNoToken_NothingIsPrepared()
     {
         // Arrange
@@ -2049,7 +2155,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
+            => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

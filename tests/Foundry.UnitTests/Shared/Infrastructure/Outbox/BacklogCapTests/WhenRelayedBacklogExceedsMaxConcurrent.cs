@@ -234,7 +234,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }
@@ -252,7 +252,8 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             new Uri("https://github.com/owner/repo.git"),
             "GITHUB_PAT",
             new WorkerProvider.GitHub(),
-            "https://api.github.com/repos/owner/repo/issues");
+            "https://api.github.com/repos/owner/repo/issues",
+            "github.com");
 
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
             MonitoredRepositoryId repositoryId,
@@ -279,7 +280,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
 
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
+            => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

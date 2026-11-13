@@ -89,6 +89,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
             StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             new StubIssueContentQueries(),
             new StubTrackerContextQueries(trackerContext),
+            new CapturingSystemNotificationBroadcaster(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -187,7 +188,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
             => Task.FromResult(30);
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
+            => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
