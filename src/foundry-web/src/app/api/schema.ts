@@ -1121,6 +1121,7 @@ export interface components {
             branchUrl?: null | string;
             sideBranchName?: null | string;
             sideBranchUrl?: null | string;
+            divergenceReason?: null | string;
         };
         IssueSummary: {
             /** Format: uuid */
