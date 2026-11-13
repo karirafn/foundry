@@ -7,16 +7,8 @@ import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
-import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
-
-const mockWorkerHub = {
-  on: () => {},
-  onReconnected: () => {},
-  onReconnecting: () => {},
-  onClose: () => {},
-  stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
-  start: () => Promise.resolve(),
-};
+import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
+import { provideFakeHubs } from '../../../core/testing/fake-hub-transport';
 
 const mockStateDetails: IssueStateDetails = {
   workerRunId: null,
@@ -91,7 +83,7 @@ function setup(detail: IssueDetail, run: WorkerRunDetail | null = null, getLog =
       provideHttpClientTesting(),
       { provide: IssueSignalRService, useValue: { on: () => {}, onReconnected: () => {} } },
       { provide: WorkerRunService, useValue: { getDetail: () => of(null), getLog } },
-      { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      provideFakeHubs(),
     ],
   });
   const fixture = TestBed.createComponent(IssueDetailComponent);

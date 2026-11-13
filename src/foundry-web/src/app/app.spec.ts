@@ -6,21 +6,15 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Subject } from 'rxjs';
 import { App } from './app';
 import { routes } from './app.routes';
-import { SYSTEM_HUB_FACTORY, SystemHub, SystemSignalRService } from './core/services/system-signalr.service';
+import { SystemSignalRService } from './core/services/system-signalr.service';
 import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { DispatchService } from './core/services/dispatch.service';
 import { CreditsService } from './core/services/credits.service';
 import { UsageService } from './core/services/usage.service';
 import { UsageSnapshot } from './core/models/usage.model';
-import { WORKER_HUB_FACTORY, WorkerHub } from './core/services/worker-signalr.service';
+import { FakeHubTransport, provideFakeHubs } from './core/testing/fake-hub-transport';
 import { AgentActivity } from './core/models/agent-activity.model';
-
-const mockSystemHubFactory = (): SystemHub => ({
-  on: () => {},
-  onReconnected: () => {},
-  start: () => Promise.resolve(),
-});
 
 function createMockSettingsService(isColdBuildBlocking = false) {
   return {
@@ -134,25 +128,6 @@ function createMockUsageService(snapshot: UsageSnapshot | null = null) {
   };
 }
 
-interface CapturedWorkerHub {
-  onAgentActivity: ((activity: AgentActivity) => void) | null;
-}
-
-function createMockWorkerHub(captured: CapturedWorkerHub): WorkerHub {
-  return {
-    on: <T>(method: string, cb: (payload: T) => void) => {
-      if (method === 'AgentActivity') {
-        captured.onAgentActivity = cb as unknown as (activity: AgentActivity) => void;
-      }
-    },
-    onReconnected: () => {},
-    onReconnecting: () => {},
-    onClose: () => {},
-    stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
-    start: () => Promise.resolve(),
-  };
-}
-
 function buildAgentActivity(workerRunId: string, issueId: string): AgentActivity {
   return {
     workerRunId,
@@ -171,27 +146,25 @@ function buildAgentActivity(workerRunId: string, issueId: string): AgentActivity
 
 function setupApp(isColdBuildBlocking = false, usageSnapshot: UsageSnapshot | null = buildTestSnapshot()) {
   const mockAccountService = createMockAccountService();
-  const workerHubCallbacks: CapturedWorkerHub = { onAgentActivity: null };
-  const workerHub = createMockWorkerHub(workerHubCallbacks);
+  const workerHub = new FakeHubTransport();
   TestBed.configureTestingModule({
     imports: [App],
     providers: [
       provideRouter(routes),
       provideHttpClient(),
       provideHttpClientTesting(),
-      { provide: SYSTEM_HUB_FACTORY, useValue: mockSystemHubFactory },
+      provideFakeHubs({ workers: workerHub }),
       { provide: SettingsService, useValue: createMockSettingsService(isColdBuildBlocking) },
       { provide: AccountService, useValue: mockAccountService },
       { provide: DispatchService, useValue: createMockDispatchService() },
       { provide: SystemSignalRService, useValue: createMockSignalRService() },
       { provide: CreditsService, useValue: createMockCreditsService() },
       { provide: UsageService, useValue: createMockUsageService(usageSnapshot) },
-      { provide: WORKER_HUB_FACTORY, useValue: () => workerHub },
     ],
   });
   const fixture = TestBed.createComponent(App);
   fixture.detectChanges();
-  return { fixture, mockAccountService, workerHubCallbacks };
+  return { fixture, mockAccountService, workerHub };
 }
 
 describe('App', () => {
@@ -417,12 +390,12 @@ describe('App', () => {
 
     it('should update the count live as agent activity arrives', () => {
       // Arrange
-      const { fixture, workerHubCallbacks } = setupApp();
+      const { fixture, workerHub } = setupApp();
       const compiled = fixture.nativeElement as HTMLElement;
 
       // Act
-      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-1', 'issue-1'));
-      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-2', 'issue-2'));
+      workerHub.emit('AgentActivity', buildAgentActivity('run-1', 'issue-1'));
+      workerHub.emit('AgentActivity', buildAgentActivity('run-2', 'issue-2'));
       fixture.detectChanges();
 
       // Assert
@@ -433,13 +406,13 @@ describe('App', () => {
 
     it('should announce count changes through the shell announcer but not the initial count', () => {
       // Arrange
-      const { fixture, workerHubCallbacks } = setupApp();
+      const { fixture, workerHub } = setupApp();
       const compiled = fixture.nativeElement as HTMLElement;
       const announcer = compiled.querySelector('.app__sr-announcer');
       expect(announcer?.textContent?.trim()).toBe('');
 
       // Act
-      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-1', 'issue-1'));
+      workerHub.emit('AgentActivity', buildAgentActivity('run-1', 'issue-1'));
       fixture.detectChanges();
 
       // Assert
@@ -448,15 +421,15 @@ describe('App', () => {
 
     it('should not announce token-only updates for an already counted run', () => {
       // Arrange
-      const { fixture, mockAccountService, workerHubCallbacks } = setupApp();
+      const { fixture, mockAccountService, workerHub } = setupApp();
       const compiled = fixture.nativeElement as HTMLElement;
-      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-1', 'issue-1'));
+      workerHub.emit('AgentActivity', buildAgentActivity('run-1', 'issue-1'));
       fixture.detectChanges();
       mockAccountService._srAnnouncementSignal.set('Account added.');
       fixture.detectChanges();
 
       // Act — a later payload for the same run changes nothing countable.
-      workerHubCallbacks.onAgentActivity!({
+      workerHub.emit('AgentActivity', {
         ...buildAgentActivity('run-1', 'issue-1'),
         tokens: { inputTokens: 10, outputTokens: 20 },
       });

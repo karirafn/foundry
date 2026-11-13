@@ -4,31 +4,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AgentActivity, AgentActivityEnded } from '../../../core/models/agent-activity.model';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
-import { WORKER_HUB_FACTORY, WorkerHub } from '../../../core/services/worker-signalr.service';
+import { FakeHubTransport, provideFakeHubs } from '../../../core/testing/fake-hub-transport';
 import { FloorPageComponent } from './floor-page';
-
-interface CapturedHub {
-  onAgentActivity: ((activity: AgentActivity) => void) | null;
-  onAgentActivityEnded: ((ended: AgentActivityEnded) => void) | null;
-  onReconnecting: (() => void) | null;
-}
-
-function buildHub(captured: CapturedHub): WorkerHub {
-  return {
-    on: <T>(method: string, cb: (payload: T) => void) => {
-      if (method === 'AgentActivity') {
-        captured.onAgentActivity = cb as unknown as (activity: AgentActivity) => void;
-      } else if (method === 'AgentActivityEnded') {
-        captured.onAgentActivityEnded = cb as unknown as (ended: AgentActivityEnded) => void;
-      }
-    },
-    onReconnected: () => {},
-    onReconnecting: (cb) => { captured.onReconnecting = cb; },
-    onClose: () => {},
-    stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
-    start: () => Promise.resolve(),
-  };
-}
 
 function buildActivity(workerRunId: string, issueId: string): AgentActivity {
   return {
@@ -62,13 +39,13 @@ function issueItem(id: string, issueNumber: number, state: string) {
 }
 
 async function setup() {
-  const captured: CapturedHub = { onAgentActivity: null, onAgentActivityEnded: null, onReconnecting: null };
+  const hub = new FakeHubTransport();
   TestBed.configureTestingModule({
     imports: [FloorPageComponent],
     providers: [
       provideHttpClient(),
       provideHttpClientTesting(),
-      { provide: WORKER_HUB_FACTORY, useValue: () => buildHub(captured) },
+      provideFakeHubs({ workers: hub }),
       {
         provide: IssueSignalRService,
         useValue: { on: () => {}, onReconnected: () => {}, connectionStatus: signal('connected') },
@@ -79,7 +56,7 @@ async function setup() {
   const httpMock = TestBed.inject(HttpTestingController);
   await Promise.resolve();
   fixture.detectChanges();
-  return { fixture, httpMock, captured, el: fixture.nativeElement as HTMLElement };
+  return { fixture, httpMock, hub, el: fixture.nativeElement as HTMLElement };
 }
 
 function flushIssues(httpMock: HttpTestingController, items: unknown[]): void {
@@ -97,10 +74,10 @@ describe('FloorPageComponent', () => {
 
   it('should render one lane per active run and free slots from server capacity', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress'), issueItem('issue-2', 2, 'in_progress')]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
-    captured.onAgentActivity!(buildActivity('run-2', 'issue-2'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-2', 'issue-2'));
     fixture.detectChanges();
 
     // Act
@@ -115,14 +92,14 @@ describe('FloorPageComponent', () => {
 
   it('should remove a lane when its run ends', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
     flushCapacity(httpMock, 2);
 
     // Act
-    captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+    hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
     fixture.detectChanges();
     flushCapacity(httpMock, 3);
     fixture.detectChanges();
@@ -134,9 +111,9 @@ describe('FloorPageComponent', () => {
 
   it('should show occupied slots without agent activity yet as starting', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress'), issueItem('issue-2', 2, 'in_progress')]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
 
     // Act — the server counts two occupied slots, but only one run reports activity.
@@ -151,13 +128,13 @@ describe('FloorPageComponent', () => {
 
   it('should refetch capacity when the number of active runs changes', async () => {
     // Arrange
-    const { fixture, httpMock, captured } = await setup();
+    const { fixture, httpMock, hub } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
     fixture.detectChanges();
     flushCapacity(httpMock, 2);
 
     // Act
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
 
     // Assert
@@ -215,14 +192,14 @@ describe('FloorPageComponent', () => {
 
   it('should mark lanes stale while the worker hub is reconnecting', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
     flushCapacity(httpMock, 2);
 
     // Act
-    captured.onReconnecting!();
+    hub.reconnecting();
     fixture.detectChanges();
 
     // Assert
@@ -232,13 +209,13 @@ describe('FloorPageComponent', () => {
   // Publishing slots (#787)
   it('should render a publishing card and a retrying card in place of starting slots', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [
       issueItem('issue-1', 1, 'in_progress'),
       { ...issueItem('issue-42', 42, 'in_progress'), title: 'Add retry', publishPhase: 'publishing' },
       { ...issueItem('issue-57', 57, 'revision_in_progress'), title: 'Fix login redirect', publishPhase: 'retrying' },
     ]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
 
     // Act — three occupied slots: one agent lane and two publishing runs.
@@ -264,12 +241,12 @@ describe('FloorPageComponent', () => {
 
   it('should place publishing cards after the agent lanes and before the starting slots', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [
       issueItem('issue-1', 1, 'in_progress'),
       { ...issueItem('issue-42', 42, 'in_progress'), publishPhase: 'publishing' },
     ]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
 
     // Act — three occupied: lane, publishing, starting.
@@ -285,14 +262,14 @@ describe('FloorPageComponent', () => {
 
   it('should include the publishing count in the summary only when above zero', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [
       issueItem('issue-1', 1, 'in_progress'),
       issueItem('issue-2', 2, 'in_progress'),
       { ...issueItem('issue-42', 42, 'in_progress'), publishPhase: 'publishing' },
     ]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
-    captured.onAgentActivity!(buildActivity('run-2', 'issue-2'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-2', 'issue-2'));
     fixture.detectChanges();
 
     // Act
@@ -305,9 +282,9 @@ describe('FloorPageComponent', () => {
 
   it('should leave the publishing count out of the summary when nothing is publishing', async () => {
     // Arrange
-    const { fixture, httpMock, captured, el } = await setup();
+    const { fixture, httpMock, hub, el } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
-    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
 
     // Act
