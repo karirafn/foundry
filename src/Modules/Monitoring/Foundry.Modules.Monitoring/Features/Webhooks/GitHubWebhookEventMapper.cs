@@ -18,6 +18,11 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// <item><term><c>pull_request</c>, <c>pull_request_review</c>, <c>pull_request_review_comment</c>,
 /// <c>issue_comment</c> (on a PR)</term><description>review pass for the owning issue — the checks
 /// pass when that issue is checks-pending (the review pass only acts on review issues)</description></item>
+/// <item><term><c>pull_request_review</c>, <c>pull_request_review_comment</c>, <c>issue_comment</c> (on a PR)
+/// </term><description>otherwise, awaiting-input pass for the awaiting-input issue whose question lives on that
+/// PR</description></item>
+/// <item><term><c>issue_comment</c> (on an issue)</term><description>awaiting-input pass for that issue when it
+/// is awaiting input with no PR (its question lives on the issue thread)</description></item>
 /// <item><term><c>check_suite</c> (completed), <c>status</c></term><description>checks pass for the owning issue</description></item>
 /// <item><term><c>branch_protection_rule</c>, <c>repository_ruleset</c></term><description>branch-rules step</description></item>
 /// <item><term><c>push</c></term><description>no nudge — handled by <see cref="BranchPushPublisher"/></description></item>
@@ -79,8 +84,8 @@ internal static partial class GitHubWebhookEventMapper
         {
             "issues" => MapIssues(payload, repositoryId, tracked),
             "issue_dependencies" => MapIssueDependencies(payload, repositoryId, tracked),
-            "pull_request" or "pull_request_review" or "pull_request_review_comment"
-                => MapPullRequest(payload, repositoryId, tracked),
+            "pull_request" => MapPullRequest(payload, repositoryId, tracked, isComment: false),
+            "pull_request_review" or "pull_request_review_comment" => MapPullRequest(payload, repositoryId, tracked, isComment: true),
             "issue_comment" => MapIssueComment(payload, repositoryId, tracked),
             "check_suite" => MapCheckSuite(payload, repositoryId, tracked),
             "status" => MapStatus(payload, repositoryId, tracked),
@@ -125,7 +130,11 @@ internal static partial class GitHubWebhookEventMapper
         return null;
     }
 
-    private static NudgeKey? MapPullRequest(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
+    private static NudgeKey? MapPullRequest(
+        JsonElement payload,
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        bool isComment)
     {
         if (!TryGetObject(payload, "pull_request", out JsonElement pullRequest))
         {
@@ -134,21 +143,25 @@ internal static partial class GitHubWebhookEventMapper
 
         int? pullNumber = GetInt(pullRequest, "number");
         string? headBranch = TryGetObject(pullRequest, "head", out JsonElement head) ? GetString(head, "ref") : null;
+        IReadOnlyList<int> pullNumbers = pullNumber is { } n ? [n] : [];
+        IReadOnlyList<string> branches = headBranch is { } b ? [b] : [];
 
-        return WebhookRelevance.MapOwningIssue(repositoryId, tracked, pullNumber is { } n ? [n] : [], headBranch is { } b ? [b] : [], PullRequestUrlPattern());
+        return isComment
+            ? WebhookRelevance.MapPullRequestComment(repositoryId, tracked, pullNumbers, branches, PullRequestUrlPattern())
+            : WebhookRelevance.MapOwningIssue(repositoryId, tracked, pullNumbers, branches, PullRequestUrlPattern());
     }
 
     private static NudgeKey? MapIssueComment(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
     {
-        // Only comments on a pull request matter; a comment on a plain issue maps to nothing.
-        if (!TryGetObject(payload, "issue", out JsonElement issue)
-            || !TryGetObject(issue, "pull_request", out _)
-            || GetInt(issue, "number") is not { } pullNumber)
+        if (!TryGetObject(payload, "issue", out JsonElement issue) || GetInt(issue, "number") is not { } number)
         {
             return null;
         }
 
-        return WebhookRelevance.MapOwningIssue(repositoryId, tracked, [pullNumber], [], PullRequestUrlPattern());
+        // GitHub numbers pull requests and issues in one sequence; "issue.pull_request" marks a PR thread.
+        return TryGetObject(issue, "pull_request", out _)
+            ? WebhookRelevance.MapPullRequestComment(repositoryId, tracked, [number], [], PullRequestUrlPattern())
+            : WebhookRelevance.MapIssueComment(repositoryId, tracked, number);
     }
 
     private static NudgeKey? MapCheckSuite(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)

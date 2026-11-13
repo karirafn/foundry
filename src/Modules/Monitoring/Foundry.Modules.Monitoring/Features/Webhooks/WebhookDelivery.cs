@@ -111,7 +111,10 @@ internal static class WebhookDelivery
             blockers = edges.Select(e => e.BlockedByIssueNumber).ToHashSet();
         }
 
-        return new WebhookTrackingContext(known, review, checksPending, blockers);
+        IReadOnlyList<AwaitingInputThread> awaitingInput = [.. (await issueQueries.GetAwaitingInputIssuesAsync(repositoryId, cancellationToken))
+            .Select(i => new AwaitingInputThread(i.IssueNumber, i.PullRequestUrl))];
+
+        return new WebhookTrackingContext(known, review, checksPending, blockers, awaitingInput);
     }
 
     private static bool IsWellFormedHookId(string hookId) =>

@@ -16,12 +16,14 @@ public sealed class Map
     private static readonly DateTimeOffset At = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
 
     // Issue 10 is tracked (detected) and blocked by untracked issue 77; 20 is in review on PR 21 and
-    // blocks tracked issue 30; 30 is checks-pending on PR 31.
+    // blocks tracked issue 30; 30 is checks-pending on PR 31; 40 awaits input on its own thread;
+    // 50 awaits input on PR 51.
     private static readonly WebhookTrackingContext Tracked = new(
-        new HashSet<int> { 10, 20, 30 },
+        new HashSet<int> { 10, 20, 30, 40, 50 },
         [new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At)],
         [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)],
-        new HashSet<int> { 77, 20 });
+        new HashSet<int> { 77, 20 },
+        [new AwaitingInputThread(40, null), new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51")]);
 
     private static NudgeKey? MapEvent(string eventName, string json)
     {
@@ -113,6 +115,42 @@ public sealed class Map
     public void WhenIssueCommentOnPlainIssue_IsDropped()
     {
         MapEvent("issue_comment", """{"issue":{"number":10}}""").ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenIssueCommentOnAwaitingInputIssueWithoutPullRequest_NudgesAwaitingInputPass()
+    {
+        MapEvent("issue_comment", """{"action":"created","issue":{"number":40}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+    }
+
+    [Fact]
+    public void WhenIssueCommentOnAwaitingInputIssueWhoseQuestionIsOnItsPullRequest_IsDropped()
+    {
+        MapEvent("issue_comment", """{"action":"created","issue":{"number":50}}""").ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenIssueCommentOnAwaitingInputPullRequest_NudgesAwaitingInputPass()
+    {
+        MapEvent("issue_comment", """{"action":"created","issue":{"number":51,"pull_request":{"url":"x"}}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 50));
+    }
+
+    [Theory]
+    [InlineData("pull_request_review")]
+    [InlineData("pull_request_review_comment")]
+    public void WhenReviewOnAwaitingInputPullRequest_NudgesAwaitingInputPass(string eventName)
+    {
+        MapEvent(eventName, """{"action":"submitted","pull_request":{"number":51,"head":{"ref":"feat/50-thing"}}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 50));
+    }
+
+    [Fact]
+    public void WhenPullRequestEventOnAwaitingInputPullRequest_IsDropped()
+    {
+        MapEvent("pull_request", """{"action":"edited","pull_request":{"number":51,"head":{"ref":"feat/50-thing"}}}""")
+            .ShouldBeNull();
     }
 
     [Fact]
