@@ -22,6 +22,9 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
     /// <summary>Bounds a Publish that hangs; the attempt fails transiently and is retried with backoff.</summary>
     private static readonly TimeSpan PublishTimeout = TimeSpan.FromMinutes(15);
 
+    /// <summary>Bounds a probe: it is one ls-remote, so one that stalls this long is inconclusive.</summary>
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromMinutes(2);
+
     public async Task<PrepareOutcome> PrepareAsync(PrepareRequest request, CancellationToken cancellationToken)
     {
         WorkerContainerSpec spec = PublisherContainerSpec.ForPrepare(request);
@@ -83,6 +86,40 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
             return new PublishResult.Failed(
                 $"The Publisher could not run: {DockerWorkerOrchestrator.RedactDockerError(ex.Message)}",
                 Transient: true);
+        }
+        finally
+        {
+            if (containerId is not null)
+            {
+                await TryRemoveAsync(containerId);
+            }
+        }
+    }
+
+    public async Task<HostProbeOutcome> ProbeAsync(HostProbeRequest request, CancellationToken cancellationToken)
+    {
+        WorkerContainerSpec spec = PublisherContainerSpec.ForProbe(request);
+        string? containerId = null;
+
+        try
+        {
+            containerId = await runtime.CreateAndStartAsync(DockerWorkerOrchestrator.ToCreateParameters(spec), cancellationToken);
+
+            long? exitCode = await WaitWithinTimeoutAsync(containerId, ProbeTimeout, cancellationToken);
+
+            if (exitCode is null)
+            {
+                return new HostProbeOutcome.Inconclusive(
+                    $"The Publisher probe did not finish within {ProbeTimeout.TotalMinutes:0} minutes.");
+            }
+
+            string? log = await runtime.GetAllLogsAsync(containerId, cancellationToken);
+            return HostProbeOutputParser.Parse(log);
+        }
+        catch (DockerApiException ex)
+        {
+            return new HostProbeOutcome.Inconclusive(
+                $"The Publisher probe could not run: {DockerWorkerOrchestrator.RedactDockerError(ex.Message)}");
         }
         finally
         {

@@ -46,4 +46,26 @@ internal sealed class FakePublisher(PrepareOutcome? outcome = null) : IPublisher
         _publishRequests.Add(request);
         return Task.FromResult(_publishResults.TryDequeue(out PublishResult? result) ? result : new PublishResult.NothingToPublish());
     }
+    private readonly List<HostProbeRequest> _probeRequests = [];
+
+    private readonly Queue<HostProbeOutcome> _probeOutcomes = new();
+
+    public IReadOnlyList<HostProbeRequest> ProbeRequests => _probeRequests;
+
+    /// <summary>Scripts the next probe outcomes, in order; once they run out every probe finds the host reachable.</summary>
+    public FakePublisher WithProbeOutcomes(params HostProbeOutcome[] outcomes)
+    {
+        foreach (HostProbeOutcome outcome in outcomes)
+        {
+            _probeOutcomes.Enqueue(outcome);
+        }
+
+        return this;
+    }
+
+    public Task<HostProbeOutcome> ProbeAsync(HostProbeRequest request, CancellationToken cancellationToken)
+    {
+        _probeRequests.Add(request);
+        return Task.FromResult(_probeOutcomes.TryDequeue(out HostProbeOutcome? next) ? next : new HostProbeOutcome.Reachable());
+    }
 }

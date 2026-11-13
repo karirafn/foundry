@@ -22,4 +22,7 @@ internal sealed class PreparedPublisher : IPublisher
 
         return Task.FromResult<PublishResult>(new PublishResult.Published(Head, 1, ["feat: smoke-tested feature"], []));
     }
+
+    public Task<HostProbeOutcome> ProbeAsync(HostProbeRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult<HostProbeOutcome>(new HostProbeOutcome.Reachable());
 }

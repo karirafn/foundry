@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -89,6 +90,7 @@ public static class WorkersModule
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
         services.AddScoped<WorkerRunPublisher>();
+        services.AddScoped<HostProber>();
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<RunPublishingService>();
         services.AddHostedService<AgentActivityFollowerService>();
@@ -96,6 +98,7 @@ public static class WorkersModule
         services.AddHostedService<StaleStartingRunService>();
         services.AddHostedService<StaleReservationService>();
         services.AddHostedService<RunTranscriptRetentionService>();
+        services.AddHostedService<HostProbeService>();
 
         return services;
     }
