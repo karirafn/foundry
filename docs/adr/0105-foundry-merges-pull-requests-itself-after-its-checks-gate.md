@@ -1,5 +1,7 @@
 # Foundry Merges Pull Requests Itself After Its Checks Gate
 
+> **2026-11-13 — Amended:** the head source in the "Pinned head" clause is replaced by [ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md): the commit comes from the PR status read for every outcome, not from the checks read. It can precede the commit the verdict describes, so a race refuses the merge as `head_moved` rather than merging unchecked work.
+
 ## Context
 
 A repository can opt in to having the pull requests Foundry opens merged without a person.
