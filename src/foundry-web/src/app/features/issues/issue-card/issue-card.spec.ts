@@ -46,6 +46,10 @@ const mockIssue: IssueSummary = {
   repositorySlug: 'owner/repo',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
+  stage: 'implement',
+  needsAction: false,
+  awaitsDispatch: false,
+  codeStep: null,
 };
 
 function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, isNextUp = false, queuePosition: number | null = null) {

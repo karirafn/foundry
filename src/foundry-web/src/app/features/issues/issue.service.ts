@@ -2,7 +2,16 @@ import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signa
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, PublishPhase, QUEUED_TIER_STATES } from './issue.model';
+import {
+  CodeStep,
+  IssueDetail,
+  IssueStage,
+  IssueState,
+  IssueSummary,
+  LIVE_STATES,
+  PublishPhase,
+  QUEUED_TIER_STATES,
+} from './issue.model';
 import type { TokenTotal } from '../workers/run-totals.model';
 import {
   DEFAULT_SELECTED_GROUPS,
@@ -86,6 +95,37 @@ const RECONCILE_SAFETY_NET_MS = 30_000;
 // Narrows the wire value to a known publish phase; anything else reads as no phase.
 function toPublishPhase(value: string | null | undefined): PublishPhase | null {
   return value === 'publishing' || value === 'retrying' ? value : null;
+}
+
+const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>(['triage', 'implement', 'awaiting_review', 'done']);
+const CODE_STEPS: ReadonlySet<string> = new Set<CodeStep>(['publishing', 'publish_retrying', 'rebasing', 'checks']);
+
+// Narrows the wire value to a known stage; a stage this dashboard doesn't know reads as null, and
+// the board leaves that card out rather than guess its column.
+function toIssueStage(value: string | null | undefined): IssueStage | null {
+  return value != null && ISSUE_STAGES.has(value) ? (value as IssueStage) : null;
+}
+
+function toCodeStep(value: string | null | undefined): CodeStep | null {
+  return value != null && CODE_STEPS.has(value) ? (value as CodeStep) : null;
+}
+
+interface WirePlacement {
+  stage?: string | null;
+  needsAction?: boolean | null;
+  awaitsDispatch?: boolean | null;
+  codeStep?: string | null;
+}
+
+type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'codeStep'>;
+
+function toPlacement(wire: WirePlacement): Placement {
+  return {
+    stage: toIssueStage(wire.stage),
+    needsAction: wire.needsAction === true,
+    awaitsDispatch: wire.awaitsDispatch === true,
+    codeStep: toCodeStep(wire.codeStep),
+  };
 }
 
 function isDispatchableQueued(issue: IssueSummary): boolean {
@@ -401,6 +441,14 @@ export class IssueService {
   }
 
   toggleExpand(id: string): void {
+    this.selectIssue(this.expandedIssueId() === id ? null : id);
+  }
+
+  /**
+   * Opens the detail of the issue with `id`, or closes it for `null`. Unlike toggleExpand, selecting
+   * the open issue again keeps it open (and reloads its detail).
+   */
+  selectIssue(id: string | null): void {
     this._retryErrorSignal.set(null);
     this._retrySuccessSignal.set(null);
     this.retrying.set(false);
@@ -408,7 +456,7 @@ export class IssueService {
     this._triageActionErrorSignal.set(null);
     this._triageActionSuccessSignal.set(null);
 
-    if (this.expandedIssueId() === id) {
+    if (id === null) {
       this.expandedIssueId.set(null);
       this.issueDetail.set(null);
       return;
@@ -506,6 +554,10 @@ export class IssueService {
       console.warn('IssueService: rejected IssueUpdated event with unknown state');
       return;
     }
+
+    // The hub payload is the server summary as sent, so its placement is narrowed here as the
+    // mapper narrows a loaded one.
+    updated = { ...updated, ...toPlacement(updated) };
 
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
@@ -605,6 +657,8 @@ export class IssueService {
       pullRequestUrl: i.pullRequestUrl ?? null,
       providerType: i.providerType ?? null,
       publishPhase: toPublishPhase(i.publishPhase),
+      checksOutcome: i.checksOutcome ?? null,
+      ...toPlacement(i),
     };
   }
 

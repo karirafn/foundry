@@ -17,6 +17,15 @@ export interface RunStats {
 /** Publish phase of a working issue's run; null while the agent runs or once publishing finished. */
 export type PublishPhase = 'publishing' | 'retrying';
 
+/**
+ * The part of the lifecycle that owns the issue, as the server declares it. `done` is a known value
+ * that the board never places.
+ */
+export type IssueStage = 'triage' | 'implement' | 'awaiting_review' | 'done';
+
+/** The step Foundry's own code runs for the issue, with no worker involved. */
+export type CodeStep = 'publishing' | 'publish_retrying' | 'rebasing' | 'checks';
+
 export interface IssueSummary {
   id: string;
   issueNumber: number;
@@ -39,6 +48,16 @@ export interface IssueSummary {
    * revision_in_progress: Foundry is publishing the run's commits, or retrying a failed publish.
    */
   publishPhase?: PublishPhase | null;
+  /**
+   * Placement on the board, decided by the server (#851). Null when the server sent a stage this
+   * dashboard does not know; the board leaves such a card out.
+   */
+  stage: IssueStage | null;
+  /** True when the issue progresses only after a person acts. */
+  needsAction: boolean;
+  /** True while the issue waits for a worker run to be dispatched. */
+  awaitsDispatch: boolean;
+  codeStep: CodeStep | null;
 }
 
 export interface EligibilityViolation {
