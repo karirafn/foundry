@@ -1,5 +1,5 @@
 import { Component, Signal, computed, inject } from '@angular/core';
-import { DispatchService } from '../../../../core/services/dispatch.service';
+import { DispatchService } from '../../../core/services/dispatch.service';
 
 @Component({
   selector: 'fd-dispatch-controls',
@@ -46,12 +46,12 @@ export class DispatchControlsComponent {
 
   protected readonly buttonLabel: Signal<string> = computed(() => {
     if (this.dispatchService.pausing()) {
-      return 'Pausing...';
+      return 'Pausing…';
     }
     if (this.dispatchService.resuming()) {
-      return 'Resuming...';
+      return 'Resuming…';
     }
-    return this.isPaused() ? 'Resume All' : 'Pause All';
+    return this.isPaused() ? 'Resume all' : 'Pause all';
   });
 
   protected readonly dispatchStatusText: Signal<string> = computed(() => {

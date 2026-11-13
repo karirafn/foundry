@@ -38,6 +38,11 @@ export class IssueSignalRService {
     this._connection.on(methodName, callback);
   }
 
+  /** Removes a handler registered with `on`, for a consumer that lives shorter than the app. */
+  off<T>(methodName: string, callback: (data: T) => void): void {
+    this._connection.off(methodName, callback);
+  }
+
   onReconnected(callback: () => void): void {
     this._reconnectedCallbacks.push(callback);
   }

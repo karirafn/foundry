@@ -209,6 +209,13 @@ describe('App', () => {
     expect(compiled.querySelector('.app-header__logo')?.textContent).toContain('Foundry');
   });
 
+  it('links the Foundry logo to the board', async () => {
+    const { fixture } = setupApp();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('a.app-header__logo')?.getAttribute('href')).toBe('/');
+  });
+
   it('should include the forge overlay component', () => {
     const { fixture } = setupApp();
     const compiled = fixture.nativeElement as HTMLElement;

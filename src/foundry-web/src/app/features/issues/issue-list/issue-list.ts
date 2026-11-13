@@ -6,7 +6,7 @@ import { IssueCardComponent } from '../issue-card/issue-card';
 import { IssueCardSkeletonComponent } from '../issue-card/issue-card-skeleton';
 import { IssueDetailComponent } from '../issue-detail/issue-detail';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
-import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls';
+import { DispatchControlsComponent } from '../../board/dispatch-controls/dispatch-controls';
 import { IssueGroupFilterComponent } from '../issue-group-filter/issue-group-filter';
 import { SettingsService } from '../../../core/services/settings.service';
 import { LIVE_STATES } from '../issue.model';

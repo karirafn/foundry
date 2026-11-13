@@ -1,0 +1,143 @@
+@use '../../../../styles/board-breakpoints' as *;
+
+:host {
+  display: grid;
+  grid-row: 1 / span 4;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fd-board-card-collapse {
+  to {
+    grid-template-rows: 0fr;
+    margin-block: 0;
+    opacity: 0;
+  }
+}
+
+.board-column__header {
+  align-items: baseline;
+  border-bottom: 1px solid var(--fd-border-muted);
+  display: flex;
+  gap: var(--fd-spacing-sm);
+  grid-row: 1;
+  margin: 0;
+  padding-bottom: var(--fd-spacing-sm);
+  position: relative;
+}
+
+// The flow-chart cue between stages: a chevron centred in the column gap.
+:host(:not(:last-of-type)) .board-column__header::after {
+  background: var(--fd-text-tertiary);
+  content: '';
+  height: 12px;
+  inset-inline-end: calc(var(--fd-spacing-xl) / -2 - 6px);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  position: absolute;
+  top: 0.2em;
+  width: 12px;
+}
+
+.board-column__name {
+  color: var(--fd-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.board-column__count {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-column__cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+  min-width: 0;
+
+  &--queue { grid-row: 2; }
+  &--flow { grid-row: 3; }
+
+  &--needs {
+    grid-row: 4;
+    padding-top: 1.75rem;
+  }
+}
+
+.board-column__caption {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+
+  // On wide screens the shared band carries the Needs-you caption.
+  &--needs {
+    display: none;
+  }
+}
+
+.board-column__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board-column__item {
+  display: grid;
+  grid-template-rows: 1fr;
+
+  &--collapse {
+    overflow: hidden;
+    animation: fd-board-card-collapse var(--fd-motion-exit) var(--fd-ease-exit) forwards;
+  }
+}
+
+.board-column__skeleton {
+  animation: fd-skeleton-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--fd-bg-card) 25%, var(--fd-bg-card-hover) 50%, var(--fd-bg-card) 75%);
+  background-size: 200% 100%;
+  border-radius: var(--fd-radius-md);
+  height: 64px;
+}
+
+@media (width < $board-breakpoint) {
+  :host {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+  }
+
+  :host(:not(:last-of-type)) .board-column__header::after {
+    display: none;
+  }
+
+  .board-column__cell--needs {
+    background: var(--fd-bg-needs-band);
+    border-radius: var(--fd-radius-lg);
+    order: 1;
+    padding: var(--fd-spacing-md);
+  }
+
+  .board-column__header { order: 0; }
+  .board-column__cell--queue { order: 2; }
+  .board-column__cell--flow { order: 3; }
+
+  .board-column__caption--needs {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-column__item--collapse {
+    animation: fd-fade-out 200ms ease forwards;
+    animation-duration: 200ms !important;
+  }
+}

@@ -1,0 +1,36 @@
+@if (open()) {
+  <div
+    class="side-sheet__scrim"
+    aria-hidden="true"
+    animate.enter="side-sheet__scrim--enter"
+    animate.leave="side-sheet__scrim--leave"
+  ></div>
+  <div
+    #panel
+    class="side-sheet"
+    role="dialog"
+    aria-modal="false"
+    [attr.aria-labelledby]="labelledBy()"
+    animate.enter="side-sheet--enter"
+    animate.leave="side-sheet--leave"
+    (keydown)="onKeydown($event)"
+  >
+    <button type="button" class="side-sheet__close" [attr.aria-label]="closeLabel()" (click)="dismissed.emit()">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    </button>
+    <ng-container [ngTemplateOutlet]="content()" />
+  </div>
+}

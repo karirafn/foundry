@@ -1,3 +1,5 @@
+@use 'styles/motion';
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
 
 :root {
@@ -84,6 +86,15 @@
 
   /* Gutter — fixed leading cell width for listbox option rows */
   --fd-gutter: 1rem;
+
+  /* Board (#851) */
+  --fd-app-header-height: 48px;
+  --fd-bg-needs-band: rgba(224, 165, 38, 0.045);      /* light: rgba(154, 103, 0, 0.06) */
+  --fd-border-needs-band: rgba(224, 165, 38, 0.30);   /* light: rgba(154, 103, 0, 0.35) — decorative rule only */
+  --fd-bg-working-subtle: rgba(163, 113, 247, 0.10);  /* light: rgba(102, 57, 186, 0.08) — step-chip fill */
+  --fd-bg-success-subtle: rgba(63, 185, 80, 0.10);    /* light: rgba(26, 127, 55, 0.08) */
+  --fd-bg-backdrop: rgba(1, 4, 9, 0.55);              /* light: rgba(31, 35, 40, 0.30) — narrow sheet scrim */
+  --fd-shadow-pane: -16px 0 40px rgba(0, 0, 0, 0.45); /* light: -8px 0 24px rgba(31, 35, 40, 0.14) */
 
   /* Card queue-position gutter — fixed track width so 1–2 digit ordinals never reflow the body */
   --fd-card-gutter-width: 1.75rem;
