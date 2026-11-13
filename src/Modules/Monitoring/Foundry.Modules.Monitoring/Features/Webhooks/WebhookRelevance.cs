@@ -12,24 +12,36 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// <see cref="BlockerIssueNumbers"/> holds the same-repository issues that currently block a tracked
 /// issue; it is loaded only for issue events (GitHub <c>issues</c>, GitLab <c>issue</c> / <c>work_item</c>),
 /// whose close of a blocker must nudge the dependency pass.
+/// <see cref="AwaitingInputIssues"/> holds the issues waiting for an answer, whose question thread's comments
+/// nudge the awaiting-input pass.
 /// </summary>
 internal sealed record WebhookTrackingContext(
     IReadOnlySet<int> KnownIssueNumbers,
     IReadOnlyList<ReviewIssueInfo> ReviewIssues,
     IReadOnlyList<ChecksPendingIssueInfo> ChecksPendingIssues,
-    IReadOnlySet<int>? BlockerIssueNumbers = null)
+    IReadOnlySet<int>? BlockerIssueNumbers = null,
+    IReadOnlyList<AwaitingInputThread>? AwaitingInputIssues = null)
 {
     internal static readonly WebhookTrackingContext Empty = new(new HashSet<int>(), [], []);
 
     internal IReadOnlySet<int> Blockers => BlockerIssueNumbers ?? EmptySet;
 
+    internal IReadOnlyList<AwaitingInputThread> AwaitingInput => AwaitingInputIssues ?? [];
+
     private static readonly IReadOnlySet<int> EmptySet = new HashSet<int>();
 }
 
 /// <summary>
+/// An awaiting-input issue and the thread its question lives on (ADR 0096): the pull request's thread when
+/// <paramref name="PullRequestUrl"/> is set, otherwise the issue's own thread.
+/// </summary>
+internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestUrl);
+
+/// <summary>
 /// Provider-neutral relevance rules shared by the webhook event mappers (ADR 0085): a pull/merge
 /// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
-/// issue is checks-pending; an issue close of a blocker nudges the listing plus the dependency pass;
+/// issue is checks-pending; a comment on an awaiting-input issue's question thread nudges its
+/// awaiting-input pass; an issue close of a blocker nudges the listing plus the dependency pass;
 /// anything else maps to <see langword="null"/>.
 /// </summary>
 internal static partial class WebhookRelevance
@@ -89,6 +101,45 @@ internal static partial class WebhookRelevance
 
         return null;
     }
+
+    /// <summary>
+    /// Maps a comment or review on a pull/merge request: the owning issue's review or checks pass, falling
+    /// back to the awaiting-input pass of the issue whose question lives on that pull request's thread.
+    /// </summary>
+    internal static NudgeKey? MapPullRequestComment(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        IReadOnlyList<int> pullNumbers,
+        IReadOnlyList<string> branches,
+        Regex pullRequestUrlPattern)
+    {
+        if (MapOwningIssue(repositoryId, tracked, pullNumbers, branches, pullRequestUrlPattern) is { } owning)
+        {
+            return owning;
+        }
+
+        foreach (AwaitingInputThread waiting in tracked.AwaitingInput)
+        {
+            if (waiting.PullRequestUrl is { } pullRequestUrl && MatchesPull(pullRequestUrl, pullNumbers, pullRequestUrlPattern))
+            {
+                return new NudgeKey(repositoryId, NudgePass.AwaitingInput, waiting.IssueNumber);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a comment on an issue's own thread to the awaiting-input pass of that issue, when its question
+    /// lives there (it has no pull request). A comment on any other issue maps to <see langword="null"/>.
+    /// </summary>
+    internal static NudgeKey? MapIssueComment(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber) =>
+        tracked.AwaitingInput.Any(w => w.IssueNumber == issueNumber && w.PullRequestUrl is null)
+            ? new NudgeKey(repositoryId, NudgePass.AwaitingInput, issueNumber)
+            : null;
 
     /// <summary>
     /// Maps an issue close to the listing plus dependency pass when the closing issue blocks a tracked

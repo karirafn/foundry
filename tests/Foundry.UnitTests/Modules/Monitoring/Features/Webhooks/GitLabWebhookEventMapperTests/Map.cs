@@ -16,12 +16,16 @@ public sealed class Map
     private static readonly DateTimeOffset At = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
 
     // Issue 10 is tracked and blocked by untracked issue 77; 20 is in review on MR 21;
-    // 30 is checks-pending on MR 31.
+    // 30 is checks-pending on MR 31; 40 awaits input on its own thread; 50 awaits input on MR 51.
     private static readonly WebhookTrackingContext Tracked = new(
-        new HashSet<int> { 10, 20, 30 },
+        new HashSet<int> { 10, 20, 30, 40, 50 },
         [new ReviewIssueInfo(20, "https://gitlab.com/group/sub/project/-/merge_requests/21", At)],
         [new ChecksPendingIssueInfo(30, "https://gitlab.com/group/sub/project/-/merge_requests/31", At, At)],
-        new HashSet<int> { 77 });
+        new HashSet<int> { 77 },
+        [
+            new AwaitingInputThread(40, null),
+            new AwaitingInputThread(50, "https://gitlab.com/group/sub/project/-/merge_requests/51"),
+        ]);
 
     private static NudgeKey? MapEvent(string json)
     {
@@ -121,6 +125,43 @@ public sealed class Map
     public void WhenCommentOnIssue_IsDropped()
     {
         MapEvent("""{"object_kind":"note","object_attributes":{"noteable_type":"Issue"},"issue":{"iid":10}}""")
+            .ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("note")]
+    [InlineData("confidential_note")]
+    public void WhenCommentOnAwaitingInputIssueWithoutMergeRequest_NudgesAwaitingInputPass(string eventType)
+    {
+        MapEvent($$$"""{"object_kind":"note","event_type":"{{{eventType}}}","object_attributes":{"noteable_type":"Issue"},"issue":{"iid":40}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+    }
+
+    [Fact]
+    public void WhenCommentOnAwaitingInputWorkItem_NudgesAwaitingInputPass()
+    {
+        MapEvent("""{"object_kind":"note","object_attributes":{"noteable_type":"WorkItem"},"work_item":{"iid":40}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+    }
+
+    [Fact]
+    public void WhenCommentOnAwaitingInputIssueWhoseQuestionIsOnItsMergeRequest_IsDropped()
+    {
+        MapEvent("""{"object_kind":"note","object_attributes":{"noteable_type":"Issue"},"issue":{"iid":50}}""")
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenCommentOnAwaitingInputMergeRequest_NudgesAwaitingInputPass()
+    {
+        MapEvent("""{"object_kind":"note","object_attributes":{"noteable_type":"MergeRequest"},"merge_request":{"iid":51,"source_branch":"feat/50-thing"}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 50));
+    }
+
+    [Fact]
+    public void WhenMergeRequestEventOnAwaitingInputMergeRequest_IsDropped()
+    {
+        MapEvent("""{"object_kind":"merge_request","object_attributes":{"iid":51,"source_branch":"feat/50-thing"}}""")
             .ShouldBeNull();
     }
 

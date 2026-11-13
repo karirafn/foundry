@@ -17,6 +17,10 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// when the issue closing is a blocker of a tracked issue</description></item>
 /// <item><term><c>merge_request</c>, <c>note</c> (on a merge request)</term><description>review pass for
 /// the owning issue — the checks pass when that issue is checks-pending</description></item>
+/// <item><term><c>note</c> (on a merge request)</term><description>otherwise, awaiting-input pass for the
+/// awaiting-input issue whose question lives on that merge request</description></item>
+/// <item><term><c>note</c> (on an issue or work item)</term><description>awaiting-input pass for that issue when
+/// it is awaiting input with no merge request (its question lives on the issue thread)</description></item>
 /// <item><term><c>pipeline</c> (finished)</term><description>checks pass for the owning issue</description></item>
 /// <item><term><c>push</c></term><description>no nudge — handled by <see cref="BranchPushPublisher"/></description></item>
 /// </list>
@@ -145,36 +149,57 @@ internal static partial class GitLabWebhookEventMapper
             return null;
         }
 
-        return MapMergeRequestObject(attributes, repositoryId, tracked);
+        return MapMergeRequestObject(attributes, repositoryId, tracked, isComment: false);
     }
 
     private static NudgeKey? MapNote(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
     {
-        // Only comments on a merge request matter; a comment on an issue, commit or snippet maps to nothing.
-        if (!TryGetObject(payload, "object_attributes", out JsonElement attributes)
-            || GetString(attributes, "noteable_type") != "MergeRequest"
-            || !TryGetObject(payload, "merge_request", out JsonElement mergeRequest))
+        // Comments on a merge request or an issue (work item) matter; a comment on a commit or snippet maps to nothing.
+        if (!TryGetObject(payload, "object_attributes", out JsonElement attributes))
         {
             return null;
         }
 
-        return MapMergeRequestObject(mergeRequest, repositoryId, tracked);
+        return GetString(attributes, "noteable_type") switch
+        {
+            "MergeRequest" => TryGetObject(payload, "merge_request", out JsonElement mergeRequest)
+                ? MapMergeRequestObject(mergeRequest, repositoryId, tracked, isComment: true)
+                : null,
+            "Issue" or "WorkItem" => GetNotedIssueIid(payload) is { } iid
+                ? MapIssueComment(repositoryId, tracked, iid)
+                : null,
+            _ => null,
+        };
+    }
+
+    // GitLab stores work-item notes against the issue, but a work-item payload may carry its own object.
+    private static int? GetNotedIssueIid(JsonElement payload)
+    {
+        foreach (string property in (string[])["issue", "work_item"])
+        {
+            if (TryGetObject(payload, property, out JsonElement issue) && GetInt(issue, "iid") is { } iid)
+            {
+                return iid;
+            }
+        }
+
+        return null;
     }
 
     private static NudgeKey? MapMergeRequestObject(
         JsonElement mergeRequest,
         MonitoredRepositoryId repositoryId,
-        WebhookTrackingContext tracked)
+        WebhookTrackingContext tracked,
+        bool isComment)
     {
         int? iid = GetInt(mergeRequest, "iid");
         string? sourceBranch = GetString(mergeRequest, "source_branch");
+        IReadOnlyList<int> mergeRequestIids = iid is { } n ? [n] : [];
+        IReadOnlyList<string> branches = sourceBranch is { } b ? [b] : [];
 
-        return MapOwningIssue(
-            repositoryId,
-            tracked,
-            iid is { } n ? [n] : [],
-            sourceBranch is { } b ? [b] : [],
-            MergeRequestUrlPattern());
+        return isComment
+            ? MapPullRequestComment(repositoryId, tracked, mergeRequestIids, branches, MergeRequestUrlPattern())
+            : MapOwningIssue(repositoryId, tracked, mergeRequestIids, branches, MergeRequestUrlPattern());
     }
 
     private static NudgeKey? MapPipeline(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
