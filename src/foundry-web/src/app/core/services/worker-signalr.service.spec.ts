@@ -1,61 +1,25 @@
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, take, toArray } from 'rxjs';
-import { RECENT_TOOL_LIMIT, RECONNECT_REPLAY_GRACE_MS, WorkerSignalRService, WORKER_HUB_FACTORY, WorkerHub } from './worker-signalr.service';
+import { RECENT_TOOL_LIMIT, RECONNECT_REPLAY_GRACE_MS, WorkerSignalRService } from './worker-signalr.service';
+import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 import { WorkerActivity } from '../models/worker-activity.model';
 import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
-
-interface CapturedHubCallbacks {
-  onWorkerActivity: ((activity: WorkerActivity) => void) | null;
-  onAgentActivity?: ((activity: AgentActivity) => void) | null;
-  onAgentActivityEnded?: ((ended: AgentActivityEnded) => void) | null;
-  onReconnected: (() => void) | null;
-  onReconnecting?: (() => void) | null;
-  onClose?: (() => void) | null;
-}
-
-function buildMockHub(captured: CapturedHubCallbacks): WorkerHub {
-  return {
-    on: <T>(method: string, cb: (payload: T) => void) => {
-      if (method === 'WorkerActivity') {
-        captured.onWorkerActivity = cb as unknown as (activity: WorkerActivity) => void;
-      } else if (method === 'AgentActivity') {
-        captured.onAgentActivity = cb as unknown as (activity: AgentActivity) => void;
-      } else if (method === 'AgentActivityEnded') {
-        captured.onAgentActivityEnded = cb as unknown as (ended: AgentActivityEnded) => void;
-      }
-    },
-    onReconnected: (cb: () => void) => {
-      captured.onReconnected = cb;
-    },
-    onReconnecting: (cb: () => void) => {
-      captured.onReconnecting = cb;
-    },
-    onClose: (cb: () => void) => {
-      captured.onClose = cb;
-    },
-    stream: (_method: string, _workerRunId: string) => ({
-      subscribe: (_callbacks: unknown) => ({ dispose: () => { /* no-op */ } }),
-    }),
-    start: () => Promise.resolve(),
-  };
-}
 
 function setup() {
   TestBed.resetTestingModule();
 
-  const captured: CapturedHubCallbacks = { onWorkerActivity: null, onReconnected: null };
-  const mockHubFactory = () => buildMockHub(captured);
+  const hub = new FakeHubTransport();
 
   TestBed.configureTestingModule({
     providers: [
       WorkerSignalRService,
-      { provide: WORKER_HUB_FACTORY, useValue: mockHubFactory },
+      provideFakeHubs({ workers: hub }),
     ],
   });
 
   return {
     svc: TestBed.inject(WorkerSignalRService),
-    captured,
+    hub,
   };
 }
 
@@ -84,11 +48,11 @@ describe('WorkerSignalRService', () => {
 
     it('should list every agent activity and count active agents', () => {
       // Arrange
-      const { svc, captured } = setup();
+      const { svc, hub } = setup();
 
       // Act
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2' }));
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2' }));
 
       // Assert
       expect(svc.activeAgentCount()).toBe(2);
@@ -97,11 +61,11 @@ describe('WorkerSignalRService', () => {
 
     it('should decrement the active agent count when a run ends', () => {
       // Arrange
-      const { svc, captured } = setup();
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
+      const { svc, hub } = setup();
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
 
       // Act
-      captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+      hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
 
       // Assert
       expect(svc.activeAgentCount()).toBe(0);
@@ -109,15 +73,15 @@ describe('WorkerSignalRService', () => {
 
     it('should accumulate distinct in-flight tools into the recent tool ticker', () => {
       // Arrange
-      const { svc, captured } = setup();
+      const { svc, hub } = setup();
       const bash = { name: 'Bash', summary: 'npm test', startedAt: '2026-01-01T00:00:01Z' };
       const read = { name: 'Read', summary: 'src/app.ts', startedAt: '2026-01-01T00:00:05Z' };
 
       // Act
-      captured.onAgentActivity!(buildAgentActivity({ inFlightTool: bash }));
-      captured.onAgentActivity!(buildAgentActivity({ inFlightTool: bash }));
-      captured.onAgentActivity!(buildAgentActivity({ inFlightTool: null }));
-      captured.onAgentActivity!(buildAgentActivity({ inFlightTool: read }));
+      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: bash }));
+      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: bash }));
+      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: null }));
+      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: read }));
 
       // Assert
       expect(svc.recentToolsForRun('run-1')).toEqual([bash, read]);
@@ -125,11 +89,11 @@ describe('WorkerSignalRService', () => {
 
     it('should keep only the most recent tools', () => {
       // Arrange
-      const { svc, captured } = setup();
+      const { svc, hub } = setup();
 
       // Act
       for (let i = 0; i < RECENT_TOOL_LIMIT + 2; i++) {
-        captured.onAgentActivity!(buildAgentActivity({
+        hub.emit('AgentActivity', buildAgentActivity({
           inFlightTool: { name: 'Bash', summary: `step ${i}`, startedAt: null },
         }));
       }
@@ -142,11 +106,11 @@ describe('WorkerSignalRService', () => {
 
     it('should forget the tool ticker when the run ends', () => {
       // Arrange
-      const { svc, captured } = setup();
-      captured.onAgentActivity!(buildAgentActivity({ inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
+      const { svc, hub } = setup();
+      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
 
       // Act
-      captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+      hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
 
       // Assert
       expect(svc.recentToolsForRun('run-1')).toEqual([]);
@@ -154,30 +118,30 @@ describe('WorkerSignalRService', () => {
 
     it('should report connected after the hub starts and track reconnecting and close', async () => {
       // Arrange
-      const { svc, captured } = setup();
+      const { svc, hub } = setup();
       await Promise.resolve();
 
       // Act / Assert
       expect(svc.connectionStatus()).toBe('connected');
-      captured.onReconnecting!();
+      hub.reconnecting();
       expect(svc.connectionStatus()).toBe('reconnecting');
-      captured.onReconnected!();
+      hub.reconnected();
       expect(svc.connectionStatus()).toBe('connected');
-      captured.onClose!();
+      hub.close();
       expect(svc.connectionStatus()).toBe('disconnected');
     });
 
     it('should prune runs the reconnect replay did not re-send', () => {
       // Arrange
       vi.useFakeTimers();
-      const { svc, captured } = setup();
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2' }));
+      const { svc, hub } = setup();
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2' }));
 
       // Act — run-2 ended while disconnected, so the replay only re-sends run-1.
-      captured.onReconnecting!();
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      captured.onReconnected!();
+      hub.reconnecting();
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
+      hub.reconnected();
       vi.advanceTimersByTime(RECONNECT_REPLAY_GRACE_MS);
 
       // Assert
@@ -187,14 +151,14 @@ describe('WorkerSignalRService', () => {
     it('should not prune while the connection drops again before the grace window ends', () => {
       // Arrange
       vi.useFakeTimers();
-      const { svc, captured } = setup();
-      captured.onAgentActivity!(buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
-      captured.onReconnecting!();
-      captured.onReconnected!();
+      const { svc, hub } = setup();
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1' }));
+      hub.reconnecting();
+      hub.reconnected();
 
       // Act
       vi.advanceTimersByTime(RECONNECT_REPLAY_GRACE_MS / 2);
-      captured.onReconnecting!();
+      hub.reconnecting();
       vi.advanceTimersByTime(RECONNECT_REPLAY_GRACE_MS);
 
       // Assert
@@ -213,13 +177,13 @@ describe('WorkerSignalRService', () => {
 
     it('should store the latest AgentActivity payload by issue id', () => {
       // Arrange
-      const { svc, captured } = setup();
+      const { svc, hub } = setup();
       const first = buildAgentActivity({ completedTaskCount: 1 });
       const second = buildAgentActivity({ completedTaskCount: 2 });
 
       // Act
-      captured.onAgentActivity!(first);
-      captured.onAgentActivity!(second);
+      hub.emit('AgentActivity', first);
+      hub.emit('AgentActivity', second);
 
       // Assert
       expect(svc.agentActivityForIssue('issue-1')).toEqual(second);
@@ -227,11 +191,11 @@ describe('WorkerSignalRService', () => {
 
     it('should remove the agent activity when AgentActivityEnded arrives for the same run', () => {
       // Arrange
-      const { svc, captured } = setup();
-      captured.onAgentActivity!(buildAgentActivity());
+      const { svc, hub } = setup();
+      hub.emit('AgentActivity', buildAgentActivity());
 
       // Act
-      captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+      hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
 
       // Assert
       expect(svc.agentActivityForIssue('issue-1')).toBeNull();
@@ -239,12 +203,12 @@ describe('WorkerSignalRService', () => {
 
     it('should keep a newer run\'s activity when AgentActivityEnded arrives for an older run', () => {
       // Arrange
-      const { svc, captured } = setup();
+      const { svc, hub } = setup();
       const newer = buildAgentActivity({ workerRunId: 'run-2' });
-      captured.onAgentActivity!(newer);
+      hub.emit('AgentActivity', newer);
 
       // Act
-      captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+      hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
 
       // Assert
       expect(svc.agentActivityForIssue('issue-1')).toEqual(newer);
@@ -263,7 +227,7 @@ describe('WorkerSignalRService', () => {
   // Cycle 2: WorkerActivity signal updates when hub broadcasts
   it('should update workerActivity signal when WorkerActivity event is received', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     const activity: WorkerActivity = {
       workerRunId: 'run-1',
       issueId: 'issue-1',
@@ -271,7 +235,7 @@ describe('WorkerSignalRService', () => {
     };
 
     // Act
-    captured.onWorkerActivity!(activity);
+    hub.emit('WorkerActivity', activity);
 
     // Assert
     expect(svc.workerActivity()).toEqual(activity);
@@ -289,13 +253,13 @@ describe('WorkerSignalRService', () => {
   // Cycle 4: second WorkerActivity replaces first
   it('should replace workerActivity signal when a new WorkerActivity arrives', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     const first: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:00:00Z' };
     const second: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:01:00Z' };
-    captured.onWorkerActivity!(first);
+    hub.emit('WorkerActivity', first);
 
     // Act
-    captured.onWorkerActivity!(second);
+    hub.emit('WorkerActivity', second);
 
     // Assert
     expect(svc.workerActivity()).toEqual(second);
@@ -304,12 +268,12 @@ describe('WorkerSignalRService', () => {
   // Cycle 5: reconnected emits when hub reconnects
   it('should emit on reconnected when hub reconnects', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     let count = 0;
     svc.reconnected.subscribe(() => count++);
 
     // Act
-    captured.onReconnected!();
+    hub.reconnected();
 
     // Assert
     expect(count).toBe(1);
@@ -326,7 +290,7 @@ describe('WorkerSignalRService', () => {
 
   it('should return lastActivityAt from activityFor after WorkerActivity is received', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     const activity: WorkerActivity = {
       workerRunId: 'run-A',
       issueId: 'issue-A',
@@ -334,7 +298,7 @@ describe('WorkerSignalRService', () => {
     };
 
     // Act
-    captured.onWorkerActivity!(activity);
+    hub.emit('WorkerActivity', activity);
 
     // Assert
     expect(svc.activityFor('run-A')).toBe('2026-06-01T12:00:00Z');
@@ -350,7 +314,7 @@ describe('WorkerSignalRService', () => {
 
   it('should return lastActivityAt from activityForIssue after WorkerActivity is received', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     const activity: WorkerActivity = {
       workerRunId: 'run-B',
       issueId: 'issue-B',
@@ -358,7 +322,7 @@ describe('WorkerSignalRService', () => {
     };
 
     // Act
-    captured.onWorkerActivity!(activity);
+    hub.emit('WorkerActivity', activity);
 
     // Assert
     expect(svc.activityForIssue('issue-B')).toBe('2026-06-01T13:00:00Z');
@@ -368,7 +332,7 @@ describe('WorkerSignalRService', () => {
 
   it('should independently track activity for two different issues', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     const activityA: WorkerActivity = {
       workerRunId: 'run-A',
       issueId: 'issue-A',
@@ -381,8 +345,8 @@ describe('WorkerSignalRService', () => {
     };
 
     // Act
-    captured.onWorkerActivity!(activityA);
-    captured.onWorkerActivity!(activityB);
+    hub.emit('WorkerActivity', activityA);
+    hub.emit('WorkerActivity', activityB);
 
     // Assert — each issue returns its own lastActivityAt
     expect(svc.activityForIssue('issue-A')).toBe('2026-06-01T12:00:00Z');
@@ -400,11 +364,11 @@ describe('WorkerSignalRService', () => {
 
   it('should reflect new activityAt reactively after WorkerActivity arrives', () => {
     // Arrange
-    const { svc, captured } = setup();
+    const { svc, hub } = setup();
     const initialNull = svc.activityForIssue('issue-I');
 
     // Act
-    captured.onWorkerActivity!({
+    hub.emit('WorkerActivity', {
       workerRunId: 'run-I',
       issueId: 'issue-I',
       lastActivityAt: '2026-06-01T21:00:00Z',
@@ -413,5 +377,23 @@ describe('WorkerSignalRService', () => {
     // Assert
     expect(initialNull).toBeNull();
     expect(svc.activityForIssue('issue-I')).toBe('2026-06-01T21:00:00Z');
+  });
+
+  it('should stream a run log through the workers hub and dispose it on unsubscribe', () => {
+    // Arrange
+    const { svc, hub } = setup();
+    const lines: string[] = [];
+
+    // Act
+    const subscription = svc.streamLog('run-L').subscribe((line) => lines.push(line));
+    const stream = hub.streams[0];
+    stream.subscriber!.next('first line');
+    subscription.unsubscribe();
+
+    // Assert
+    expect(stream.methodName).toBe('StreamLog');
+    expect(stream.args).toEqual(['run-L']);
+    expect(lines).toEqual(['first line']);
+    expect(stream.disposed).toBe(true);
   });
 });

@@ -1,9 +1,8 @@
-import { DestroyRef, Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, Observer, Subject } from 'rxjs';
-import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { WorkerActivity } from '../models/worker-activity.model';
 import { AgentActivity, AgentActivityEnded, InFlightTool } from '../models/agent-activity.model';
-import { ConnectionStatus } from './issue-signalr.service';
+import { ConnectionStatus, HubConnections, SharedHubConnection } from './hub-connection';
 
 /** How many recent tool calls the Floor's tool ticker keeps per run. */
 export const RECENT_TOOL_LIMIT = 5;
@@ -15,47 +14,10 @@ export const RECENT_TOOL_LIMIT = 5;
  */
 export const RECONNECT_REPLAY_GRACE_MS = 10_000;
 
-export interface WorkerHub {
-  on<T>(methodName: string, callback: (payload: T) => void): void;
-  onReconnected(callback: () => void): void;
-  onReconnecting(callback: () => void): void;
-  onClose(callback: () => void): void;
-  stream(methodName: string, workerRunId: string): {
-    subscribe(callbacks: {
-      next: (line: string) => void;
-      error: (err: unknown) => void;
-      complete: () => void;
-    }): { dispose(): void };
-  };
-  start(): Promise<void>;
-}
-
-function buildWorkerHub(): WorkerHub {
-  const conn: HubConnection = new HubConnectionBuilder()
-    .withUrl('/hubs/workers')
-    .withAutomaticReconnect()
-    .build();
-
-  return {
-    on: (methodName, callback) => conn.on(methodName, callback),
-    onReconnected: (callback) => conn.onreconnected(callback),
-    onReconnecting: (callback) => conn.onreconnecting(callback),
-    onClose: (callback) => conn.onclose(callback),
-    stream: (methodName, workerRunId) => conn.stream(methodName, workerRunId),
-    start: () => conn.start(),
-  };
-}
-
-export const WORKER_HUB_FACTORY = new InjectionToken<() => WorkerHub>(
-  'WorkerHubFactory',
-  { providedIn: 'root', factory: () => buildWorkerHub }
-);
-
 @Injectable({ providedIn: 'root' })
 export class WorkerSignalRService {
-  private readonly _hubFactory = inject(WORKER_HUB_FACTORY);
   private readonly _destroyRef = inject(DestroyRef);
-  private readonly _hub: WorkerHub;
+  private readonly _hub: SharedHubConnection = inject(HubConnections).get('workers');
 
   private readonly _workerActivitySignal: WritableSignal<WorkerActivity | null> = signal(null);
   readonly workerActivity: Signal<WorkerActivity | null> = this._workerActivitySignal.asReadonly();
@@ -75,8 +37,7 @@ export class WorkerSignalRService {
   /** Number of active runs reporting Agent Activity — the "agents working" count. */
   readonly activeAgentCount: Signal<number> = computed(() => this._agentActivityByIssueIdSignal().size);
 
-  private readonly _connectionStatusSignal: WritableSignal<ConnectionStatus> = signal('disconnected');
-  readonly connectionStatus: Signal<ConnectionStatus> = this._connectionStatusSignal.asReadonly();
+  readonly connectionStatus: Signal<ConnectionStatus> = this._hub.status;
 
   // Issue ids held when the connection dropped and not yet re-sent by the reconnect replay.
   private _unconfirmedIssueIds: Set<string> | null = null;
@@ -86,8 +47,6 @@ export class WorkerSignalRService {
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
   constructor() {
-    this._hub = this._hubFactory();
-
     this._hub.on<WorkerActivity>('WorkerActivity', (activity) => {
       this._workerActivitySignal.set(activity);
 
@@ -123,7 +82,6 @@ export class WorkerSignalRService {
     });
 
     this._hub.onReconnecting(() => {
-      this._connectionStatusSignal.set('reconnecting');
       // A prune scheduled by an earlier reconnect must not fire while the connection is down again.
       if (this._replayGraceHandle !== null) {
         clearTimeout(this._replayGraceHandle);
@@ -133,13 +91,8 @@ export class WorkerSignalRService {
     });
 
     this._hub.onReconnected(() => {
-      this._connectionStatusSignal.set('connected');
       this._scheduleUnconfirmedPrune();
       this._reconnected.next();
-    });
-
-    this._hub.onClose(() => {
-      this._connectionStatusSignal.set('disconnected');
     });
 
     this._destroyRef.onDestroy(() => {
@@ -148,11 +101,9 @@ export class WorkerSignalRService {
       }
     });
 
-    this._hub.start()
-      .then(() => this._connectionStatusSignal.set('connected'))
-      .catch(() => {
-        console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers');
-      });
+    this._hub.start().catch(() => {
+      console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers');
+    });
   }
 
   /** Recent tool calls for the run, newest last, accumulated from successive in-flight tools. */
@@ -229,7 +180,7 @@ export class WorkerSignalRService {
 
   streamLog(workerRunId: string): Observable<string> {
     return new Observable((observer: Observer<string>) => {
-      const subscription = this._hub.stream('StreamLog', workerRunId).subscribe({
+      const subscription = this._hub.stream<string>('StreamLog', workerRunId).subscribe({
         next: (line: string) => observer.next(line),
         error: (err: unknown) => observer.error(err),
         complete: () => observer.complete(),

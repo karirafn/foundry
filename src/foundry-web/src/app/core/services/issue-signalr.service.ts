@@ -1,37 +1,18 @@
-import { Injectable, signal, WritableSignal } from '@angular/core';
-import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
+import { Injectable, Signal, inject } from '@angular/core';
+import { ConnectionStatus, HubConnections, SharedHubConnection } from './hub-connection';
 
-export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
+export type { ConnectionStatus } from './hub-connection';
 
 @Injectable({ providedIn: 'root' })
 export class IssueSignalRService {
-  readonly connectionStatus: WritableSignal<ConnectionStatus> = signal('disconnected');
+  private readonly _connection: SharedHubConnection = inject(HubConnections).get('issues');
 
-  private readonly _connection: HubConnection;
-  private _reconnectedCallbacks: Array<() => void> = [];
+  readonly connectionStatus: Signal<ConnectionStatus> = this._connection.status;
 
   constructor() {
-    this._connection = new HubConnectionBuilder()
-      .withUrl('/hubs/issues')
-      .withAutomaticReconnect()
-      .build();
-
-    this._connection.onreconnecting(() => {
-      this.connectionStatus.set('reconnecting');
+    this._connection.start().catch(() => {
+      // The status already reads 'disconnected'; consumers show that instead of a log line.
     });
-
-    this._connection.onreconnected(() => {
-      this.connectionStatus.set('connected');
-      for (const callback of this._reconnectedCallbacks) {
-        callback();
-      }
-    });
-
-    this._connection.onclose(() => {
-      this.connectionStatus.set('disconnected');
-    });
-
-    this.init();
   }
 
   on<T>(methodName: string, callback: (data: T) => void): void {
@@ -44,17 +25,6 @@ export class IssueSignalRService {
   }
 
   onReconnected(callback: () => void): void {
-    this._reconnectedCallbacks.push(callback);
-  }
-
-  private init(): void {
-    this._connection
-      .start()
-      .then(() => {
-        this.connectionStatus.set('connected');
-      })
-      .catch(() => {
-        this.connectionStatus.set('disconnected');
-      });
+    this._connection.onReconnected(callback);
   }
 }

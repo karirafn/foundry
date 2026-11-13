@@ -1,6 +1,5 @@
-import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
-import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import {
   CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
@@ -11,40 +10,16 @@ import {
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../models/settings.model';
 import { UsageSnapshot } from '../models/usage.model';
+import { HubConnections, SharedHubConnection } from './hub-connection';
 
 const RELOAD_TRIGGER_CATEGORIES: ReadonlySet<string> = new Set([
   DISPATCH_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
 ]);
 
-export interface SystemHub {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  on(methodName: string, callback: (...args: any[]) => void): void;
-  onReconnected(callback: () => void): void;
-  start(): Promise<void>;
-}
-
-function buildSystemHub(): SystemHub {
-  const conn: HubConnection = new HubConnectionBuilder()
-    .withUrl('/hubs/system')
-    .withAutomaticReconnect()
-    .build();
-
-  return {
-    on: (methodName, callback) => conn.on(methodName, callback),
-    onReconnected: (callback) => conn.onreconnected(callback),
-    start: () => conn.start(),
-  };
-}
-
-export const SYSTEM_HUB_FACTORY = new InjectionToken<() => SystemHub>(
-  'SystemHubFactory',
-  { providedIn: 'root', factory: () => buildSystemHub }
-);
-
 @Injectable({ providedIn: 'root' })
 export class SystemSignalRService {
-  private readonly _hubFactory = inject(SYSTEM_HUB_FACTORY);
+  private readonly _hub: SharedHubConnection = inject(HubConnections).get('system');
 
   private readonly _notifications: WritableSignal<SystemNotification[]> = signal([]);
 
@@ -66,9 +41,7 @@ export class SystemSignalRService {
   readonly usageSnapshotUpdated: Observable<UsageSnapshot | null> = this._usageSnapshotUpdated.asObservable();
 
   constructor() {
-    const hub = this._hubFactory();
-
-    hub.on('SystemNotificationReceived', (notification: SystemNotification) => {
+    this._hub.on('SystemNotificationReceived', (notification: SystemNotification) => {
       if (RELOAD_TRIGGER_CATEGORIES.has(notification.category)) {
         this._reloadTrigger.next();
       }
@@ -80,19 +53,19 @@ export class SystemSignalRService {
       this._applyNotification(notification);
     });
 
-    hub.on('LoginSessionUpdated', (update: LoginSessionUpdate) => {
+    this._hub.on('LoginSessionUpdated', (update: LoginSessionUpdate) => {
       this._loginSessionUpdate.next(update);
     });
 
-    hub.on('UsageSnapshotUpdated', (snapshot: UsageSnapshot | null) => {
+    this._hub.on('UsageSnapshotUpdated', (snapshot: UsageSnapshot | null) => {
       this._usageSnapshotUpdated.next(snapshot);
     });
 
-    hub.onReconnected(() => {
+    this._hub.onReconnected(() => {
       this._reconnected.next();
     });
 
-    hub.start().catch(() => {
+    this._hub.start().catch(() => {
       console.warn('[SystemSignalRService] Failed to connect to /hubs/system');
     });
   }

@@ -6,7 +6,8 @@ import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@a
 import { HistoryPageComponent } from './history-page';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
-import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
+import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
+import { provideFakeHubs } from '../../../core/testing/fake-hub-transport';
 import { IssueSummary } from '../issue.model';
 
 // Hub handlers register here, so a test can push an IssueUpdated event to every listener.
@@ -22,15 +23,6 @@ const mockIssueSignalRService = {
   },
   onReconnected: () => {},
   connectionStatus: () => 'connected',
-};
-
-const mockWorkerHub = {
-  on: () => {},
-  onReconnected: () => {},
-  onReconnecting: () => {},
-  onClose: () => {},
-  stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
-  start: () => Promise.resolve(),
 };
 
 const completed: IssueSummary = {
@@ -78,7 +70,7 @@ function setup() {
       provideLocationMocks(),
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
       WorkerSignalRService,
-      { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      provideFakeHubs(),
     ],
   });
   const fixture = TestBed.createComponent(HistoryPageComponent);
