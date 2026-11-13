@@ -27,6 +27,9 @@
 #   BASE_DEFAULT_SHA — the default-branch head recorded at Prepare (D)
 #   BASE_BRANCH_SHA  — the run-branch head recorded at Prepare; empty for a Fresh run
 #   AUTHOR_NAME, AUTHOR_EMAIL — the account identity every Run commit is rewritten to
+#   CONFIRMED_FINDINGS — optional: the secret findings an operator confirmed as false positives (#899), one gitleaks
+#                    fingerprint per line, <commit>:<path>:<ruleId>:<line>. The scan suppresses exactly these; any
+#                    other finding still blocks the push. Unset or empty suppresses nothing.
 # FOUNDRY_HANDOFF_DIR and FOUNDRY_WORK_DIR redirect /handoff and /work for the bats suite only.
 set -eu
 
@@ -516,7 +519,8 @@ DIFF_GATE_REVERT_SUBJECT="chore: revert files blocked by the Foundry diff gate"
 SCANNER_FINDINGS_EXIT=3
 
 # scan_secrets — scans the content added by the Run commits (new_tip --not <base> <D>) with Foundry's own
-# scanner configuration. Findings end the publish with nothing pushed:
+# scanner configuration, suppressing exactly the CONFIRMED_FINDINGS fingerprints. Findings end the publish with nothing
+# pushed:
 #   FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path; the last field, may hold spaces>
 #   FOUNDRY_PUBLISH result=secret_detected findings=<n>
 # The matched value is never printed: the report template has no field for it, and the scanner redacts its logs.
@@ -525,12 +529,19 @@ scan_secrets() {
         '{{ range . }}FOUNDRY_SECRET_FINDING commit={{ .Commit }} line={{ .StartLine }} rule={{ .RuleID }} path={{ .File }}' \
         '{{ end }}' > "$scan_template"
 
+    # Only Foundry chooses what is ignored: the fingerprints an operator confirmed, never the repository's own file.
+    ignore_path=/dev/null
+    if [ -n "${CONFIRMED_FINDINGS:-}" ]; then
+        printf '%s\n' "$CONFIRMED_FINDINGS" > "$scan_ignore"
+        ignore_path="$scan_ignore"
+    fi
+
     # --text scans every file as text, so an attribute marking it binary cannot hide content; the repository's
     # ignore file and inline allow comments are never honoured, because the agent can write them.
     gitleaks git \
         --no-banner --no-color --log-level error --redact \
         --config "$GITLEAKS_CONFIG_FILE" \
-        --gitleaks-ignore-path /dev/null \
+        --gitleaks-ignore-path "$ignore_path" \
         --ignore-gitleaks-allow \
         --exit-code "$SCANNER_FINDINGS_EXIT" \
         --report-format template --report-template "$scan_template" --report-path "$scan_report" \
@@ -720,6 +731,7 @@ publish() {
     scan_report="$gate_dir/scan.report"
     scan_findings="$gate_dir/scan.findings"
     scan_err="$gate_dir/scan.err"
+    scan_ignore="$gate_dir/scan.ignore"
     trap 'rm -rf "$ASKPASS_FILE" "$git_err" "$commit_map" "$commit_object" "$rewritten_object" "$run_commit_list" "$run_commit_lines" "$reverted_lines" "$gate_dir"' EXIT
     printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
     chmod 700 "$ASKPASS_FILE"
