@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Merge;
 using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
@@ -393,6 +394,15 @@ internal sealed partial class GitLabIssueProvider(
     {
         // GitLab's rebase endpoint has no expected-head guard; the merge request IID is the pull request id.
         return httpClient.RequestRebaseAsync(apiBaseUrl, slug, pullRequestId, token, cancellationToken);
+    }
+
+    public Task<Result<MergeRequestOutcome>> MergePullRequestAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string expectedHeadSha,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.MergePullRequestAsync(apiBaseUrl, slug, pullRequestUrl, expectedHeadSha, token, cancellationToken);
     }
 
     private async Task<Result<string>> FindOpenMergeRequestAsync(
