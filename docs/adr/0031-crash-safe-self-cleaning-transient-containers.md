@@ -1,5 +1,7 @@
 # Crash-Safe, Self-Cleaning Transient Login and Helper Containers
 
+> **2026-11-13 — Amended:** the **Two-layer reaping** clause in Decision is changed in two ways. First, `TransientContainerReaper` now reaps a non-running transient container only once it was created more than a grace period ago (30 minutes, longer than the Publisher's 15-minute prepare and publish timeouts). Publisher containers also carry `foundry.transient`, and the periodic sweep was reaping them between create and start (a SIGKILL after the 10 s stop grace, reported as exit code 137) and between exit and the log read (losing the Publisher's output); credential containers shared the create-to-start window. Second, the startup `LoginContainerReaper` the Decision describes no longer exists in `src`, and `ListTransientContainersAsync` has no production caller, so the periodic reaper is the only reaper and is the cleanup for Publisher and credential containers orphaned by a Foundry crash, including ones left in `created`. The clause was true when written; a later change removed the startup reaper.
+
 ## Context
 
 The interactive OAuth login flow starts short-lived Docker containers: a login container (`claude auth login --claudeai`) and one or more credential-helper containers (`claude auth status --json` / onboarding seed) that mount the credential volume.
