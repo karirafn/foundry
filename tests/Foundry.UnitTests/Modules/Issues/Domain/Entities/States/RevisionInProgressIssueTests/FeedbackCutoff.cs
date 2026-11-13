@@ -11,7 +11,7 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.RevisionInProgressIssueTests;
 
 /// <summary>
-/// The cutoff each of the four completion transitions carries forward, per revision trigger kind (issue #751).
+/// The cutoff each of the two completion transitions carries forward, per revision trigger kind (issue #751).
 /// A trigger that consumed no comments anchors to the run's start time, so a comment posted while the run was
 /// working is still read by the next review pass.
 /// </summary>
@@ -23,8 +23,6 @@ public sealed class FeedbackCutoff
 
     public static TheoryData<string> Transitions =>
     [
-        nameof(RevisionInProgressIssue.MarkInReview),
-        nameof(RevisionInProgressIssue.MarkUnchanged),
         nameof(RevisionInProgressIssue.MarkRebasePending),
         nameof(RevisionInProgressIssue.MarkUnchangedRebasePending),
     ];
@@ -144,9 +142,6 @@ public sealed class FeedbackCutoff
     private static DateTimeOffset Complete(RevisionInProgressIssue revisionInProgress, string transition) =>
         transition switch
         {
-            nameof(RevisionInProgressIssue.MarkInReview) => revisionInProgress.MarkInReview(RunStartedAt, DateTimeOffset.UtcNow).FeedbackCutoffAt,
-            nameof(RevisionInProgressIssue.MarkUnchanged) => revisionInProgress.MarkUnchanged(RunStartedAt,
-            DateTimeOffset.UtcNow).FeedbackCutoffAt,
             nameof(RevisionInProgressIssue.MarkRebasePending) => revisionInProgress.MarkRebasePending(RunStartedAt,
             DateTimeOffset.UtcNow).FeedbackCutoffAt,
             nameof(RevisionInProgressIssue.MarkUnchangedRebasePending) =>

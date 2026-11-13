@@ -15,6 +15,7 @@ import { formatWaiting } from '../../../../shared/utils/format-waiting';
 import { providerDisplayName, providerTerminology } from '../../../../shared/utils/provider.util';
 import { ItemView } from '../../board-state.service';
 import { NeedsItem, STAGE_LABELS, STAGE_ORDER } from '../../board.model';
+import { IssueRefComponent } from '../../issue-ref/issue-ref';
 
 interface ReviewLink {
   readonly href: string | null | undefined;
@@ -25,7 +26,7 @@ interface ReviewLink {
 /** An issue that needs a person: why, where it stopped and for how long. It changes no state. */
 @Component({
   selector: 'fd-needs-card',
-  imports: [DatePipe, SafeHrefPipe, StageChipComponent],
+  imports: [DatePipe, IssueRefComponent, SafeHrefPipe, StageChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'item().issue.id',

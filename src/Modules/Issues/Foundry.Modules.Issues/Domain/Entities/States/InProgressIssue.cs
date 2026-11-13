@@ -36,22 +36,6 @@ public sealed class InProgressIssue : Issue
         return inProgress;
     }
 
-    public ReviewIssue MarkInReview(
-        string branchName,
-        string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt,
-        DateTimeOffset transitionedAt)
-    {
-        ReviewIssue review = ReviewIssue.FromInProgress(
-            this,
-            branchName,
-            pullRequestUrl,
-            feedbackCutoffAt,
-            transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
-        return review;
-    }
-
     /// <summary>
     /// The run left an open pull request: Foundry rebases its branch onto the default branch before the
     /// checks gate reads any verdict (ADR 0087).

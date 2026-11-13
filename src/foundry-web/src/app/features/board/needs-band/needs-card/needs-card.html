@@ -11,9 +11,11 @@
       <span class="needs-card__reason">Completed</span>
     }
     <fd-stage-chip [label]="stageLabel()" [step]="stageStep()" [steps]="stageCount" />
-    <span class="needs-card__repo" [attr.title]="item().issue.repositorySlug"
-      >{{ item().issue.repositorySlug }} <strong>#{{ item().issue.issueNumber }}</strong></span
-    >
+    <fd-issue-ref
+      class="needs-card__ref"
+      [slug]="item().issue.repositorySlug"
+      [issueNumber]="item().issue.issueNumber"
+    />
   </div>
   <button
     #button
