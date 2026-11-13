@@ -26,6 +26,9 @@ public sealed class RevisionQueuedIssueConfiguration : IEntityTypeConfiguration<
             .HasColumnType("TEXT")
             .HasColumnName("revision_trigger");
 
+        builder.Property(i => i.PriorFeedbackCutoffAt)
+            .HasColumnName("prior_feedback_cutoff_at");
+
         builder.Property(i => i.ChecksFixAttempts)
             .HasDefaultValue(0)
             .HasColumnName("checks_fix_attempts");

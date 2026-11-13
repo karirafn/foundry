@@ -47,6 +47,12 @@ public sealed class PublishBlockedIssue : Issue
 
     public int ChecksFixAttempts { get; private set; }
 
+    /// <summary>
+    /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
+    /// <see langword="null"/> when the revision consumed comments or predates the field.
+    /// </summary>
+    public DateTimeOffset? PriorFeedbackCutoffAt { get; private set; }
+
     public int RebaseConflictAttempts { get; private set; }
 
     public bool IsRevision => Trigger is not null;
@@ -72,6 +78,7 @@ public sealed class PublishBlockedIssue : Issue
         blocked.PullRequestUrl = source.PullRequestUrl;
         blocked.Trigger = source.Trigger;
         blocked.ChecksFixAttempts = source.ChecksFixAttempts;
+        blocked.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         blocked.RebaseConflictAttempts = source.RebaseConflictAttempts;
         blocked.BlockedAt = blockedAt;
         return blocked;

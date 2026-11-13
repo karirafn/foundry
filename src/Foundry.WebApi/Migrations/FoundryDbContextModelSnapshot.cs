@@ -1486,6 +1486,11 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("checks_fix_attempts");
 
+                    b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prior_feedback_cutoff_at");
+
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -1584,6 +1589,11 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("failure_reason");
+
+                    b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prior_feedback_cutoff_at");
 
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
@@ -1870,6 +1880,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("failure_reason");
 
+                    b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prior_feedback_cutoff_at");
+
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -1956,6 +1971,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("checks_fix_attempts");
+
+                    b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prior_feedback_cutoff_at");
 
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
@@ -2681,6 +2701,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("checks_fix_attempts");
+
+                    b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prior_feedback_cutoff_at");
 
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()

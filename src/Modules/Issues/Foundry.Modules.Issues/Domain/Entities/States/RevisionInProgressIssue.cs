@@ -39,6 +39,12 @@ public sealed class RevisionInProgressIssue : Issue
 
     public int ChecksFixAttempts { get; private set; }
 
+    /// <summary>
+    /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
+    /// <see langword="null"/> when the revision consumed comments or predates the field.
+    /// </summary>
+    public DateTimeOffset? PriorFeedbackCutoffAt { get; private set; }
+
     public int RebaseConflictAttempts { get; private set; }
 
     internal static RevisionInProgressIssue FromRevisionQueued(
@@ -53,6 +59,7 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.Trigger = source.Trigger;
         revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionInProgress.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionInProgress;
     }
@@ -69,6 +76,7 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.Trigger = trigger;
         revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionInProgress.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionInProgress;
     }
@@ -145,13 +153,18 @@ public sealed class RevisionInProgressIssue : Issue
 
     // The cutoff the next review pass reads comments after. A ReviewFeedback trigger anchors to the newest comment
     // it consumed, so feedback posted after that batch is still read. Every other trigger (FailedChecks,
-    // RebaseConflict) consumed no comments, so it anchors to the run's start time — the same as a first run — and a
-    // comment posted while the run was working is not dropped. A ReviewFeedback trigger with no consumed timestamp
-    // falls back to the run's start time as well.
+    // RebaseConflict) consumed no comments, so it keeps the cutoff of the state it started from: a comment posted
+    // while the issue waited on checks or a rebase, or while the run was working, is not dropped (issue #925).
+    // Without a carried cutoff (a ReviewFeedback trigger with no consumed timestamp, an InputProvided trigger whose
+    // answer must not be read again, or a row that predates the field) it falls back to the run's start time.
     private DateTimeOffset FeedbackCutoffAt(DateTimeOffset runStartedAt) =>
-        Trigger is RevisionTrigger.ReviewFeedback { NewestConsumedCommentAt: DateTimeOffset newestConsumedCommentAt }
-            ? newestConsumedCommentAt
-            : runStartedAt;
+        Trigger switch
+        {
+            RevisionTrigger.ReviewFeedback { NewestConsumedCommentAt: DateTimeOffset newestConsumedCommentAt } =>
+                newestConsumedCommentAt,
+            RevisionTrigger.ReviewFeedback => runStartedAt,
+            _ => PriorFeedbackCutoffAt ?? runStartedAt,
+        };
 
     /// <summary>The revision run stopped to ask a person (ADR 0096): its pull request is open, so input resumes a revision.</summary>
     public AwaitingInputIssue MarkAwaitingInput(
