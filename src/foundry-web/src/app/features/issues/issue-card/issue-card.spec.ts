@@ -31,7 +31,6 @@ function createWithAgentActivity(agentActivity: AgentActivity, lastActivityAt: s
   });
   const fixture = TestBed.createComponent(IssueCardComponent);
   fixture.componentRef.setInput('issue', issue);
-  fixture.componentRef.setInput('expanded', false);
   fixture.componentRef.setInput('lastActivityAt', lastActivityAt);
   fixture.componentRef.setInput('agentActivity', agentActivity);
   fixture.detectChanges();
@@ -52,7 +51,7 @@ const mockIssue: IssueSummary = {
   codeStep: null,
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, isNextUp = false, queuePosition: number | null = null) {
+function createComponent(issue: IssueSummary = mockIssue, lastActivityAt: string | null = null, isNextUp = false, queuePosition: number | null = null) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
     providers: [
@@ -61,7 +60,6 @@ function createComponent(issue: IssueSummary = mockIssue, expanded = false, last
   });
   const fixture = TestBed.createComponent(IssueCardComponent);
   fixture.componentRef.setInput('issue', issue);
-  fixture.componentRef.setInput('expanded', expanded);
   if (lastActivityAt !== null) {
     fixture.componentRef.setInput('lastActivityAt', lastActivityAt);
   }
@@ -133,12 +131,12 @@ describe('IssueCardComponent', () => {
     ]);
   });
 
-  it('should still toggle a card with no links', () => {
+  it('should still open a card with no links', () => {
     // Arrange
     const fixture = createComponent({ ...mockIssue, url: '', pullRequestUrl: null });
     const el = fixture.nativeElement as HTMLElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
@@ -148,12 +146,12 @@ describe('IssueCardComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  it('should emit toggle exactly once when the toggle button is clicked', () => {
+  it('should emit open exactly once when the toggle button is clicked', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     let count = 0;
-    fixture.componentInstance.toggle.subscribe(() => count++);
+    fixture.componentInstance.open.subscribe(() => count++);
 
     // Act
     (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
@@ -162,12 +160,12 @@ describe('IssueCardComponent', () => {
     expect(count).toBe(1);
   });
 
-  it('should emit toggle when a non-link area of the card is clicked', () => {
+  it('should emit open when a non-link area of the card is clicked', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     (el.querySelector('.issue-card__timestamp') as HTMLElement).click();
@@ -176,12 +174,12 @@ describe('IssueCardComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  it('should not emit toggle when Enter is pressed on a link', () => {
+  it('should not emit open when Enter is pressed on a link', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     const link = el.querySelector('.issue-card__link') as HTMLAnchorElement;
@@ -277,14 +275,14 @@ describe('IssueCardComponent', () => {
     expect(link?.getAttribute('aria-label')).toBe('View issue #42 on owner/repo');
   });
 
-  // Cycle 5: toggle output on click
-  it('should emit toggle when the card is clicked', () => {
+  // Cycle 5: open output on click
+  it('should emit open when the card is clicked', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     const card = el.querySelector('.issue-card') as HTMLElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     card.click();
@@ -306,13 +304,13 @@ describe('IssueCardComponent', () => {
     expect(link).toBeFalsy();
   });
 
-  it('should not emit toggle when the external link is clicked', () => {
+  it('should not emit open when the external link is clicked', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     const link = el.querySelector('.issue-card__link') as HTMLAnchorElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     const event = new MouseEvent('click', { bubbles: true });
@@ -322,25 +320,31 @@ describe('IssueCardComponent', () => {
     expect(emitted).toBe(false);
   });
 
-  // Cycle 6: ARIA - aria-expanded reflects expanded input
-  it('should set aria-expanded="false" when not expanded', () => {
+  // Cycle 6: ARIA - the title button opens a dialog (the issue pane), so it is not a disclosure
+  it('should mark the title button as opening a dialog', () => {
     // Arrange / Act
-    const fixture = createComponent(mockIssue, false);
+    const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
-    expect(card?.getAttribute('aria-expanded')).toBe('false');
+    const button = el.querySelector('.issue-card__toggle') as HTMLElement;
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(button.getAttribute('aria-expanded')).toBeNull();
+    expect(button.getAttribute('aria-controls')).toBeNull();
   });
 
-  it('should set aria-expanded="true" when expanded', () => {
-    // Arrange / Act
-    const fixture = createComponent(mockIssue, true);
+  it('should emit open with the title button, which focus returns to', () => {
+    // Arrange
+    const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
+    let invoker: HTMLElement | null = null;
+    fixture.componentInstance.open.subscribe((button) => (invoker = button));
+
+    // Act
+    (el.querySelector('.issue-card__timestamp') as HTMLElement).click();
 
     // Assert
-    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
-    expect(card?.getAttribute('aria-expanded')).toBe('true');
+    expect(invoker).toBe(el.querySelector('.issue-card__toggle'));
   });
 
   it('should make the toggle focusable as a native button', () => {
@@ -354,17 +358,7 @@ describe('IssueCardComponent', () => {
     expect(card?.type).toBe('button');
   });
 
-  // Cycle 6b: aria-controls and aria-label
-  it('should set aria-controls pointing to the detail element id', () => {
-    // Arrange / Act
-    const fixture = createComponent();
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
-    expect(card?.getAttribute('aria-controls')).toBe('detail-abc123');
-  });
-
+  // Cycle 6b: aria-label
   it('should set aria-label with issue number, title, and state', () => {
     // Arrange / Act
     const fixture = createComponent();
@@ -459,13 +453,13 @@ describe('IssueCardComponent', () => {
   });
 
   // Cycle 7: keyboard interaction
-  it('should emit toggle when Enter key is pressed', () => {
+  it('should emit open when Enter key is pressed', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -474,13 +468,13 @@ describe('IssueCardComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  it('should emit toggle when Space key is pressed', () => {
+  it('should emit open when Space key is pressed', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
     const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     card.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
@@ -668,7 +662,7 @@ describe('IssueCardComponent', () => {
     const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(liveIssue, false, recentAt);
+    const fixture = createComponent(liveIssue, recentAt);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -683,7 +677,7 @@ describe('IssueCardComponent', () => {
     const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(failedIssue, false, recentAt);
+    const fixture = createComponent(failedIssue, recentAt);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -697,7 +691,7 @@ describe('IssueCardComponent', () => {
     const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(liveIssue, false, recentAt);
+    const fixture = createComponent(liveIssue, recentAt);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert — no aria-label on a roleless span; use sr-only child or issueAriaLabel instead
@@ -710,7 +704,7 @@ describe('IssueCardComponent', () => {
     const liveIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
 
     // Act
-    const fixture = createComponent(liveIssue, false, null);
+    const fixture = createComponent(liveIssue, null);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -744,7 +738,7 @@ describe('IssueCardComponent', () => {
     const justUnderThreshold = new Date(Date.now() - (5 * 60 * 1000 - 1000)).toISOString();
 
     // Act
-    const fixture = createComponent(liveIssue, false, justUnderThreshold);
+    const fixture = createComponent(liveIssue, justUnderThreshold);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -758,7 +752,7 @@ describe('IssueCardComponent', () => {
     const exactlyFiveMin = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(liveIssue, false, exactlyFiveMin);
+    const fixture = createComponent(liveIssue, exactlyFiveMin);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -772,7 +766,7 @@ describe('IssueCardComponent', () => {
     const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(liveIssue, false, sevenMinutesAgo);
+    const fixture = createComponent(liveIssue, sevenMinutesAgo);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -786,7 +780,7 @@ describe('IssueCardComponent', () => {
     const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(failedIssue, false, recentAt);
+    const fixture = createComponent(failedIssue, recentAt);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -801,7 +795,7 @@ describe('IssueCardComponent', () => {
     const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(contQueued, false, recentAt);
+    const fixture = createComponent(contQueued, recentAt);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert — no activity line since continuation_queued is not live
@@ -1004,7 +998,6 @@ describe('IssueCardComponent', () => {
     });
     const fixture = TestBed.createComponent(IssueCardComponent);
     fixture.componentRef.setInput('issue', queuedIssue);
-    fixture.componentRef.setInput('expanded', false);
     fixture.componentRef.setInput('isNextUp', true);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -1037,7 +1030,6 @@ describe('IssueCardComponent', () => {
     });
     const fixture = TestBed.createComponent(IssueCardComponent);
     fixture.componentRef.setInput('issue', queuedIssue);
-    fixture.componentRef.setInput('expanded', false);
     fixture.componentRef.setInput('isNextUp', true);
     fixture.componentRef.setInput('queuePosition', 1);
     fixture.detectChanges();
@@ -1061,7 +1053,6 @@ describe('IssueCardComponent', () => {
     });
     const fixture = TestBed.createComponent(IssueCardComponent);
     fixture.componentRef.setInput('issue', queuedIssue);
-    fixture.componentRef.setInput('expanded', false);
     fixture.componentRef.setInput('isNextUp', true);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -1521,7 +1512,7 @@ describe('IssueCardComponent', () => {
     const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(liveIssue, false, sevenMinutesAgo);
+    const fixture = createComponent(liveIssue, sevenMinutesAgo);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert — aria-label uses "7 minutes", not "7m"
@@ -1536,7 +1527,7 @@ describe('IssueCardComponent', () => {
     const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
     // Act
-    const fixture = createComponent(failedIssue, false, recentAt);
+    const fixture = createComponent(failedIssue, recentAt);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1560,7 +1551,6 @@ describe('IssueCardComponent', () => {
     });
     const fixture = TestBed.createComponent(IssueCardComponent);
     fixture.componentRef.setInput('issue', liveIssue);
-    fixture.componentRef.setInput('expanded', false);
     const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
     fixture.componentRef.setInput('lastActivityAt', sevenMinutesAgo);
     fixture.detectChanges();
@@ -1608,7 +1598,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue, false, null, false, 3);
+    const fixture = createComponent(queuedIssue, null, false, 3);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1622,7 +1612,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue, false, null, false, 5);
+    const fixture = createComponent(queuedIssue, null, false, 5);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1642,7 +1632,6 @@ describe('IssueCardComponent', () => {
     });
     const fixture = TestBed.createComponent(IssueCardComponent);
     fixture.componentRef.setInput('issue', queuedIssue);
-    fixture.componentRef.setInput('expanded', false);
     fixture.componentRef.setInput('isNextUp', true);
     fixture.componentRef.setInput('queuePosition', 1);
     fixture.detectChanges();
@@ -1659,7 +1648,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue, false, null, false, 2);
+    const fixture = createComponent(queuedIssue, null, false, 2);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1692,7 +1681,7 @@ describe('IssueCardComponent', () => {
     const inProgressIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
 
     // Act
-    const fixture = createComponent(inProgressIssue, false, null, false, 1);
+    const fixture = createComponent(inProgressIssue, null, false, 1);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1736,7 +1725,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue, false, null, false, 2);
+    const fixture = createComponent(queuedIssue, null, false, 2);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1750,7 +1739,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue, false, null, false, 2);
+    const fixture = createComponent(queuedIssue, null, false, 2);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1770,7 +1759,6 @@ describe('IssueCardComponent', () => {
     });
     const fixture = TestBed.createComponent(IssueCardComponent);
     fixture.componentRef.setInput('issue', queuedIssue);
-    fixture.componentRef.setInput('expanded', false);
     fixture.componentRef.setInput('isNextUp', true);
     fixture.componentRef.setInput('queuePosition', 1);
     fixture.detectChanges();
@@ -2302,7 +2290,7 @@ describe('IssueCardComponent', () => {
     expect(group.lastElementChild?.classList.contains('issue-card__link')).toBe(true);
   });
 
-  it('should not emit toggle when the PR link is clicked', () => {
+  it('should not emit open when the PR link is clicked', () => {
     // Arrange
     const issue: IssueSummary = { ...mockIssue, state: 'review', pullRequestUrl: prUrl };
     const fixture = createComponent(issue);
@@ -2310,7 +2298,7 @@ describe('IssueCardComponent', () => {
     const prLink = el.querySelector('.issue-card__pr-link') as HTMLAnchorElement;
     prLink.addEventListener('click', (e) => e.preventDefault());
     let emitted = false;
-    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+    fixture.componentInstance.open.subscribe(() => (emitted = true));
 
     // Act
     prLink.click();
@@ -2532,7 +2520,7 @@ describe('IssueCardComponent', () => {
       const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(triagingIssue, false, recentAt);
+      const fixture = createComponent(triagingIssue, recentAt);
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
@@ -2545,7 +2533,7 @@ describe('IssueCardComponent', () => {
       const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(triagingIssue, false, sevenMinutesAgo);
+      const fixture = createComponent(triagingIssue, sevenMinutesAgo);
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
@@ -2558,7 +2546,7 @@ describe('IssueCardComponent', () => {
       const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(triagingIssue, false, recentAt);
+      const fixture = createComponent(triagingIssue, recentAt);
       const label =
         (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
 
@@ -2573,7 +2561,7 @@ describe('IssueCardComponent', () => {
       const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(triagingIssue, false, sevenMinutesAgo);
+      const fixture = createComponent(triagingIssue, sevenMinutesAgo);
       const label =
         (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
 
@@ -2612,7 +2600,7 @@ describe('IssueCardComponent', () => {
       const queued: IssueSummary = { ...mockIssue, state: 'triage_queued' };
 
       // Act
-      const fixture = createComponent(queued, false, null, false, 2);
+      const fixture = createComponent(queued, null, false, 2);
       const el = fixture.nativeElement as HTMLElement;
       const label = el.querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
 
@@ -2626,7 +2614,7 @@ describe('IssueCardComponent', () => {
       const queued: IssueSummary = { ...mockIssue, state: 'triage_queued' };
 
       // Act
-      const fixture = createComponent(queued, false, null, true, 1);
+      const fixture = createComponent(queued, null, true, 1);
       const label =
         (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
 
@@ -2641,7 +2629,7 @@ describe('IssueCardComponent', () => {
       const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(mockIssue, false, sevenMinutesAgo);
+      const fixture = createComponent(mockIssue, sevenMinutesAgo);
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
@@ -2654,7 +2642,7 @@ describe('IssueCardComponent', () => {
       const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(mockIssue, false, recentAt);
+      const fixture = createComponent(mockIssue, recentAt);
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
@@ -2666,7 +2654,7 @@ describe('IssueCardComponent', () => {
       const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
       // Act
-      const fixture = createComponent(mockIssue, false, recentAt);
+      const fixture = createComponent(mockIssue, recentAt);
       const label =
         (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
 

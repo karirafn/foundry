@@ -37,6 +37,8 @@ export class SideSheetComponent {
   /** Id of the heading inside the content; it labels the dialog and takes focus on open. */
   readonly labelledBy: InputSignal<string> = input.required<string>();
   readonly closeLabel: InputSignal<string> = input<string>('Close');
+  /** False when the content renders its own close button (it must still emit a dismissal). */
+  readonly closeButton: InputSignal<boolean> = input<boolean>(true);
   readonly dismissed: OutputEmitterRef<void> = output<void>();
 
   protected readonly content: Signal<TemplateRef<unknown>> = contentChild.required(TemplateRef);
@@ -77,7 +79,7 @@ export class SideSheetComponent {
       return;
     }
     // A card swaps the sheet's content rather than closing it.
-    if (event.target.closest('[data-issue-card]') !== null) {
+    if (event.target.closest('[data-issue-card], [data-issue-id]') !== null) {
       return;
     }
     this.dismissed.emit();

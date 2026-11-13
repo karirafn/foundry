@@ -1,4 +1,15 @@
-import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  InputSignal,
+  OutputEmitterRef,
+  Signal,
+  computed,
+  inject,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 import { NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES, PublishPhase, QUEUED_TIER_STATES } from '../issue.model';
 import { cardAccentFor, resolveStateDisplay } from '../../../shared/utils/state-display';
@@ -117,9 +128,9 @@ function isUntracked(tokens: TokenTotal): boolean {
   template: `
     <!--
       The root is a non-interactive container: HTML forbids links inside a <button>, so the
-      expand/collapse control is the dedicated title button below and the links are its siblings.
-      The container click handler keeps the whole card as the pointer hit area; keyboard and
-      assistive-technology users reach the toggle button directly.
+      control that opens the issue pane is the dedicated title button below and the links are its
+      siblings. The container click handler keeps the whole card as the pointer hit area; keyboard
+      and assistive-technology users reach the title button directly.
     -->
     <div
       class="issue-card"
@@ -195,10 +206,10 @@ function isUntracked(tokens: TokenTotal): boolean {
           class="issue-card__title"
           [attr.title]="issue().title"
         ><button
+          #openButton
           type="button"
           class="issue-card__toggle"
-          [attr.aria-expanded]="expanded().toString()"
-          [attr.aria-controls]="'detail-' + issue().id"
+          aria-haspopup="dialog"
           [attr.aria-label]="issueAriaLabel()"
           (keydown)="onKeydown($event)"
         >{{ issue().title }}</button></div>
@@ -326,12 +337,15 @@ function isUntracked(tokens: TokenTotal): boolean {
 })
 export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
-  readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
   readonly agentActivity: InputSignal<AgentActivity | null> = input<AgentActivity | null>(null);
   readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly queuePosition: InputSignal<number | null> = input<number | null>(null);
-  readonly toggle: OutputEmitterRef<void> = output<void>();
+  /** Asks the page to open this issue in the pane; carries the button that focus returns to. */
+  readonly open: OutputEmitterRef<HTMLElement> = output<HTMLElement>();
+
+  private readonly _openButton: Signal<ElementRef<HTMLButtonElement>> =
+    viewChild.required<ElementRef<HTMLButtonElement>>('openButton');
 
   private readonly _ticker = inject(TickerService);
 
@@ -597,7 +611,7 @@ export class IssueCardComponent {
   }
 
   onCardClick(): void {
-    this.toggle.emit();
+    this.open.emit(this._openButton().nativeElement);
   }
 
   onLinkClick(event: MouseEvent): void {
@@ -607,7 +621,7 @@ export class IssueCardComponent {
   onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      this.toggle.emit();
+      this.open.emit(this._openButton().nativeElement);
     }
   }
 }

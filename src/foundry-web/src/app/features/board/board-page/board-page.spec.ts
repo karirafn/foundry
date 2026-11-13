@@ -2,7 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { Location } from '@angular/common';
+import { provideLocationMocks } from '@angular/common/testing';
 import { vi } from 'vitest';
 import {
   ConnectionStatus,
@@ -33,6 +35,8 @@ function item(id: string, issueNumber: number, overrides: Record<string, unknown
   };
 }
 
+const hubHandlers = new Map<string, (payload: unknown) => void>();
+
 interface Harness {
   el: HTMLElement;
   httpMock: HttpTestingController;
@@ -40,18 +44,19 @@ interface Harness {
   render: () => Promise<void>;
 }
 
-async function setup(): Promise<Harness> {
+async function setup(url = '/'): Promise<Harness> {
   const status = signal<ConnectionStatus>('connected');
   TestBed.configureTestingModule({
     imports: [BoardPageComponent],
     providers: [
       provideRouter([]),
+      provideLocationMocks(),
       provideHttpClient(),
       provideHttpClientTesting(),
       {
         provide: IssueSignalRService,
         useValue: {
-          on: () => {},
+          on: (name: string, handler: (payload: unknown) => void) => hubHandlers.set(name, handler),
           off: () => {},
           onReconnected: () => {},
           connectionStatus: status,
@@ -81,9 +86,16 @@ async function setup(): Promise<Harness> {
       },
     ],
   });
+  // Bootstrap sets the listener up in the app; Back and Forward reach the router through it.
+  TestBed.inject(Router).setUpLocationChangeListener();
+  await TestBed.inject(Router).navigateByUrl(url);
   const fixture = TestBed.createComponent(BoardPageComponent);
   document.body.appendChild(fixture.nativeElement);
+  // The router defers a Back navigation to a macrotask, so a render waits one out.
   const render = async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fixture.detectChanges();
     await fixture.whenStable();
   };
@@ -96,8 +108,8 @@ async function setup(): Promise<Harness> {
   };
 }
 
-async function loaded(items: unknown[]): Promise<Harness> {
-  const h = await setup();
+async function loaded(items: unknown[], url = '/'): Promise<Harness> {
+  const h = await setup(url);
   h.httpMock.expectOne('/api/issues').flush({ items, nextCursor: null });
   await h.render();
   return h;
@@ -283,7 +295,7 @@ describe('BoardPageComponent', () => {
 
       // Assert
       h.httpMock.expectOne('/api/issues/f');
-      expect(document.activeElement?.id).toBe('board-sheet-title');
+      expect(document.activeElement?.id).toBe('issue-pane-title');
     });
 
     it('returns focus to the card when Escape closes it', async () => {
@@ -316,6 +328,123 @@ describe('BoardPageComponent', () => {
 
       // Assert
       expect(h.el.querySelector('[role="dialog"].side-sheet:not(.side-sheet--leave)')).toBeNull();
+    });
+
+    it('puts the open issue in the URL', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142)]);
+
+      // Act
+      await openCard(h, 'f');
+
+      // Assert
+      h.httpMock.expectOne('/api/issues/f');
+      expect(TestBed.inject(Router).url).toBe('/?issue=f');
+    });
+
+    it('closes on browser Back and returns focus to the card', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142)]);
+      const button = await openCard(h, 'f');
+      h.httpMock.expectOne('/api/issues/f');
+
+      // Act
+      TestBed.inject(Location).back();
+      await h.render();
+
+      // Assert
+      expect(TestBed.inject(Router).url).toBe('/');
+      expect(h.el.querySelector('[role="dialog"].side-sheet:not(.side-sheet--leave)')).toBeNull();
+      expect(document.activeElement).toBe(button);
+    });
+
+    it('removes the parameter when the close button closes it', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142)]);
+      await openCard(h, 'f');
+      h.httpMock.expectOne('/api/issues/f');
+
+      // Act
+      (h.el.querySelector('button[aria-label="Close issue details"]') as HTMLButtonElement).click();
+      await h.render();
+
+      // Assert
+      expect(TestBed.inject(Router).url).toBe('/');
+    });
+
+    it('swaps without adding a history entry, so Back closes the pane', async () => {
+      // Arrange
+      const h = await loaded([item('a', 1), item('b', 2)]);
+      await openCard(h, 'a');
+      h.httpMock.expectOne('/api/issues/a');
+      await openCard(h, 'b');
+      h.httpMock.expectOne('/api/issues/b');
+      expect(TestBed.inject(Router).url).toBe('/?issue=b');
+
+      // Act
+      TestBed.inject(Location).back();
+      await h.render();
+
+      // Assert
+      expect(TestBed.inject(Router).url).toBe('/');
+    });
+
+    it('moves focus to the heading when it swaps', async () => {
+      // Arrange
+      const h = await loaded([item('a', 1), item('b', 2, { title: 'Second' })]);
+      await openCard(h, 'a');
+      h.httpMock.expectOne('/api/issues/a');
+
+      // Act
+      await openCard(h, 'b');
+      h.httpMock.expectOne('/api/issues/b');
+
+      // Assert
+      expect(document.activeElement?.id).toBe('issue-pane-title');
+      expect(document.activeElement?.textContent?.trim()).toBe('#2 Second');
+    });
+
+    it('reopens from a deep link once the board has loaded', async () => {
+      // Arrange
+      const h = await setup('/?issue=f');
+      expect(h.el.querySelector('[role="dialog"]')).toBeNull();
+
+      // Act
+      h.httpMock.expectOne('/api/issues').flush({ items: [item('f', 142, { title: 'Linked' })], nextCursor: null });
+      await h.render();
+
+      // Assert
+      h.httpMock.expectOne('/api/issues/f');
+      expect(h.el.querySelector('[role="dialog"] h2')?.textContent?.trim()).toBe('#142 Linked');
+      expect(TestBed.inject(Router).url).toBe('/?issue=f');
+    });
+
+    it('removes a deep link to an issue not on the board and opens nothing', async () => {
+      // Act
+      const h = await loaded([item('f', 142)], '/?issue=gone');
+
+      // Assert
+      h.httpMock.expectNone('/api/issues/gone');
+      expect(h.el.querySelector('[role="dialog"]')).toBeNull();
+      expect(TestBed.inject(Router).url).toBe('/');
+    });
+
+    it('stays open on an issue that completes while it is open', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142, { title: 'Add retry' })]);
+      await openCard(h, 'f');
+      h.httpMock.expectOne('/api/issues/f');
+
+      // Act
+      hubHandlers.get('IssueUpdated')!(
+        item('f', 142, { title: 'Add retry', state: 'completed', stage: 'done' }),
+      );
+      await h.render();
+
+      // Assert
+      h.httpMock.match('/api/issues/f');
+      expect(h.el.querySelector('[role="dialog"] h2')?.textContent?.trim()).toBe('#142 Add retry');
+      expect(TestBed.inject(Router).url).toBe('/?issue=f');
     });
 
     it('swaps to another card without closing', async () => {

@@ -331,58 +331,58 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues/abc123').flush({});
   });
 
-  // Cycle 6: toggleExpand — collapse when same id
-  it('should collapse when toggleExpand is called with the currently expanded id', () => {
-    // Arrange — first expand
-    service.toggleExpand('abc123');
+  // Cycle 6: selectIssue(null) clears the selection
+  it('should clear the selection when selectIssue is called with null', () => {
+    // Arrange — first select
+    service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-    expect(service.expandedIssueId()).toBe('abc123');
+    expect(service.selectedIssueId()).toBe('abc123');
 
-    // Act — collapse
-    service.toggleExpand('abc123');
+    // Act — clear
+    service.selectIssue(null);
 
     // Assert
-    expect(service.expandedIssueId()).toBeNull();
+    expect(service.selectedIssueId()).toBeNull();
     expect(service.issueDetail()).toBeNull();
   });
 
-  // Cycle 7: toggleExpand — expand new and fetch detail
-  it('should expand a new issue and fetch its detail when toggleExpand is called', () => {
+  // Cycle 7: selectIssue — expand new and fetch detail
+  it('should expand a new issue and fetch its detail when selectIssue is called', () => {
     // Arrange — no additional setup
 
     // Act
-    service.toggleExpand('abc123');
+    service.selectIssue('abc123');
 
     // Assert
-    expect(service.expandedIssueId()).toBe('abc123');
+    expect(service.selectedIssueId()).toBe('abc123');
     expect(service.detailLoading()).toBe(true);
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
 
-  // Cycle 8: toggleExpand — switch from one to another
-  it('should switch to a new issue when toggleExpand is called with a different id', () => {
+  // Cycle 8: selectIssue — switch from one to another
+  it('should switch to a new issue when selectIssue is called with a different id', () => {
     // Arrange
-    service.toggleExpand('abc123');
+    service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
 
     // Act
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
 
     // Assert
-    expect(service.expandedIssueId()).toBe('def456');
+    expect(service.selectedIssueId()).toBe('def456');
     httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
   });
 
-  // Cycle 8b: toggleExpand — switching clears stale detail immediately
+  // Cycle 8b: selectIssue — switching clears stale detail immediately
   it('should clear issueDetail and set detailLoading to true immediately when switching to a different issue', () => {
     // Arrange — expand first issue and let its detail load
     const ineligibleDetail = { ...mockSummary, state: 'ineligible' };
-    service.toggleExpand('abc123');
+    service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush(ineligibleDetail);
     expect(service.issueDetail()).toEqual(ineligibleDetail);
 
     // Act — switch to a different issue (do NOT flush the second request yet)
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
 
     // Assert — stale detail is cleared and loading is true before the new response arrives
     expect(service.issueDetail()).toBeNull();
@@ -392,17 +392,17 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
   });
 
-  // Cycle 8c: toggleExpand — rapid switching does not leak stale state
+  // Cycle 8c: selectIssue — rapid switching does not leak stale state
   it('should not retain stale detail when rapidly switching between issues', () => {
     // Arrange — expand first issue, let detail load
-    service.toggleExpand('abc123');
+    service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary, state: 'ineligible' });
     expect(service.issueDetail()).not.toBeNull();
 
     // Act — switch to issue B without waiting for response, then switch to issue C
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
     // At this point the def456 request is in flight; switch again
-    service.toggleExpand('ghi789');
+    service.selectIssue('ghi789');
 
     // Assert — issueDetail is null (cleared) and detailLoading is true
     expect(service.issueDetail()).toBeNull();
@@ -413,9 +413,9 @@ describe('IssueService', () => {
   });
 
   // Cycle 8d: late-arriving detail response for a previous issue must not overwrite current detail
-  // This tests the in-callback guard: even if a response arrives after expandedIssueId changed
+  // This tests the in-callback guard: even if a response arrives after selectedIssueId changed
   // (e.g. via SignalR triggering loadDetail while the user has already switched), it is discarded.
-  it('should discard a late-arriving detail response when expandedIssueId no longer matches', () => {
+  it('should discard a late-arriving detail response when selectedIssueId no longer matches', () => {
     // Arrange — simulate issue B already loaded as the active issue
     const detailB: IssueDetail = {
       ...mockSummary,
@@ -438,7 +438,7 @@ describe('IssueService', () => {
     };
 
     // Expand B so its detail is loaded first
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
     httpMock.expectOne('/api/issues/def456').flush(detailB);
     expect(service.issueDetail()).toEqual(detailB);
 
@@ -447,16 +447,16 @@ describe('IssueService', () => {
     service.loadDetail('abc123');
     const reqA = httpMock.expectOne('/api/issues/abc123');
 
-    // User switches to issue B again (or any other change that sets expandedIssueId away from A)
-    // Here we directly set expandedIssueId to simulate switching away from A
-    service.expandedIssueId.set('def456');
+    // User switches to issue B again (or any other change that sets selectedIssueId away from A)
+    // Here we directly set selectedIssueId to simulate switching away from A
+    service.selectedIssueId.set('def456');
 
     // Act — the stale response for issue A now arrives
     reqA.flush({ ...mockSummary, id: 'abc123' });
 
     // Assert — issue B's detail is still shown; the stale A response was discarded by the guard
     expect(service.issueDetail()).toEqual(detailB);
-    expect(service.expandedIssueId()).toBe('def456');
+    expect(service.selectedIssueId()).toBe('def456');
   });
 
   // Cycle 9: SignalR upsert — updates existing issue in list
@@ -503,9 +503,9 @@ describe('IssueService', () => {
     const callbacks: Record<string, (data: IssueSummary) => void> = {};
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
-    svc.toggleExpand('abc123');
+    svc.selectIssue('abc123');
     http.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-    expect(svc.expandedIssueId()).toBe('abc123');
+    expect(svc.selectedIssueId()).toBe('abc123');
 
     // Act — signal update for the currently expanded issue
     callbacks['IssueUpdated']({ ...mockSummary, state: 'in_progress' });
@@ -609,6 +609,37 @@ describe('IssueService', () => {
 
     // Assert — must not contain server-influenced text such as err.message
     expect(service.detailError()).toBe('Failed to load issue details');
+  });
+
+  it('marks the detail missing when loadDetail returns 404', () => {
+    // Act
+    service.selectIssue('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush('Not Found', { status: 404, statusText: 'Not Found' });
+
+    // Assert
+    expect(service.detailMissing()).toBe(true);
+  });
+
+  it('does not mark the detail missing when loadDetail fails with another status', () => {
+    // Act
+    service.selectIssue('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush('Boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(service.detailMissing()).toBe(false);
+  });
+
+  it('clears the missing mark when another issue is selected', () => {
+    // Arrange
+    service.selectIssue('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush('Not Found', { status: 404, statusText: 'Not Found' });
+
+    // Act
+    service.selectIssue('def456');
+
+    // Assert
+    expect(service.detailMissing()).toBe(false);
+    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
   });
 
   it('should clear loadError on successful loadIssues', () => {
@@ -881,7 +912,7 @@ describe('IssueService', () => {
   });
 
   // UX-4: stale retry state cleared on issue switch
-  it('should clear retryError when switching to a different issue via toggleExpand', () => {
+  it('should clear retryError when switching to a different issue via selectIssue', () => {
     // Arrange — set a retry error for abc123
     service.retryIssue('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
@@ -891,20 +922,20 @@ describe('IssueService', () => {
     expect(service.retryError()).not.toBeNull();
 
     // Act — switch to a different issue
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
 
     // Assert — retry error is cleared
     expect(service.retryError()).toBeNull();
     httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
   });
 
-  it('should clear retrying when switching to a different issue via toggleExpand', () => {
+  it('should clear retrying when switching to a different issue via selectIssue', () => {
     // Arrange — simulate retrying stuck at true
     service.retryIssue('abc123');
     expect(service.retrying()).toBe(true);
 
     // Act — switch to a different issue before the request resolves
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
 
     // Assert — loading flag is cleared synchronously
     expect(service.retrying()).toBe(false);
@@ -915,9 +946,9 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
 
-  it('should clear retryError when collapsing the current issue via toggleExpand', () => {
-    // Arrange — expand and set error
-    service.toggleExpand('abc123');
+  it('should clear retryError when clearing the selection via selectIssue', () => {
+    // Arrange — select and set error
+    service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
     service.retryIssue('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
@@ -925,8 +956,8 @@ describe('IssueService', () => {
     });
     expect(service.retryError()).not.toBeNull();
 
-    // Act — collapse same issue (toggleExpand with same id)
-    service.toggleExpand('abc123');
+    // Act — clear the selection
+    service.selectIssue(null);
 
     // Assert
     expect(service.retryError()).toBeNull();
@@ -945,7 +976,7 @@ describe('IssueService', () => {
     expect(service.retrySuccess()).toBe('Retry queued. Issue status is updating.');
   });
 
-  it('should clear retrySuccess when toggleExpand is called', () => {
+  it('should clear retrySuccess when selectIssue is called', () => {
     // Arrange — get a success message set
     service.retryIssue('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
@@ -953,7 +984,7 @@ describe('IssueService', () => {
     expect(service.retrySuccess()).not.toBeNull();
 
     // Act — switch issue
-    service.toggleExpand('def456');
+    service.selectIssue('def456');
 
     // Assert
     expect(service.retrySuccess()).toBeNull();
@@ -1408,9 +1439,9 @@ describe('IssueService (band transitions + counts debounce)', () => {
   it('should still re-fetch detail when the expanded issue receives an IssueUpdated event (regression)', () => {
     // Arrange
     vi.useFakeTimers();
-    service.toggleExpand('issue-1');
+    service.selectIssue('issue-1');
     httpMock.expectOne('/api/issues/issue-1').flush({ ...activeSummary });
-    expect(service.expandedIssueId()).toBe('issue-1');
+    expect(service.selectedIssueId()).toBe('issue-1');
 
     // Act — trigger an IssueUpdated event for the expanded issue
     callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
@@ -3498,7 +3529,7 @@ describe('IssueService (triage actions)', () => {
     expect(service.retryError()).toBeNull();
   });
 
-  it('toggleExpand clears pending, error and success', () => {
+  it('selectIssue clears pending, error and success', () => {
     // Arrange
     service.skipTriage('abc123');
     httpMock
@@ -3507,7 +3538,7 @@ describe('IssueService (triage actions)', () => {
     service.retriage('abc123');
 
     // Act
-    service.toggleExpand('abc123');
+    service.selectIssue('abc123');
 
     // Assert
     expect(service.triageActionPending()).toBeNull();
@@ -3517,14 +3548,14 @@ describe('IssueService (triage actions)', () => {
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
 
-  it('toggleExpand clears a success message', () => {
+  it('selectIssue clears a success message', () => {
     // Arrange
     service.retryTriage('abc123');
     httpMock.expectOne('/api/issues/abc123/retry-triage').flush({});
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
 
     // Act
-    service.toggleExpand('abc123');
+    service.selectIssue('abc123');
 
     // Assert
     expect(service.triageActionSuccess()).toBeNull();
@@ -3636,7 +3667,7 @@ describe('IssueService board placement (#851)', () => {
     svc.selectIssue('p1');
 
     // Assert
-    expect(svc.expandedIssueId()).toBe('p1');
+    expect(svc.selectedIssueId()).toBe('p1');
     http.expectOne('/api/issues/p1').flush({ ...placedItem });
   });
 
@@ -3650,7 +3681,7 @@ describe('IssueService board placement (#851)', () => {
     svc.selectIssue('p1');
 
     // Assert
-    expect(svc.expandedIssueId()).toBe('p1');
+    expect(svc.selectedIssueId()).toBe('p1');
     http.expectOne('/api/issues/p1').flush({ ...placedItem });
   });
 
@@ -3664,7 +3695,7 @@ describe('IssueService board placement (#851)', () => {
     svc.selectIssue(null);
 
     // Assert
-    expect(svc.expandedIssueId()).toBeNull();
+    expect(svc.selectedIssueId()).toBeNull();
     expect(svc.issueDetail()).toBeNull();
   });
 });
