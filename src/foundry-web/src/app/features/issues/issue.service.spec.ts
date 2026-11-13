@@ -26,7 +26,10 @@ const mockSummary: IssueSummary = {
   stage: 'triage',
   needsAction: false,
   awaitsDispatch: true,
+  waitsOnBlockers: false,
   codeStep: null,
+  repositoryId: 'repo-1',
+  enteredStateAt: '2026-01-01T00:00:00Z',
 };
 
 function setupWithCapturingSignalR(callbacks: Record<string, (data: IssueSummary) => void>, reconnectCallbacks: Array<() => void>) {
@@ -1047,7 +1050,10 @@ describe('IssueService (band transitions)', () => {
     stage: 'triage',
     needsAction: false,
     awaitsDispatch: true,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
   };
 
   const resolvedSummary: IssueSummary = {
@@ -1061,7 +1067,10 @@ describe('IssueService (band transitions)', () => {
     stage: 'done',
     needsAction: false,
     awaitsDispatch: false,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
   };
 
   beforeEach(() => {
@@ -1224,7 +1233,10 @@ describe('IssueService (resolved paging)', () => {
     stage: 'done',
     needsAction: false,
     awaitsDispatch: false,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
   };
 
   beforeEach(() => {
@@ -1628,7 +1640,10 @@ describe('IssueService (dispatch-order queue grouping)', () => {
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: true,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
   };
 
   beforeEach(() => {
@@ -1834,7 +1849,10 @@ describe('IssueService (queue-order reconcile)', () => {
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: true,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
     repositoryEligibilityStatus: null,
   };
 
@@ -1849,7 +1867,10 @@ describe('IssueService (queue-order reconcile)', () => {
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: true,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
     repositoryEligibilityStatus: null,
   };
 
@@ -2464,7 +2485,10 @@ describe('IssueService (nextUpAnnouncement)', () => {
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: true,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
     repositoryEligibilityStatus: null,
   };
 
@@ -2758,7 +2782,10 @@ describe('IssueService board placement (#851)', () => {
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: false,
+    waitsOnBlockers: false,
     codeStep: 'checks',
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
     checksOutcome: null,
   };
 
@@ -2837,6 +2864,67 @@ describe('IssueService board placement (#851)', () => {
 
     // Assert
     expect(svc.issues()[0]).toMatchObject({ stage: 'implement', codeStep: null });
+  });
+
+  it('maps the repository id, blocker wait and state entry time from the issues response (#892)', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [{
+        ...placedItem,
+        state: 'blocked',
+        repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
+        waitsOnBlockers: true,
+        enteredStateAt: '2026-11-12T16:30:15.123Z',
+      }],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0]).toMatchObject({
+      repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
+      waitsOnBlockers: true,
+      enteredStateAt: '2026-11-12T16:30:15.123Z',
+    });
+  });
+
+  it('carries the repository id, blocker wait and state entry time of an IssueUpdated payload (#892)', () => {
+    // Arrange
+    const { svc, http, callbacks } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    callbacks['IssueUpdated']({
+      ...placedItem,
+      state: 'triage_blocked',
+      repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
+      waitsOnBlockers: true,
+      enteredStateAt: '2026-11-12T16:30:15.123Z',
+    } as unknown as IssueSummary);
+
+    // Assert
+    expect(svc.issues()[0]).toMatchObject({
+      repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
+      waitsOnBlockers: true,
+      enteredStateAt: '2026-11-12T16:30:15.123Z',
+    });
+  });
+
+  it('reads a missing blocker wait on an IssueUpdated payload as not waiting', () => {
+    // Arrange
+    const { svc, http, callbacks } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    callbacks['IssueUpdated']({ ...placedItem } as unknown as IssueSummary);
+
+    // Assert
+    expect(svc.issues()[0].waitsOnBlockers).toBe(false);
   });
 
   it('selectIssue opens the issue and loads its detail', () => {
