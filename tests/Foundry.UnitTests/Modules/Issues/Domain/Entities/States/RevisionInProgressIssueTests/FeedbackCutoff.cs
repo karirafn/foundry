@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -11,12 +12,14 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.RevisionInProgressIssueTests;
 
 /// <summary>
-/// The cutoff each of the two completion transitions carries forward, per revision trigger kind (issue #751).
-/// A trigger that consumed no comments anchors to the run's start time, so a comment posted while the run was
-/// working is still read by the next review pass.
+/// The cutoff each of the two completion transitions carries forward, per revision trigger kind (issues #751, #925).
+/// A trigger that consumed no comments keeps the cutoff of the state it started from, so a comment posted while the
+/// issue waited, or while the run was working, is still read by the next review pass.
 /// </summary>
 public sealed class FeedbackCutoff
 {
+    private static readonly DateTimeOffset PriorCutoffAt = new(2026, 6, 1, 9, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset CommentWhileWaitingAt = new(2026, 6, 1, 10, 30, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset NewestConsumedCommentAt = new(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset RunStartedAt = new(2026, 6, 1, 11, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset CommentDuringRunAt = new(2026, 6, 1, 11, 30, 0, TimeSpan.Zero);
@@ -29,7 +32,7 @@ public sealed class FeedbackCutoff
 
     [Theory]
     [MemberData(nameof(Transitions))]
-    public void WhenFailedChecksTrigger_CutoffIsRunStartedAt(string transition)
+    public void WhenFailedChecksTrigger_CutoffIsTheChecksPendingCutoffItStartedFrom(string transition)
     {
         // Arrange
         RevisionInProgressIssue revisionInProgress = FailedChecksRevision();
@@ -38,7 +41,21 @@ public sealed class FeedbackCutoff
         DateTimeOffset cutoff = Complete(revisionInProgress, transition);
 
         // Assert
-        cutoff.ShouldBe(RunStartedAt);
+        cutoff.ShouldBe(PriorCutoffAt);
+    }
+
+    [Theory]
+    [MemberData(nameof(Transitions))]
+    public void WhenRebaseConflictTrigger_CutoffIsTheRebasePendingCutoffItStartedFrom(string transition)
+    {
+        // Arrange
+        RevisionInProgressIssue revisionInProgress = RebaseConflictRevision();
+
+        // Act
+        DateTimeOffset cutoff = Complete(revisionInProgress, transition);
+
+        // Assert
+        cutoff.ShouldBe(PriorCutoffAt);
     }
 
     [Theory]
@@ -59,16 +76,20 @@ public sealed class FeedbackCutoff
 
     [Theory]
     [MemberData(nameof(Transitions))]
-    public void WhenRebaseConflictTrigger_CutoffIsRunStartedAt(string transition)
+    public void WhenNonFeedbackTrigger_CommentPostedWhileWaitingIsAfterCutoff(string transition)
     {
         // Arrange
-        RevisionInProgressIssue revisionInProgress = RebaseConflictRevision();
+        RevisionInProgressIssue failedChecks = FailedChecksRevision();
+        RevisionInProgressIssue rebaseConflict = RebaseConflictRevision();
 
         // Act
-        DateTimeOffset cutoff = Complete(revisionInProgress, transition);
+        DateTimeOffset failedChecksCutoff = Complete(failedChecks, transition);
+        DateTimeOffset rebaseConflictCutoff = Complete(rebaseConflict, transition);
 
         // Assert
-        cutoff.ShouldBe(RunStartedAt);
+        failedChecksCutoff.ShouldSatisfyAllConditions(
+            () => failedChecksCutoff.ShouldBeLessThan(CommentWhileWaitingAt),
+            () => rebaseConflictCutoff.ShouldBeLessThan(CommentWhileWaitingAt));
     }
 
     [Theory]
@@ -119,9 +140,31 @@ public sealed class FeedbackCutoff
         cutoff.ShouldBe(RunStartedAt);
     }
 
+    [Fact]
+    public void WhenFixRunEndsAndIssueReturnsToReview_ReviewReadsCommentsPostedWhileChecksWerePending()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder().WithFeedbackCutoffAt(PriorCutoffAt).ChecksPending();
+        RevisionInProgressIssue fixRun = checksPending
+            .FixChecks([new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1")], DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), RunStartedAt);
+
+        // Act
+        ReviewIssue review = fixRun
+            .MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow)
+            .ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+
+        // Assert
+        review.FeedbackCutoffAt.ShouldSatisfyAllConditions(
+            () => review.FeedbackCutoffAt.ShouldBe(PriorCutoffAt),
+            () => review.FeedbackCutoffAt.ShouldBeLessThan(CommentWhileWaitingAt));
+    }
+
     private static RevisionInProgressIssue FailedChecksRevision()
     {
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithFeedbackCutoffAt(PriorCutoffAt)
             .ChecksPending()
             .FixChecks([new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1")], DateTimeOffset.UtcNow)
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
@@ -132,6 +175,7 @@ public sealed class FeedbackCutoff
     private static RevisionInProgressIssue RebaseConflictRevision()
     {
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithFeedbackCutoffAt(PriorCutoffAt)
             .RebasePending()
             .ResolveConflict(DateTimeOffset.UtcNow)
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);

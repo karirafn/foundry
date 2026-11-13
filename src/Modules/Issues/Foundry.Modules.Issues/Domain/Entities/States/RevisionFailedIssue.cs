@@ -41,6 +41,12 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
 
     public int ChecksFixAttempts { get; private set; }
 
+    /// <summary>
+    /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
+    /// <see langword="null"/> when the revision consumed comments or predates the field.
+    /// </summary>
+    public DateTimeOffset? PriorFeedbackCutoffAt { get; private set; }
+
     public int RebaseConflictAttempts { get; private set; }
 
     public string FailureReason { get; private set; } = string.Empty;
@@ -62,6 +68,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.Trigger = source.Trigger;
         failed.ChecksFixAttempts = source.ChecksFixAttempts;
+        failed.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         failed.RebaseConflictAttempts = source.RebaseConflictAttempts;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
@@ -83,6 +90,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.Trigger = trigger;
         failed.ChecksFixAttempts = source.ChecksFixAttempts;
+        failed.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         failed.RebaseConflictAttempts = source.RebaseConflictAttempts;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
@@ -104,6 +112,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.Trigger = trigger;
         failed.ChecksFixAttempts = source.ChecksFixAttempts;
+        failed.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         failed.RebaseConflictAttempts = source.RebaseConflictAttempts;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
