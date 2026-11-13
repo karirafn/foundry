@@ -4,7 +4,6 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
-using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -376,9 +375,9 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         retryDetails.ShouldSatisfyAllConditions(
             () => retryDetails.IsExhausted.ShouldBeFalse(),
             () => retryDetails.AttemptNumber.ShouldBe(1),
-            () => retryDetails.MaxAttempts.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
+            () => retryDetails.MaxAttempts.ShouldBe(2),
             () => retryDetails.NextAttemptDueAt.ShouldNotBeNull()
-                .ShouldBe(failedAt + TransientRetrySchedule.ComputeBackoff(1), tolerance: TimeSpan.FromSeconds(1)));
+                .ShouldBe(failedAt + TimeSpan.FromMinutes(1), tolerance: TimeSpan.FromSeconds(1)));
     }
 
     [Fact]
@@ -401,7 +400,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // consecutiveRuns at cap — exhausted
-        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 2);
         IIssueQueries sut = new IssueQueries(
             _dbContext,
             _slugQueries,
@@ -421,8 +420,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         TransientRetryDetails retryDetails = stateDetails.TransientRetry.ShouldNotBeNull();
         retryDetails.ShouldSatisfyAllConditions(
             () => retryDetails.IsExhausted.ShouldBeTrue(),
-            () => retryDetails.AttemptNumber.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
-            () => retryDetails.MaxAttempts.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
+            () => retryDetails.AttemptNumber.ShouldBe(2),
+            () => retryDetails.MaxAttempts.ShouldBe(2),
             () => retryDetails.NextAttemptDueAt.ShouldBeNull());
     }
 
@@ -509,9 +508,9 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         retryDetails.ShouldSatisfyAllConditions(
             () => retryDetails.IsExhausted.ShouldBeFalse(),
             () => retryDetails.AttemptNumber.ShouldBe(1),
-            () => retryDetails.MaxAttempts.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
+            () => retryDetails.MaxAttempts.ShouldBe(2),
             () => retryDetails.NextAttemptDueAt.ShouldNotBeNull()
-                .ShouldBe(failedAt + TransientRetrySchedule.ComputeBackoff(1), tolerance: TimeSpan.FromSeconds(1)));
+                .ShouldBe(failedAt + TimeSpan.FromMinutes(1), tolerance: TimeSpan.FromSeconds(1)));
     }
 
     [Fact]
@@ -574,7 +573,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // consecutiveRuns at cap — exhausted
-        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
+        NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 2);
         IIssueQueries sut = new IssueQueries(
             _dbContext,
             _slugQueries,
@@ -595,9 +594,113 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         TransientRetryDetails retryDetails = stateDetails.TransientRetry.ShouldNotBeNull();
         retryDetails.ShouldSatisfyAllConditions(
             () => retryDetails.IsExhausted.ShouldBeTrue(),
-            () => retryDetails.AttemptNumber.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
-            () => retryDetails.MaxAttempts.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
+            () => retryDetails.AttemptNumber.ShouldBe(2),
+            () => retryDetails.MaxAttempts.ShouldBe(2),
             () => retryDetails.NextAttemptDueAt.ShouldBeNull());
+    }
+
+    private async Task<TransientRetryDetails?> GetTransientRetryAsync(Issue issue, int consecutiveTransientRuns)
+    {
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            new NullWorkerRunQueries(consecutiveTransientRuns),
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
+
+        Result<IssueDetail> result = await sut.GetIssueDetailAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        return result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.StateDetails.ShouldNotBeNull().TransientRetry;
+    }
+
+    [Fact]
+    public async Task WhenProviderUnreachableFailedIssueHasAttemptsRemaining_ReturnsItsOwnSchedule()
+    {
+        // Arrange
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithFailureCategory(FailureCategory.ProviderUnreachable)
+            .WithFailedAt(failedAt)
+            .Failed();
+
+        // Act
+        TransientRetryDetails? retry = await GetTransientRetryAsync(failed, consecutiveTransientRuns: 2);
+
+        // Assert
+        TransientRetryDetails retryDetails = retry.ShouldNotBeNull();
+        retryDetails.ShouldSatisfyAllConditions(
+            () => retryDetails.IsExhausted.ShouldBeFalse(),
+            () => retryDetails.AttemptNumber.ShouldBe(2),
+            () => retryDetails.MaxAttempts.ShouldBe(5),
+            () => retryDetails.NextAttemptDueAt.ShouldNotBeNull()
+                .ShouldBe(failedAt + TimeSpan.FromMinutes(4), tolerance: TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task WhenProviderUnreachableFailedIssueReachesItsMaximum_ReturnsExhaustedBlock()
+    {
+        // Arrange
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithFailureCategory(FailureCategory.ProviderUnreachable)
+            .WithFailedAt(DateTimeOffset.UtcNow)
+            .Failed();
+
+        // Act
+        TransientRetryDetails? retry = await GetTransientRetryAsync(failed, consecutiveTransientRuns: 5);
+
+        // Assert
+        TransientRetryDetails retryDetails = retry.ShouldNotBeNull();
+        retryDetails.ShouldSatisfyAllConditions(
+            () => retryDetails.IsExhausted.ShouldBeTrue(),
+            () => retryDetails.MaxAttempts.ShouldBe(5),
+            () => retryDetails.NextAttemptDueAt.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenTransientRevisionFailedIssueHasAttemptsRemaining_ReturnsTransientRetryBlock()
+    {
+        // Arrange
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+        RevisionFailedIssue revisionFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithFailureCategory(FailureCategory.ProviderUnreachable)
+            .WithFailedAt(failedAt)
+            .RevisionFailed();
+
+        // Act
+        TransientRetryDetails? retry = await GetTransientRetryAsync(revisionFailed, consecutiveTransientRuns: 1);
+
+        // Assert
+        TransientRetryDetails retryDetails = retry.ShouldNotBeNull();
+        retryDetails.ShouldSatisfyAllConditions(
+            () => retryDetails.IsExhausted.ShouldBeFalse(),
+            () => retryDetails.AttemptNumber.ShouldBe(1),
+            () => retryDetails.MaxAttempts.ShouldBe(5),
+            () => retryDetails.NextAttemptDueAt.ShouldNotBeNull()
+                .ShouldBe(failedAt + TimeSpan.FromMinutes(2), tolerance: TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task WhenRevisionFailedIssueIsNotAutoRetryable_TransientRetryIsNull()
+    {
+        // Arrange
+        RevisionFailedIssue revisionFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithFailureCategory(FailureCategory.NonZeroExit)
+            .WithFailedAt(DateTimeOffset.UtcNow)
+            .RevisionFailed();
+
+        // Act
+        TransientRetryDetails? retry = await GetTransientRetryAsync(revisionFailed, consecutiveTransientRuns: 1);
+
+        // Assert
+        retry.ShouldBeNull();
     }
 
     [Fact]

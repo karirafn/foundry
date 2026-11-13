@@ -38,9 +38,19 @@ public sealed record FailureCategory
     public static readonly FailureCategory ProviderError = new(ProviderErrorToken);
 
     /// <summary>The Publisher could not reach the git provider (DNS, connection, HTTP 429 or 5xx) after every retry.</summary>
-    public static readonly FailureCategory ProviderUnreachable = new(ProviderUnreachableToken);
+    /// <remarks>Its schedule stretches over about an hour, long enough to outlast a typical provider outage.</remarks>
+    public static readonly FailureCategory ProviderUnreachable = new(
+        ProviderUnreachableToken,
+        AutomaticRetrySchedule.Create(
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32)));
 
-    public static readonly FailureCategory TransientApiError = new(TransientApiErrorToken);
+    public static readonly FailureCategory TransientApiError = new(
+        TransientApiErrorToken,
+        AutomaticRetrySchedule.Create(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1)));
     public static readonly FailureCategory CreditsExhausted = new(CreditsExhaustedToken);
     public static readonly FailureCategory ModelUnavailable = new(ModelUnavailableToken);
     public static readonly FailureCategory PrClosed = new(PrClosedToken);
@@ -88,9 +98,32 @@ public sealed record FailureCategory
             { BlockerLinkFailedToken, BlockerLinkFailed },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
+    /// <summary>Every category that retries automatically: exactly those with an <see cref="AutomaticRetry"/> schedule.</summary>
+    public static readonly IReadOnlyCollection<FailureCategory> AutoRetryable =
+        [.. KnownCategories.Values.Where(category => category.AutomaticRetry is not null)];
+
+    /// <summary>The soonest any auto-retryable failure can become due for its first automatic retry.</summary>
+    public static readonly TimeSpan ShortestFirstAutomaticRetryBackoff =
+        AutoRetryable.Min(category => category.AutomaticRetry!.BackoffAfter(1));
+
     public string Value { get; }
 
-    private FailureCategory(string value) => Value = value;
+    /// <summary>
+    /// How this category retries automatically, or <see langword="null"/> when it never does and waits for an operator.
+    /// </summary>
+    public AutomaticRetrySchedule? AutomaticRetry { get; }
+
+    private FailureCategory(string value, AutomaticRetrySchedule? automaticRetry = null)
+    {
+        Value = value;
+        AutomaticRetry = automaticRetry;
+    }
+
+    /// <summary>Whether <paramref name="token"/> names a category that retries automatically.</summary>
+    public static bool IsAutoRetryableToken(string? token) =>
+        token is not null
+        && KnownCategories.TryGetValue(token, out FailureCategory? category)
+        && category.AutomaticRetry is not null;
 
     public static Result<FailureCategory> Create(string token) =>
         KnownCategories.TryGetValue(token, out FailureCategory? category)

@@ -15,7 +15,7 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// It is not a <see cref="FailedIssue"/>, because retrying a <see cref="FailedIssue"/> skips triage while retrying
 /// this one runs triage again.
 /// </summary>
-public sealed class TriageFailedIssue : Issue
+public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
 {
     public override IssueStage Stage => IssueStage.Triage;
 

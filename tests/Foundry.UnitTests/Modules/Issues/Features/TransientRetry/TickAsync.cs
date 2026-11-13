@@ -329,6 +329,197 @@ public sealed class TickAsync : IAsyncDisposable
         persisted2.ShouldBeOfType<FreshQueuedIssue>();
     }
 
+    private async Task<Issue?> TickAndReloadAsync(Issue seeded, int streak, DateTimeOffset now)
+    {
+        _dbContext.Set<Issue>().Add(seeded);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        TransientRetryService sut = BuildSut(workerRunQueries: new StubWorkerRunQueries(count: streak), now: now);
+
+        await sut.TickForTest(CancellationToken.None);
+
+        _dbContext.ChangeTracker.Clear();
+        return await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == seeded.Id, TestContext.Current.CancellationToken);
+    }
+
+    private static FailedIssue FailedWith(FailureCategory category, DateTimeOffset failedAt) =>
+        new IssueBuilder()
+            .WithIssueNumber(30)
+            .WithFailureCategory(category)
+            .WithFailedAt(failedAt)
+            .Failed();
+
+    [Fact]
+    public async Task WhenTransientRevisionFailureIsDueAndUnderCap_RetriesTheRevision()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        RevisionFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(31)
+            .WithFailureCategory(FailureCategory.TransientApiError)
+            .WithFailedAt(now.AddMinutes(-2))
+            .RevisionFailed();
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(failed, streak: 1, now);
+
+        // Assert
+        persisted.ShouldBeOfType<RevisionQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenTransientRevisionFailureIsDue_RaisesIssueRevisionQueuedDomainEvent()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        RevisionFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(32)
+            .WithFailureCategory(FailureCategory.ProviderUnreachable)
+            .WithFailedAt(now.AddMinutes(-3))
+            .RevisionFailed();
+
+        // Act
+        await TickAndReloadAsync(failed, streak: 1, now);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<IssueRevisionQueued>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenARevisionFailureIsNotAutoRetryable_ItStaysParked()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        RevisionFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(33)
+            .WithFailureCategory(FailureCategory.NonZeroExit)
+            .WithFailedAt(now.AddHours(-2))
+            .RevisionFailed();
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(failed, streak: 0, now);
+
+        // Assert
+        persisted.ShouldBeOfType<RevisionFailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenProviderUnreachableFailedOneMinuteAgo_ItWaitsForItsTwoMinuteBackoff()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.ProviderUnreachable, now.AddMinutes(-1.5)), streak: 1, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenProviderUnreachableBackoffHasElapsed_TransitionsToQueued()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.ProviderUnreachable, now.AddMinutes(-2.5)), streak: 1, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenProviderUnreachableStreakIsFour_ItWaitsSixteenMinutes()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.ProviderUnreachable, now.AddMinutes(-15)), streak: 4, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenProviderUnreachableStreakIsFiveTimes_StaysFailed()
+    {
+        // Arrange — U×5: streak 5 ≥ 5
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.ProviderUnreachable, now.AddHours(-2)), streak: 5, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenLatestFailureIsTransientApiErrorAfterAnUnreachable_ItsMaximumOfTwoStopsTheStreak()
+    {
+        // Arrange — U×1 then E: streak 2 ≥ 2
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.TransientApiError, now.AddHours(-2)), streak: 2, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenLatestFailureIsUnreachableAfterATransientApiError_ItRetriesUnderItsMaximumOfFive()
+    {
+        // Arrange — E×1 then U: streak 2 < 5, backoff 4 minutes
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.ProviderUnreachable, now.AddMinutes(-5)), streak: 2, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenTwoTransientApiErrorsThenThreeUnreachables_StaysFailed()
+    {
+        // Arrange — E×2 then U×3: streak 5 ≥ 5
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.ProviderUnreachable, now.AddHours(-2)), streak: 5, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenCountingTheStreak_PassesTheLatestCategorysMaximum()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        _dbContext.Set<Issue>().Add(FailedWith(FailureCategory.ProviderUnreachable, now.AddMinutes(-5)));
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        StubWorkerRunQueries stub = new(count: 1);
+        TransientRetryService sut = BuildSut(workerRunQueries: stub, now: now);
+
+        // Act
+        await sut.TickForTest(CancellationToken.None);
+
+        // Assert
+        stub.RequestedMaxAttempts.ShouldBe([5]);
+    }
+
     // -------------------------------------------------------------------------
     // Test doubles
     // -------------------------------------------------------------------------
@@ -338,11 +529,16 @@ public sealed class TickAsync : IAsyncDisposable
     /// </summary>
     private sealed class StubWorkerRunQueries(int count) : IWorkerRunQueries
     {
+        public List<int> RequestedMaxAttempts { get; } = [];
+
         public Task<int> CountConsecutiveTransientRunsAsync(
             Guid issueId,
             int maxAttempts,
             CancellationToken cancellationToken)
-            => Task.FromResult(count);
+        {
+            RequestedMaxAttempts.Add(maxAttempts);
+            return Task.FromResult(count);
+        }
 
         public Task<Result<WorkerRunDetail>> GetWorkerRunDetailAsync(
             Guid workerRunId,

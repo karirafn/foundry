@@ -176,4 +176,56 @@ public sealed class WhenCountingConsecutiveTransientRuns : IAsyncDisposable
         // Assert
         result.ShouldBe(0);
     }
+
+    [Fact]
+    public async Task WhenStreakMixesUnreachableAndTransientApiErrors_CountsEveryAutoRetryableRun()
+    {
+        // Arrange — E×2 then U×3, newest last
+        IssueId issueId = IssueId.New();
+
+        await SeedFailedRunAsync(issueId, new FailureReason.TransientApiError(), BaseTime.AddMinutes(-5));
+        await SeedFailedRunAsync(issueId, new FailureReason.TransientApiError(), BaseTime.AddMinutes(-4));
+        await SeedFailedRunAsync(issueId, new FailureReason.ProviderUnreachable("dns"), BaseTime.AddMinutes(-3));
+        await SeedFailedRunAsync(issueId, new FailureReason.ProviderUnreachable("dns"), BaseTime.AddMinutes(-2));
+        await SeedFailedRunAsync(issueId, new FailureReason.ProviderUnreachable("dns"), BaseTime.AddMinutes(-1));
+
+        // Act
+        int result = await QueryAsync(issueId.Value, maxAttempts: 5);
+
+        // Assert
+        result.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task WhenUnreachableThenTransientApiError_ReturnsTwo()
+    {
+        // Arrange — U×1 then E
+        IssueId issueId = IssueId.New();
+
+        await SeedFailedRunAsync(issueId, new FailureReason.ProviderUnreachable("dns"), BaseTime.AddMinutes(-2));
+        await SeedFailedRunAsync(issueId, new FailureReason.TransientApiError(), BaseTime.AddMinutes(-1));
+
+        // Act
+        int result = await QueryAsync(issueId.Value);
+
+        // Assert
+        result.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenANonRetryableFailureSitsBetweenUnreachables_TheStreakBreaksThere()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+
+        await SeedFailedRunAsync(issueId, new FailureReason.ProviderUnreachable("dns"), BaseTime.AddMinutes(-3));
+        await SeedFailedRunAsync(issueId, new FailureReason.WorkerBootstrapFailed("clone"), BaseTime.AddMinutes(-2));
+        await SeedFailedRunAsync(issueId, new FailureReason.ProviderUnreachable("dns"), BaseTime.AddMinutes(-1));
+
+        // Act
+        int result = await QueryAsync(issueId.Value, maxAttempts: 5);
+
+        // Assert
+        result.ShouldBe(1);
+    }
 }

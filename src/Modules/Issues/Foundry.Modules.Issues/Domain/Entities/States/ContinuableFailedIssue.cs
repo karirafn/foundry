@@ -7,7 +7,7 @@ using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
-public sealed class ContinuableFailedIssue : Issue
+public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
 {
     public override IssueStage Stage => IssueStage.Implement;
 
