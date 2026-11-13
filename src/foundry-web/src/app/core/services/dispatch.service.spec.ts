@@ -219,7 +219,7 @@ describe('DispatchService', () => {
     });
 
     // Assert
-    expect(service.pauseResumeError()).toBe('Failed to pause dispatch');
+    expect(service.pauseResumeError()).toBe("Couldn't pause dispatch. Try again.");
   });
 
   // Cycle 9: resumeDispatch sends POST to /api/settings/dispatch/resume
@@ -285,6 +285,6 @@ describe('DispatchService', () => {
     });
 
     // Assert
-    expect(service.pauseResumeError()).toBe('Failed to resume dispatch');
+    expect(service.pauseResumeError()).toBe("Couldn't resume dispatch. Try again.");
   });
 });

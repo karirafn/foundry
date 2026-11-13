@@ -1,0 +1,46 @@
+<fd-board-band bandId="needs" label="Needs you" [tinted]="!empty()">
+  <span bandCount class="needs-band__count" aria-hidden="true">{{ count() }}</span
+  ><span bandCount class="sr-only">{{ countText() }}</span>
+
+  @if (empty()) {
+    <p class="needs-band__empty">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+      Nothing needs you
+    </p>
+  } @else {
+    @if (alerts().length > 0) {
+      <ul class="needs-band__alerts" aria-label="Repository alerts">
+        @for (alert of alerts(); track alert.repositoryId) {
+          <li><fd-repo-alert [alert]="alert" /></li>
+        }
+      </ul>
+    }
+    @if (items().length > 0) {
+      <ul class="needs-band__cards" aria-label="Issues that need you">
+        @for (item of items(); track item.issue.id) {
+          <li class="needs-band__item" [class.fd-board-collapse]="item.phase === 'collapse'">
+            <fd-needs-card
+              [item]="item"
+              [now]="now()"
+              (open)="open.emit({ id: item.issue.id, invoker: $event })"
+            />
+          </li>
+        }
+      </ul>
+    }
+  }
+</fd-board-band>

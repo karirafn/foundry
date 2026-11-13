@@ -17,21 +17,38 @@ import { SideSheetComponent } from '../../../shared/components/side-sheet/side-s
 import { IssuePaneComponent, ISSUE_PANE_TITLE_ID } from '../../issue-pane/issue-pane';
 import { IssueSelection, provideIssueSelection } from '../../issue-pane/issue-selection';
 import { IssueService } from '../../issues/issue.service';
-import { BoardColumnComponent, CardOpened } from '../board-column/board-column';
+import { BlockedBandComponent } from '../blocked-band/blocked-band';
+import { BoardRepositoriesService } from '../board-repositories.service';
 import { BoardStateService } from '../board-state.service';
-import { BoardSummaryComponent } from '../board-summary/board-summary';
-import { STAGES, TRIGGER_LABEL } from '../board.model';
+import { CardOpened, TRIGGER_LABEL } from '../board.model';
+import { DispatchControlsComponent } from '../dispatch-controls/dispatch-controls';
+import { NeedsBandComponent } from '../needs-band/needs-band';
+import { PipelineBandComponent } from '../pipeline-band/pipeline-band';
+import { ProgressBandComponent } from '../progress-band/progress-band';
 
-// Matches $board-breakpoint in styles/_board-breakpoints.scss.
+// Matches $sheet-overlay-breakpoint in styles/_breakpoints.scss.
 const NARROW_QUERY = '(width < 900px)';
 const EMPTY_MESSAGE = `Nothing is in flight. Add the ${TRIGGER_LABEL} label to an issue to start work.`;
 const STALE_QUEUE_MESSAGE = 'Queue order may be out of date';
+// Cadence of "waiting 12m" and "running 3m"; coarse enough to stay quiet, fine enough to read live.
+const CLOCK_INTERVAL_MS = 5_000;
 
-/** The landing page: active issues by stage, with a Needs-you row and a pane for one issue's detail. */
+/**
+ * The landing page: active issues in priority bands (Needs you, In progress, Pipeline, Blocked),
+ * with a pane for one issue's detail.
+ */
 @Component({
   selector: 'fd-board-page',
-  imports: [BoardSummaryComponent, BoardColumnComponent, SideSheetComponent, IssuePaneComponent],
-  providers: [BoardStateService, provideIssueSelection('board')],
+  imports: [
+    DispatchControlsComponent,
+    NeedsBandComponent,
+    ProgressBandComponent,
+    PipelineBandComponent,
+    BlockedBandComponent,
+    SideSheetComponent,
+    IssuePaneComponent,
+  ],
+  providers: [BoardStateService, BoardRepositoriesService, provideIssueSelection('board')],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './board-page.html',
   styleUrl: './board-page.scss',
@@ -39,15 +56,16 @@ const STALE_QUEUE_MESSAGE = 'Queue order may be out of date';
 export class BoardPageComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
   protected readonly board = inject(BoardStateService);
-  private readonly _host: HTMLElement = inject(ElementRef<HTMLElement>).nativeElement;
+  private readonly _repositories = inject(BoardRepositoriesService);
   protected readonly selection = inject(IssueSelection);
   private readonly _document = inject(DOCUMENT);
   private readonly _heading = viewChild.required<ElementRef<HTMLElement>>('heading');
 
-  protected readonly stageCount = STAGES.length;
   protected readonly triggerLabel = TRIGGER_LABEL;
-
   protected readonly paneTitleId = ISSUE_PANE_TITLE_ID;
+
+  private readonly _now: WritableSignal<number> = signal(Date.now());
+  protected readonly now: Signal<number> = this._now.asReadonly();
 
   private readonly _narrow: WritableSignal<boolean> = signal(false);
   /** On narrow screens the sheet covers the board, so the board leaves the tab order. */
@@ -58,10 +76,7 @@ export class BoardPageComponent implements OnInit {
   protected readonly loading: Signal<boolean> = this.issueService.initialLoading;
 
   protected readonly empty: Signal<boolean> = computed(
-    () =>
-      !this.loading() &&
-      this.issueService.loadError() === null &&
-      this.board.columns().every((c) => c.queue.length + c.flow.length + c.needs.length === 0),
+    () => !this.loading() && this.issueService.loadError() === null && this.board.itemCount() === 0,
   );
 
   protected readonly emptyAnnouncement: Signal<string> = computed(() =>
@@ -74,10 +89,13 @@ export class BoardPageComponent implements OnInit {
   constructor() {
     effect(() => this.board.sheetCoversBoard.set(this.sheetCoversBoard()));
     this._watchNarrow();
+    const clock = setInterval(() => this._now.set(Date.now()), CLOCK_INTERVAL_MS);
+    inject(DestroyRef).onDestroy(() => clearInterval(clock));
   }
 
   ngOnInit(): void {
     this.issueService.loadIssues();
+    this._repositories.reload();
   }
 
   protected openCard(opened: CardOpened): void {
@@ -87,16 +105,6 @@ export class BoardPageComponent implements OnInit {
   protected retryLoad(): void {
     this.issueService.loadIssues();
     this._heading().nativeElement.focus();
-  }
-
-  /** Moves focus to the first card that needs a person, in flow order. */
-  protected focusFirstNeedsCard(): void {
-    const button = this._host.querySelector<HTMLElement>('[data-needs="true"] button');
-    if (button === null) {
-      return;
-    }
-    button.focus();
-    button.scrollIntoView({ block: 'nearest' });
   }
 
   private _watchNarrow(): void {

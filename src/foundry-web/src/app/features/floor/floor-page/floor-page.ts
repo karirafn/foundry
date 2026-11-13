@@ -2,15 +2,20 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
+  Injector,
   OnInit,
   Signal,
   WritableSignal,
+  afterNextRender,
   computed,
   effect,
   inject,
   signal,
   untracked,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { ConnectionStatus } from '../../../core/services/issue-signalr.service';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
@@ -40,6 +45,11 @@ export class FloorPageComponent implements OnInit {
   private readonly _issueService = inject(IssueService);
   private readonly _capacityService = inject(DispatchCapacityService);
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _injector = inject(Injector);
+  private readonly _host: HTMLElement = inject(ElementRef<HTMLElement>).nativeElement;
+  private readonly _fragment: Signal<string | null> = toSignal(inject(ActivatedRoute).fragment, {
+    initialValue: null,
+  });
 
   private readonly _nowSignal: WritableSignal<number> = signal(Date.now());
   protected readonly now: Signal<number> = this._nowSignal.asReadonly();
@@ -105,6 +115,8 @@ export class FloorPageComponent implements OnInit {
       untracked(() => this._capacityService.load());
     });
 
+    this._focusLaneFromFragment();
+
     const clockHandle = setInterval(() => this._nowSignal.set(Date.now()), CLOCK_INTERVAL_MS);
     const capacityHandle = setInterval(() => this._capacityService.load(), CAPACITY_REFRESH_MS);
     this._destroyRef.onDestroy(() => {
@@ -115,5 +127,36 @@ export class FloorPageComponent implements OnInit {
 
   ngOnInit(): void {
     this._issueService.loadIssues();
+  }
+
+  /**
+   * A board card's Watch on Floor link names a lane heading in the fragment. The router does no
+   * anchor scrolling, so the page scrolls to the heading and focuses it once that lane renders; a
+   * fragment naming no lane is ignored.
+   */
+  private _focusLaneFromFragment(): void {
+    let handled: string | null = null;
+    effect(() => {
+      const fragment = this._fragment();
+      const lanes = this.lanes();
+      if (fragment === null || fragment === handled) {
+        return;
+      }
+      if (!lanes.some((lane) => `floor-lane-${lane.issueId}` === fragment)) {
+        return;
+      }
+      handled = fragment;
+      afterNextRender(
+        () => {
+          const heading = this._host.ownerDocument.getElementById(fragment);
+          if (heading === null || !this._host.contains(heading)) {
+            return;
+          }
+          heading.scrollIntoView({ block: 'start' });
+          heading.focus({ preventScroll: true });
+        },
+        { injector: this._injector },
+      );
+    });
   }
 }

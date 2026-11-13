@@ -190,6 +190,39 @@ describe('App', () => {
     expect(compiled.querySelector('a.app-header__logo')?.getAttribute('href')).toBe('/');
   });
 
+  it('navigates between Board, Floor and History from the main nav', async () => {
+    // Arrange
+    const { fixture } = setupApp();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const nav = compiled.querySelector('nav[aria-label="Main"]');
+    const links = [...(nav?.querySelectorAll('a') ?? [])];
+
+    // Assert
+    expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+      ['Board', '/'],
+      ['Floor', '/floor'],
+      ['History', '/issues'],
+    ]);
+  });
+
+  it('keeps the status cluster outside the main nav', async () => {
+    // Arrange
+    const { fixture } = setupApp();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const status = compiled.querySelector('.app-header__status');
+
+    // Assert
+    expect(status?.tagName).toBe('DIV');
+    expect(status?.closest('nav')).toBeNull();
+    expect(status?.querySelector('fd-agents-chip')).not.toBeNull();
+  });
+
   it('should include the forge overlay component', () => {
     const { fixture } = setupApp();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -326,7 +359,7 @@ describe('App', () => {
     // Arrange — provide a non-null snapshot so the widget renders
     const { fixture } = setupApp(false, buildTestSnapshot());
     const compiled = fixture.nativeElement as HTMLElement;
-    const nav = compiled.querySelector('.app-header__nav');
+    const nav = compiled.querySelector('.app-header__status');
 
     // Assert
     expect(nav).not.toBeNull();
@@ -363,7 +396,7 @@ describe('App', () => {
       const compiled = fixture.nativeElement as HTMLElement;
 
       // Act
-      const nav = compiled.querySelector('.app-header__nav');
+      const nav = compiled.querySelector('.app-header__status');
       const navChildren = Array.from(nav?.children ?? []);
       const agentsChip = nav?.querySelector('fd-agents-chip');
       const link = agentsChip?.querySelector('a');

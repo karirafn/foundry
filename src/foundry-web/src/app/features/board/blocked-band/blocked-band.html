@@ -1,0 +1,33 @@
+<fd-board-band
+  bandId="blocked"
+  label="Blocked"
+  [disclosure]="true"
+  [expanded]="expanded()"
+  controls="board-blocked-list"
+  (toggled)="toggle()"
+>
+  <span bandCount class="blocked-band__count">&#32;{{ items().length }}</span>
+  <p bandAside class="blocked-band__aside">These start on their own once their blockers close.</p>
+
+  <!-- Stays mounted while collapsed, so aria-controls always names an element. -->
+  <ul
+    class="blocked-band__rows"
+    id="board-blocked-list"
+    aria-label="Blocked issues"
+    [hidden]="!expanded()"
+  >
+    @for (item of items(); track item.issue.id) {
+      <li [class.fd-board-collapse]="item.phase === 'collapse'">
+        <fd-board-row
+          [issue]="item.issue"
+          [phase]="item.phase"
+          [moved]="item.moved"
+          (open)="open.emit({ id: item.issue.id, invoker: $event })"
+        >
+          <span rowLead></span>
+          <fd-role-tag rowLead [role]="item.role" />
+        </fd-board-row>
+      </li>
+    }
+  </ul>
+</fd-board-band>

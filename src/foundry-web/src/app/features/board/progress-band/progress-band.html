@@ -1,0 +1,58 @@
+<fd-board-band bandId="progress" label="In progress">
+  <span bandCount class="progress-band__slots">
+    @if (capacity() !== null || capacityError()) {
+      <span aria-hidden="true">·</span>
+    }
+    @if (capacity(); as capacity) {
+      <span class="progress-band__pips" aria-hidden="true">
+        @for (busy of pips(); track $index) {
+          <span class="progress-band__pip" [class.progress-band__pip--busy]="busy"></span>
+        }
+      </span>
+      <span class="sr-only">, </span>{{ capacity.occupiedSlots }} of {{ capacity.maxConcurrent }}
+      slots
+    } @else if (capacityError()) {
+      <span class="sr-only">, </span>Slots unavailable
+    }
+  </span>
+
+  @if (empty()) {
+    <p class="progress-band__empty">{{ emptyText() }}</p>
+  } @else {
+    @if (workers().length > 0) {
+      <ul class="progress-band__cards" aria-label="Running workers">
+        @for (item of workers(); track item.issue.id) {
+          <li class="progress-band__item" [class.fd-board-collapse]="item.phase === 'collapse'">
+            <fd-worker-card
+              [item]="item"
+              [now]="now()"
+              (open)="open.emit({ id: item.issue.id, invoker: $event })"
+            />
+          </li>
+        }
+      </ul>
+    }
+    @if (steps().length > 0) {
+      <h3 class="progress-band__subheading" id="board-band-progress-steps">Handled by Foundry</h3>
+      <ul class="progress-band__rows" aria-label="Steps Foundry is running">
+        @for (item of steps(); track item.issue.id) {
+          <li class="progress-band__row" [class.fd-board-collapse]="item.phase === 'collapse'">
+            <fd-board-row
+              [issue]="item.issue"
+              [phase]="item.phase"
+              [moved]="item.moved"
+              (open)="open.emit({ id: item.issue.id, invoker: $event })"
+            >
+              <fd-step-chip
+                rowLead
+                class="progress-band__step"
+                [label]="stepLabels[item.step]"
+                [tone]="stepTone(item.step)"
+              />
+            </fd-board-row>
+          </li>
+        }
+      </ul>
+    }
+  }
+</fd-board-band>

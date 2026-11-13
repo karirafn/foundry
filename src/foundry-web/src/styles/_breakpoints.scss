@@ -1,0 +1,7 @@
+// Below this width the side sheet covers the page as a full-width overlay. NARROW_QUERY in
+// features/board/board-page/board-page.ts must match it.
+$sheet-overlay-breakpoint: 900px;
+
+// Below this width the top bar wraps to two rows, page padding tightens, board rows reflow to two
+// lines and cards go full width.
+$compact-breakpoint: 640px;

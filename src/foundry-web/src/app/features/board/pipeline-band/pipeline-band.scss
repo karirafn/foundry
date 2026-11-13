@@ -1,0 +1,67 @@
+@use '../../../../styles/board-lists' as *;
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+.pipeline-band__count {
+  color: var(--fd-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.pipeline-band__stale {
+  align-items: center;
+  color: var(--fd-text-warning);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  gap: var(--fd-spacing-xs);
+  margin: 0;
+}
+
+.pipeline-band__rows {
+  @include row-list;
+}
+
+.pipeline-band__position {
+  color: var(--fd-text-secondary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &--next {
+    color: var(--fd-text-success);
+  }
+}
+
+.pipeline-band__ineligible {
+  color: var(--fd-text-warning);
+}
+
+.pipeline-band__more {
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-link);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  margin-top: var(--fd-spacing-sm);
+  min-height: 32px;
+  padding: 0 var(--fd-spacing-md);
+
+  &:hover {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}

@@ -1,4 +1,4 @@
-@use '../../../../styles/board-breakpoints' as *;
+@use '../../../../styles/breakpoints' as *;
 @use '../../../../styles/controls' as *;
 
 .side-sheet {
@@ -102,7 +102,7 @@
   }
 }
 
-@media (width < $board-breakpoint) {
+@media (width < $sheet-overlay-breakpoint) {
   .side-sheet {
     inset: var(--fd-app-header-height) 0 0 0;
     width: 100%;

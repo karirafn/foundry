@@ -20,7 +20,7 @@ import {
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { StepChipComponent, StepChipTone } from '../../../shared/components/step-chip/step-chip';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
-import { CODE_STEP_LABELS, STAGES, codeStepTone } from '../../board/board.model';
+import { CODE_STEP_LABELS, STAGE_LABELS, codeStepTone } from '../../board/board.model';
 import { IssueDetail, IssueSummary } from '../../issues/issue.model';
 import { SecretFindingsComponent } from '../../issues/secret-findings/secret-findings';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
@@ -71,7 +71,7 @@ export class PaneStatusComponent {
     if (stage === 'done') {
       return 'Done';
     }
-    return STAGES.find((s) => s.id === stage)?.label ?? null;
+    return stage === null ? null : STAGE_LABELS[stage];
   });
 
   protected readonly stepChip: Signal<{ label: string; tone: StepChipTone } | null> = computed(() => {

@@ -1,0 +1,50 @@
+<ng-template #title
+  ><span class="board-band__label">{{ label() }}</span
+  ><ng-content select="[bandCount]"
+/></ng-template>
+
+<section
+  class="board-band"
+  [class.board-band--tinted]="tinted()"
+  [attr.aria-labelledby]="headingId()"
+>
+  <div class="board-band__head">
+    @if (disclosure()) {
+      <h2 class="board-band__heading" [id]="headingId()">
+        <button
+          type="button"
+          class="board-band__disclosure"
+          data-band-heading
+          [attr.aria-expanded]="expanded()"
+          [attr.aria-controls]="controls()"
+          (click)="toggled.emit()"
+        >
+          <svg
+            class="board-band__chevron"
+            [class.board-band__chevron--open]="expanded()"
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+          <ng-container [ngTemplateOutlet]="title" />
+        </button>
+      </h2>
+    } @else {
+      <h2 class="board-band__heading" [id]="headingId()" tabindex="-1" data-band-heading>
+        <ng-container [ngTemplateOutlet]="title" />
+      </h2>
+    }
+    <ng-content select="[bandAside]" />
+  </div>
+  <ng-content />
+</section>

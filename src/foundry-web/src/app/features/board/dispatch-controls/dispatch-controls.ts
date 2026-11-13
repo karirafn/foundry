@@ -26,8 +26,6 @@ import { DispatchService } from '../../../core/services/dispatch.service';
         {{ buttonLabel() }}
       </button>
 
-      <span class="dispatch-controls__status" role="status">{{ dispatchStatusText() }}</span>
-
       @if (dispatchService.pauseResumeError()) {
         <span class="dispatch-controls__error" role="alert">
           {{ dispatchService.pauseResumeError() }}
@@ -52,16 +50,6 @@ export class DispatchControlsComponent {
       return 'Resuming…';
     }
     return this.isPaused() ? 'Resume all' : 'Pause all';
-  });
-
-  protected readonly dispatchStatusText: Signal<string> = computed(() => {
-    if (this.dispatchService.usageLimitResetsAt() !== null) {
-      return 'Dispatch paused — usage limit';
-    }
-    if (this.dispatchService.isDispatchPaused()) {
-      return 'Dispatch paused';
-    }
-    return '';
   });
 
   toggle(): void {

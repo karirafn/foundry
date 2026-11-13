@@ -1,4 +1,5 @@
 @use 'styles/motion';
+@use 'styles/breakpoints' as *;
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
 
@@ -45,6 +46,7 @@
   --fd-spacing-lg: 1rem;
   --fd-spacing-xl: 1.5rem;
   --fd-spacing-2xl: 2rem;
+  --fd-spacing-3xl: 2.5rem;
 
   --fd-text-on-state: #ffffff;
   --fd-accent-working: #a371f7;
@@ -96,6 +98,11 @@
   --fd-bg-backdrop: rgba(1, 4, 9, 0.55);              /* light: rgba(31, 35, 40, 0.30) — narrow sheet scrim */
   --fd-shadow-pane: -16px 0 40px rgba(0, 0, 0, 0.45); /* light: -8px 0 24px rgba(31, 35, 40, 0.14) */
 
+  /* Board bands (#893) */
+  --fd-bg-next-row: rgba(63, 185, 80, 0.08);          /* light: rgba(26, 127, 55, 0.08) — Pipeline row 1 */
+  --fd-border-next-row: rgba(63, 185, 80, 0.45);      /* light: rgba(26, 127, 55, 0.45) — its leading rule */
+  --fd-nav-indicator: #58a6ff;                         /* light: #0969da — active nav underline, 6.85:1 on --fd-bg-card */
+
   /* Card queue-position gutter — fixed track width so 1–2 digit ordinals never reflow the body */
   --fd-card-gutter-width: 1.75rem;
 
@@ -103,6 +110,13 @@
   --fd-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
   --fd-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+// The top bar wraps to two rows (logo and status, then the nav tabs); the side sheet follows it.
+@media (width < $compact-breakpoint) {
+  :root {
+    --fd-app-header-height: 93px;
+  }
 }
 
 *,
