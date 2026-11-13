@@ -1,0 +1,162 @@
+@use '../../../../styles/controls' as *;
+
+.history-page {
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: var(--fd-spacing-xl);
+}
+
+.history-page__header {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--fd-spacing-md);
+  justify-content: space-between;
+
+  @media (max-width: 599px) {
+    flex-direction: column;
+  }
+}
+
+.history-page__heading {
+  color: var(--fd-text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.history-page__lead {
+  color: var(--fd-text-secondary);
+  font-size: 0.875rem;
+  margin: var(--fd-spacing-xs) 0 0;
+}
+
+.history-page__board-link {
+  color: var(--fd-text-link);
+  font-size: 0.875rem;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.history-page__stats {
+  display: block;
+  margin-block: var(--fd-spacing-lg) var(--fd-spacing-xl);
+}
+
+// --fd-text-secondary (#8b949e) is 6.14:1 on the page background — WCAG AA.
+.history-page__resolved-heading {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--fd-spacing-md);
+  text-transform: uppercase;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.history-page__grid,
+.history-page__skeletons {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+.history-page__item {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-page__item--enter {
+  animation: fd-fade-in var(--fd-motion-fade) ease both;
+}
+
+// The global reduced-motion rule shortens every animation; this one is already a fade, so it keeps
+// its duration.
+@media (prefers-reduced-motion: reduce) {
+  .history-page__item--enter {
+    animation-duration: 160ms !important;
+  }
+}
+
+.history-page__error {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-md);
+  justify-content: center;
+  padding: var(--fd-spacing-2xl);
+  text-align: center;
+}
+
+.history-page__error-message {
+  color: var(--fd-state-failed);
+  font-size: 1rem;
+}
+
+.history-page__empty {
+  color: var(--fd-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  padding: var(--fd-spacing-2xl) var(--fd-spacing-lg);
+  text-align: center;
+}
+
+.history-page__load-more-error {
+  align-items: center;
+  color: var(--fd-text-error);
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-sm);
+  justify-content: center;
+  margin-top: var(--fd-spacing-md);
+  padding: var(--fd-spacing-sm) var(--fd-spacing-lg);
+}
+
+.history-page__load-more-error-message {
+  flex: 1;
+  text-align: center;
+}
+
+.history-page__retry,
+.history-page__load-more {
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  min-height: 44px;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+    border-color: var(--fd-text-secondary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.history-page__load-more {
+  display: block;
+  margin: var(--fd-spacing-md) auto 0;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  @media (max-width: 599px) {
+    width: 100%;
+  }
+}

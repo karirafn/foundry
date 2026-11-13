@@ -131,7 +131,7 @@ The commits a worker run produced: those reachable from the run tip but from nei
 
 ## Diff gate
 
-The checks the [Publisher](#publisher) runs on a [Run bundle](#run-bundle) before pushing (#788): a **secret block** plus **size and binary reverts**. After the identity rewrite it scans the content added by the [Run commits](#run-commits) with gitleaks (pinned by version and checksum in the Publisher image) using Foundry's own configuration (`workers/publisher/gitleaks.toml`); a repository's `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments are never honoured. A finding pushes nothing: the Publisher reports `FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<id> path=<path>` lines (never the matched value) and `FOUNDRY_PUBLISH result=secret_detected findings=<n>`, the run becomes `PublishBlockedRun` keeping its Hand-off volume, and its issue waits in Needs attention as `publish_blocked` with only **Discard run** (there is no publish-anyway). Otherwise every file the Run commits added or changed that is binary by git's detection or larger than 5 MiB is restored, in one code-authored commit `chore: revert files blocked by the Foundry diff gate`, to its content at `<D>` for a rebased tip and at `<base>` otherwise (deleted when it did not exist there), reported as `FOUNDRY_REVERTED_FILE reason=binary|oversized size=<bytes> path=<path>`, kept on the run (`RevertedFiles`) and listed under "Files reverted by Foundry" in the pull request body or the run's summary comment. Deletions and CI/CD files are not gated.
+The checks the [Publisher](#publisher) runs on a [Run bundle](#run-bundle) before pushing (#788): a **secret block** plus **size and binary reverts**. After the identity rewrite it scans the content added by the [Run commits](#run-commits) with gitleaks (pinned by version and checksum in the Publisher image) using Foundry's own configuration (`workers/publisher/gitleaks.toml`); a repository's `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments are never honoured. A finding pushes nothing: the Publisher reports `FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<id> path=<path>` lines (never the matched value) and `FOUNDRY_PUBLISH result=secret_detected findings=<n>`, the run becomes `PublishBlockedRun` keeping its Hand-off volume, and its issue waits in Needs you as `publish_blocked` with only **Discard run** (there is no publish-anyway). Otherwise every file the Run commits added or changed that is binary by git's detection or larger than 5 MiB is restored, in one code-authored commit `chore: revert files blocked by the Foundry diff gate`, to its content at `<D>` for a rebased tip and at `<base>` otherwise (deleted when it did not exist there), reported as `FOUNDRY_REVERTED_FILE reason=binary|oversized size=<bytes> path=<path>`, kept on the run (`RevertedFiles`) and listed under "Files reverted by Foundry" in the pull request body or the run's summary comment. Deletions and CI/CD files are not gated.
 
 ## Provider
 
@@ -316,20 +316,20 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 - **Active** — every state except `completed`.
 - **Resolved** — `completed` only.
 
-The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
+The dashboard shows each issue in one of four display groups. They come from the placement the server declares ([Issue Stage](#issue-stage), [Needs action](#needs-action), [Awaits dispatch](#awaits-dispatch)), not from a frontend list of states:
 
-- **In progress** — a worker is actually running right now: implementing, revising or triaging (`in_progress`, `revision_in_progress`, `triage_in_progress`). Exactly `LIVE_STATES`.
-- **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `branch_diverged`).
-- **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `triage_queued`, `queued`, `blocked`, `triage_blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
-- **Resolved** — done (`completed`).
+- **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs-you row of its stage's column.
+- **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). It sits in its stage's queue section.
+- **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, exactly `LIVE_STATES`) or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`). It sits in its stage's in-flow cell.
+- **Resolved** — stage Done (`completed`). It leaves the board and is listed on Resolved history (`/issues`), newest first, next to the run statistics.
 
-Two states deserve explicit note:
+A few states deserve explicit note:
 
-- `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
-- `blocked` is Waiting because a `BlockedIssue` auto-transitions to `FreshQueuedIssue` when its blockers close on the provider; no user action is required.
-- `triage_blocked` is Waiting for the same reason: a `TriageBlockedIssue` auto-transitions to `TriageQueuedIssue` when its blockers close.
-- `awaiting_input` is Needs-attention (label "Awaiting input") because it advances only when a person answers the posted questions.
-- `triage_failed` is Needs-attention (label "Triage failed"): a transient failure retries itself, anything else waits for Retry triage or Skip triage ([ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md)).
+- `unchanged` needs action because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
+- `blocked` is Queued because a `BlockedIssue` auto-transitions to `FreshQueuedIssue` when its blockers close on the provider; no user action is required.
+- `triage_blocked` is Queued for the same reason: a `TriageBlockedIssue` auto-transitions to `TriageQueuedIssue` when its blockers close.
+- `awaiting_input` needs action (label "Awaiting input") because it advances only when a person answers the posted questions. Its column follows its resume target ([Issue Stage](#issue-stage)).
+- `triage_failed` needs action (label "Triage failed"): a transient failure retries itself, anything else waits for Retry triage or Skip triage ([ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md)).
 
 ### Issue Stage
 
@@ -337,7 +337,7 @@ The part of the lifecycle that currently owns an issue — **Triage**, **Impleme
 
 ### Needs action
 
-True when the issue progresses only after a person acts (`Issue.NeedsAction`). The same set as the Needs attention display group, plus `publish_blocked`. A Needs-action issue sits in its stage's Needs-you row on the board.
+True when the issue progresses only after a person acts (`Issue.NeedsAction`). A Needs-action issue is in the Needs you display group: it sits in its stage's Needs-you row on the board.
 
 ### Awaits dispatch
 
@@ -349,7 +349,7 @@ The step Foundry's own code is running for the issue, with no worker involved �
 
 ## TriageQueuedIssue
 
-`triage_queued`: an issue waiting for a worker to triage it ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)). A [Queued Issue](#queued-issue) with `TierRank = 2`, between continuation and fresh. Display group: Waiting, label "Triage queued".
+`triage_queued`: an issue waiting for a worker to triage it ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)). A [Queued Issue](#queued-issue) with `TierRank = 2`, between continuation and fresh. Display group: Queued, label "Triage queued".
 
 - **Ways in** — every new issue (`DetectedIssue.QueueTriage()`, on creation; an issue still `detected` from before triage existed is sent there by the dependency pass when it has no open blockers), a [TriageBlockedIssue](#triageblockedissue) whose blockers closed, input arriving on an `AwaitingInputIssue` with a `Retriage` [resume target](#awaitinginputissue), Retry triage from `TriageFailedIssue`, and [Re-triage](#re-triage) from `FreshQueued` or `Blocked`.
 - Triage waits for open blockers (ADR 0102): when the dependency pass or the claim-time re-check finds open blockers, `Block()` → `TriageBlockedIssue`. Re-triage or an answered question while blockers are open therefore lands here first and then moves to `TriageBlocked`. The dependency pass keeps blockers current in `TriageInProgress`, `TriageFailed` and `AwaitingInput` too, where they are only recorded. Revision, continuation and rebase-conflict runs never go through triage.
@@ -358,7 +358,7 @@ The step Foundry's own code is running for the issue, with no worker involved �
 
 ## TriageBlockedIssue
 
-`triage_blocked`: an issue that hasn't been triaged and has open blockers, or one a triage run found blocked ([ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md), [ADR 0103](docs/adr/0103-triage-defers-on-open-dependencies-by-linking-blockers.md)). When its blockers close, it moves to `TriageQueued`. A [Blocked Issue](#blocked-issue) has already been triaged or skipped triage, and moves to `FreshQueued`. Display group: Waiting, label "Triage blocked".
+`triage_blocked`: an issue that hasn't been triaged and has open blockers, or one a triage run found blocked ([ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md), [ADR 0103](docs/adr/0103-triage-defers-on-open-dependencies-by-linking-blockers.md)). When its blockers close, it moves to `TriageQueued`. A [Blocked Issue](#blocked-issue) has already been triaged or skipped triage, and moves to `FreshQueued`. Display group: Queued, label "Triage blocked".
 
 - Carries `WorkerRunId`: the triage run whose verdict named the blockers; `null` when the issue waits on blockers found before triage.
 - Not a [Queued Issue](#queued-issue): it is never a dispatch candidate and holds no worker slot. Triage waits so the run judges the issue against the code its blockers wrote, not code that doesn't exist yet.
@@ -368,7 +368,7 @@ The step Foundry's own code is running for the issue, with no worker involved �
 
 ## TriageInProgressIssue
 
-`triage_in_progress`: an issue a triage worker is reading. Carries `WorkerRunId`. Display group: In progress, label "Triaging".
+`triage_in_progress`: an issue a triage worker is reading. Carries `WorkerRunId`. Display group: In flow, label "Triaging".
 Counts against the global slots and the [Repository Worker Limit](#repository-worker-limit) like every running worker.
 
 - **Ways out** — the run's outcome step dispatches by role: a triage run that exits 0 with a schema-valid verdict publishes `TriageRunCompleted(IssueId, WorkerRunId, TriageResult, DecidedAt)` with `TriageResult = Ready(kind) | NeedsInput(kind, questions) | Blocked(kind, blockedBy)` instead of `WorkerRunCompleted`, and the merge-request lookup never runs.
@@ -380,7 +380,7 @@ Counts against the global slots and the [Repository Worker Limit](#repository-wo
 
 ## TriageFailedIssue
 
-`triage_failed`: an issue whose triage run failed. Carries `WorkerRunId`, `FailureReason`, `FailureCategory` and `FailedAt`. Display group: Needs attention.
+`triage_failed`: an issue whose triage run failed. Carries `WorkerRunId`, `FailureReason`, `FailureCategory` and `FailedAt`. Display group: Needs you.
 Not a `FailedIssue`, whose `Retry()` returns `FreshQueuedIssue` and would skip triage.
 
 - **Causes** — beyond a failed run (non-zero exit, timeout, cancellation, `verdict_invalid`): `blocker_cycle` (`FailureCategory.BlockerCycle`) when a blocker a `blocked` verdict names would close a dependency cycle (from `TriageInProgressIssue.FailOnBlockerCycle`), and `blocker_link_failed` (`FailureCategory.BlockerLinkFailed`) when the provider permanently refused to link a named blocker (from `TriageBlockedIssue.FailBlockerLink`, via `FromTriageBlocked`, which takes the run id from the `BlockerLinkFailed` event). Neither is transient, so both park until Retry triage or Skip triage.
@@ -403,7 +403,7 @@ The operator action that sends a `TriageFailedIssue` through the dependency chec
 ## AwaitingInputIssue
 
 `awaiting_input`: an issue whose run stopped to ask a person one or more questions ([ADR 0096](docs/adr/0096-awaiting-input-replies-detected-by-recorded-ids-and-branch-head.md)).
-It waits for input on the thread where the question was posted. Display group: Needs attention, label "Awaiting input".
+It waits for input on the thread where the question was posted. Display group: Needs you, label "Awaiting input".
 
 - **Way in** — an implement run that exits 0 with a schema-valid `needs_input` verdict resolves to `WorkerOutcome.NeedsInput` (a merged pull request still completes the issue and the verdict is ignored; a non-zero exit still goes through failure classification), and `WorkerRunCompleted` carries the questions. `InProgressIssue.MarkAwaitingInput` and `RevisionInProgressIssue.MarkAwaitingInput` open a [clarification](#clarification) round.
 - **Resume target** — recorded at entry from what the asking run left: `Revision(branch, pr)` for an open pull request (always for a revision run), `Continuation(branch)` for commits without a pull request, `Fresh` when nothing was pushed, or `Retriage` when a triage run asked (see [TriageInProgressIssue](#triageinprogressissue)) (column `resume_target`).
@@ -761,7 +761,7 @@ It is shown in the posted comment and next to the blocker on the dashboard.
 
 ## Rebase Pending Issue
 
-A lifecycle state (`rebase_pending`, Active / Waiting) for an issue whose worker run left an open pull request: Foundry is rebasing the worker branch onto the default branch through the provider before the checks gate ([ADR 0087](docs/adr/0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)). The agent never force-pushes: when this rebase conflicts, a `RebaseConflict` revision rebases the branch itself and the [Publisher](#publisher) pushes the rebased tip with a lease ([ADR 0101](docs/adr/0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)).
+A lifecycle state (`rebase_pending`, Active / In flow) for an issue whose worker run left an open pull request: Foundry is rebasing the worker branch onto the default branch through the provider before the checks gate ([ADR 0087](docs/adr/0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)). The agent never force-pushes: when this rebase conflicts, a `RebaseConflict` revision rebases the branch itself and the [Publisher](#publisher) pushes the rebased tip with a lease ([ADR 0101](docs/adr/0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)).
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `EnteredRebasePendingAt`, `FeedbackCutoffAt`, `ChecksFixAttempts` and [`RebaseConflictAttempts`](#rebase-conflict-attempts) — all non-nullable.
 Entered from `InProgressIssue.MarkRebasePending` (a run that completed with `MergeState.Open`) and from `RevisionInProgressIssue.MarkRebasePending` / `MarkUnchangedRebasePending` (a revision that reported a branch and PR, or pushed nothing — the branch may still be behind). A merged PR or no PR keeps the existing `Completed` / `Unchanged` transitions, with no rebase.
 Entering raises `IssueEnteredRebasePending`, which nudges Monitoring's rebase step; the scheduled poll is its backstop. The step's progress (pre-rebase head, request time, transient-failure backoff) is persisted per episode in `pending_rebases`, so a host restart resumes it.
@@ -781,7 +781,7 @@ Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
 Carries `WorkerRunId` — non-nullable.
 Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
-Classified as Active / Needs attention (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
+Classified as Active / Needs you (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
 Transitions: `UnchangedIssue.Retry()` → `FreshQueuedIssue`.
 Hard-deleted when the provider-side issue is closed or loses its trigger label (untracked by the poller). If reopened upstream with the trigger label it is re-detected as a new issue.
 
@@ -1012,7 +1012,7 @@ A single execution of a worker against an issue — the primary aggregate for th
 Modeled as a polymorphic aggregate with state variants: `StartingRun` (container creation requested), `ActiveRun` (container running), `PublishingRun` (container ended; its commits are being published), `PublishFailedRun` (a publish attempt failed), `CompletedRun` (exited successfully), `FailedRun` (exited with error, timed out, failed to start, or was discarded).
 
 **Publishing** ([ADR 0100](docs/adr/0100-workers-hold-no-provider-credential-and-foundry-publishes.md)). A run with a branch moves `Running → Publishing → Completed` (or `Failed`): when its container exits, times out, is cancelled or is found gone, `ActiveRun.BeginPublishing` keeps the exit facts, container log tail, verdict and the verdict's raw `pullRequest` text on a `PublishingRun`, and the container is removed while the Hand-off volume stays. `RunPublishingService` then runs `WorkerRunPublisher`: the Publisher pushes the Run bundle; for a run that exited 0 without a `needs_input` verdict, code opens the pull request when none is open (title `<type>: <summary>` from the issue's kind and the verdict's validated summary, else the issue title; body the verdict's `PullRequestDescription`, else one built from the commit subjects, then `Closes #<issue>`), or posts one summary comment on the open one (recorded in the posted-comment registry; the body is never overwritten); then the outcome is resolved and applied as before. Each step is recorded (`published_at`, `pull_request_settled_at`), so a retry never pushes, opens or comments twice. `WorkerRunCompleted` carries the publish facts (`RunPublishFacts`: pushed head, pull request URL, diverged side branch and its [divergence reason](#branch-divergence-reason), branch commit count), and the run's dispatch slot is released only then.
-**PublishFailed.** A transient publish failure moves the run to `PublishFailedRun`, retried after `PublishRetryPolicy.RetryDelays` (1, 2, 5, 15 minutes; `MaxAttempts` 5). A permanent failure, or the last attempt, exhausts it: the run frees its slot, raises `WorkerRunFailed` with category `publish_failed`, and its issue waits in Needs attention with **Retry publish** (`POST /api/workers/runs/{id}/publish-retry`: `202`, `409` when the run is not waiting for a publish retry, `404`), which reruns Publish from the retained Hand-off volume. A diverged run completes with its side branch and divergence reason, and its issue waits in Needs attention as branch diverged.
+**PublishFailed.** A transient publish failure moves the run to `PublishFailedRun`, retried after `PublishRetryPolicy.RetryDelays` (1, 2, 5, 15 minutes; `MaxAttempts` 5). A permanent failure, or the last attempt, exhausts it: the run frees its slot, raises `WorkerRunFailed` with category `publish_failed`, and its issue waits in Needs you with **Retry publish** (`POST /api/workers/runs/{id}/publish-retry`: `202`, `409` when the run is not waiting for a publish retry, `404`), which reruns Publish from the retained Hand-off volume. A diverged run completes with its side branch and divergence reason, and its issue waits in Needs you as branch diverged.
 **PublishBlocked.** A run whose publish the [Diff gate](#diff-gate) blocked raises `WorkerRunPublishBlocked` (the finding count only) and frees its slot; its issue waits as `publish_blocked`. **Discard run** (`POST /api/workers/runs/{id}/discard`: `202`, `409` when the run is not holding unpublished work that waits for an operator, `404`) ends a blocked run or an exhausted publish-failed run: the run fails with category `run_discarded`, its Hand-off volume is deleted, and its issue fails, so Retry Issue starts a new run from the branch. The Hand-off time to live discards a blocked run like a publish-failed one.
 An issue can have multiple runs (e.g. after retry from Failed or Review state).
 Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure function that consults merge-request state first (see Worker Outcome Detection).
@@ -1202,7 +1202,7 @@ For each stale run, the sweep:
 2. Calls `StartingRun.Fail(ContainerError("Container did not start within the allowed time."))`.
 3. The `WorkerRunFailed` domain event raised by `Fail` flows through `WorkerRunFailedHandler` → `InProgressIssue.MarkFailed()` → `FailedIssue` → the issue becomes retryable from the dashboard (see ADR 0050).
 
-A `container_error` failure does not auto-retry (`TransientRetryService` filters on `transient_api_error` only) — the issue parks under "Needs attention" for operator review, consistent with [ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md).
+A `container_error` failure does not auto-retry (`TransientRetryService` filters on `transient_api_error` only) — the issue parks under "Needs you" for operator review, consistent with [ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md).
 A `WorkerRunFailed` event whose run ID does not match the issue's current `WorkerRunId` is silently ignored by `WorkerRunFailedHandler` (stale-run-ID guard), so a concurrent transition cannot produce a double failure.
 The same guard applies to `WorkerRunCompletedHandler`: a `WorkerRunCompleted` event whose run ID does not match is rejected as stale, so a superseded run cannot drive a completed transition on an issue that has already moved on.
 
