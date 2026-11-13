@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { compile } from 'sass';
 
 // Emulated view encapsulation scopes a component's stylesheet to its own template, so
-// the badge classes the issue-detail template uses must be emitted by its own stylesheet.
+// the badge classes the pane-facts template uses must be emitted by its own stylesheet.
 function compiledCss(relativePath: string): string {
   return compile(resolve(process.cwd(), relativePath)).css;
 }
@@ -16,12 +16,12 @@ function ruleBody(css: string, selector: string): string {
   return match[1];
 }
 
-describe('issue-detail stylesheet badge chips', () => {
-  const issueDetailPath = 'src/app/features/issues/issue-detail/issue-detail.scss';
+describe('pane-facts stylesheet badge chips', () => {
+  const paneFactsPath = 'src/app/features/issue-pane/pane-facts/pane-facts.scss';
 
   it('gives the base .badge class its pill shape and typography', () => {
     // Act
-    const body = ruleBody(compiledCss(issueDetailPath), '.badge');
+    const body = ruleBody(compiledCss(paneFactsPath), '.badge');
 
     // Assert
     expect(body).toContain('border-radius: 9999px');

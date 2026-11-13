@@ -1,0 +1,184 @@
+@use 'sass:map';
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/badge' as *;
+
+// The Triage differs and triage verdict chips take the shared pill shape; no state or outlined
+// modifier is emitted here.
+@include badge($states: (), $exclude-outlined: map.keys($badge-outlined-variants));
+
+:host {
+  display: block;
+  margin-bottom: var(--fd-spacing-xl);
+}
+
+// The floor-lane section-heading style.
+.pane-facts__heading {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--fd-spacing-sm);
+  text-transform: uppercase;
+}
+
+.pane-facts__list {
+  display: grid;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  grid-template-columns: minmax(7.5rem, max-content) 1fr;
+  margin: 0;
+
+  dt {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  dd {
+    color: var(--fd-text-primary);
+    font-size: 0.8125rem;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 479px) {
+    grid-template-columns: 1fr;
+
+    dd {
+      margin-bottom: var(--fd-spacing-xs);
+    }
+  }
+}
+
+.pane-facts__full {
+  grid-column: 1 / -1;
+}
+
+.pane-facts__mono {
+  font-family: var(--fd-font-mono);
+}
+
+.pane-facts__line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-sm);
+}
+
+.pane-facts__differs {
+  margin-top: var(--fd-spacing-xs);
+}
+
+.pane-facts__note,
+.pane-facts__muted {
+  color: var(--fd-text-secondary);
+}
+
+// Outlined chips; their pill shape and type come from the badge mixin (`.badge`).
+.pane-facts__chip {
+  &--warning {
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &--success {
+    border: 1px solid var(--fd-text-success);
+    color: var(--fd-text-success);
+  }
+
+  &--neutral {
+    border: 1px solid var(--fd-text-secondary);
+    color: var(--fd-text-secondary);
+  }
+}
+
+.pane-facts__link {
+  color: var(--fd-text-link);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-facts__blockers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+}
+
+.pane-facts__pill {
+  background: var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+
+.pane-facts__result {
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+
+  &--clamped {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+}
+
+.pane-facts__more {
+  background: transparent;
+  border: none;
+  color: var(--fd-text-link);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  min-height: 32px;
+  padding: 0;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+.pane-facts__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+}
+
+.pane-facts__bar {
+  animation: fd-skeleton-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--fd-border-default) 0%,
+    var(--fd-bg-card-hover) 50%,
+    var(--fd-border-default) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--fd-radius-sm);
+  display: block;
+  height: 1rem;
+  width: 100%;
+
+  &--short {
+    width: 40%;
+  }
+}

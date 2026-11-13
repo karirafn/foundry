@@ -31,7 +31,7 @@ const ANNOUNCEMENT_DEBOUNCE_MS = 3000;
         (click)="_toggle()"
       >
         <span class="log-view__toggle-icon" aria-hidden="true">{{ _expanded() ? '▼' : '▶' }}</span>
-        <span class="log-view__toggle-label">{{ label() }}</span>
+        <span class="log-view__toggle-label">{{ _toggleLabel() }}</span>
       </button>
 
       <!-- Body is always mounted so aria-controls resolves and the role="log" live region pre-exists before content arrives -->
@@ -66,6 +66,8 @@ export class LogViewComponent implements OnInit {
   readonly lines = input<string[] | null>(null);
   readonly logStream = input<Observable<string> | null>(null);
   readonly label = input<string>('Log');
+  /** The toggle's text while collapsed; null shows `label` in both states. */
+  readonly collapsedLabel = input<string | null>(null);
   readonly expanded = input<boolean>(true);
 
   protected readonly _bodyId = `log-view-body-${nextId++}`;
@@ -73,6 +75,8 @@ export class LogViewComponent implements OnInit {
   protected readonly _expanded: WritableSignal<boolean> = signal(true);
   protected readonly _streamedLines: WritableSignal<string[]> = signal([]);
   protected readonly _liveAnnouncement: WritableSignal<string> = signal('');
+
+  protected readonly _toggleLabel = computed(() => (this._expanded() ? this.label() : (this.collapsedLabel() ?? this.label())));
 
   protected readonly _displayLines = computed(() => {
     if (this.mode() === 'stream') {

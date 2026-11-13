@@ -18,11 +18,13 @@ import {
   untracked,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { IssueDetailComponent } from '../issues/issue-detail/issue-detail';
 import { IssueDetail, IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
 import { WorkerRunDetail } from '../workers/worker-run.model';
 import { WorkerRunService } from '../workers/worker-run.service';
+import { WORKING_STATES } from '../../shared/utils/issue-state';
+import { PaneActivityComponent } from './pane-activity/pane-activity';
+import { PaneFactsComponent } from './pane-facts/pane-facts';
 import { PaneHeaderComponent } from './pane-header/pane-header';
 import { PaneStatusComponent } from './pane-status/pane-status';
 
@@ -30,12 +32,12 @@ export const ISSUE_PANE_TITLE_ID = 'issue-pane-title';
 
 /**
  * The issue pane's content, rendered inside `fd-side-sheet`: the header, the status line with its
- * one callout and actions, then the remaining `fd-issue-detail` facts and logs. It loads the
- * worker run of the selected issue for the layers below it.
+ * one callout and actions, the facts, and, while a worker runs, its activity. It loads the worker
+ * run of the selected issue for the layers below it.
  */
 @Component({
   selector: 'fd-issue-pane',
-  imports: [PaneHeaderComponent, PaneStatusComponent, IssueDetailComponent],
+  imports: [PaneHeaderComponent, PaneStatusComponent, PaneFactsComponent, PaneActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './issue-pane.html',
   styleUrl: './issue-pane.scss',
@@ -82,6 +84,15 @@ export class IssuePaneComponent {
 
   protected readonly pullRequestUrl: Signal<string | null> = computed(
     () => this.liveSummary()?.pullRequestUrl ?? this.run()?.publish?.pullRequestUrl ?? null);
+
+  /** Activity shows only while a worker runs: a working state that is not publishing. */
+  protected readonly showsActivity: Signal<boolean> = computed(() => {
+    const detail = this.detail();
+    if (detail === null || !WORKING_STATES.has(detail.state)) {
+      return false;
+    }
+    return (this.liveSummary()?.publishPhase ?? detail.publishPhase ?? null) === null;
+  });
 
   protected readonly untracked: Signal<boolean> = computed(
     () => this.issueService.selectedIssueId() === this.issueId() && this.issueService.detailMissing(),

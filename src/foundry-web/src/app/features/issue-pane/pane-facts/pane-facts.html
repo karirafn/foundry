@@ -1,0 +1,158 @@
+<section class="pane-facts" [attr.aria-labelledby]="headingId">
+  <h3 class="pane-facts__heading" [id]="headingId">Details</h3>
+
+  @if (detail() === null) {
+    <div class="pane-facts__skeleton" aria-busy="true">
+      <span class="sr-only">Loading details…</span>
+      <span class="pane-facts__bar" aria-hidden="true"></span>
+      <span class="pane-facts__bar" aria-hidden="true"></span>
+      <span class="pane-facts__bar pane-facts__bar--short" aria-hidden="true"></span>
+    </div>
+  } @else {
+    <dl class="pane-facts__list">
+      @for (f of facts(); track f.key) {
+        @switch (f.type) {
+          @case ('text') {
+            <dt>{{ f.key }}</dt>
+            <dd [class.pane-facts__mono]="f.mono">{{ f.value }}</dd>
+          }
+          @case ('kind') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              <span class="pane-facts__line">
+                <span class="pane-facts__kind-value" [class.pane-facts__muted]="!f.known">{{ f.label }}</span>
+                <span class="pane-facts__note">{{ f.sourceNote }}</span>
+              </span>
+              @if (f.triageDiffers; as sentence) {
+                <span class="pane-facts__line pane-facts__differs">
+                  <span class="badge pane-facts__chip pane-facts__chip--warning">Triage differs</span>
+                  <span>{{ sentence }}</span>
+                </span>
+              }
+            </dd>
+          }
+          @case ('triage') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              @if (f.verdict; as v) {
+                <span class="pane-facts__line">
+                  <span class="badge pane-facts__chip" [class]="'pane-facts__chip--' + v.tone">{{ v.outcomeLabel }}</span>
+                  <span>{{ v.kindLabel }}</span>
+                  <span class="pane-facts__note">Triaged <time [attr.datetime]="v.decidedAt">{{ v.decidedAt | date: 'medium' }}</time></span>
+                  @if (v.note) {
+                    <span class="pane-facts__note">{{ v.note }}</span>
+                  }
+                </span>
+              } @else {
+                Not triaged. This issue was queued without a readiness check.
+              }
+            </dd>
+          }
+          @case ('published') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              <span class="pane-facts__line">
+                @if (f.href | safeHref; as href) {
+                  <a
+                    class="pane-facts__sha pane-facts__mono pane-facts__link"
+                    [href]="href"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    [attr.title]="f.fullSha"
+                    [attr.aria-label]="'Head commit ' + f.fullSha"
+                  >{{ f.shortSha }}</a>
+                } @else {
+                  <span
+                    class="pane-facts__sha pane-facts__mono"
+                    [attr.title]="f.fullSha"
+                    [attr.aria-label]="'Head commit ' + f.fullSha"
+                  >{{ f.shortSha }}</span>
+                }
+                <span>{{ f.commits }}</span>
+              </span>
+            </dd>
+          }
+          @case ('reverted_files') {
+            <!-- fd-reverted-files shows its own key; the dt names the row for screen readers. -->
+            <dt class="sr-only">{{ f.key }}</dt>
+            <dd class="pane-facts__full"><fd-reverted-files [files]="f.files" /></dd>
+          }
+          @case ('run') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              <span class="pane-facts__line">
+                @if (f.role) {
+                  <fd-role-tag [role]="f.role" />
+                }
+                <span class="pane-facts__mono" [attr.title]="f.id">{{ f.shortId }}</span>
+              </span>
+            </dd>
+          }
+          @case ('blockers') {
+            <dt [id]="blockersKeyId">{{ f.key }}</dt>
+            <dd>
+              <ul class="pane-facts__blockers" [attr.aria-labelledby]="blockersKeyId">
+                @for (b of f.blockers; track b.number) {
+                  <li>
+                    <span class="pane-facts__mono">{{ b.number }}</span>
+                    @if (b.reason) {
+                      &ngsp;<span class="pane-facts__note">{{ b.reason }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            </dd>
+          }
+          @case ('labels') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              <span class="pane-facts__line">
+                @for (label of f.labels; track label) {
+                  <span class="pane-facts__pill">{{ label }}</span>
+                }
+              </span>
+            </dd>
+          }
+          @case ('date') {
+            <dt>{{ f.key }}</dt>
+            <dd><time [attr.datetime]="f.iso">{{ f.iso | date: 'medium' }}</time></dd>
+          }
+          @case ('result') {
+            <dt class="pane-facts__full">{{ f.key }}</dt>
+            <dd class="pane-facts__full">
+              <p
+                class="pane-facts__result"
+                [id]="resultId"
+                [class.pane-facts__result--clamped]="f.long && !resultExpanded()"
+              >{{ f.text }}</p>
+              @if (f.long) {
+                <button
+                  type="button"
+                  class="pane-facts__more"
+                  [attr.aria-expanded]="resultExpanded()"
+                  [attr.aria-controls]="resultId"
+                  (click)="toggleResult()"
+                >{{ resultExpanded() ? 'Show less' : 'Show more' }}</button>
+              }
+            </dd>
+          }
+          @case ('log') {
+            <dt class="sr-only">{{ f.key }}</dt>
+            <dd class="pane-facts__full">
+              @if (logLines(); as lines) {
+                <fd-log-view
+                  style="--fd-log-view-max-height: 16rem"
+                  mode="static"
+                  [lines]="lines"
+                  label="Hide log"
+                  collapsedLabel="Show log"
+                  [expanded]="false"
+                />
+              }
+            </dd>
+          }
+        }
+      }
+    </dl>
+  }
+</section>

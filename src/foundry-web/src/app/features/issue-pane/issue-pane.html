@@ -19,8 +19,11 @@
         (retry)="retry()"
       />
       <!-- The Clarifications section (#757) slots in here, between the status and the facts. -->
-      @if (detail(); as d) {
-        <fd-issue-detail [detail]="d" [run]="run()" />
+      @if (issueService.detailError() === null) {
+        <fd-pane-facts [detail]="detail()" [run]="run()" [summary]="liveSummary()" />
+      }
+      @if (showsActivity()) {
+        <fd-pane-activity [issueId]="issueId()" [workerRunId]="detail()?.stateDetails?.workerRunId ?? null" />
       }
     }
   </div>

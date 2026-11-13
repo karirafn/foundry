@@ -1,0 +1,103 @@
+:host {
+  display: block;
+  margin-bottom: var(--fd-spacing-xl);
+}
+
+// The floor-lane section-heading style.
+.pane-activity__heading {
+  align-items: baseline;
+  color: var(--fd-text-secondary);
+  display: flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: var(--fd-spacing-sm);
+  justify-content: space-between;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--fd-spacing-sm);
+  text-transform: uppercase;
+}
+
+.pane-activity__elapsed {
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+
+  &--silent {
+    color: var(--fd-text-warning);
+    font-weight: 600;
+  }
+}
+
+.pane-activity__stale {
+  color: var(--fd-text-warning);
+  font-size: 0.8125rem;
+  margin: 0 0 var(--fd-spacing-sm);
+}
+
+.pane-activity__step-line {
+  align-items: baseline;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-sm);
+  justify-content: space-between;
+  margin: 0;
+}
+
+.pane-activity__step {
+  color: var(--fd-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pane-activity__ordinal {
+  color: var(--fd-text-secondary);
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+}
+
+.pane-activity__bar {
+  background: var(--fd-border-muted);
+  border-radius: 2px;
+  height: 4px;
+  margin: var(--fd-spacing-xs) 0 var(--fd-spacing-sm);
+  overflow: hidden;
+}
+
+.pane-activity__fill {
+  background: var(--fd-accent-working);
+  height: 100%;
+  transition: width 300ms var(--fd-ease-glide);
+}
+
+.pane-activity__tool {
+  animation: fd-fade-in 160ms ease both;
+  color: var(--fd-text-secondary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.8125rem;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-activity__tool-name {
+  color: var(--fd-text-primary);
+}
+
+.pane-activity__waiting {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+// The global reduced-motion rule shortens every animation; the tool line is already a fade, so it
+// keeps its duration, and the progress bar snaps.
+@media (prefers-reduced-motion: reduce) {
+  .pane-activity__tool {
+    animation-duration: 160ms !important;
+  }
+
+  .pane-activity__fill {
+    transition: none;
+  }
+}

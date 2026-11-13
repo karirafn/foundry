@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { resolve } from 'node:path';
+import { compile } from 'sass';
 import { Subject } from 'rxjs';
 import { LogViewComponent } from './log-view';
 
@@ -235,5 +237,59 @@ describe('LogViewComponent', () => {
     // Assert
     expect(btn.getAttribute('aria-controls')).toBeTruthy();
     expect(btn.getAttribute('aria-controls')).toBe(body.id);
+  });
+
+  describe('collapsedLabel', () => {
+    function createLabelled(collapsedLabel: string | null, expanded: boolean) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({ imports: [LogViewComponent] });
+      const fixture = TestBed.createComponent(LogViewComponent);
+      fixture.componentRef.setInput('mode', 'static');
+      fixture.componentRef.setInput('lines', ['line']);
+      fixture.componentRef.setInput('label', 'Hide log');
+      fixture.componentRef.setInput('collapsedLabel', collapsedLabel);
+      fixture.componentRef.setInput('expanded', expanded);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      return { fixture, el, toggleLabel: () => el.querySelector('.log-view__toggle-label')?.textContent?.trim() };
+    }
+
+    it('shows the collapsed label while collapsed', () => {
+      // Act
+      const { toggleLabel } = createLabelled('Show log', false);
+
+      // Assert
+      expect(toggleLabel()).toBe('Show log');
+    });
+
+    it('shows the label once expanded', () => {
+      // Arrange
+      const { fixture, el, toggleLabel } = createLabelled('Show log', false);
+
+      // Act
+      el.querySelector<HTMLButtonElement>('.log-view__toggle')!.click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(toggleLabel()).toBe('Hide log');
+    });
+
+    it('shows the label in both states when no collapsed label is set', () => {
+      // Act
+      const collapsed = createLabelled(null, false).toggleLabel();
+      const expanded = createLabelled(null, true).toggleLabel();
+
+      // Assert
+      expect(collapsed).toBe('Hide log');
+      expect(expanded).toBe('Hide log');
+    });
+  });
+
+  it('bounds the body height by --fd-log-view-max-height, defaulting to 400px', () => {
+    // Act
+    const css = compile(resolve(process.cwd(), 'src/app/shared/components/log-view/log-view.scss')).css;
+
+    // Assert
+    expect(css).toContain('max-height: var(--fd-log-view-max-height, 400px)');
   });
 });
