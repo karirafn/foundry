@@ -165,6 +165,13 @@ function text(el: Element | null | undefined): string {
   return el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 }
 
+/** The element's text without its aria-hidden parts, as a description reads it. */
+function spoken(el: Element | null): string {
+  const copy = el!.cloneNode(true) as Element;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((hidden) => hidden.remove());
+  return text(copy);
+}
+
 function idsIn(el: HTMLElement, selector: string): string[] {
   return [...el.querySelectorAll(`${selector} [data-issue-id]`)].map((c) =>
     c.getAttribute('data-issue-id')!,
@@ -384,7 +391,10 @@ describe('BoardPageComponent', () => {
       const card = el.querySelector('fd-needs-card')!;
       expect(text(card.querySelector('.needs-card__reason'))).toBe('Needs answers');
       expect(text(card.querySelector('fd-stage-chip'))).toBe('Stage: Implement');
-      expect(text(card.querySelector('.needs-card__repo'))).toBe('acme/api #42');
+      const ref = card.querySelector('fd-issue-ref.needs-card__ref')!;
+      expect(text(ref.querySelector('.issue-ref__name'))).toBe('api');
+      expect(text(ref.querySelector('.issue-ref__number'))).toBe('#42');
+      expect(ref.getAttribute('title')).toBe('acme/api');
       expect(text(card.querySelector('.needs-card__why'))).toBe(
         'Questions are waiting for your answers',
       );
@@ -441,7 +451,14 @@ describe('BoardPageComponent', () => {
       // Assert
       const card = el.querySelector('fd-worker-card')!;
       expect(text(card.querySelector('fd-role-tag'))).toBe('Role: triage');
-      expect(text(card.querySelector('.worker-card__elapsed'))).toBe('Running for running 12m');
+      const meta = card.querySelector('.worker-card__meta')!;
+      expect([...meta.children].map((c) => c.tagName.toLowerCase())).toEqual([
+        'fd-role-tag',
+        'fd-issue-ref',
+      ]);
+      expect(text(meta.querySelector('fd-issue-ref .issue-ref__number'))).toBe('#3');
+      const status = card.querySelector('.worker-card__footer .worker-card__status')!;
+      expect(text(status.querySelector('.worker-card__elapsed'))).toBe('Running for running 12m');
       const link = card.querySelector('a')!;
       expect(text(link)).toBe('Watch on Floor');
       expect(link.getAttribute('href')).toBe('/floor#floor-lane-w');
@@ -477,6 +494,7 @@ describe('BoardPageComponent', () => {
           "Waiting for the agent's first event",
         );
         expect(el.querySelector('.worker-card__event')).toBeNull();
+        expect(el.querySelector('.worker-card__sep')).toBeNull();
       });
 
       it('shows the current task, its position on a hidden segmented bar, and the latest tool', async () => {
@@ -543,6 +561,46 @@ describe('BoardPageComponent', () => {
         expect(card.querySelector('[aria-live], [role="status"]')).toBeNull();
       });
 
+      it('describes the card button with its top line, task line and status while live', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3, { enteredStateAt: minutesAgo(12) })]);
+
+        // Act
+        h.activities.set(new Map([['w', running()]]));
+        await h.render();
+
+        // Assert
+        const button = h.el.querySelector('.worker-card__title')!;
+        expect(button.getAttribute('aria-describedby')).toBe(
+          'worker-card-w-meta worker-card-w-task worker-card-w-status',
+        );
+        expect(spoken(h.el.querySelector('[id="worker-card-w-meta"]'))).toMatch(
+          /^Role: implement ?acme\/api #3$/,
+        );
+        expect(spoken(h.el.querySelector('[id="worker-card-w-status"]'))).toBe(
+          'Running for 12m, last event 2m ago',
+        );
+      });
+
+      it('describes a completed card by its top line and status, which reads Completed', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        hubHandlers.get('IssueUpdated')!(item('w', 3, { state: 'completed', stage: 'done' }));
+        await h.render();
+
+        // Assert
+        const card = h.el.querySelector('fd-worker-card')!;
+        const button = card.querySelector('.worker-card__title')!;
+        expect(button.getAttribute('aria-describedby')).toBe(
+          'worker-card-w-meta worker-card-w-status',
+        );
+        expect(text(card.querySelector('[id="worker-card-w-status"]'))).toBe('Completed');
+        expect(card.querySelector('.worker-card__meta .worker-card__completed')).toBeNull();
+        expect(card.querySelector('fd-worker-activity')).toBeNull();
+      });
+
       it('says when the last event was', async () => {
         // Arrange
         const h = await loaded([item('w', 3)]);
@@ -552,8 +610,9 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const event = h.el.querySelector('.worker-card__event')!;
+        const event = h.el.querySelector('.worker-card__status .worker-card__event')!;
         expect(text(event)).toBe('last event 2m ago');
+        expect(h.el.querySelector('.worker-card__sep')?.getAttribute('aria-hidden')).toBe('true');
         expect(h.el.querySelector('.worker-card--silent')).toBeNull();
       });
 
@@ -701,7 +760,8 @@ describe('BoardPageComponent', () => {
       const row = el.querySelector('fd-board-row')!;
       const button = row.querySelector('button')!;
       expect(button.getAttribute('aria-label')).toBe('Fix alerts, #32');
-      const repo = row.querySelector('.board-row__repo')!;
+      const repo = row.querySelector('fd-issue-ref.board-row__repo')!;
+      expect(repo.id).toBe('board-row-i-repo');
       expect(repo.getAttribute('title')).toBe('acme/isal-monitoring');
       expect(button.getAttribute('aria-describedby')).toContain(repo.id);
       expect(text(repo.querySelector('[aria-hidden="true"]'))).toBe('isal-monitoring');

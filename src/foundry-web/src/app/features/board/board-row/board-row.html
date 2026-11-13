@@ -5,11 +5,12 @@
   [class.fd-board-moved]="moved()"
 >
   <span class="board-row__lead" [id]="idBase() + '-lead'"><ng-content select="[rowLead]" /></span>
-  <span class="board-row__repo" [id]="idBase() + '-repo'" [attr.title]="issue().repositorySlug"
-    ><span aria-hidden="true">{{ name() }}</span
-    ><span class="sr-only">{{ issue().repositorySlug }}</span>
-    <span class="board-row__number">#{{ issue().issueNumber }}</span></span
-  >
+  <fd-issue-ref
+    class="board-row__repo"
+    [id]="idBase() + '-repo'"
+    [slug]="issue().repositorySlug"
+    [issueNumber]="issue().issueNumber"
+  />
   <button
     #button
     type="button"

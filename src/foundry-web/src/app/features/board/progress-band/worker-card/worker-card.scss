@@ -13,10 +13,10 @@
   border-radius: var(--fd-radius-md);
   display: flex;
   flex-direction: column;
-  gap: var(--fd-spacing-xs);
+  gap: var(--fd-spacing-sm);
   height: 100%;
   min-width: 0;
-  padding: var(--fd-spacing-md);
+  padding: var(--fd-spacing-lg);
   position: relative;
   // The global reduced-motion rule makes the edge change instant.
   transition:
@@ -47,35 +47,9 @@
   min-width: 0;
 }
 
-.worker-card__repo {
-  color: var(--fd-text-secondary);
+.worker-card__ref {
   flex: 1 1 auto;
-  font-family: var(--fd-font-mono);
   font-size: 0.75rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  strong {
-    color: var(--fd-text-primary);
-  }
-}
-
-.worker-card__elapsed,
-.worker-card__completed {
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.worker-card__elapsed {
-  color: var(--fd-text-secondary);
-}
-
-.worker-card__completed {
-  color: var(--fd-text-success);
-  font-weight: 600;
 }
 
 .worker-card__title {
@@ -117,13 +91,41 @@
   min-width: 0;
 }
 
+// Not a live region: it ticks every second; the board announces silence once.
+.worker-card__status {
+  align-items: center;
+  color: var(--fd-text-secondary);
+  column-gap: var(--fd-spacing-xs);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  min-width: 0;
+  row-gap: 2px;
+}
+
+.worker-card__elapsed {
+  white-space: nowrap;
+}
+
+.worker-card__sep {
+  color: var(--fd-text-secondary);
+}
+
+.worker-card__completed {
+  color: var(--fd-text-success);
+  font-weight: 600;
+}
+
 .worker-card__event {
   align-items: center;
   color: var(--fd-text-secondary);
   display: inline-flex;
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
   gap: var(--fd-spacing-xs);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 
   &--silent {
     color: var(--fd-text-warning);
@@ -142,6 +144,7 @@
   color: var(--fd-text-link);
   display: inline-flex;
   font-size: 0.8125rem;
+  margin-inline-start: auto;
   min-height: 32px;
   position: relative;
   z-index: 1;
