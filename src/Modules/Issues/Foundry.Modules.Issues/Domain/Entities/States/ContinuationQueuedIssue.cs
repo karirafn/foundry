@@ -42,7 +42,9 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
 
     public string FailureReason { get; private set; } = string.Empty;
 
-    internal static ContinuationQueuedIssue FromContinuableFailed(ContinuableFailedIssue source, DateTimeOffset transitionedAt)
+    internal static ContinuationQueuedIssue FromContinuableFailed(
+        ContinuableFailedIssue source,
+        DateTimeOffset transitionedAt)
     {
         ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
         queued.CopySharedPropertiesFrom(source);

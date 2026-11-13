@@ -84,7 +84,9 @@ internal sealed class TriageRunCompletedHandler(
             [.. blocked.BlockedBy.Select((TriageBlocker blocker) => blocker.IssueNumber)]);
 
         return cycle is null
-            ? triaging.MarkBlocked(new TriageVerdict.Blocked(ToIssueKind(blocked.Kind), blocked.BlockedBy, decidedAt), transitionedAt)
+            ? triaging.MarkBlocked(
+                new TriageVerdict.Blocked(ToIssueKind(blocked.Kind), blocked.BlockedBy, decidedAt),
+                transitionedAt)
             : triaging.FailOnBlockerCycle(cycle, decidedAt);
     }
 

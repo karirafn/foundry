@@ -87,5 +87,6 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
     /// <summary>
     /// Skip triage: the issue goes through the dependency check without a readiness verdict, its kind left as it is.
     /// </summary>
-    public Issue SkipTriage(DateTimeOffset transitionedAt) => ReleaseThroughDependencyCheck(verdict: null, transitionedAt);
+    public Issue SkipTriage(DateTimeOffset transitionedAt) =>
+        ReleaseThroughDependencyCheck(verdict: null, transitionedAt);
 }
