@@ -988,9 +988,11 @@ The provider clients stop paginating at a fixed page cap and return `IssueListin
 An incomplete listing cannot distinguish an issue closed on the provider from one that simply fell outside the fetched window, so the untrack pass is skipped entirely and the repository enters **untrack suppression**, logged once on entry rather than every cycle.
 Detection, detail-change, dependency, and review passes all continue normally and the poll still succeeds — only deletion is withheld.
 Suppression clears automatically on the first later cycle whose listing is complete; no operator action is involved.
-The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, `continuation_queued`, and `unchanged`.
+The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states (`Issue.IsRestingState()`): `detected`, `triage_queued`, `queued`, `revision_queued`, `continuation_queued`, `blocked`, `triage_blocked`, `failed`, `triage_failed`, `continuable_failed`, `revision_failed`, `branch_diverged`, and `unchanged`.
 `completed` is preserved — completion wins over provider closure.
-`in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review. Untracking never stops a worker; stopping one is an explicit user action (see Run Cancellation).
+`triage_in_progress`, `in_progress`, and `revision_in_progress` are preserved — a live worker is running. Untracking never stops a worker; stopping one is an explicit user action (see Run Cancellation).
+`review`, `checks_pending`, `rebase_pending`, and `awaiting_input` are preserved — each asks the provider whether the issue is closed (`ProviderIssueClosed`) and completes when it is.
+`publish_failed` and `publish_blocked` are preserved — their run's unpublished work waits in its Hand-off volume, and the issue leaves only when the run is discarded or the volume's time to live expires.
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
 ## Provider Issue
