@@ -344,6 +344,14 @@ True when the issue progresses only after a person acts (`Issue.NeedsAction`). A
 
 True when the issue is waiting for a worker run to be dispatched — queued, or detected or blocked before it can be queued (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). An awaiting-dispatch issue sits in its stage's queue section on the board.
 
+### Waits on blockers
+
+True when the issue waits for its open blockers to close before it can move on: `blocked` (triaged or skipped triage, then found blocked) and `triage_blocked` (waiting untriaged). Declared by each state type (`Issue.WaitsOnBlockers`), so a new state cannot compile without one; every other state is false. Both blocked states also [Await dispatch](#awaits-dispatch); a client placing an issue gives Waits on blockers precedence. Served on `IssueSummary.WaitsOnBlockers`.
+
+### Entered state at
+
+When the issue entered its current state (`Issue.EnteredStateAt`): the detection time for a `detected` issue, otherwise the time of the transition that created the current state instance. Every transition stamps it anew, a re-queue into the same state type included, and it is never carried over from the state being left. Each state's factory takes the transition time as a required parameter, so no transition can leave it unstamped. For a working state (`in_progress`, `revision_in_progress`, `triage_in_progress`) it answers "running since", to within container start-up. Issues that existed before it was recorded start from their detection time, an upper bound until their next transition. Served on `IssueSummary.EnteredStateAt`.
+
 ### Code step
 
 The step Foundry's own code is running for the issue, with no worker involved — **publishing** (or **retrying a publish**), **rebasing** (`rebase_pending`), or waiting for CI **checks** (`checks_pending`). Rebasing and checks are declared by the state type (`Issue.CodeStep`); publishing is a phase of the issue's run, so `IssueSummary.CodeStep` reads it from the run's publish phase (`publishing | publish_retrying | rebasing | checks`, or null).

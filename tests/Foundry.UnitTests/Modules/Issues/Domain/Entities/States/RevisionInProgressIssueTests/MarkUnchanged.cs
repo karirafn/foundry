@@ -24,7 +24,7 @@ public sealed class MarkUnchanged
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkUnchanged(RunStartedAt);
+        ReviewIssue review = revisionInProgress.MarkUnchanged(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         review.Id.ShouldBe(revisionInProgress.Id);
@@ -40,7 +40,7 @@ public sealed class MarkUnchanged
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkUnchanged(RunStartedAt);
+        revisionInProgress.MarkUnchanged(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         IssueInReview domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -61,7 +61,7 @@ public sealed class MarkUnchanged
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkUnchanged(RunStartedAt);
+        ReviewIssue review = revisionInProgress.MarkUnchanged(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert — PR still exists, so returns to ReviewIssue (not UnchangedIssue)
         review.ShouldSatisfyAllConditions(
@@ -81,7 +81,7 @@ public sealed class MarkUnchanged
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkUnchanged(RunStartedAt);
+        ReviewIssue review = revisionInProgress.MarkUnchanged(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         review.FeedbackCutoffAt.ShouldBe(RunStartedAt);

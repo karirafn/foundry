@@ -19,7 +19,7 @@ public sealed class Retry
         UnchangedIssue unchanged = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Unchanged();
 
         // Act
-        FreshQueuedIssue queued = unchanged.Retry();
+        FreshQueuedIssue queued = unchanged.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         queued.Id.ShouldBe(unchanged.Id);
@@ -33,7 +33,7 @@ public sealed class Retry
         UnchangedIssue unchanged = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Unchanged();
 
         // Act
-        unchanged.Retry();
+        unchanged.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         IssueQueued domainEvent = unchanged.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();
@@ -50,7 +50,7 @@ public sealed class Retry
         UnchangedIssue unchanged = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Unchanged();
 
         // Act
-        FreshQueuedIssue queued = unchanged.Retry();
+        FreshQueuedIssue queued = unchanged.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(

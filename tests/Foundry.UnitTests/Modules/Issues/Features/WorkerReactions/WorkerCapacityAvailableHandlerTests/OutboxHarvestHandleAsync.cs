@@ -106,7 +106,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -161,7 +161,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -216,7 +216,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -267,7 +267,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
+        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -310,7 +310,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(10)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         dbContext.Set<Issue>().Add(continuationQueued);
         dbContext.SaveChanges();
         dbContext.ChangeTracker.Clear();

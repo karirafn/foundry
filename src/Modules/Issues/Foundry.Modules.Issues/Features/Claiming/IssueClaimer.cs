@@ -18,7 +18,8 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 internal sealed class IssueClaimer(
     DbContext db,
     IIntegrationEventDispatcher integrationEventDispatcher,
-    IDomainEventDispatcher domainEventDispatcher)
+    IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider)
 {
     public async Task ClaimAsync(
         DispatchCandidate candidate,
@@ -27,7 +28,7 @@ internal sealed class IssueClaimer(
     {
         QueuedIssue issue = candidate.Issue;
         BranchName? branchName = issue.DispatchBranchName;
-        Issue claimed = issue.Claim(workerRunId);
+        Issue claimed = issue.Claim(workerRunId, timeProvider.GetUtcNow());
 
         string issueApiUrl = candidate.DispatchInfo.IssueApiUrlBase
             + "/" + claimed.IssueNumber.ToString(CultureInfo.InvariantCulture);

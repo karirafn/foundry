@@ -67,7 +67,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
         NullDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -90,7 +90,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
         NullDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -112,7 +112,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
         CapturingDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -131,7 +131,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
         NullDomainEventDispatcher dispatcher = new();
 
         // Act

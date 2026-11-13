@@ -40,6 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new CreditsRestoredHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             NullLogger<CreditsRestoredHandler>.Instance);
     }
 

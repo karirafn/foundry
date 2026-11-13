@@ -34,7 +34,10 @@ function issue(state: IssueDetail['state'], details: Partial<IssueStateDetails> 
     stage: null,
     needsAction: false,
     awaitsDispatch: false,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
     author: 'dev',
     labels: [],
     stateDetails: stateDetails(details),
@@ -56,7 +59,10 @@ function summary(overrides: Partial<IssueSummary> = {}): IssueSummary {
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: false,
+    waitsOnBlockers: false,
     codeStep: null,
+    repositoryId: 'repo-1',
+    enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }

@@ -23,6 +23,8 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -30,7 +32,7 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
     {
     }
 
-    private TriageFailedIssue(IssueId id) : base(id)
+    private TriageFailedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -64,7 +66,7 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        TriageFailedIssue failed = new(source.Id);
+        TriageFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.SetBlockedBy(source.BlockedBy);
         failed.WorkerRunId = workerRunId;
@@ -75,9 +77,9 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
     }
 
     /// <summary>Retry triage: the issue waits for a triage worker again.</summary>
-    public TriageQueuedIssue RetryTriage()
+    public TriageQueuedIssue RetryTriage(DateTimeOffset transitionedAt)
     {
-        TriageQueuedIssue queued = TriageQueuedIssue.FromTriageFailed(this);
+        TriageQueuedIssue queued = TriageQueuedIssue.FromTriageFailed(this, transitionedAt);
         AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
         return queued;
     }
@@ -85,5 +87,6 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
     /// <summary>
     /// Skip triage: the issue goes through the dependency check without a readiness verdict, its kind left as it is.
     /// </summary>
-    public Issue SkipTriage() => ReleaseThroughDependencyCheck(verdict: null);
+    public Issue SkipTriage(DateTimeOffset transitionedAt) =>
+        ReleaseThroughDependencyCheck(verdict: null, transitionedAt);
 }

@@ -61,7 +61,7 @@ public sealed class FactoryTests
         ContinuationQueuedIssue continuationQueued = new IssueBuilder()
             .WithIssueNumber(issueNumber)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         int position = 2;
 
         // Act

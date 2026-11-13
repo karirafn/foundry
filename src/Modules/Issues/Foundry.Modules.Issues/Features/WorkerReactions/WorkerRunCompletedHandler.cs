@@ -14,11 +14,13 @@ namespace Foundry.Modules.Issues.Features.WorkerReactions;
 internal sealed class WorkerRunCompletedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<WorkerRunCompletedHandler> logger) : IIntegrationEventHandler<WorkerRunCompleted>
 {
     public async Task HandleAsync(WorkerRunCompleted @event, CancellationToken cancellationToken)
     {
         IssueId issueId = IssueId.From(@event.IssueId);
+        DateTimeOffset now = timeProvider.GetUtcNow();
 
         Issue? issue = await db.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
@@ -53,7 +55,8 @@ internal sealed class WorkerRunCompletedHandler(
                     sideBranchName,
                     @event.Publish.DivergenceReason ?? BranchDivergenceReason.BranchMoved,
                     @event.Publish.PullRequestUrl
-                        ?? (@event.MergeState == WorkerRunMergeState.Open ? @event.PullRequestUrl : null));
+                        ?? (@event.MergeState == WorkerRunMergeState.Open ? @event.PullRequestUrl : null),
+                    now);
                 await db.TransitionAsync(inProgress, diverged, domainEventDispatcher, cancellationToken);
                 return;
             }
@@ -75,7 +78,8 @@ internal sealed class WorkerRunCompletedHandler(
                     @event.MergeState == WorkerRunMergeState.Open ? @event.PullRequestUrl : null,
                     inputRequest.BranchHasCommits,
                     inputRequest.Questions,
-                    DateTimeOffset.UtcNow);
+                    now,
+                    now);
                 await db.TransitionAsync(inProgress, awaiting, domainEventDispatcher, cancellationToken);
                 return;
             }
@@ -94,7 +98,7 @@ internal sealed class WorkerRunCompletedHandler(
                     CompletedIssue completed = inProgress.MarkCompleted(
                         @event.BranchName,
                         @event.PullRequestUrl,
-                        DateTimeOffset.UtcNow);
+                        now);
                     await db.TransitionAsync(inProgress, completed, domainEventDispatcher, cancellationToken);
                     break;
 
@@ -115,12 +119,13 @@ internal sealed class WorkerRunCompletedHandler(
                     RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
                         @event.BranchName,
                         @event.PullRequestUrl,
-                        @event.RunStartedAt ?? DateTimeOffset.UtcNow);
+                        @event.RunStartedAt ?? now,
+                        now);
                     await db.TransitionAsync(inProgress, rebasePending, domainEventDispatcher, cancellationToken);
                     break;
 
                 default:
-                    UnchangedIssue unchanged = inProgress.MarkUnchanged();
+                    UnchangedIssue unchanged = inProgress.MarkUnchanged(now);
                     await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
                     break;
             }
@@ -144,7 +149,8 @@ internal sealed class WorkerRunCompletedHandler(
             {
                 BranchDivergedIssue revisionDiverged = revisionInProgress.MarkBranchDiverged(
                     revisionSideBranchName,
-                    @event.Publish.DivergenceReason ?? BranchDivergenceReason.BranchMoved);
+                    @event.Publish.DivergenceReason ?? BranchDivergenceReason.BranchMoved,
+                    now);
                 await db.TransitionAsync(revisionInProgress, revisionDiverged, domainEventDispatcher, cancellationToken);
                 return;
             }
@@ -153,7 +159,8 @@ internal sealed class WorkerRunCompletedHandler(
             {
                 AwaitingInputIssue revisionAwaiting = revisionInProgress.MarkAwaitingInput(
                     revisionInputRequest.Questions,
-                    DateTimeOffset.UtcNow);
+                    now,
+                    now);
                 await db.TransitionAsync(revisionInProgress, revisionAwaiting, domainEventDispatcher, cancellationToken);
                 return;
             }
@@ -164,15 +171,15 @@ internal sealed class WorkerRunCompletedHandler(
             // same as a first run, so a comment posted while the run was working is still read.
             // The ?? UtcNow fallback is back-compat for events serialized before RunStartedAt existed (see above).
             // Both paths rebase: a revision that pushed nothing may still be behind the default branch (ADR 0087).
-            DateTimeOffset revisionRunStartedAt = @event.RunStartedAt ?? DateTimeOffset.UtcNow;
+            DateTimeOffset revisionRunStartedAt = @event.RunStartedAt ?? now;
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
-                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkRebasePending(revisionRunStartedAt);
+                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkRebasePending(revisionRunStartedAt, now);
                 await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
             }
             else
             {
-                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkUnchangedRebasePending(revisionRunStartedAt);
+                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkUnchangedRebasePending(revisionRunStartedAt, now);
                 await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
             }
 

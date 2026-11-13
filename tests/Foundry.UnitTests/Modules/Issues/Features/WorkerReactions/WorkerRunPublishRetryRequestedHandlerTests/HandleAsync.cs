@@ -36,6 +36,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new WorkerRunPublishRetryRequestedHandler(
             _dbContext,
             new CapturingDomainEventDispatcher(),
+            TimeProvider.System,
             NullLogger<WorkerRunPublishRetryRequestedHandler>.Instance);
     }
 

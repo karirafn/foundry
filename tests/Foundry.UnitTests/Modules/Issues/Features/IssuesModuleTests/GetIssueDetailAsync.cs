@@ -162,14 +162,15 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
         ReviewIssue review = inProgress.MarkInReview(
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
-            feedbackCutoffAt: feedbackCutoffAt);
+            feedbackCutoffAt: feedbackCutoffAt,
+            DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -198,7 +199,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
@@ -231,13 +232,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
-            feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(1));
+            feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
@@ -269,7 +271,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
@@ -307,7 +309,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
@@ -317,7 +319,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(continuableFailed, continuationQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -342,7 +344,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
@@ -389,7 +391,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
@@ -434,7 +436,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
@@ -473,7 +475,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
@@ -522,7 +524,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
@@ -561,7 +563,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
@@ -711,17 +713,18 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/issue-1",
             "https://github.com/owner/repo/pull/42",
-            DateTimeOffset.UtcNow.AddDays(1))
-            .MarkChecksPending(new RebaseOutcome.UpToDate());
+            DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -747,21 +750,22 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/issue-1",
             "https://github.com/owner/repo/pull/42",
-            DateTimeOffset.UtcNow.AddDays(1))
-            .MarkChecksPending(new RebaseOutcome.UpToDate());
+            DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
             new FailingCheck("CI / build", "failure", "https://github.com/owner/repo/actions/runs/1"),
         ];
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.StillFailing(failingChecks));
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.StillFailing(failingChecks), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -791,15 +795,16 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         WorkerRunId workerRunId = WorkerRunId.New();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
         ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/issue-1",
             "https://github.com/owner/repo/pull/42",
-            feedbackCutoffAt)
-            .MarkChecksPending(new RebaseOutcome.UpToDate());
+            feedbackCutoffAt,
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

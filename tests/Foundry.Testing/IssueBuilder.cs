@@ -45,6 +45,7 @@ public sealed class IssueBuilder
     private int _omittedCommentCount;
     private DateTimeOffset? _newestCommentAt;
     private DateTimeOffset _runStartedAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _transitionedAt = DateTimeOffset.UtcNow;
     private IReadOnlyList<FailingCheck> _failingChecks =
     [
         new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
@@ -101,6 +102,9 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithRunStartedAt(DateTimeOffset value) { _runStartedAt = value; return this; }
 
+    /// <summary>The time every transition the builder replays happens at, so each built state entered it then.</summary>
+    public IssueBuilder WithTransitionedAt(DateTimeOffset value) { _transitionedAt = value; return this; }
+
     public IssueBuilder WithFailingChecks(IEnumerable<FailingCheck> value) { _failingChecks = [.. value]; return this; }
 
     /// <summary>Records blockers on the issue from detection, which every later state carries forward.</summary>
@@ -126,40 +130,40 @@ public sealed class IssueBuilder
         return detected;
     }
 
-    public TriageQueuedIssue TriageQueued() => Detected().QueueTriage();
+    public TriageQueuedIssue TriageQueued() => Detected().QueueTriage(_transitionedAt);
 
     /// <summary>A new issue waiting untriaged for its <paramref name="blockers"/> to close (ADR 0102).</summary>
-    public TriageBlockedIssue TriageBlocked(IReadOnlyList<int> blockers) => Detected().BlockTriage(blockers);
+    public TriageBlockedIssue TriageBlocked(IReadOnlyList<int> blockers) => Detected().BlockTriage(blockers, _transitionedAt);
 
-    public TriageInProgressIssue TriageInProgress() => TriageQueued().Claim(_workerRunId);
+    public TriageInProgressIssue TriageInProgress() => TriageQueued().Claim(_workerRunId, _transitionedAt);
 
     public TriageFailedIssue TriageFailed() =>
         TriageInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
 
     /// <summary>A queued issue that skipped triage: no verdict recorded, its kind as the labels decided.</summary>
-    public FreshQueuedIssue FreshQueued() => (FreshQueuedIssue)TriageFailed().SkipTriage();
+    public FreshQueuedIssue FreshQueued() => (FreshQueuedIssue)TriageFailed().SkipTriage(_transitionedAt);
 
     /// <summary>A queued issue triage judged ready as <paramref name="kind"/>.</summary>
     public FreshQueuedIssue FreshQueuedFromTriage(IssueKind kind) =>
-        (FreshQueuedIssue)TriageInProgress().MarkReady(new TriageVerdict.Ready(kind, _runStartedAt));
+        (FreshQueuedIssue)TriageInProgress().MarkReady(new TriageVerdict.Ready(kind, _runStartedAt), _transitionedAt);
 
     /// <summary>A triage run that asked the <see cref="DefaultQuestions"/>: resumes as a re-triage.</summary>
     public AwaitingInputIssue AwaitingInputFromTriage(IssueKind kind) =>
-        TriageInProgress().MarkNeedsInput(new TriageVerdict.NeedsInput(kind, DefaultQuestions, _runStartedAt));
+        TriageInProgress().MarkNeedsInput(new TriageVerdict.NeedsInput(kind, DefaultQuestions, _runStartedAt), _transitionedAt);
 
     /// <summary>A triage run that named the blockers of <paramref name="verdict"/>: waits untriaged on them.</summary>
     public TriageBlockedIssue TriageBlockedFromTriage(TriageVerdict.Blocked verdict) =>
-        TriageInProgress().MarkBlocked(verdict);
+        TriageInProgress().MarkBlocked(verdict, _transitionedAt);
 
-    public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId);
+    public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId, _transitionedAt);
 
     public ReviewIssue Review() =>
-        InProgress().MarkInReview(_branchName, _pullRequestUrl, _feedbackCutoffAt);
+        InProgress().MarkInReview(_branchName, _pullRequestUrl, _feedbackCutoffAt, _transitionedAt);
 
     public RevisionQueuedIssue RevisionQueued() =>
-        Review().Revise(_reviewComments, _omittedCommentCount, _newestCommentAt);
+        Review().Revise(_reviewComments, _transitionedAt, _omittedCommentCount, _newestCommentAt);
 
-    public RevisionInProgressIssue RevisionInProgress() => RevisionQueued().Claim(_workerRunId);
+    public RevisionInProgressIssue RevisionInProgress() => RevisionQueued().Claim(_workerRunId, _transitionedAt);
 
     public FailedIssue Failed() =>
         InProgress().MarkFailed(_failureReason, _failedAt, _failureCategory);
@@ -193,18 +197,18 @@ public sealed class IssueBuilder
     public BranchDivergedIssue BranchDiverged(
         string sideBranchName = "feat/1-test-run-1",
         BranchDivergenceReason reason = BranchDivergenceReason.BranchMoved) =>
-        InProgress().MarkBranchDiverged(_branchName, sideBranchName, reason, pullRequestUrl: null);
+        InProgress().MarkBranchDiverged(_branchName, sideBranchName, reason, pullRequestUrl: null, _transitionedAt);
 
     /// <summary>A revision run whose work went to <paramref name="sideBranchName"/> for <paramref name="reason"/>.</summary>
     public BranchDivergedIssue BranchDivergedFromRevision(
         string sideBranchName = "feat/1-test-run-1",
         BranchDivergenceReason reason = BranchDivergenceReason.BranchMoved) =>
-        RevisionInProgress().MarkBranchDiverged(sideBranchName, reason);
+        RevisionInProgress().MarkBranchDiverged(sideBranchName, reason, _transitionedAt);
 
     public RebasePendingIssue RebasePending() =>
-        InProgress().MarkRebasePending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
+        InProgress().MarkRebasePending(_branchName, _pullRequestUrl, _feedbackCutoffAt, _transitionedAt);
 
-    public RebasePendingIssue RebasePendingFromRevision() => RevisionInProgress().MarkRebasePending(_runStartedAt);
+    public RebasePendingIssue RebasePendingFromRevision() => RevisionInProgress().MarkRebasePending(_runStartedAt, _transitionedAt);
 
     /// <summary>
     /// Builds a <see cref="RebasePendingIssue"/> that has already dispatched <paramref name="conflicts"/>
@@ -215,22 +219,22 @@ public sealed class IssueBuilder
         RebasePendingIssue rebasePending = RebasePending();
         for (int i = 0; i < conflicts; i++)
         {
-            rebasePending = rebasePending.ResolveConflict().Claim(_workerRunId).MarkRebasePending(_runStartedAt);
+            rebasePending = rebasePending.ResolveConflict(_transitionedAt).Claim(_workerRunId, _transitionedAt).MarkRebasePending(_runStartedAt, _transitionedAt);
         }
 
         return rebasePending;
     }
 
-    public ChecksPendingIssue ChecksPending() => RebasePending().MarkChecksPending(_rebaseOutcome);
+    public ChecksPendingIssue ChecksPending() => RebasePending().MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
-    public ChecksPendingIssue ChecksPendingFromRevision() => RebasePendingFromRevision().MarkChecksPending(_rebaseOutcome);
+    public ChecksPendingIssue ChecksPendingFromRevision() => RebasePendingFromRevision().MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
     /// <summary>
     /// Builds a <see cref="ChecksPendingIssue"/> that arrived via a FixChecks revision dispatch
     /// (i.e., ChecksFixAttempts = 1). Used to test the second-attempt code path in FixChecks scenarios.
     /// </summary>
     public ChecksPendingIssue ChecksPendingFromFixChecks() =>
-        ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending(_runStartedAt).MarkChecksPending(_rebaseOutcome);
+        ChecksPending().FixChecks(_failingChecks, _transitionedAt).Claim(_workerRunId, _transitionedAt).MarkRebasePending(_runStartedAt, _transitionedAt).MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
     /// <summary>
     /// Builds a <see cref="ChecksPendingIssue"/> that has exhausted all FixChecks dispatch
@@ -239,11 +243,11 @@ public sealed class IssueBuilder
     /// than dispatching another fix revision.
     /// </summary>
     public ChecksPendingIssue ChecksPendingAtCap() =>
-        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending(_runStartedAt).MarkChecksPending(_rebaseOutcome);
+        ChecksPendingFromFixChecks().FixChecks(_failingChecks, _transitionedAt).Claim(_workerRunId, _transitionedAt).MarkRebasePending(_runStartedAt, _transitionedAt).MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
-    public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome);
+    public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome, _transitionedAt);
 
-    public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();
+    public UnchangedIssue Unchanged() => InProgress().MarkUnchanged(_transitionedAt);
 
     public CompletedIssue Completed() => Review().Complete(_completedAt);
 
@@ -253,11 +257,11 @@ public sealed class IssueBuilder
 
     /// <summary>An implement run that opened a pull request and then asked: resumes as a revision.</summary>
     public AwaitingInputIssue AwaitingInput() =>
-        InProgress().MarkAwaitingInput(_branchName, _pullRequestUrl, branchHasCommits: true, DefaultQuestions, _runStartedAt);
+        InProgress().MarkAwaitingInput(_branchName, _pullRequestUrl, branchHasCommits: true, DefaultQuestions, _runStartedAt, _transitionedAt);
 
     /// <summary>An implement run that asked without opening a pull request: resumes as a continuation or fresh.</summary>
     public AwaitingInputIssue AwaitingInputWithoutPullRequest(bool branchHasCommits) =>
-        InProgress().MarkAwaitingInput(_branchName, pullRequestUrl: null, branchHasCommits, DefaultQuestions, _runStartedAt);
+        InProgress().MarkAwaitingInput(_branchName, pullRequestUrl: null, branchHasCommits, DefaultQuestions, _runStartedAt, _transitionedAt);
 
     /// <summary>An awaiting-input issue whose questions were posted at <paramref name="postedAt"/>.</summary>
     public AwaitingInputIssue AwaitingInputPosted(DateTimeOffset postedAt, bool withPullRequest = true)

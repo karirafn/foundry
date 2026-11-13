@@ -28,6 +28,7 @@ internal static class RetryIssueFresh
     internal sealed class Handler(
         DbContext db,
         IDomainEventDispatcher domainEventDispatcher,
+        TimeProvider timeProvider,
         IIssueQueries issueQueries,
         IWorkBranchCommands workBranchCommands,
         ILogger<Handler> logger)
@@ -75,7 +76,7 @@ internal static class RetryIssueFresh
                 }
             }
 
-            FreshQueuedIssue next = continuableFailed.RetryFresh();
+            FreshQueuedIssue next = continuableFailed.RetryFresh(timeProvider.GetUtcNow());
             await db.TransitionAsync(issue, next, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(

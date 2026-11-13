@@ -98,7 +98,7 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             .Review();
 
         RevisionQueuedIssue revisionQueued = review.Revise(
-            [new ReviewComment("Fix this.")],
+            [new ReviewComment("Fix this.")], DateTimeOffset.UtcNow,
             omittedCommentCount: 5,
             newestCommentAt: new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero));
 
@@ -140,7 +140,7 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             .WithPullRequestUrl("https://github.com/owner/repo/pull/30")
             .WithFailingChecks(failingChecks)
             .ChecksPending()
-            .FixChecks(failingChecks);
+            .FixChecks(failingChecks, DateTimeOffset.UtcNow);
 
         _dbContext.Set<Issue>().Add(revisionQueued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -202,7 +202,7 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             .WithIssueNumber(58)
             .WithLabels([])
             .RebasePendingAfterConflicts(1)
-            .ResolveConflict();
+            .ResolveConflict(DateTimeOffset.UtcNow);
 
         _dbContext.Set<Issue>().Add(revisionQueued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -228,8 +228,8 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             .WithIssueNumber(59)
             .WithLabels([])
             .RebasePendingAfterConflicts(1)
-            .MarkChecksPending(new RebaseOutcome.Disabled())
-            .ToReview(new ChecksOutcome.Passed());
+            .MarkChecksPending(new RebaseOutcome.Disabled(), DateTimeOffset.UtcNow)
+            .ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
 
         _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

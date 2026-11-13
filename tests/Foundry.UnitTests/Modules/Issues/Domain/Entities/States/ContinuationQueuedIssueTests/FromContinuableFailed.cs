@@ -18,7 +18,7 @@ public sealed class FromContinuableFailed
         ContinuableFailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed();
 
         // Act
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failed);
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failed, DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(
@@ -39,7 +39,7 @@ public sealed class FromContinuableFailed
         ContinuableFailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed();
 
         // Act
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failed);
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failed, DateTimeOffset.UtcNow);
 
         // Assert
         queued.FailureReason.ShouldBe(failed.FailureReason);
@@ -57,7 +57,7 @@ public sealed class FromContinuableFailed
             .ContinuableFailed();
 
         // Act
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failedWithLongReason);
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(failedWithLongReason, DateTimeOffset.UtcNow);
 
         // Assert
         queued.FailureReason.Length.ShouldBe(500);

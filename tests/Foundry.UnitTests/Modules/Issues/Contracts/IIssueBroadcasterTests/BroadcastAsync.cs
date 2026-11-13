@@ -26,7 +26,10 @@ public sealed class BroadcastAsync
             Stage: "triage",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null);
+            CodeStep: null,
+            RepositoryId: Guid.NewGuid(),
+            WaitsOnBlockers: false,
+            EnteredStateAt: DateTimeOffset.UtcNow);
 
         StubIssueBroadcaster sut = new();
 

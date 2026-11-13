@@ -38,7 +38,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
         _dispatcher = new CapturingDomainEventDispatcher();
-        _sut = new RebaseResolvedHandler(_dbContext, _dispatcher, NullLogger<RebaseResolvedHandler>.Instance);
+        _sut = new RebaseResolvedHandler(_dbContext, _dispatcher, TimeProvider.System, NullLogger<RebaseResolvedHandler>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

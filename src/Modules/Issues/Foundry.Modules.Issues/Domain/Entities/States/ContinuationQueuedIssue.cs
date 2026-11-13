@@ -16,6 +16,8 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
 
     public override bool AwaitsDispatch => true;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     public const int FailureReasonMaxLength = 500;
@@ -25,7 +27,7 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
     {
     }
 
-    private ContinuationQueuedIssue(IssueId id) : base(id)
+    private ContinuationQueuedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -40,9 +42,11 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
 
     public string FailureReason { get; private set; } = string.Empty;
 
-    internal static ContinuationQueuedIssue FromContinuableFailed(ContinuableFailedIssue source)
+    internal static ContinuationQueuedIssue FromContinuableFailed(
+        ContinuableFailedIssue source,
+        DateTimeOffset transitionedAt)
     {
-        ContinuationQueuedIssue queued = new(source.Id);
+        ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
         queued.CopySharedPropertiesFrom(source);
         queued.BranchName = source.BranchName;
         queued.FailureReason = source.FailureReason.Length > FailureReasonMaxLength
@@ -51,9 +55,9 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         return queued;
     }
 
-    internal static ContinuationQueuedIssue FromBranchDiverged(BranchDivergedIssue source)
+    internal static ContinuationQueuedIssue FromBranchDiverged(BranchDivergedIssue source, DateTimeOffset transitionedAt)
     {
-        ContinuationQueuedIssue queued = new(source.Id);
+        ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
         queued.CopySharedPropertiesFrom(source);
         queued.BranchName = source.BranchName;
         string reason = source.DivergenceReason switch
@@ -71,9 +75,10 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         AwaitingInputIssue source,
         ResumeTarget.Continuation target,
         string input,
-        DateTimeOffset answeredAt)
+        DateTimeOffset answeredAt,
+        DateTimeOffset transitionedAt)
     {
-        ContinuationQueuedIssue queued = new(source.Id);
+        ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
         queued.CopySharedPropertiesFrom(source);
         queued.AnswerClarification(input, answeredAt);
         queued.BranchName = target.BranchName;
@@ -81,9 +86,9 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         return queued;
     }
 
-    public override InProgressIssue Claim(WorkerRunId workerRunId)
+    public override InProgressIssue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
-        InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId);
+        InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId, claimedAt);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
         return inProgress;
     }

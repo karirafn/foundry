@@ -22,6 +22,7 @@ public sealed class MarkInReview
         ReviewIssue review = inProgress.MarkInReview(
             "foundry/1/add-feature",
             "https://github.com/owner/repo/pull/5",
+            DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -39,6 +40,7 @@ public sealed class MarkInReview
         inProgress.MarkInReview(
             "foundry/1/add-feature",
             "https://github.com/owner/repo/pull/5",
+            DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -58,7 +60,7 @@ public sealed class MarkInReview
         string pullRequestUrl = "https://github.com/owner/repo/pull/5";
 
         // Act
-        ReviewIssue review = inProgress.MarkInReview(branchName, pullRequestUrl, DateTimeOffset.UtcNow);
+        ReviewIssue review = inProgress.MarkInReview(branchName, pullRequestUrl, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
         // Assert
         review.ShouldSatisfyAllConditions(

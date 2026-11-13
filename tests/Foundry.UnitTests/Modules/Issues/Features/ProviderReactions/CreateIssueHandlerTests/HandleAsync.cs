@@ -56,7 +56,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), TimeProvider.System, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -87,7 +87,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), TimeProvider.System, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -113,7 +113,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: null,
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), TimeProvider.System, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -140,7 +140,7 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "feature",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), TimeProvider.System, NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);

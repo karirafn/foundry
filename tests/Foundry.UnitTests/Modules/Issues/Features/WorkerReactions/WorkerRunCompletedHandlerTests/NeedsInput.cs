@@ -46,6 +46,7 @@ public sealed class NeedsInput : IAsyncDisposable
         _sut = new WorkerRunCompletedHandler(
             _dbContext,
             new CapturingDomainEventDispatcher(),
+            TimeProvider.System,
             NullLogger<WorkerRunCompletedHandler>.Instance);
     }
 

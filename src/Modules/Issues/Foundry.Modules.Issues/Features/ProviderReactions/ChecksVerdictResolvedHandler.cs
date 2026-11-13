@@ -16,6 +16,7 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 internal sealed class ChecksVerdictResolvedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<ChecksVerdictResolvedHandler> logger) : IIntegrationEventHandler<ChecksVerdictResolved>
 {
     public async Task HandleAsync(ChecksVerdictResolved @event, CancellationToken cancellationToken)
@@ -48,7 +49,9 @@ internal sealed class ChecksVerdictResolvedHandler(
         if (outcome is ChecksOutcome.StillFailing stillFailing
             && checksPendingIssue.CanFixChecks(stillFailing.FailingChecks))
         {
-            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(stillFailing.FailingChecks);
+            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(
+                stillFailing.FailingChecks,
+                timeProvider.GetUtcNow());
             await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
             return;
         }
@@ -61,7 +64,7 @@ internal sealed class ChecksVerdictResolvedHandler(
                 @event.IssueNumber);
         }
 
-        ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome);
+        ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome, timeProvider.GetUtcNow());
         await db.TransitionAsync(checksPendingIssue, reviewIssue, domainEventDispatcher, cancellationToken);
     }
 }

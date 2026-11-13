@@ -19,6 +19,7 @@ using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Foundry.Modules.Issues;
 
@@ -26,6 +27,7 @@ public static class IssuesModule
 {
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IIssueQueries, IssueQueries>();
         services.AddScoped<InFlightWorkerCountQuery>();
         services.AddScoped<DispatchCandidateSelector>();

@@ -13,6 +13,7 @@ namespace Foundry.Modules.Issues.Features.CredentialReactions;
 internal sealed class CredentialsValidatedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<CredentialsValidatedHandler> logger) : IIntegrationEventHandler<CredentialsValidated>
 {
     public async Task HandleAsync(CredentialsValidated @event, CancellationToken cancellationToken)
@@ -27,7 +28,7 @@ internal sealed class CredentialsValidatedHandler(
 
         foreach (FailedIssue failed in failedIssues)
         {
-            FreshQueuedIssue queued = failed.Retry();
+            FreshQueuedIssue queued = failed.Retry(timeProvider.GetUtcNow());
             await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(
@@ -37,7 +38,7 @@ internal sealed class CredentialsValidatedHandler(
 
         foreach (ContinuableFailedIssue continuableFailed in continuableFailedIssues)
         {
-            ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+            ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(timeProvider.GetUtcNow());
             await db.TransitionAsync(
                 continuableFailed,
                 continuationQueued,

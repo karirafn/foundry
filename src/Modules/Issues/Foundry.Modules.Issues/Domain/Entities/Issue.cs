@@ -14,8 +14,21 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     {
     }
 
-    protected Issue(IssueId id) : base(id)
+    /// <param name="id">The issue's id, kept across every state.</param>
+    /// <param name="enteredStateAt">
+    /// When the issue entered this state. Required so that no transition can leave it unstamped: the generic
+    /// transition has no clock, so each state's factory receives the time from its caller.
+    /// </param>
+    protected Issue(IssueId id, DateTimeOffset enteredStateAt) : base(id)
     {
+        if (enteredStateAt == DateTimeOffset.MinValue)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(enteredStateAt),
+                "An issue state needs the time it was entered; the default value is not a time.");
+        }
+
+        EnteredStateAt = enteredStateAt;
     }
 
     // The persisted label half of KindClassification: the labelled kind, or null when no label decided it. The
@@ -58,6 +71,12 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     public DateTimeOffset DetectedAt { get; private set; }
 
+    /// <summary>
+    /// When the issue entered its current state: the transition that created this state instance, or
+    /// <see cref="DetectedAt"/> for the detected state. Never carried over from the state being left.
+    /// </summary>
+    public DateTimeOffset EnteredStateAt { get; private set; }
+
     public IReadOnlyList<int> BlockedBy { get; private set; } = [];
 
     /// <summary>
@@ -88,6 +107,12 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// be queued.
     /// </summary>
     public abstract bool AwaitsDispatch { get; }
+
+    /// <summary>
+    /// True when the issue waits for its open blockers to close before it can move on: blocked, or blocked before
+    /// triage.
+    /// </summary>
+    public abstract bool WaitsOnBlockers { get; }
 
     /// <summary>The step Foundry's own code is running for the issue, or <see langword="null"/> when none is.</summary>
     public abstract IssueCodeStep? CodeStep { get; }
@@ -184,16 +209,16 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// otherwise, so an issue with open blockers is never queued. A ready <paramref name="verdict"/> is recorded on the
     /// next state; skipping triage records none.
     /// </summary>
-    private protected Issue ReleaseThroughDependencyCheck(TriageVerdict.Ready? verdict)
+    private protected Issue ReleaseThroughDependencyCheck(TriageVerdict.Ready? verdict, DateTimeOffset transitionedAt)
     {
         if (BlockedBy.Count == 0)
         {
-            FreshQueuedIssue queued = FreshQueuedIssue.FromTriage(this, verdict);
+            FreshQueuedIssue queued = FreshQueuedIssue.FromTriage(this, verdict, transitionedAt);
             AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
             return queued;
         }
 
-        BlockedIssue blocked = BlockedIssue.FromTriage(this, verdict);
+        BlockedIssue blocked = BlockedIssue.FromTriage(this, verdict, transitionedAt);
         AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }

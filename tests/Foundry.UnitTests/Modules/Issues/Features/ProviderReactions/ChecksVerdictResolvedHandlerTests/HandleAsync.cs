@@ -43,6 +43,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new ChecksVerdictResolvedHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             _logger);
     }
 

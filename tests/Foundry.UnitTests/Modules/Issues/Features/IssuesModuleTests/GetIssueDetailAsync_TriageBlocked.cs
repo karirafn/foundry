@@ -112,7 +112,7 @@ public sealed class GetIssueDetailAsync_TriageBlocked : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .TriageBlockedFromTriage(verdict)
             .FailBlockerLink(WorkerRunId.New(), 3, "issue is locked", DateTimeOffset.UtcNow);
-        BlockedIssue blocked = failed.SkipTriage().ShouldBeOfType<BlockedIssue>();
+        BlockedIssue blocked = failed.SkipTriage(DateTimeOffset.UtcNow).ShouldBeOfType<BlockedIssue>();
         _dbContext.Set<Issue>().Add(blocked);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -136,7 +136,7 @@ public sealed class GetIssueDetailAsync_TriageBlocked : IAsyncDisposable
         FreshQueuedIssue queued = new IssueBuilder()
             .WithMonitoredRepositoryId(RepositoryId)
             .FreshQueuedFromTriage(IssueKind.Feature);
-        BlockedIssue blocked = queued.Block([3, 5]);
+        BlockedIssue blocked = queued.Block([3, 5], DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(blocked);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -162,7 +162,7 @@ public sealed class GetIssueDetailAsync_TriageBlocked : IAsyncDisposable
             IssueKind.Feature,
             [new TriageBlocker(3, "Needs the retry queue."), new TriageBlocker(5, "Needs the schema.")],
             DateTimeOffset.UtcNow);
-        TriageBlockedIssue blocked = inProgress.MarkBlocked(verdict);
+        TriageBlockedIssue blocked = inProgress.MarkBlocked(verdict, DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(blocked);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();

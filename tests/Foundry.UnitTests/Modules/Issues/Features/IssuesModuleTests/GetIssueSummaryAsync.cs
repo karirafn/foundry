@@ -229,6 +229,90 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenSummarised_CarriesTheMonitoredRepositoryId()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(detected.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().RepositoryId.ShouldBe(repositoryId.Value);
+    }
+
+    [Theory]
+    [InlineData("blocked", true)]
+    [InlineData("triage_blocked", true)]
+    [InlineData("queued", false)]
+    [InlineData("review", false)]
+    public async Task WhenInState_SummaryCarriesWhetherItWaitsOnBlockers(string state, bool expected)
+    {
+        // Arrange
+        Issue issue = state switch
+        {
+            "blocked" => new IssueBuilder().WithBlockedBy([2]).TriageFailed().SkipTriage(DateTimeOffset.UtcNow),
+            "triage_blocked" => new IssueBuilder().TriageBlocked([2]),
+            "queued" => new IssueBuilder().FreshQueued(),
+            _ => BuildState(new IssueBuilder(), state),
+        };
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().WaitsOnBlockers.ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData("review")]
+    [InlineData("revision_in_progress")]
+    [InlineData("completed")]
+    public async Task WhenPersistedAndReadBack_SummaryCarriesTheTimeTheStateWasEntered(string state)
+    {
+        // Arrange
+        DateTimeOffset transitionedAt = new(2026, 11, 12, 16, 30, 15, 123, TimeSpan.Zero);
+        Issue issue = BuildState(
+            new IssueBuilder()
+                .WithDetectedAt(transitionedAt.AddDays(-3))
+                .WithTransitionedAt(transitionedAt)
+                .WithCompletedAt(transitionedAt),
+            state);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().EnteredStateAt.ShouldBe(transitionedAt);
+    }
+
+    [Fact]
+    public async Task WhenTransitionedThroughTheDatabase_SummaryCarriesTheNewStateEntryTime()
+    {
+        // Arrange
+        DateTimeOffset claimedAt = new(2026, 11, 10, 13, 0, 0, TimeSpan.Zero);
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(MonitoredRepositoryId.New());
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), claimedAt);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(inProgress.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().EnteredStateAt.ShouldBe(claimedAt);
+    }
+
+    [Fact]
     public async Task WhenReview_SummaryNeedsAction()
     {
         // Arrange
@@ -355,17 +439,18 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
-            DateTimeOffset.UtcNow.AddDays(1))
-            .MarkChecksPending(new RebaseOutcome.UpToDate());
+            DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -387,15 +472,16 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         const string ExpectedPrUrl = "https://github.com/owner/repo/pull/7";
         ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/1-test",
             ExpectedPrUrl,
-            DateTimeOffset.UtcNow.AddDays(1))
-            .MarkChecksPending(new RebaseOutcome.UpToDate());
+            DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -564,19 +650,22 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         RevisionQueuedIssue queued = triggerKind switch
         {
             "review_feedback" => builder.RevisionQueued(),
-            "failed_checks" => builder.ChecksPending().FixChecks([new FailingCheck("ci/build", "failure", null)]),
-            "rebase_conflict" => builder.RebasePending().ResolveConflict(),
+            "failed_checks" => builder.ChecksPending().FixChecks([new FailingCheck("ci/build", "failure", null)],
+            DateTimeOffset.UtcNow),
+            "rebase_conflict" => builder.RebasePending().ResolveConflict(DateTimeOffset.UtcNow),
             "input_provided" => (RevisionQueuedIssue)builder
                 .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
-                .ProvideInput("Use SQLite.", DateTimeOffset.UtcNow),
+                .ProvideInput("Use SQLite.", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             _ => throw new ArgumentOutOfRangeException(nameof(triggerKind), triggerKind, null),
         };
 
         return state switch
         {
             "revision_queued" => queued,
-            "revision_in_progress" => queued.Claim(WorkerRunId.New()),
-            "revision_failed" => queued.Claim(WorkerRunId.New())
+            "revision_in_progress" => queued.Claim(WorkerRunId.New(),
+            DateTimeOffset.UtcNow),
+            "revision_failed" => queued.Claim(WorkerRunId.New(),
+            DateTimeOffset.UtcNow)
                 .MarkFailed("Container exited with code 1", FailureCategory.NonZeroExit, DateTimeOffset.UtcNow),
             _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
         };

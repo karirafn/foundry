@@ -17,6 +17,8 @@ public sealed class ChecksPendingIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => IssueCodeStep.Checks;
 
     /// <summary>
@@ -30,7 +32,7 @@ public sealed class ChecksPendingIssue : Issue
     {
     }
 
-    private ChecksPendingIssue(IssueId id) : base(id)
+    private ChecksPendingIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -58,9 +60,10 @@ public sealed class ChecksPendingIssue : Issue
 
     internal static ChecksPendingIssue FromRebasePending(
         RebasePendingIssue source,
-        RebaseOutcome rebaseOutcome)
+        RebaseOutcome rebaseOutcome,
+        DateTimeOffset transitionedAt)
     {
-        ChecksPendingIssue checksPending = new(source.Id);
+        ChecksPendingIssue checksPending = new(source.Id, transitionedAt);
         checksPending.CopySharedPropertiesFrom(source);
         checksPending.WorkerRunId = source.WorkerRunId;
         checksPending.BranchName = source.BranchName;
@@ -75,15 +78,16 @@ public sealed class ChecksPendingIssue : Issue
         return checksPending;
     }
 
-    public ReviewIssue ToReview(ChecksOutcome checksOutcome)
+    public ReviewIssue ToReview(ChecksOutcome checksOutcome, DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome);
+        ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
 
     public RevisionQueuedIssue Revise(
         IReadOnlyList<ReviewComment> comments,
+        DateTimeOffset transitionedAt,
         int omittedCommentCount = 0,
         DateTimeOffset? newestCommentAt = null)
     {
@@ -91,7 +95,8 @@ public sealed class ChecksPendingIssue : Issue
             this,
             comments,
             omittedCommentCount,
-            newestCommentAt);
+            newestCommentAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }
@@ -100,14 +105,14 @@ public sealed class ChecksPendingIssue : Issue
         failingChecks.Count > 0
         && ChecksFixAttempts < ChecksMaxFixPushes;
 
-    public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks)
+    public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks, DateTimeOffset transitionedAt)
     {
         if (failingChecks.Count == 0)
         {
             throw new ArgumentException("A checks fix must name at least one failing check.", nameof(failingChecks));
         }
 
-        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks);
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks, transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }

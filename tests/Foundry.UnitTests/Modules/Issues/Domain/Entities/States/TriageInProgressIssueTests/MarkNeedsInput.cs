@@ -24,7 +24,7 @@ public sealed class MarkNeedsInput
         TriageVerdict.NeedsInput verdict = new(IssueKind.Feature, questions, DecidedAt);
 
         // Act
-        AwaitingInputIssue awaiting = triaging.MarkNeedsInput(verdict);
+        AwaitingInputIssue awaiting = triaging.MarkNeedsInput(verdict, DateTimeOffset.UtcNow);
 
         // Assert
         awaiting.ShouldSatisfyAllConditions(

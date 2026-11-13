@@ -121,7 +121,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithIssueNumber(issueNumber)
             .WithDetectedAt(Now)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

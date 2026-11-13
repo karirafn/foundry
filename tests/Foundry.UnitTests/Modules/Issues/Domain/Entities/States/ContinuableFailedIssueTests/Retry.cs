@@ -19,7 +19,7 @@ public sealed class Retry
         ContinuableFailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed();
 
         // Act
-        ContinuationQueuedIssue queued = failed.Retry();
+        ContinuationQueuedIssue queued = failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(
@@ -35,7 +35,7 @@ public sealed class Retry
         ContinuableFailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed();
 
         // Act
-        failed.Retry();
+        failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         IssueContinuationQueued domainEvent = failed.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuationQueued>();

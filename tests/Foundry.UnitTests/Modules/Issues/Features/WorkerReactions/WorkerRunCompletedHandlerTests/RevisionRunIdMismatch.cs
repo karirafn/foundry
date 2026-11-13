@@ -39,6 +39,7 @@ public sealed class RevisionRunIdMismatch : IAsyncDisposable
         _sut = new WorkerRunCompletedHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             NullLogger<WorkerRunCompletedHandler>.Instance);
     }
 

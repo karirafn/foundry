@@ -66,6 +66,7 @@ public sealed class TickAsync : IAsyncDisposable
 
         return new BranchDivergedResumeService(
             sp.GetRequiredService<IServiceScopeFactory>(),
+            TimeProvider.System,
             NullLogger<BranchDivergedResumeService>.Instance);
     }
 

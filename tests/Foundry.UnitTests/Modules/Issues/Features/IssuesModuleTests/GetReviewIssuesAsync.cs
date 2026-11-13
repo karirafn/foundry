@@ -67,10 +67,10 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = inProgress.MarkInReview($"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow);
+        ReviewIssue review = inProgress.MarkInReview($"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         return review;

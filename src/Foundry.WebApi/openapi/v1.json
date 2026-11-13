@@ -3685,7 +3685,10 @@
           "stage",
           "needsAction",
           "awaitsDispatch",
-          "codeStep"
+          "codeStep",
+          "repositoryId",
+          "waitsOnBlockers",
+          "enteredStateAt"
         ],
         "type": "object",
         "properties": {
@@ -3753,6 +3756,17 @@
               "null",
               "string"
             ]
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "waitsOnBlockers": {
+            "type": "boolean"
+          },
+          "enteredStateAt": {
+            "type": "string",
+            "format": "date-time"
           },
           "checksOutcome": {
             "type": [

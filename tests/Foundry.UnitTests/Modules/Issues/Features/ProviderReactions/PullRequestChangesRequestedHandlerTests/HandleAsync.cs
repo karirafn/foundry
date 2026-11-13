@@ -40,6 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new PullRequestChangesRequestedHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             NullLogger<PullRequestChangesRequestedHandler>.Instance);
     }
 

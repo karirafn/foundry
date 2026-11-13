@@ -26,7 +26,7 @@ public sealed class ResolveRebase
             .RebasePending();
 
         // Act
-        Issue next = rebasePending.ResolveRebase(new RebaseOutcome.Conflict());
+        Issue next = rebasePending.ResolveRebase(new RebaseOutcome.Conflict(), DateTimeOffset.UtcNow);
 
         // Assert
         RevisionQueuedIssue revisionQueued = next.ShouldBeOfType<RevisionQueuedIssue>();
@@ -49,7 +49,7 @@ public sealed class ResolveRebase
             .RebasePending();
 
         // Act
-        rebasePending.ResolveRebase(new RebaseOutcome.Conflict());
+        rebasePending.ResolveRebase(new RebaseOutcome.Conflict(), DateTimeOffset.UtcNow);
 
         // Assert
         IssueRevisionQueued domainEvent = rebasePending.DomainEvents
@@ -67,7 +67,7 @@ public sealed class ResolveRebase
         RebasePendingIssue rebasePending = new IssueBuilder().RebasePendingAfterConflicts(1);
 
         // Act
-        Issue next = rebasePending.ResolveRebase(new RebaseOutcome.Conflict());
+        Issue next = rebasePending.ResolveRebase(new RebaseOutcome.Conflict(), DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<RevisionQueuedIssue>()
@@ -82,7 +82,7 @@ public sealed class ResolveRebase
             .RebasePendingAfterConflicts(RebasePendingIssue.MaxRebaseConflictAttempts);
 
         // Act
-        Issue next = rebasePending.ResolveRebase(new RebaseOutcome.Conflict());
+        Issue next = rebasePending.ResolveRebase(new RebaseOutcome.Conflict(), DateTimeOffset.UtcNow);
 
         // Assert
         ChecksPendingIssue checksPending = next.ShouldBeOfType<ChecksPendingIssue>();
@@ -100,7 +100,7 @@ public sealed class ResolveRebase
             .RebasePendingAfterConflicts(RebasePendingIssue.MaxRebaseConflictAttempts);
 
         // Act & Assert
-        Should.Throw<InvalidOperationException>(() => rebasePending.ResolveConflict());
+        Should.Throw<InvalidOperationException>(() => rebasePending.ResolveConflict(DateTimeOffset.UtcNow));
     }
 
     public static TheoryData<RebaseOutcome> SuccessfulSyncs => [new RebaseOutcome.UpToDate(), new RebaseOutcome.Rebased()];
@@ -113,7 +113,7 @@ public sealed class ResolveRebase
         RebasePendingIssue rebasePending = new IssueBuilder().RebasePendingAfterConflicts(1);
 
         // Act
-        Issue next = rebasePending.ResolveRebase(outcome);
+        Issue next = rebasePending.ResolveRebase(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         ChecksPendingIssue checksPending = next.ShouldBeOfType<ChecksPendingIssue>();
@@ -133,7 +133,7 @@ public sealed class ResolveRebase
         RebasePendingIssue rebasePending = new IssueBuilder().RebasePendingAfterConflicts(1);
 
         // Act
-        Issue next = rebasePending.ResolveRebase(outcome);
+        Issue next = rebasePending.ResolveRebase(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         ChecksPendingIssue checksPending = next.ShouldBeOfType<ChecksPendingIssue>();
@@ -150,13 +150,13 @@ public sealed class ResolveRebase
         RebasePendingIssue rebasePending = new IssueBuilder().RebasePending();
 
         // Act
-        RevisionQueuedIssue revisionQueued = rebasePending.ResolveRebase(new RebaseOutcome.Conflict())
+        RevisionQueuedIssue revisionQueued = rebasePending.ResolveRebase(new RebaseOutcome.Conflict(), DateTimeOffset.UtcNow)
             .ShouldBeOfType<RevisionQueuedIssue>();
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
-        RebasePendingIssue rebasePendingAgain = revisionInProgress.MarkUnchangedRebasePending(DateTimeOffset.UtcNow);
-        ChecksPendingIssue checksPending = rebasePendingAgain.ResolveRebase(new RebaseOutcome.Disabled())
+        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
+        RebasePendingIssue rebasePendingAgain = revisionInProgress.MarkUnchangedRebasePending(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        ChecksPendingIssue checksPending = rebasePendingAgain.ResolveRebase(new RebaseOutcome.Disabled(), DateTimeOffset.UtcNow)
             .ShouldBeOfType<ChecksPendingIssue>();
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
 
         // Assert
         new[]
@@ -174,15 +174,15 @@ public sealed class ResolveRebase
     {
         // Arrange
         RevisionInProgressIssue revisionInProgress = new IssueBuilder().RebasePending()
-            .ResolveConflict()
-            .Claim(WorkerRunId.New());
+            .ResolveConflict(DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Act
         RevisionFailedIssue failed = revisionInProgress.MarkFailed(
             "boom",
             FailureCategory.NonZeroExit,
             DateTimeOffset.UtcNow);
-        RevisionQueuedIssue retried = failed.Retry();
+        RevisionQueuedIssue retried = failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         failed.RebaseConflictAttempts.ShouldBe(1);
@@ -197,14 +197,14 @@ public sealed class ResolveRebase
         // Arrange
         ChecksPendingIssue checksPending = new IssueBuilder()
             .RebasePendingAfterConflicts(1)
-            .ResolveRebase(new RebaseOutcome.Skipped(RebaseSkipReasons.Timeout))
+            .ResolveRebase(new RebaseOutcome.Skipped(RebaseSkipReasons.Timeout), DateTimeOffset.UtcNow)
             .ShouldBeOfType<ChecksPendingIssue>();
 
         // Act
-        RevisionQueuedIssue fixChecks = checksPending.FixChecks([new FailingCheck("ci/build", "failure", null)]);
-        RevisionQueuedIssue revise = checksPending.Revise([new ReviewComment("Fix it.")]);
-        RevisionQueuedIssue fromReview = checksPending.ToReview(new ChecksOutcome.Passed())
-            .Revise([new ReviewComment("Fix it.")]);
+        RevisionQueuedIssue fixChecks = checksPending.FixChecks([new FailingCheck("ci/build", "failure", null)], DateTimeOffset.UtcNow);
+        RevisionQueuedIssue revise = checksPending.Revise([new ReviewComment("Fix it.")], DateTimeOffset.UtcNow);
+        RevisionQueuedIssue fromReview = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow)
+            .Revise([new ReviewComment("Fix it.")], DateTimeOffset.UtcNow);
 
         // Assert
         new[]

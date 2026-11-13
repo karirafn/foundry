@@ -57,7 +57,13 @@ export interface IssueSummary {
   needsAction: boolean;
   /** True while the issue waits for a worker run to be dispatched. */
   awaitsDispatch: boolean;
+  /** True while the issue waits for its open blockers to close (#892). */
+  waitsOnBlockers: boolean;
   codeStep: CodeStep | null;
+  /** The monitored repository the issue belongs to: the id the repository list and settings route use. */
+  repositoryId: string;
+  /** When the issue entered its current state (ISO 8601). */
+  enteredStateAt: string;
 }
 
 export interface EligibilityViolation {

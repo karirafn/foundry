@@ -22,7 +22,8 @@ public sealed class MarkInReviewWithFeedbackCutoff
         ReviewIssue review = inProgress.MarkInReview(
             "foundry/1/add-feature",
             "https://github.com/owner/repo/pull/5",
-            feedbackCutoffAt);
+            feedbackCutoffAt,
+            DateTimeOffset.UtcNow);
 
         // Assert
         review.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt);

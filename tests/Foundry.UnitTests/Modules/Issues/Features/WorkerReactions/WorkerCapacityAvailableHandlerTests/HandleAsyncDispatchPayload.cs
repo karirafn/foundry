@@ -57,7 +57,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher());
+        IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher(), TimeProvider.System);
         _sut = new WorkerCapacityAvailableHandler(
             _dbContext,
             selector,

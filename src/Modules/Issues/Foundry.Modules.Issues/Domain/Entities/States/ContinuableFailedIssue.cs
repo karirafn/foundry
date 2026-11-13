@@ -15,6 +15,8 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -22,7 +24,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
     {
     }
 
-    private ContinuableFailedIssue(IssueId id) : base(id)
+    private ContinuableFailedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -47,7 +49,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = branchName;
@@ -64,7 +66,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = target.BranchName;
@@ -81,7 +83,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -98,7 +100,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -115,7 +117,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -132,7 +134,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -149,7 +151,7 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        ContinuableFailedIssue failed = new(source.Id);
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -160,9 +162,9 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         return failed;
     }
 
-    public ContinuationQueuedIssue Retry()
+    public ContinuationQueuedIssue Retry(DateTimeOffset transitionedAt)
     {
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(this);
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(this, transitionedAt);
         AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
         return queued;
     }
@@ -172,9 +174,9 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
     /// deletes the branch on the provider first so the next dispatch re-creates it from the
     /// default branch rather than continuing from the previous commits.
     /// </summary>
-    public FreshQueuedIssue RetryFresh()
+    public FreshQueuedIssue RetryFresh(DateTimeOffset transitionedAt)
     {
-        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this, transitionedAt);
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }

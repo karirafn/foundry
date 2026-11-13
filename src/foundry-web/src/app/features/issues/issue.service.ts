@@ -94,16 +94,18 @@ interface WirePlacement {
   stage?: string | null;
   needsAction?: boolean | null;
   awaitsDispatch?: boolean | null;
+  waitsOnBlockers?: boolean | null;
   codeStep?: string | null;
 }
 
-type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'codeStep'>;
+type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'codeStep'>;
 
 function toPlacement(wire: WirePlacement): Placement {
   return {
     stage: toIssueStage(wire.stage),
     needsAction: wire.needsAction === true,
     awaitsDispatch: wire.awaitsDispatch === true,
+    waitsOnBlockers: wire.waitsOnBlockers === true,
     codeStep: toCodeStep(wire.codeStep),
   };
 }
@@ -523,6 +525,8 @@ export class IssueService {
       providerType: i.providerType ?? null,
       publishPhase: toPublishPhase(i.publishPhase),
       checksOutcome: i.checksOutcome ?? null,
+      repositoryId: i.repositoryId,
+      enteredStateAt: i.enteredStateAt,
       ...toPlacement(i),
     };
   }

@@ -15,6 +15,8 @@ public sealed class FailedIssue : Issue, IAutoRetryableFailedState
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -22,7 +24,7 @@ public sealed class FailedIssue : Issue, IAutoRetryableFailedState
     {
     }
 
-    private FailedIssue(IssueId id) : base(id)
+    private FailedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -40,7 +42,7 @@ public sealed class FailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        FailedIssue failed = new(source.Id);
+        FailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
@@ -55,7 +57,7 @@ public sealed class FailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        FailedIssue failed = new(source.Id);
+        FailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
@@ -64,9 +66,9 @@ public sealed class FailedIssue : Issue, IAutoRetryableFailedState
         return failed;
     }
 
-    public FreshQueuedIssue Retry()
+    public FreshQueuedIssue Retry(DateTimeOffset transitionedAt)
     {
-        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this, transitionedAt);
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }

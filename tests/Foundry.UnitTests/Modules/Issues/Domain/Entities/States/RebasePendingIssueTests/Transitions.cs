@@ -24,7 +24,7 @@ public sealed class Transitions
         RebaseOutcome outcome = new RebaseOutcome.Skipped(RebaseSkipReasons.Timeout);
 
         // Act
-        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(outcome);
+        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         checksPending.ShouldSatisfyAllConditions(
@@ -45,7 +45,7 @@ public sealed class Transitions
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.Rebased());
+        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.Rebased(), DateTimeOffset.UtcNow);
 
         // Assert
         checksPending.EnteredChecksPendingAt.ShouldBeInRange(before, DateTimeOffset.UtcNow);
@@ -61,7 +61,7 @@ public sealed class Transitions
             .RebasePending();
 
         // Act
-        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.UpToDate());
+        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
 
         // Assert
         IssueChecksPending domainEvent = rebasePending.DomainEvents
@@ -119,7 +119,7 @@ public sealed class Transitions
             .ChecksPending();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
 
         // Assert
         review.RebaseOutcome.ShouldBeOfType<RebaseOutcome.Conflict>();
