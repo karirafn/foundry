@@ -19,7 +19,8 @@ import { IssueDetail } from '../../issues/issue.model';
 import { IssueService, TriageAction } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
-import { PaneAction } from '../pane-callout.model';
+import { SecretFindingsComponent } from '../../issues/secret-findings/secret-findings';
+import { PaneAction, possibleSecrets } from '../pane-callout.model';
 
 const RETRIAGE_MESSAGE =
   'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply.';
@@ -38,7 +39,7 @@ let nextId = 0;
  */
 @Component({
   selector: 'fd-pane-actions',
-  imports: [ConfirmDialogComponent],
+  imports: [ConfirmDialogComponent, SecretFindingsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pane-actions.html',
   styleUrl: './pane-actions.scss',
@@ -65,6 +66,7 @@ export class PaneActionsComponent {
   protected readonly confirmRetriageOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmPublishRetryOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmDiscardOpen: WritableSignal<boolean> = signal(false);
+  protected readonly confirmFalsePositivesOpen: WritableSignal<boolean> = signal(false);
 
   // Set once the user confirmed a stop in this view; reset whenever the detail reloads, after
   // which the persisted cancelRequestedAt takes over.
@@ -83,6 +85,21 @@ export class PaneActionsComponent {
   private readonly _discardError: WritableSignal<string | null> = signal(null);
   private readonly _discardSuccess: WritableSignal<string | null> = signal(null);
   protected readonly discardSuccess: Signal<string | null> = this._discardSuccess.asReadonly();
+
+  // Unchecked on every open, so each confirmation takes a fresh look at the list.
+  protected readonly falsePositivesAcknowledged: WritableSignal<boolean> = signal(false);
+  private readonly _confirmFalsePositivesPending: WritableSignal<boolean> = signal(false);
+  protected readonly confirmFalsePositivesPending: Signal<boolean> = this._confirmFalsePositivesPending.asReadonly();
+  private readonly _confirmFalsePositivesError: WritableSignal<string | null> = signal(null);
+  private readonly _confirmFalsePositivesSuccess: WritableSignal<string | null> = signal(null);
+  protected readonly confirmFalsePositivesSuccess: Signal<string | null> = this._confirmFalsePositivesSuccess.asReadonly();
+
+  /** Any publish action of the run in flight: each disables the others. */
+  protected readonly publishActionPending: Signal<boolean> = computed(() =>
+    this._publishRetryPending() || this._discardPending() || this._confirmFalsePositivesPending());
+
+  /** The block time of the run as rendered; null until a blocked run has loaded. */
+  private readonly _publishBlockedAt: Signal<string | null> = computed(() => this.run()?.publishBlockedAt ?? null);
 
   protected readonly triagePending: Signal<TriageAction | null> = computed(() =>
     this.issueService.triageActionPending());
@@ -104,7 +121,10 @@ export class PaneActionsComponent {
 
   /** The one error to show: this view's own first, then the service's for the offered actions. */
   protected readonly error: Signal<string | null> = computed(() => {
-    const local = this._cancelError() ?? this._publishRetryError() ?? this._discardError();
+    const local = this._cancelError()
+      ?? this._publishRetryError()
+      ?? this._discardError()
+      ?? this._confirmFalsePositivesError();
     if (local !== null) {
       return local;
     }
@@ -126,9 +146,21 @@ export class PaneActionsComponent {
     return `Foundry pushes the run's commits to ${target} and opens or updates the pull request. CI runs on the push.`;
   });
 
+  private readonly _providerName: Signal<string> = computed(() =>
+    providerDisplayName(this.providerType()) || 'the provider');
+
   protected readonly discardMessage: Signal<string> = computed(() =>
     "The run's commits are deleted from this host and nothing is pushed. The issue moves to Failed, where "
-      + `Retry issue starts a new worker from the branch on ${providerDisplayName(this.providerType()) || 'the provider'}. This cannot be undone.`);
+      + `Retry issue starts a new worker from the branch on ${this._providerName()}. This cannot be undone.`);
+
+  protected readonly confirmFalsePositivesTitle: Signal<string> = computed(() =>
+    `Publish with ${possibleSecrets(this.run()?.secretFindings.length ?? 0)}?`);
+
+  protected readonly confirmFalsePositivesMessage: Signal<string> = computed(() => {
+    const target = this.detail().stateDetails?.branchName ?? 'the issue branch';
+    return `Foundry pushes the run's commits to ${target}, including the content these findings flagged. Once pushed, `
+      + `it stays in the repository's history on ${this._providerName()}, and CI runs on the push. This cannot be undone.`;
+  });
 
   // The service-backed action the user last started here, named when the service reports success.
   private _serviceAction: PaneAction | null = null;
@@ -147,7 +179,15 @@ export class PaneActionsComponent {
         this._publishRetryError.set(null);
         this.confirmDiscardOpen.set(false);
         this._discardError.set(null);
+        this.confirmFalsePositivesOpen.set(false);
+        this._confirmFalsePositivesError.set(null);
       });
+    });
+
+    // A run blocked again holds a finding set the open dialog was not opened on.
+    effect(() => {
+      this._publishBlockedAt();
+      untracked(() => this.confirmFalsePositivesOpen.set(false));
     });
 
     effect(() => {
@@ -170,8 +210,18 @@ export class PaneActionsComponent {
     return this.actions().includes(action);
   }
 
-  protected buttonClass(primary: boolean): string {
-    return primary ? 'pane-actions__btn pane-actions__btn--primary' : 'pane-actions__btn';
+  /**
+   * The first action is filled, except Discard run and the confirmation: Foundry cannot know which
+   * outcome of a blocked run is right, and a filled button reads as its recommendation.
+   */
+  protected buttonClass(action: PaneAction, first: boolean): string {
+    if (action === 'discard_run') {
+      return 'pane-actions__btn pane-actions__btn--destructive';
+    }
+    if (action === 'confirm_false_positives') {
+      return 'pane-actions__btn pane-actions__btn--neutral';
+    }
+    return first ? 'pane-actions__btn pane-actions__btn--primary' : 'pane-actions__btn';
   }
 
   protected openCancelConfirm(): void {
@@ -197,6 +247,7 @@ export class PaneActionsComponent {
   protected openPublishRetryConfirm(): void {
     this._publishRetryError.set(null);
     this._discardError.set(null);
+    this._confirmFalsePositivesError.set(null);
     this.confirmPublishRetryOpen.set(true);
   }
 
@@ -222,6 +273,7 @@ export class PaneActionsComponent {
   protected openDiscardConfirm(): void {
     this._discardError.set(null);
     this._publishRetryError.set(null);
+    this._confirmFalsePositivesError.set(null);
     this.confirmDiscardOpen.set(true);
   }
 
@@ -241,6 +293,34 @@ export class PaneActionsComponent {
       }
       this._discardSuccess.set('Run discarded. Issue status is updating.');
       this.succeeded.emit('discard_run');
+    });
+  }
+
+  protected openConfirmFalsePositives(): void {
+    this._confirmFalsePositivesError.set(null);
+    this._discardError.set(null);
+    this._publishRetryError.set(null);
+    this.falsePositivesAcknowledged.set(false);
+    this.confirmFalsePositivesOpen.set(true);
+  }
+
+  protected confirmFalsePositives(): void {
+    this.confirmFalsePositivesOpen.set(false);
+    const workerRunId = this._workerRunId();
+    const publishBlockedAt = this._publishBlockedAt();
+    if (!workerRunId || publishBlockedAt === null || !this.falsePositivesAcknowledged()) {
+      return;
+    }
+    this._confirmFalsePositivesPending.set(true);
+    this._confirmFalsePositivesSuccess.set(null);
+    this._workerRunService.requestConfirmFalsePositives(workerRunId, publishBlockedAt).subscribe((error) => {
+      this._confirmFalsePositivesPending.set(false);
+      if (error !== null) {
+        this._confirmFalsePositivesError.set(error);
+        return;
+      }
+      this._confirmFalsePositivesSuccess.set('Findings confirmed. Publishing restarted; issue status is updating.');
+      this.succeeded.emit('confirm_false_positives');
     });
   }
 

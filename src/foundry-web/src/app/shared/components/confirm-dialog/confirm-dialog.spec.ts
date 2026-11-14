@@ -151,3 +151,64 @@ describe('ConfirmDialogComponent', () => {
     ).toBe(true);
   });
 });
+
+@Component({
+  imports: [ConfirmDialogComponent],
+  template: `
+    <fd-confirm-dialog title="Publish?" message="This cannot be undone." [confirmDisabled]="confirmDisabled()">
+      <p class="projected">Every finding is listed.</p>
+    </fd-confirm-dialog>
+  `,
+})
+class BodyHostComponent {
+  readonly confirmDisabled = signal(true);
+}
+
+function setupWithBody() {
+  TestBed.configureTestingModule({ imports: [BodyHostComponent] });
+  const fixture = TestBed.createComponent(BodyHostComponent);
+  fixture.detectChanges();
+  const dialog = (fixture.nativeElement as HTMLElement).querySelector('dialog') as HTMLDialogElement;
+  return { fixture, host: fixture.componentInstance, dialog };
+}
+
+describe('ConfirmDialogComponent with a projected body', () => {
+  it('should render the projected content between the message and the actions', () => {
+    // Act
+    const { dialog } = setupWithBody();
+
+    // Assert
+    const order = Array.from(dialog.querySelectorAll('.confirm-dialog__message, .projected, .confirm-dialog__actions'))
+      .map((e) => e.className);
+    expect(order).toEqual(['confirm-dialog__message', 'projected', 'confirm-dialog__actions']);
+  });
+
+  it('should disable only the confirm button while confirmDisabled is set', () => {
+    // Act
+    const { dialog } = setupWithBody();
+
+    // Assert
+    expect((dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).disabled).toBe(true);
+    expect((dialog.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('should enable the confirm button once confirmDisabled clears', () => {
+    // Arrange
+    const { fixture, host, dialog } = setupWithBody();
+
+    // Act
+    host.confirmDisabled.set(false);
+    fixture.detectChanges();
+
+    // Assert
+    expect((dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('should leave the confirm button enabled by default', () => {
+    // Act
+    const { dialog } = setup();
+
+    // Assert
+    expect((dialog().querySelector('.confirm-dialog__confirm') as HTMLButtonElement).disabled).toBe(false);
+  });
+});

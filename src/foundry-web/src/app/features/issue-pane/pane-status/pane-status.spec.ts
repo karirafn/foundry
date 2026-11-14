@@ -91,6 +91,9 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     discardsAt: null,
     secretFindings: [],
     revertedFiles: [],
+    publishBlockedAt: null,
+    falsePositivesConfirmedAt: null,
+    confirmedFindings: [],
     ...overrides,
   };
 }
@@ -119,6 +122,7 @@ function setup(detail: IssueDetail | null, options: { run?: WorkerRunDetail | nu
           requestCancel: vi.fn(() => of(null)),
           requestPublishRetry: vi.fn(() => of(null)),
           requestDiscard: vi.fn(() => of(null)),
+          requestConfirmFalsePositives: vi.fn(() => of(null)),
         },
       },
     ],
@@ -251,7 +255,7 @@ describe('PaneStatusComponent', () => {
     expect(list?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Conclusion: failure');
   });
 
-  it('renders the secret findings with their heading for a blocked push', () => {
+  it('renders the secret findings with their heading for a blocked push, offering Discard run then the confirmation', () => {
     // Act
     const { callout } = setup(issue('publish_blocked'), {
       run: run({ state: 'publish_blocked', secretFindings: [{ path: 'a.env', line: 3, commitSha: 'abc', ruleId: 'aws-key' }] }),
@@ -262,7 +266,8 @@ describe('PaneStatusComponent', () => {
     expect(findings?.querySelectorAll('li').length).toBe(1);
     const list = findings?.querySelector('ul');
     expect(callout().querySelector(`[id="${list?.getAttribute('aria-labelledby')}"]`)).not.toBeNull();
-    expect(text(callout().querySelector('fd-pane-actions .pane-actions'))).toBe('Discard run');
+    const buttons = Array.from(callout().querySelectorAll('fd-pane-actions .pane-actions button')).map((b) => text(b));
+    expect(buttons).toEqual(['Discard run', 'Confirm all as false positives and publish']);
   });
 
   it('renders link rows for a diverged branch', () => {
@@ -370,6 +375,37 @@ describe('PaneStatusComponent', () => {
       expect(focusedBeforeReload?.classList.contains('pane-callout__title')).toBe(false);
       expect(document.activeElement?.classList.contains('pane-callout__title')).toBe(true);
       expect(text(document.activeElement)).toBe('Queued');
+    });
+
+    it('moves focus to the Publishing callout title once findings are confirmed and the reload lands', async () => {
+      // Arrange
+      const blocked = run({
+        state: 'publish_blocked',
+        secretFindings: [{ path: 'a.env', line: 3, commitSha: 'abc', ruleId: 'aws-key' }],
+        publishBlockedAt: '2026-11-14T09:00:00+00:00',
+      });
+      const { fixture, el, render } = setup(issue('publish_blocked'), { run: blocked });
+      const confirmAll = Array.from(el.querySelectorAll<HTMLButtonElement>('fd-pane-actions .pane-actions button'))
+        .find((b) => text(b) === 'Confirm all as false positives and publish')!;
+      confirmAll.click();
+      await render();
+      const dialog = Array.from(el.querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open)!;
+      (dialog.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+      await render();
+      (dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+      await render();
+
+      // Act
+      fixture.componentRef.setInput('detail', issue('in_progress'));
+      fixture.componentRef.setInput('run', run({ state: 'publishing', falsePositivesConfirmedAt: '2026-11-14T09:05:00+00:00' }));
+      await render();
+
+      // Assert
+      expect(el.querySelector('.pane-actions__success--confirm-false-positives')?.textContent?.trim()).toBe(
+        'Findings confirmed. Publishing restarted; issue status is updating.',
+      );
+      expect(document.activeElement?.classList.contains('pane-callout__title')).toBe(true);
+      expect(text(document.activeElement)).toBe('Publishing');
     });
 
     it('does not move focus on an ordinary detail reload', async () => {

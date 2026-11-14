@@ -80,6 +80,28 @@ export class WorkerRunService {
     );
   }
 
+  /**
+   * Confirms every secret finding of a publish-blocked run as a false positive, so Foundry
+   * publishes it. `publishBlockedAt` is the run's block time as the client rendered it: the server
+   * refuses (409) a confirmation of a finding set the operator has not seen. Resolves to `null` once
+   * the confirmation is accepted (202), or to a user-facing error message.
+   */
+  requestConfirmFalsePositives(workerRunId: string, publishBlockedAt: string): Observable<string | null> {
+    return this._http.post(`/api/workers/runs/${workerRunId}/confirm-false-positives`, { publishBlockedAt }).pipe(
+      map(() => null),
+      catchError((err: HttpErrorResponse) => {
+        if (err.status === 409) {
+          return of('The findings changed or this run is no longer blocked. Review the current state.');
+        }
+        if (err.status === 404) {
+          return of('The run was not found.');
+        }
+        console.error(err);
+        return of('Failed to confirm the findings.');
+      }),
+    );
+  }
+
   getLog(workerRunId: string): Observable<string | null> {
     return this._http.get(`/api/workers/runs/${workerRunId}/log`, {
       responseType: 'text',
