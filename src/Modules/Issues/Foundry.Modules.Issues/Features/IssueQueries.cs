@@ -113,6 +113,20 @@ internal sealed class IssueQueries(
         return numbers.ToHashSet();
     }
 
+    public async Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        List<int> numbers = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Where(i => i is PublishBlockedIssue || i is PublishFailedIssue)
+            .Select(i => i.IssueNumber)
+            .ToListAsync(cancellationToken);
+
+        return numbers.ToHashSet();
+    }
+
     public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -754,7 +768,8 @@ internal sealed class IssueQueries(
                 BlockedBy: null,
                 TransientRetry: null,
                 RebaseOutcome: checksPending.RebaseOutcome?.Discriminator,
-                RebaseSkippedReason: (checksPending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason),
+                RebaseSkippedReason: (checksPending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason,
+                ChecksPendingReason: checksPending.Reason.Discriminator),
 
             RebasePendingIssue rebasePending => new IssueStateDetails(
                 WorkerRunId: rebasePending.WorkerRunId.Value,

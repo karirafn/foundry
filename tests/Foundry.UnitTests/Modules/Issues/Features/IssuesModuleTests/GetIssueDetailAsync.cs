@@ -830,6 +830,57 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => stateDetails.FeedbackCutoffAt.ShouldNotBeNull()
                 .ShouldBe(feedbackCutoffAt, tolerance: TimeSpan.FromSeconds(1)),
             () => stateDetails.ChecksOutcome.ShouldBeNull(),
-            () => stateDetails.FailingChecks.ShouldBeNull());
+            () => stateDetails.FailingChecks.ShouldBeNull(),
+            () => stateDetails.ChecksPendingReason.ShouldBe("after_run"));
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingAfterHeadMoved_ReturnsHeadMovedReason()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ReviewIssue review = await ReviewThroughChecksGateAsync(inProgress, DateTimeOffset.UtcNow);
+        ChecksPendingIssue checksPending = review.RecheckAfterHeadMoved(DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(review, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            checksPending.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.StateDetails.ShouldNotBeNull().ChecksPendingReason.ShouldBe("head_moved");
+    }
+
+    [Fact]
+    public async Task WhenIssueIsNotChecksPending_ChecksPendingReasonIsNull()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ReviewIssue review = await ReviewThroughChecksGateAsync(inProgress, DateTimeOffset.UtcNow);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            review.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.StateDetails.ShouldNotBeNull().ChecksPendingReason.ShouldBeNull();
     }
 }

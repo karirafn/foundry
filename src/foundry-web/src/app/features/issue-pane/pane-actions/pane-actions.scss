@@ -1,6 +1,7 @@
 @use '../../../../styles/controls' as *;
 
 :host {
+  container: pane-actions / inline-size;
   display: block;
 }
 
@@ -23,6 +24,8 @@
   font-weight: 600;
   min-height: 32px;
   padding: 0 var(--fd-spacing-md);
+  // A long label wraps inside its button rather than pushing the row past the pane.
+  white-space: normal;
 
   &:hover:not(:disabled) {
     background: var(--fd-bg-card-hover);
@@ -52,6 +55,24 @@
   }
 }
 
+.pane-actions__btn--destructive {
+  border-color: var(--fd-state-failed);
+  color: var(--fd-text-error);
+}
+
+// Neutral: the irreversible styling sits on the dialog's commit button instead.
+.pane-actions__btn--neutral {
+  border-color: var(--fd-text-secondary);
+  color: var(--fd-text-primary);
+}
+
+// In a narrow pane the buttons stack full width, in their order.
+@container pane-actions (max-width: 30rem) {
+  .pane-actions__btn {
+    flex: 1 1 100%;
+  }
+}
+
 .pane-actions__hint {
   color: var(--fd-text-secondary);
   font-size: 0.75rem;
@@ -64,5 +85,49 @@
 
   &:not(:empty) {
     margin-top: var(--fd-spacing-xs);
+  }
+}
+
+// The confirm-all dialog body: the scroll region caps its height so the actions stay on screen.
+.pane-actions__findings-scroll {
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-sm);
+  max-height: min(40vh, 20rem);
+  overflow-y: auto;
+  padding: 0 var(--fd-spacing-sm) var(--fd-spacing-sm);
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-actions__dialog-line {
+  color: var(--fd-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: var(--fd-spacing-md) 0;
+}
+
+.pane-actions__checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: var(--fd-spacing-sm);
+  margin-bottom: var(--fd-spacing-xl);
+
+  input,
+  label {
+    cursor: pointer;
+  }
+
+  input:focus-visible {
+    @include focus-ring;
+  }
+
+  label {
+    font-size: 0.875rem;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
   }
 }

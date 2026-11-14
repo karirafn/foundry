@@ -89,6 +89,9 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     discardsAt: null,
     secretFindings: [],
     revertedFiles: [],
+    publishBlockedAt: null,
+    falsePositivesConfirmedAt: null,
+    confirmedFindings: [],
     ...overrides,
   };
 }
@@ -127,7 +130,7 @@ describe('buildCallout', () => {
       expect(callout.lines).toContain('The run finished before the cancel took effect.');
     });
 
-    it('shows a secret-blocked push with its findings, guidance and only Discard run', () => {
+    it('shows a secret-blocked push with its findings and guidance, offering Discard run then the confirmation', () => {
       // Arrange
       const findings = [{ path: 'a.env', line: 3, commitSha: 'abc', ruleId: 'aws-key' }];
 
@@ -146,9 +149,51 @@ describe('buildCallout', () => {
         "The diff gate found 1 possible secret in the run's changes, so nothing was pushed to feat/42-dark-mode.",
       ]);
       expect(callout.secretFindings).toEqual(findings);
-      expect(callout.notes[0]).toContain('Foundry never publishes a run with a detected secret. Discard the run, then retry the issue');
-      expect(callout.notes[0]).toMatch(new RegExp(`the run is discarded automatically on ${MEDIUM_DATE.source}\\.$`));
-      expect(callout.actions).toEqual(['discard_run']);
+      expect(callout.notes).toHaveLength(1);
+      expect(callout.notes[0]).toMatch(new RegExp(
+        '^Foundry publishes this run only if you confirm that every finding is a false positive\\. If any finding '
+          + 'is a real credential, discard the run and rotate the credential: the worker had it in its workspace\\. '
+          + 'Then retry the issue to start a new worker from the branch\\. If no one acts, the run is discarded '
+          + `automatically on ${MEDIUM_DATE.source}\\.$`,
+      ));
+      expect(callout.actions).toEqual(['discard_run', 'confirm_false_positives']);
+    });
+
+    it('leaves the auto-discard sentence out of the blocked guidance when the run has no discard date', () => {
+      // Act
+      const callout = buildCallout(detail('publish_blocked'), run({ state: 'publish_blocked', discardsAt: null }), null, null);
+
+      // Assert
+      expect(callout.notes[0]).toMatch(/Then retry the issue to start a new worker from the branch\.$/);
+      expect(callout.notes[0]).not.toContain('discarded automatically');
+    });
+
+    it('tells a blocked run that was confirmed before that its findings are new, above the findings', () => {
+      // Act
+      const callout = buildCallout(
+        detail('publish_blocked'),
+        run({
+          state: 'publish_blocked',
+          secretFindings: [{ path: 'b.env', line: 9, commitSha: 'def', ruleId: 'generic-api-key' }],
+          falsePositivesConfirmedAt: '2026-03-01T10:00:00Z',
+        }),
+        null,
+        null,
+      );
+
+      // Assert
+      expect(callout.lines).toEqual([
+        "The diff gate found 1 possible secret in the run's changes, so nothing was pushed to feat/42-dark-mode.",
+        'Earlier findings on this run were confirmed as false positives. These findings are new.',
+      ]);
+    });
+
+    it('has no re-block line for a run blocked for the first time', () => {
+      // Act
+      const callout = buildCallout(detail('publish_blocked'), run({ state: 'publish_blocked' }), null, null);
+
+      // Assert
+      expect(callout.lines.join(' ')).not.toContain('confirmed as false positives');
     });
 
     it('shows an exhausted publish with its attempts and reason, offering Retry publish then Discard run', () => {
@@ -538,6 +583,79 @@ describe('buildCallout', () => {
       expect(callout.tone).toBe('working');
       expect(callout.title).toBe('Checks running');
       expect(callout.lines).toEqual(['Waiting for CI checks on the merge request.']);
+    });
+
+    it('explains that new commits on GitHub sent the issue back from review, linking the pull request', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'head_moved' }),
+        null,
+        summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('working');
+      expect(callout.title).toBe('Checks re-running');
+      expect(callout.lines).toEqual([
+        'The pull request\'s branch changed on GitHub after its checks finished, so it left your review.',
+        'Waiting for CI checks on the new commits.',
+      ]);
+      expect(callout.links).toEqual([
+        { label: 'View PR', href: 'https://github.com/acme/api/pull/7', ariaLabel: 'View pull request for issue #42' },
+      ]);
+    });
+
+    it('explains new commits on a merge request in GitLab terms', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'head_moved' }),
+        null,
+        summary({ state: 'checks_pending', providerType: 'gitlab' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Checks re-running');
+      expect(callout.lines[0]).toBe(
+        'The merge request\'s branch changed on GitLab after its checks finished, so it left your review.',
+      );
+    });
+
+    for (const [name, reason] of [
+      ['after_run', 'after_run'],
+      ['null', null],
+      ['an unknown value', 'from_the_future'],
+    ] as const) {
+      it(`keeps today's pending-checks copy when the reason is ${name}`, () => {
+        // Act
+        const callout = buildCallout(
+          detail('checks_pending', { checksPendingReason: reason as IssueStateDetails['checksPendingReason'] }),
+          null,
+          summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+          null,
+        );
+
+        // Assert
+        expect(callout.title).toBe('Checks running');
+        expect(callout.lines).toEqual(['Waiting for CI checks on the pull request.']);
+        expect(callout.links).toEqual([]);
+      });
+    }
+
+    it('keeps today\'s pending-checks copy when the reason is missing', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending'),
+        null,
+        summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Checks running');
+      expect(callout.lines).toEqual(['Waiting for CI checks on the pull request.']);
+      expect(callout.links).toEqual([]);
     });
 
     it('shows a review whose checks failed with no failing check identified', () => {

@@ -68,6 +68,9 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     discardsAt: null,
     secretFindings: [],
     revertedFiles: [],
+    publishBlockedAt: null,
+    falsePositivesConfirmedAt: null,
+    confirmedFindings: [],
     ...overrides,
   };
 }
@@ -93,6 +96,7 @@ function fakeWorkerRunService() {
     requestCancel: vi.fn(() => of<string | null>(null)),
     requestPublishRetry: vi.fn(() => of<string | null>(null)),
     requestDiscard: vi.fn(() => of<string | null>(null)),
+    requestConfirmFalsePositives: vi.fn((_runId: string, _publishBlockedAt: string) => of<string | null>(null)),
   };
 }
 
@@ -155,7 +159,7 @@ describe('PaneActionsComponent', () => {
     // Assert
     expect(el.querySelector('.pane-actions')).toBeNull();
     expect(el.querySelector('fd-confirm-dialog')).toBeNull();
-    expect(el.querySelectorAll('.pane-actions__success[aria-live="polite"]').length).toBe(4);
+    expect(el.querySelectorAll('.pane-actions__success[aria-live="polite"]').length).toBe(5);
   });
 
   describe('Stop worker', () => {
@@ -574,6 +578,326 @@ describe('PaneActionsComponent', () => {
       // Assert
       expect(error()).toBe('The run holds no unpublished work.');
       expect(button('Discard run')?.disabled).toBe(false);
+    });
+  });
+
+  describe('Confirm all as false positives', () => {
+    const BLOCKED_AT = '2026-11-14T09:00:00+00:00';
+    const FINDINGS = [
+      { path: 'src/appsettings.json', line: 14, commitSha: 'abc1234', ruleId: 'aws-access-key-id' },
+      { path: 'tests/fixtures/user.json', line: 3, commitSha: 'abc1234', ruleId: 'generic-api-key' },
+      { path: 'scripts/deploy.sh', line: 27, commitSha: 'def5678', ruleId: 'generic-api-key' },
+    ];
+    const BLOCKED_ACTIONS: PaneAction[] = ['discard_run', 'confirm_false_positives'];
+    const CONFIRM_LABEL = 'Confirm all as false positives and publish';
+
+    function blockedRun(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
+      return run({ state: 'publish_blocked', secretFindings: FINDINGS, publishBlockedAt: BLOCKED_AT, ...overrides });
+    }
+
+    function setupBlocked(options: SetupOptions = {}) {
+      return setup('publish_blocked', BLOCKED_ACTIONS, { run: blockedRun(), ...options });
+    }
+
+    function openConfirm(ctx: ReturnType<typeof setupBlocked>) {
+      ctx.button(CONFIRM_LABEL)!.click();
+      ctx.render();
+    }
+
+    function acknowledgement(ctx: ReturnType<typeof setupBlocked>): HTMLInputElement {
+      return ctx.openDialog()!.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    }
+
+    function acknowledge(ctx: ReturnType<typeof setupBlocked>) {
+      const box = acknowledgement(ctx);
+      box.click();
+      ctx.render();
+    }
+
+    function confirmButton(ctx: ReturnType<typeof setupBlocked>): HTMLButtonElement {
+      return ctx.openDialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement;
+    }
+
+    it('offers Discard run then the confirmation, neither filled, each named for the issue', () => {
+      // Act
+      const { buttons, button } = setupBlocked();
+
+      // Assert
+      expect(buttons().map((b) => b.textContent?.trim())).toEqual(['Discard run', CONFIRM_LABEL]);
+      expect(buttons().some((b) => b.classList.contains('pane-actions__btn--primary'))).toBe(false);
+      expect(button('Discard run')?.classList.contains('pane-actions__btn--destructive')).toBe(true);
+      expect(button(CONFIRM_LABEL)?.classList.contains('pane-actions__btn--neutral')).toBe(true);
+      expect(button('Discard run')?.getAttribute('aria-label')).toBe('Discard run for issue #42');
+      expect(button(CONFIRM_LABEL)?.getAttribute('aria-label')).toBe(
+        'Confirm all findings as false positives and publish issue #42',
+      );
+    });
+
+    it('opens a destructive dialog naming the count, branch and provider, without confirming straight away', () => {
+      // Arrange
+      const ctx = setupBlocked({ providerType: 'gitlab' });
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      const dialog = ctx.openDialog();
+      expect(dialog?.querySelector('.confirm-dialog__title')?.textContent).toBe('Publish with 3 possible secrets?');
+      expect(dialog?.querySelector('.confirm-dialog__message')?.textContent).toBe(
+        "Foundry pushes the run's commits to feat/42-dark-mode, including the content these findings flagged. Once "
+          + "pushed, it stays in the repository's history on GitLab, and CI runs on the push. This cannot be undone.",
+      );
+      expect(dialog?.querySelector('.confirm-dialog__confirm--destructive')?.textContent?.trim()).toBe('Confirm and publish');
+      expect(dialog?.querySelector('.confirm-dialog__cancel')?.textContent?.trim()).toBe('Keep blocked');
+      expect(ctx.workerRuns.requestConfirmFalsePositives).not.toHaveBeenCalled();
+    });
+
+    it('words the dialog title for a single finding', () => {
+      // Arrange
+      const ctx = setup('publish_blocked', BLOCKED_ACTIONS, { run: blockedRun({ secretFindings: [FINDINGS[0]] }) });
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      expect(ctx.openDialog()?.querySelector('.confirm-dialog__title')?.textContent).toBe('Publish with 1 possible secret?');
+    });
+
+    it('lists every finding in a focusable scroll region named by the findings heading', () => {
+      // Arrange
+      const ctx = setupBlocked();
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      const region = ctx.openDialog()!.querySelector('.pane-actions__findings-scroll') as HTMLElement;
+      expect(region.getAttribute('tabindex')).toBe('0');
+      expect(region.getAttribute('aria-labelledby')).toBe('confirm-findings-42');
+      expect(region.querySelector('#confirm-findings-42')?.textContent?.trim()).toBe('Findings');
+      const rows = Array.from(region.querySelectorAll('li')).map((li) => [
+        li.querySelector('.secret-findings__path')?.textContent,
+        li.querySelector('.secret-findings__line')?.textContent,
+        li.querySelector('.secret-findings__rule code')?.textContent,
+      ]);
+      expect(rows).toEqual([
+        ['src/appsettings.json', 'line 14', 'aws-access-key-id'],
+        ['tests/fixtures/user.json', 'line 3', 'generic-api-key'],
+        ['scripts/deploy.sh', 'line 27', 'generic-api-key'],
+      ]);
+    });
+
+    it('says the confirmation covers only these findings, and labels the acknowledgement', () => {
+      // Arrange
+      const ctx = setupBlocked();
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      const dialog = ctx.openDialog()!;
+      expect(dialog.textContent).toContain(
+        'This confirms only these findings. If the push turns up others, it is blocked again.',
+      );
+      const box = acknowledgement(ctx);
+      expect(box.id).toBe('confirm-false-positives-ack-42');
+      expect(dialog.querySelector(`label[for="${box.id}"]`)?.textContent?.trim()).toBe(
+        'I checked every finding, and none is a real credential.',
+      );
+    });
+
+    it('keeps Confirm and publish disabled until the acknowledgement is checked', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+      const disabledBefore = confirmButton(ctx).disabled;
+
+      // Act
+      acknowledge(ctx);
+
+      // Assert
+      expect(disabledBefore).toBe(true);
+      expect(confirmButton(ctx).disabled).toBe(false);
+    });
+
+    it('unchecks the acknowledgement each time the dialog opens', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+      acknowledge(ctx);
+      ctx.dismiss();
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      expect(acknowledgement(ctx).checked).toBe(false);
+      expect(confirmButton(ctx).disabled).toBe(true);
+    });
+
+    it('does not confirm when the dialog is dismissed', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+      acknowledge(ctx);
+
+      // Act
+      ctx.dismiss();
+
+      // Assert
+      expect(ctx.workerRuns.requestConfirmFalsePositives).not.toHaveBeenCalled();
+    });
+
+    it('sends the block time of the run it rendered once confirmed', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+      acknowledge(ctx);
+
+      // Act
+      ctx.confirm();
+
+      // Assert
+      expect(ctx.workerRuns.requestConfirmFalsePositives).toHaveBeenCalledWith('run-1', BLOCKED_AT);
+    });
+
+    it('reads Confirming… and disables Discard run while the confirmation is pending', () => {
+      // Arrange
+      const workerRuns = fakeWorkerRunService();
+      workerRuns.requestConfirmFalsePositives.mockReturnValue(new Subject<string | null>());
+      const ctx = setupBlocked({ workerRuns });
+      openConfirm(ctx);
+      acknowledge(ctx);
+
+      // Act
+      ctx.confirm();
+
+      // Assert
+      expect(ctx.button('Confirming…')?.disabled).toBe(true);
+      expect(ctx.button('Discard run')?.disabled).toBe(true);
+    });
+
+    it('disables the confirmation while a discard is pending', () => {
+      // Arrange
+      const workerRuns = fakeWorkerRunService();
+      workerRuns.requestDiscard.mockReturnValue(new Subject<string | null>());
+      const ctx = setupBlocked({ workerRuns });
+      ctx.button('Discard run')!.click();
+      ctx.render();
+
+      // Act
+      ctx.confirm();
+
+      // Assert
+      expect(ctx.button('Discarding…')?.disabled).toBe(true);
+      expect(ctx.button(CONFIRM_LABEL)?.disabled).toBe(true);
+    });
+
+    it('disables the confirmation until the run with its findings has loaded', () => {
+      // Act
+      const { button } = setup('publish_blocked', BLOCKED_ACTIONS, { run: null });
+
+      // Assert
+      expect(button(CONFIRM_LABEL)?.disabled).toBe(true);
+    });
+
+    it.each([
+      ['a 409', 'The findings changed or this run is no longer blocked. Review the current state.'],
+      ['a 404', 'The run was not found.'],
+      ['any other failure', 'Failed to confirm the findings.'],
+    ])('shows the error for %s in the alert and restores both buttons', (_case, message) => {
+      // Arrange
+      const workerRuns = fakeWorkerRunService();
+      workerRuns.requestConfirmFalsePositives.mockReturnValue(of(message));
+      const ctx = setupBlocked({ workerRuns });
+      openConfirm(ctx);
+      acknowledge(ctx);
+
+      // Act
+      ctx.confirm();
+
+      // Assert
+      expect(ctx.error()).toBe(message);
+      expect(ctx.button(CONFIRM_LABEL)?.disabled).toBe(false);
+      expect(ctx.button('Discard run')?.disabled).toBe(false);
+    });
+
+    it('clears the confirmation and discard errors when the dialog opens', () => {
+      // Arrange
+      const workerRuns = fakeWorkerRunService();
+      workerRuns.requestConfirmFalsePositives.mockReturnValue(of('Failed to confirm the findings.'));
+      const ctx = setupBlocked({ workerRuns });
+      openConfirm(ctx);
+      acknowledge(ctx);
+      ctx.confirm();
+      const errorBefore = ctx.error();
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      expect(errorBefore).toBe('Failed to confirm the findings.');
+      expect(ctx.error()).toBe('');
+    });
+
+    it('announces the success across the reload and reports the action as succeeded', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+      acknowledge(ctx);
+
+      // Act
+      ctx.confirm();
+      ctx.fixture.componentRef.setInput('detail', issue('in_progress'));
+      ctx.fixture.componentRef.setInput('actions', []);
+      ctx.render();
+
+      // Assert
+      expect(ctx.el.querySelector('.pane-actions__success--confirm-false-positives')?.textContent?.trim()).toBe(
+        'Findings confirmed. Publishing restarted; issue status is updating.',
+      );
+      expect(ctx.succeeded).toEqual(['confirm_false_positives']);
+    });
+
+    it('closes the dialog when the detail reloads out of publish_blocked', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+
+      // Act
+      ctx.fixture.componentRef.setInput('detail', issue('failed'));
+      ctx.fixture.componentRef.setInput('actions', ['retry_issue']);
+      ctx.render();
+
+      // Assert
+      expect(ctx.openDialog()).toBeNull();
+    });
+
+    it('closes the dialog when the run is blocked again on a new finding set', () => {
+      // Arrange
+      const ctx = setupBlocked();
+      openConfirm(ctx);
+
+      // Act
+      ctx.fixture.componentRef.setInput('run', blockedRun({ publishBlockedAt: '2026-11-14T10:00:00+00:00' }));
+      ctx.render();
+
+      // Assert
+      expect(ctx.openDialog()).toBeNull();
+    });
+
+    it('offers no control to reveal, show or copy a secret anywhere', () => {
+      // Arrange
+      const ctx = setupBlocked();
+
+      // Act
+      openConfirm(ctx);
+
+      // Assert
+      expect(ctx.el.textContent).not.toMatch(/reveal|show secret|copy/i);
+      const labels = Array.from(ctx.el.querySelectorAll('[aria-label], [title]'))
+        .map((e) => `${e.getAttribute('aria-label') ?? ''} ${e.getAttribute('title') ?? ''}`);
+      expect(labels.join(' ')).not.toMatch(/reveal|show secret|copy/i);
     });
   });
 });

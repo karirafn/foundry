@@ -58,6 +58,11 @@ public sealed class ChecksPendingIssue : Issue
     /// </summary>
     public RebaseOutcome? RebaseOutcome { get; private set; }
 
+    /// <summary>
+    /// Why the issue is waiting on checks. Shown in the issue pane; the gate behaves the same for every reason.
+    /// </summary>
+    public ChecksPendingReason Reason { get; private set; } = new ChecksPendingReason.AfterRun();
+
     internal static ChecksPendingIssue FromRebasePending(
         RebasePendingIssue source,
         RebaseOutcome rebaseOutcome,
@@ -75,6 +80,7 @@ public sealed class ChecksPendingIssue : Issue
             ? 0
             : source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = rebaseOutcome;
+        checksPending.Reason = new ChecksPendingReason.AfterRun();
         return checksPending;
     }
 
@@ -94,6 +100,7 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.ChecksFixAttempts = 0;
         checksPending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = source.RebaseOutcome;
+        checksPending.Reason = new ChecksPendingReason.HeadMoved();
         return checksPending;
     }
 

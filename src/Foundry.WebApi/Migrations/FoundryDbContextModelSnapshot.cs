@@ -1094,6 +1094,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("checks_pending_reason");
+
                     b.Property<int>("RebaseConflictAttempts")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
