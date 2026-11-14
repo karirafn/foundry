@@ -348,6 +348,10 @@ public sealed class HandleAsync : IAsyncDisposable
         rebasePending.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
     }
 
+    // The feedback cutoff of the checks-pending or rebase-pending state a fix or conflict revision started from.
+    private static readonly DateTimeOffset SeededPriorCutoffAt =
+        new(2024, 6, 1, 9, 0, 0, TimeSpan.Zero);
+
     private RevisionInProgressIssue SeedNonFeedbackRevisionInProgressIssue(
         MonitoredRepositoryId repositoryId,
         string triggerKind)
@@ -356,7 +360,8 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(4)
             .WithBranchName("feat/issue-4")
-            .WithPullRequestUrl("https://github.com/owner/repo/pull/4");
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/4")
+            .WithFeedbackCutoffAt(SeededPriorCutoffAt);
         RevisionInProgressIssue revisionInProgress = triggerKind switch
         {
             nameof(RevisionTrigger.FailedChecks) => builder.ChecksPending()
@@ -378,13 +383,13 @@ public sealed class HandleAsync : IAsyncDisposable
     [InlineData(nameof(RevisionTrigger.FailedChecks), false)]
     [InlineData(nameof(RevisionTrigger.RebaseConflict), true)]
     [InlineData(nameof(RevisionTrigger.RebaseConflict), false)]
-    public async Task WhenNonFeedbackRevisionCompletes_FeedbackCutoffIsRunStartedAt(string triggerKind, bool withPullRequest)
+    public async Task WhenNonFeedbackRevisionCompletes_FeedbackCutoffIsThePriorCutoff(string triggerKind, bool withPullRequest)
     {
-        // Arrange — a reviewer comments after the run started but before it finished
+        // Arrange — a reviewer comments while the issue waited, before the run started (issue #925)
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = SeedNonFeedbackRevisionInProgressIssue(repositoryId, triggerKind);
         DateTimeOffset runStartedAt = new(2024, 6, 1, 12, 0, 0, TimeSpan.Zero);
-        DateTimeOffset commentDuringRunAt = runStartedAt.AddMinutes(5);
+        DateTimeOffset commentWhileWaitingAt = SeededPriorCutoffAt.AddMinutes(5);
 
         WorkerRunCompleted @event = new(
             WorkerRunId: revisionInProgress.WorkerRunId,
@@ -397,7 +402,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
 
-        // Assert — the mid-run comment falls after the cutoff, so the next review pass reads it
+        // Assert — the comment posted while waiting falls after the cutoff, so the next review pass reads it
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
@@ -405,18 +410,17 @@ public sealed class HandleAsync : IAsyncDisposable
                 TestContext.Current.CancellationToken);
         RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
         rebasePending.ShouldSatisfyAllConditions(
-            () => rebasePending.FeedbackCutoffAt.ShouldBe(runStartedAt),
-            () => rebasePending.FeedbackCutoffAt.ShouldBeLessThan(commentDuringRunAt));
+            () => rebasePending.FeedbackCutoffAt.ShouldBe(SeededPriorCutoffAt),
+            () => rebasePending.FeedbackCutoffAt.ShouldBeLessThan(commentWhileWaitingAt));
     }
 
     [Fact]
-    public async Task WhenNonFeedbackRevisionCompletesWithoutRunStartedAt_FeedbackCutoffFallsBackToUtcNow()
+    public async Task WhenNonFeedbackRevisionCompletesWithoutRunStartedAt_FeedbackCutoffIsThePriorCutoff()
     {
         // Arrange — an event serialized before RunStartedAt existed
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress =
             SeedNonFeedbackRevisionInProgressIssue(repositoryId, nameof(RevisionTrigger.FailedChecks));
-        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         WorkerRunCompleted @event = new(
             WorkerRunId: revisionInProgress.WorkerRunId,
@@ -430,13 +434,12 @@ public sealed class HandleAsync : IAsyncDisposable
         await _sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        DateTimeOffset after = DateTimeOffset.UtcNow;
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<RebasePendingIssue>().FeedbackCutoffAt.ShouldBeInRange(before, after);
+        issue.ShouldBeOfType<RebasePendingIssue>().FeedbackCutoffAt.ShouldBe(SeededPriorCutoffAt);
     }
 
     [Fact]
