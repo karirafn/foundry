@@ -64,7 +64,7 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
                 "https://api.github.com/repos/owner/repo/issues",
                 "github.com")),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),

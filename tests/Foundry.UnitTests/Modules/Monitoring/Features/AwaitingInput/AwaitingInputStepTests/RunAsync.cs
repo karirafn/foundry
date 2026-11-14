@@ -82,7 +82,7 @@ public sealed class RunAsync : IAsyncDisposable
                 new NullRepositorySlugQueries(),
                 new NullRepositoryEligibilityQuery(),
                 new NullWorkerRunQueries(),
-                new InFlightWorkerCountQuery(_dbContext),
+                new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
                 new NullGlobalSettingsQueries()),
             new AwaitingInputCommands(_dbContext, NullLogger<AwaitingInputCommands>.Instance),
             _dbContext,

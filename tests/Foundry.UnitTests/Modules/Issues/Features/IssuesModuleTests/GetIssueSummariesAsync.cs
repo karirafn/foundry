@@ -43,7 +43,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
     }
 

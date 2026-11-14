@@ -62,7 +62,7 @@ public sealed class SelectAsync : IAsyncDisposable
             _dbContext,
             repositoryDispatchQueries ?? new StubRepositoryDispatchQueries(DefaultDispatchInfo),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             issueBlockerQueries ?? new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
             settingsQueries ?? new NullGlobalSettingsQueries(),

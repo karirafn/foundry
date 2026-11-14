@@ -123,7 +123,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task ATransientFailure_WaitsToRetryAndHoldsItsSlot()
+    public async Task ATransientFailure_WaitsToRetryAndHoldsNoSlot()
     {
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
@@ -138,7 +138,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             .ShouldBeOfType<PublishFailedRun>();
         failed.IsExhausted.ShouldBeFalse();
         _events.Captured.OfType<WorkerRunPublishPhaseChanged>().ShouldHaveSingleItem().Phase.ShouldBe(WorkerRunPublishPhase.Retrying);
-        (await db.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+        (await db.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
     }
 
     [Fact]

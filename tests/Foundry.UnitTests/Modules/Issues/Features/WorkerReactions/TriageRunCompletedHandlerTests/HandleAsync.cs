@@ -49,7 +49,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new NullRepositorySlugQueries(),
                 new NullRepositoryEligibilityQuery(),
                 new NullWorkerRunQueries(),
-                new InFlightWorkerCountQuery(_dbContext),
+                new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
                 new NullGlobalSettingsQueries()),
             _dispatcher,
             TimeProvider.System,

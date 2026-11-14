@@ -44,7 +44,7 @@ public sealed class GetIssueDetailAsync_PublishStates : IAsyncDisposable
             slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
     }
 

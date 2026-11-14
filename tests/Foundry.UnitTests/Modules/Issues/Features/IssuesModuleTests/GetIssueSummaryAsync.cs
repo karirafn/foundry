@@ -47,7 +47,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             _workerRunQueries,
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
     }
 
@@ -783,5 +783,10 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
                 issueIds
                     .Where(_publishPhases.ContainsKey)
                     .ToDictionary(id => id, id => _publishPhases[id]));
+
+        public Task<IReadOnlySet<Guid>> GetIssueIdsWithUnpublishedRunAsync(
+            IReadOnlyCollection<Guid> issueIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(issueIds.Where(_publishPhases.ContainsKey).ToHashSet());
     }
 }

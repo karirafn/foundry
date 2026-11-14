@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -11,14 +9,6 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 
 internal static class WorkerRunsDbContextExtensions
 {
-    // A run holds its dispatch slot until publishing finishes (ADR 0069, ADR 0100); one whose publish retries are
-    // exhausted waits for an operator in Needs attention and frees its slot.
-    private static readonly Expression<Func<WorkerRun, bool>> OccupiesSlot = r =>
-        r is StartingRun
-        || r is ActiveRun
-        || r is PublishingRun
-        || (r is PublishFailedRun && ((PublishFailedRun)r).NextPublishAttemptAt != null);
-
     /// <summary>
     /// The run ids whose per-run volumes must survive the orphan sweep: every run occupying a slot, plus every run
     /// still holding unpublished work in its Hand-off volume.
@@ -40,9 +30,9 @@ internal static class WorkerRunsDbContextExtensions
     }
 
     /// <summary>
-    /// Returns the count of items currently occupying a dispatch slot —
-    /// pending reservations plus runs in the <c>starting</c>, <c>active</c> or <c>publishing</c> state, or retrying a
-    /// publish.
+    /// Returns the count of items currently occupying a dispatch slot — pending reservations plus the runs that
+    /// <see cref="WorkerRun.HoldsSlot"/> (<c>starting</c> or <c>active</c>). A run frees its slot when its <c>claude</c>
+    /// container stops, so publishing or retrying a publish holds none.
     /// </summary>
     internal static async Task<int> GetSlotOccupancyCountAsync(
         this DbContext dbContext,
@@ -55,7 +45,7 @@ internal static class WorkerRunsDbContextExtensions
 
         int runCount = await dbContext.Set<WorkerRun>()
             .AsNoTracking()
-            .CountAsync(OccupiesSlot, cancellationToken);
+            .CountAsync(WorkerRun.HoldsSlot, cancellationToken);
 
         return reservationCount + runCount;
     }
@@ -75,7 +65,7 @@ internal static class WorkerRunsDbContextExtensions
 
         List<WorkerRunId> runIds = await dbContext.Set<WorkerRun>()
             .AsNoTracking()
-            .Where(OccupiesSlot)
+            .Where(WorkerRun.HoldsSlot)
             .Select(r => r.Id)
             .ToListAsync(cancellationToken);
 

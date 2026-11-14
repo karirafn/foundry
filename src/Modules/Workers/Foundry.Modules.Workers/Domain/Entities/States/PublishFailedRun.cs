@@ -3,9 +3,9 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 namespace Foundry.Modules.Workers.Domain.Entities.States;
 
 /// <summary>
-/// A run whose last publish attempt failed (ADR 0100). Under the retry cap it waits for its next attempt and keeps its
-/// dispatch slot; once exhausted it waits for an operator's Retry publish, keeping its Hand-off volume until the time
-/// to live discards it.
+/// A run whose last publish attempt failed (ADR 0100). Under the retry cap it waits for its next attempt; once exhausted it
+/// waits for an operator's Retry publish, keeping its Hand-off volume until the time to live discards it. Either way it
+/// holds no Worker Slot (<see cref="WorkerRun.HoldsSlot"/>): its <c>claude</c> container has stopped.
 /// </summary>
 public sealed class PublishFailedRun : UnpublishedRun, IDiscardableRun
 {
