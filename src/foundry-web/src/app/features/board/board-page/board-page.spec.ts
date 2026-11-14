@@ -11,7 +11,7 @@ import { IssueSignalRService } from '../../../core/services/issue-signalr.servic
 import { SettingsService } from '../../../core/services/settings.service';
 import { FakeConnectionGate, provideFakeConnectionGate } from '../../../core/testing/fake-connection-gate';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
-import { AgentActivity, InFlightTool } from '../../../core/models/agent-activity.model';
+import { AgentActivity } from '../../../core/models/agent-activity.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { DispatchCapacityService } from '../../../core/services/dispatch-capacity.service';
 import { AccountService } from '../../settings/accounts/account.service';
@@ -58,7 +58,6 @@ interface Harness {
   } | null>;
   capacityError: WritableSignal<string | null>;
   activities: WritableSignal<ReadonlyMap<string, AgentActivity>>;
-  tools: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>>;
   render: () => Promise<void>;
   fixture: ComponentFixture<BoardPageComponent>;
 }
@@ -74,7 +73,6 @@ async function setup(url = '/'): Promise<Harness> {
   } | null>(null);
   const capacityError = signal<string | null>(null);
   const activities = signal<ReadonlyMap<string, AgentActivity>>(new Map());
-  const tools = signal<ReadonlyMap<string, readonly InFlightTool[]>>(new Map());
   TestBed.configureTestingModule({
     imports: [BoardPageComponent],
     providers: [
@@ -98,7 +96,6 @@ async function setup(url = '/'): Promise<Harness> {
           activeAgentCount: signal(0),
           activityForIssue: () => null,
           agentActivityForIssue: (id: string) => activities().get(id) ?? null,
-          recentToolsForRun: (runId: string) => tools().get(runId) ?? [],
         },
       },
       {
@@ -148,7 +145,6 @@ async function setup(url = '/'): Promise<Harness> {
     capacity,
     capacityError,
     activities,
-    tools,
     render,
     fixture,
   };
@@ -508,23 +504,27 @@ describe('BoardPageComponent', () => {
 
         // Assert
         const panel = el.querySelector('fd-worker-activity')!;
-        expect(text(panel.querySelector('.worker-activity__task'))).toBe('Starting…');
-        expect(text(panel.querySelector('.worker-activity__tool'))).toBe(
+        expect([...panel.querySelectorAll('p')].map((line) => text(line))).toEqual([
           "Waiting for the agent's first event",
-        );
+        ]);
         expect(el.querySelector('.worker-card__event')).toBeNull();
         expect(el.querySelector('.worker-card__sep')).toBeNull();
       });
 
-      it('shows the current task, its position on a hidden segmented bar, and the latest tool', async () => {
+      it('shows the current task and its position on a hidden segmented bar, with no tool line', async () => {
         // Arrange
         const h = await loaded([item('w', 3)]);
 
         // Act
-        h.activities.set(new Map([['w', running()]]));
-        h.tools.set(
+        h.activities.set(
           new Map([
-            ['run-w', [{ name: 'Bash', summary: 'npm test -- --watch=false', startedAt: null }]],
+            [
+              'w',
+              {
+                ...running(),
+                inFlightTool: { name: 'Bash', summary: 'npm test -- --watch=false', startedAt: null },
+              },
+            ],
           ]),
         );
         await h.render();
@@ -542,9 +542,7 @@ describe('BoardPageComponent', () => {
           'worker-activity__segment worker-activity__segment--current',
           'worker-activity__segment',
         ]);
-        const tool = panel.querySelector('.worker-activity__tool')!;
-        expect(text(tool)).toBe('Bash npm test -- --watch=false');
-        expect(tool.getAttribute('title')).toBe('Bash npm test -- --watch=false');
+        expect(text(panel)).not.toContain('npm test');
       });
 
       it('has no bar without a task list', async () => {
@@ -558,8 +556,7 @@ describe('BoardPageComponent', () => {
         // Assert
         const panel = h.el.querySelector('fd-worker-activity')!;
         expect(panel.querySelector('.worker-activity__bar')).toBeNull();
-        expect(text(panel.querySelector('.worker-activity__task'))).toBe('Working');
-        expect(text(panel.querySelector('.worker-activity__tool'))).toBe('No tool calls yet');
+        expect([...panel.querySelectorAll('p')].map((line) => text(line))).toEqual(['Working']);
       });
 
       it('describes the card button with the task line, without a live region', async () => {

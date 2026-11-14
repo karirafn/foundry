@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, take, toArray } from 'rxjs';
-import { CurrentWorkerActivity, RECENT_TOOL_LIMIT, WorkerSignalRService } from './worker-signalr.service';
+import { CurrentWorkerActivity, WorkerSignalRService } from './worker-signalr.service';
 import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 import { WorkerActivity } from '../models/worker-activity.model';
 import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
@@ -74,51 +74,6 @@ describe('WorkerSignalRService', () => {
       expect(svc.activeAgentCount()).toBe(0);
     });
 
-    it('should accumulate distinct in-flight tools into the recent tool ticker', () => {
-      // Arrange
-      const { svc, hub } = setup();
-      const bash = { name: 'Bash', summary: 'npm test', startedAt: '2026-01-01T00:00:01Z' };
-      const read = { name: 'Read', summary: 'src/app.ts', startedAt: '2026-01-01T00:00:05Z' };
-
-      // Act
-      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: bash }));
-      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: bash }));
-      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: null }));
-      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: read }));
-
-      // Assert
-      expect(svc.recentToolsForRun('run-1')).toEqual([bash, read]);
-    });
-
-    it('should keep only the most recent tools', () => {
-      // Arrange
-      const { svc, hub } = setup();
-
-      // Act
-      for (let i = 0; i < RECENT_TOOL_LIMIT + 2; i++) {
-        hub.emit('AgentActivity', buildAgentActivity({
-          inFlightTool: { name: 'Bash', summary: `step ${i}`, startedAt: null },
-        }));
-      }
-
-      // Assert
-      const tools = svc.recentToolsForRun('run-1');
-      expect(tools.length).toBe(RECENT_TOOL_LIMIT);
-      expect(tools[tools.length - 1].summary).toBe(`step ${RECENT_TOOL_LIMIT + 1}`);
-    });
-
-    it('should forget the tool ticker when the run ends', () => {
-      // Arrange
-      const { svc, hub } = setup();
-      hub.emit('AgentActivity', buildAgentActivity({ inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
-
-      // Act
-      hub.emit('AgentActivityEnded', { workerRunId: 'run-1', issueId: 'issue-1' });
-
-      // Assert
-      expect(svc.recentToolsForRun('run-1')).toEqual([]);
-    });
-
     it('should report connected after the hub starts, and reconnecting after a drop', async () => {
       // Arrange
       vi.useFakeTimers();
@@ -167,7 +122,6 @@ describe('WorkerSignalRService', () => {
 
       // Assert
       expect(svc.agentActivities().map((a) => a.workerRunId)).toEqual(['run-1']);
-      expect(svc.recentToolsForRun('run-2')).toEqual([]);
     });
 
     it('should keep a message that arrives during the load when it is newer than the snapshot', async () => {

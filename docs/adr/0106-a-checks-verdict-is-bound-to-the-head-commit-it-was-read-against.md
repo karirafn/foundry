@@ -1,5 +1,7 @@
 # A Checks Verdict Is Bound to the Head Commit It Was Read Against
 
+> **2026-11-14 — Amended:** the "Trigger is the head commit only" clause in Decision is extended by [ADR 0108](0108-a-review-issue-whose-checks-pass-on-a-rerun-returns-to-the-checks-gate.md): a non-passed verdict that reads green on an unchanged head also returns the issue to the checks gate, with an exhausted fix budget.
+
 ## Context
 
 The checks gate ([ADR 0077](0077-gate-review-on-provider-checks-at-the-issue-level.md)) reads a pull request's checks verdict once, before `review`, and records only its `ChecksOutcome`.

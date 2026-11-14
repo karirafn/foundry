@@ -31,15 +31,14 @@ function secondsBefore(seconds: number): string {
 describe('activityPanel', () => {
   it('shows the starting state before the first activity event', () => {
     // Act
-    const panel = activityPanel(null, null);
+    const panel = activityPanel(null);
 
     // Assert
     expect(panel).toEqual({
       starting: true,
-      taskLine: 'Starting…',
+      taskLine: "Waiting for the agent's first event",
       segments: [],
       progress: null,
-      tool: "Waiting for the agent's first event",
     });
   });
 
@@ -53,7 +52,7 @@ describe('activityPanel', () => {
     });
 
     // Act
-    const panel = activityPanel(activity, null);
+    const panel = activityPanel(activity);
 
     // Assert
     expect(panel.taskLine).toBe('Running tests');
@@ -65,7 +64,7 @@ describe('activityPanel', () => {
     const activity = buildActivity({ tasks: [current], currentTask: current });
 
     // Act
-    const panel = activityPanel(activity, null);
+    const panel = activityPanel(activity);
 
     // Assert
     expect(panel.taskLine).toBe('Task 1');
@@ -78,7 +77,7 @@ describe('activityPanel', () => {
     });
 
     // Act
-    const panel = activityPanel(activity, null);
+    const panel = activityPanel(activity);
 
     // Assert
     expect(panel.taskLine).toBe('Explore subagent working');
@@ -92,7 +91,7 @@ describe('activityPanel', () => {
     });
 
     // Act
-    const panel = activityPanel(activity, null);
+    const panel = activityPanel(activity);
 
     // Assert
     expect(panel.taskLine).toBe('1 of 2 tasks done');
@@ -100,7 +99,7 @@ describe('activityPanel', () => {
 
   it('reads "Working" with no task list and no subagent', () => {
     // Act
-    const panel = activityPanel(buildActivity(), null);
+    const panel = activityPanel(buildActivity());
 
     // Assert
     expect(panel.taskLine).toBe('Working');
@@ -117,7 +116,7 @@ describe('activityPanel', () => {
     });
 
     // Act
-    const panel = activityPanel(activity, null);
+    const panel = activityPanel(activity);
 
     // Assert
     expect(panel.segments).toEqual(['done', 'done', 'current', 'empty']);
@@ -126,39 +125,11 @@ describe('activityPanel', () => {
 
   it('has no bar and no position with an empty task list', () => {
     // Act
-    const panel = activityPanel(buildActivity(), null);
+    const panel = activityPanel(buildActivity());
 
     // Assert
     expect(panel.segments).toEqual([]);
     expect(panel.progress).toBeNull();
-  });
-
-  it('shows the latest tool with its summary', () => {
-    // Act
-    const panel = activityPanel(buildActivity(), {
-      name: 'Bash',
-      summary: 'npm test',
-      startedAt: null,
-    });
-
-    // Assert
-    expect(panel.tool).toBe('Bash npm test');
-  });
-
-  it('shows the latest tool alone when it has no summary', () => {
-    // Act
-    const panel = activityPanel(buildActivity(), { name: 'Read', summary: null, startedAt: null });
-
-    // Assert
-    expect(panel.tool).toBe('Read');
-  });
-
-  it('says no tool has been called yet', () => {
-    // Act
-    const panel = activityPanel(buildActivity(), null);
-
-    // Assert
-    expect(panel.tool).toBe('No tool calls yet');
   });
 });
 

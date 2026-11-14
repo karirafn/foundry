@@ -25,14 +25,6 @@
         <div class="pane-activity__fill" [style.width]="width"></div>
       </div>
     }
-    @for (t of tool() ? [tool()!] : []; track t.key) {
-      <p class="pane-activity__tool">
-        <span class="pane-activity__tool-name">{{ t.name }}</span>
-        @if (t.summary) {
-          &ngsp;<span class="pane-activity__tool-summary">{{ t.summary }}</span>
-        }
-      </p>
-    }
   } @else {
     <p class="pane-activity__waiting">Waiting for the first agent event.</p>
   }
