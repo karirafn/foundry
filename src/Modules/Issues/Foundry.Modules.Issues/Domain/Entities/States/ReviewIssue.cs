@@ -54,6 +54,13 @@ public sealed class ReviewIssue : Issue
     /// </summary>
     public string? VerifiedHeadSha { get; private set; }
 
+    /// <summary>
+    /// Why Foundry did not merge the pull request itself (ADR 0105): <see cref="ValueObjects.MergeOutcome.Disabled"/>
+    /// or <see cref="ValueObjects.MergeOutcome.Skipped"/> when the issue came from merge-pending, and
+    /// <see langword="null"/> when it never entered merge-pending.
+    /// </summary>
+    public MergeOutcome? MergeOutcome { get; private set; }
+
     internal static ReviewIssue FromChecksPending(
         ChecksPendingIssue source,
         ChecksOutcome checksOutcome,
@@ -70,6 +77,25 @@ public sealed class ReviewIssue : Issue
         review.RebaseOutcome = source.RebaseOutcome;
         review.RebaseConflictAttempts = source.RebaseConflictAttempts;
         review.VerifiedHeadSha = verifiedHeadSha;
+        return review;
+    }
+
+    internal static ReviewIssue FromMergePending(
+        MergePendingIssue source,
+        MergeOutcome mergeOutcome,
+        DateTimeOffset transitionedAt)
+    {
+        ReviewIssue review = new(source.Id, transitionedAt);
+        review.CopySharedPropertiesFrom(source);
+        review.WorkerRunId = source.WorkerRunId;
+        review.BranchName = source.BranchName;
+        review.PullRequestUrl = source.PullRequestUrl;
+        review.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        review.ChecksOutcome = source.ChecksOutcome;
+        review.RebaseOutcome = source.RebaseOutcome;
+        review.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        review.VerifiedHeadSha = source.HeadSha;
+        review.MergeOutcome = mergeOutcome;
         return review;
     }
 

@@ -883,4 +883,43 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.StateDetails.ShouldNotBeNull().ChecksPendingReason.ShouldBeNull();
     }
+
+    [Fact]
+    public async Task WhenReviewAfterSkippedMerge_StateDetailsCarryMergeOutcomeAndReason()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder()
+            .MergePending()
+            .ToReview(new MergeOutcome.Skipped("unauthorized"), DateTimeOffset.UtcNow);
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueStateDetails stateDetails = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.MergeOutcome.ShouldBe("skipped"),
+            () => stateDetails.MergeSkippedReason.ShouldBe("unauthorized"));
+    }
+
+    [Fact]
+    public async Task WhenMergePending_DetailIsMergePendingWithBranch()
+    {
+        // Arrange
+        MergePendingIssue mergePending = new IssueBuilder().WithBranchName("feat/5-merge").MergePending();
+        _dbContext.Set<Issue>().Add(mergePending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(mergePending.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("merge_pending");
+        detail.StateDetails.ShouldNotBeNull().BranchName.ShouldBe("feat/5-merge");
+    }
 }

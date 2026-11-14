@@ -114,6 +114,34 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenMergePendingIssue_TransitionsToCompletedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        MergePendingIssue mergePending = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/12")
+            .MergePending();
+        _dbContext.Set<Issue>().Add(mergePending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        ProviderIssueClosed @event = new(RepositoryId: repositoryId, IssueNumber: 7);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<CompletedIssue>().PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/12");
+    }
+
+    [Fact]
     public async Task WhenReviewIssue_TransitionsToCompletedIssue()
     {
         // Arrange

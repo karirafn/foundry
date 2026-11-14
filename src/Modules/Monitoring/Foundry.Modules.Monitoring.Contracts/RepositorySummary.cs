@@ -16,7 +16,8 @@ public sealed record RepositorySummary(
     RepositoryEligibilityInfo? Eligibility = null,
     DateTimeOffset? UntrackSuppressedSince = null,
     string WebhookStatus = RepositorySummary.WebhookNotConfigured,
-    bool RebaseAfterRun = true)
+    bool RebaseAfterRun = true,
+    bool MergeWhenChecksPass = false)
 {
     public const string WebhookNotConfigured = "not-configured";
 }

@@ -270,6 +270,24 @@ const MAX_WORKER_LIMIT = 20;
           </span>
         </div>
 
+        <div class="repository-form__field">
+          <div class="repository-form__checkbox-row">
+            <input
+              class="repository-form__toggle"
+              type="checkbox"
+              id="repository-merge-when-checks-pass"
+              aria-describedby="repository-merge-when-checks-pass-hint"
+              [checked]="_mergeWhenChecksPass()"
+              [disabled]="saving()"
+              (change)="_mergeWhenChecksPass.set($any($event.target).checked)"
+            />
+            <label class="repository-form__field-label" for="repository-merge-when-checks-pass">Merge when checks pass</label>
+          </div>
+          <span class="repository-form__field-hint" id="repository-merge-when-checks-pass-hint">
+            When every check passes, Foundry merges the pull request it opened. This is Foundry's own merge, not the provider's auto-merge. If the merge can't go through, the issue waits in review.
+          </span>
+        </div>
+
         @if (_isEditMode()) {
           <div class="repository-form__field repository-form__field--inline">
             <label class="repository-form__field-label" for="repository-active">Polling enabled</label>
@@ -339,6 +357,7 @@ export class RepositoryFormComponent implements OnInit {
   protected readonly _isActive: WritableSignal<boolean> = signal(true);
   protected readonly _applyBranchRules: WritableSignal<boolean> = signal(true);
   protected readonly _rebaseAfterRun: WritableSignal<boolean> = signal(true);
+  protected readonly _mergeWhenChecksPass: WritableSignal<boolean> = signal(false);
   protected readonly _pickerOpen: WritableSignal<boolean> = signal(false);
   protected readonly _activeOptionIndex: WritableSignal<number> = signal(-1);
   protected readonly _filterText: WritableSignal<string> = signal('');
@@ -441,6 +460,7 @@ export class RepositoryFormComponent implements OnInit {
       this._maxConcurrentWorkers.set(repo.maxConcurrentWorkers ?? DEFAULT_MAX_CONCURRENT_WORKERS);
       this._isActive.set(repo.isActive);
       this._rebaseAfterRun.set(repo.rebaseAfterRun ?? true);
+      this._mergeWhenChecksPass.set(repo.mergeWhenChecksPass ?? false);
     }
   }
 
@@ -538,6 +558,7 @@ export class RepositoryFormComponent implements OnInit {
         isActive: this._isActive(),
         maxConcurrentWorkers,
         rebaseAfterRun: this._rebaseAfterRun(),
+        mergeWhenChecksPass: this._mergeWhenChecksPass(),
       };
       this.save.emit(request);
     } else {
@@ -547,6 +568,7 @@ export class RepositoryFormComponent implements OnInit {
         maxConcurrentWorkers,
         applyBranchRules: this._applyBranchRules(),
         rebaseAfterRun: this._rebaseAfterRun(),
+        mergeWhenChecksPass: this._mergeWhenChecksPass(),
       };
       this.save.emit(request);
     }

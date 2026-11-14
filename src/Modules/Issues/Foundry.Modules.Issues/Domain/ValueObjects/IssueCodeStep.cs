@@ -8,4 +8,5 @@ public enum IssueCodeStep
 {
     Rebasing,
     Checks,
+    Merging,
 }

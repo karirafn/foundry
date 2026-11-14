@@ -175,6 +175,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -334,6 +336,12 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue(1)
                         .HasColumnName("max_concurrent_workers");
 
+                    b.Property<bool>("MergeWhenChecksPass")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("merge_when_checks_pass");
+
                     b.Property<TimeSpan?>("PollInterval")
                         .HasColumnType("TEXT")
                         .HasColumnName("poll_interval");
@@ -404,6 +412,37 @@ namespace Foundry.WebApi.Migrations
                         .HasDatabaseName("ix_monitored_repositories_host_slug");
 
                     b.ToTable("monitored_repositories", (string)null);
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingMerge", b =>
+                {
+                    b.Property<Guid>("MonitoredRepositoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monitored_repository_id");
+
+                    b.Property<int>("IssueNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("issue_number");
+
+                    b.Property<DateTimeOffset>("EnteredMergePendingAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entered_merge_pending_at");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<int>("TransientFailures")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("transient_failures");
+
+                    b.HasKey("MonitoredRepositoryId", "IssueNumber");
+
+                    b.ToTable("pending_merges", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingRebase", b =>
@@ -839,6 +878,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -904,6 +945,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -949,6 +992,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -1034,6 +1079,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -1135,6 +1182,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1200,6 +1249,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -1289,6 +1340,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1334,6 +1387,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -1407,6 +1462,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1458,6 +1515,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1480,6 +1539,110 @@ namespace Foundry.WebApi.Migrations
                         });
 
                     b.HasDiscriminator().HasValue("in_progress");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.MergePendingIssue", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch_name");
+
+                    b.Property<string>("ChecksOutcome")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("checks_outcome");
+
+                    b.Property<DateTimeOffset>("EnteredMergePendingAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entered_merge_pending_at");
+
+                    b.Property<DateTimeOffset>("FeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("feedback_cutoff_at");
+
+                    b.Property<string>("HeadSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("merge_head_sha");
+
+                    b.Property<string>("PullRequestUrl")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2000)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_request_url");
+
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
+
+                    b.Property<string>("RebaseOutcome")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("rebase_outcome");
+
+                    b.Property<Guid>("WorkerRunId")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_run_id");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_awaiting_input_fields", "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_branch_diverged_fields", "state <> 'branch_diverged' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND side_branch_name IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_checks_pending_fields", "state <> 'checks_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_checks_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_in_progress_fields", "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_queued_fields", "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_triage_failed_fields", "state <> 'triage_failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_triage_in_progress_worker_run_id", "state <> 'triage_in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_unchanged_worker_run_id", "state <> 'unchanged' OR worker_run_id IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("merge_pending");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.PublishBlockedIssue", b =>
@@ -1552,6 +1715,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -1657,6 +1822,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1745,6 +1912,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1783,6 +1952,7 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("ChecksOutcome")
                         .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
                         .HasColumnName("checks_outcome");
@@ -1791,6 +1961,11 @@ namespace Foundry.WebApi.Migrations
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("feedback_cutoff_at");
+
+                    b.Property<string>("MergeOutcome")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("merge_outcome");
 
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
@@ -1840,6 +2015,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -1954,6 +2131,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -2046,6 +2225,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -2096,6 +2277,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -2169,6 +2352,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -2220,6 +2405,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -2270,6 +2457,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -2638,6 +2827,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -2683,6 +2874,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -2771,6 +2964,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -2816,6 +3011,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_merge_pending_fields", "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
 
@@ -2936,6 +3133,15 @@ namespace Foundry.WebApi.Migrations
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Credential", null)
                         .WithMany("Namespaces")
                         .HasForeignKey("CredentialId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingMerge", b =>
+                {
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
+                        .WithMany()
+                        .HasForeignKey("MonitoredRepositoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

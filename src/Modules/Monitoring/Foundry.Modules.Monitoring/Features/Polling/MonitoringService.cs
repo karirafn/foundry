@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Webhooks;
@@ -210,6 +211,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
         // Optional: hosts (and tests) without the rebase step poll exactly as before.
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
+        MergeStep? mergeStep = scope.ServiceProvider.GetService<MergeStep>();
         AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
 
         int pollIntervalSeconds = await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
@@ -258,6 +260,12 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             if (rebaseStep is not null)
             {
                 await rebaseStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
+            }
+
+            // The scheduled poll is also the merge step's backstop (ADR 0105): it runs merges whose nudges were lost.
+            if (mergeStep is not null)
+            {
+                await mergeStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
             }
 
             // The scheduled poll is also the awaiting-input step's backstop (ADR 0096): it posts questions whose
@@ -317,6 +325,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
+        MergeStep? mergeStep = scope.ServiceProvider.GetService<MergeStep>();
         AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
 
         TimeSpan pollInterval = TimeSpan.FromSeconds(await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken));
@@ -344,6 +353,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 await RunNudgedPassAsync(
                     poller,
                     rebaseStep,
+                    mergeStep,
                     awaitingInputStep,
                     repo,
                     resolvedProvider.Provider,
@@ -357,6 +367,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     private async Task RunNudgedPassAsync(
         RepositoryPoller poller,
         RebaseStep? rebaseStep,
+        MergeStep? mergeStep,
         AwaitingInputStep? awaitingInputStep,
         MonitoredRepository repo,
         IIssueProvider provider,
@@ -421,6 +432,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 if (rebaseStep is not null)
                 {
                     await rebaseStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
+                }
+
+                break;
+
+            case NudgePass.Merge:
+                if (mergeStep is not null)
+                {
+                    await mergeStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
                 }
 
                 break;

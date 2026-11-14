@@ -305,7 +305,7 @@ A change found by a **scheduled** poll (other than the startup catch-up, see [Mo
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `TriageQueuedIssue`, `TriageBlockedIssue`, `TriageInProgressIssue`, `TriageFailedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `TriageQueuedIssue`, `TriageBlockedIssue`, `TriageInProgressIssue`, `TriageFailedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `MergePendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 Every variant carries the shared properties, including the append-only [clarification log](#clarification) and the latest [Triage Verdict](#triage-verdict), through every transition.
 Every new issue is triaged once before its first implement run, and only once its blockers close: `Detected → (TriageBlocked →) TriageQueued → TriageInProgress →` the dependency check (`FreshQueued` or `Blocked`) or `AwaitingInput` ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md), ordering amended by [ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md)).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
@@ -321,7 +321,7 @@ The dashboard shows each issue in one of four display groups. They come from the
 
 - **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs you band, first on the page, with a stage chip naming the stage where it stopped.
 - **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). It sits in the board's Pipeline band in global dispatch order, or in the Blocked band when it [Waits on blockers](#waits-on-blockers).
-- **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, exactly `LIVE_STATES`) or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`). It sits in the board's In progress band: a worker card while a worker runs, a step row on a Code step.
+- **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, exactly `LIVE_STATES`) or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`, `merge_pending`). It sits in the board's In progress band: a worker card while a worker runs, a step row on a Code step.
 - **Resolved** — stage Done (`completed`). It leaves the board and is listed on Resolved history (`/issues`), newest first, next to the run statistics.
 
 A few states deserve explicit note:
@@ -354,7 +354,7 @@ When the issue entered its current state (`Issue.EnteredStateAt`): the detection
 
 ### Code step
 
-The step Foundry's own code is running for the issue, with no worker involved — **publishing** (or **retrying a publish**), **rebasing** (`rebase_pending`), or waiting for CI **checks** (`checks_pending`). Rebasing and checks are declared by the state type (`Issue.CodeStep`); publishing is a phase of the issue's run, so `IssueSummary.CodeStep` reads it from the run's publish phase (`publishing | publish_retrying | rebasing | checks`, or null).
+The step Foundry's own code is running for the issue, with no worker involved — **publishing** (or **retrying a publish**), **rebasing** (`rebase_pending`), waiting for CI **checks** (`checks_pending`), or **merging** the pull request after its checks passed (`merge_pending`). Rebasing, checks and merging are declared by the state type (`Issue.CodeStep`); publishing is a phase of the issue's run, so `IssueSummary.CodeStep` reads it from the run's publish phase (`publishing | publish_retrying | rebasing | checks | merging`, or null).
 
 ## TriageQueuedIssue
 
@@ -460,6 +460,7 @@ Carries a random opaque webhook hook id (addressing its payload URL) and a Found
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — see [Repository Worker Limit](#repository-worker-limit).
 Carries `RebaseAfterRun` (non-nullable `bool`, default `true`) — see [Rebase After Run](#rebase-after-run).
+Carries `MergeWhenChecksPass` (non-nullable `bool`, default `false`) — see [Merge When Checks Pass](#merge-when-checks-pass).
 
 ### Apply Branch Rules
 
@@ -472,6 +473,12 @@ The per-repository operator toggle (`RebaseAfterRun`, non-nullable, default `tru
 Set on the add request (`rebaseAfterRun`, default `true`) and toggled from the repository form through the update request (`rebaseAfterRun`; omitted leaves it unchanged); surfaced on the repository summary.
 Read by the Monitoring module's rebase step when it runs — never snapshotted, so a change mid-run wins. When off, a rebase-pending issue resolves straight away with `RebaseOutcome.Disabled`.
 Unlike [Apply Branch Rules](#apply-branch-rules), existing rows default to `true`: the rebase writes only Foundry-owned branches, never repository-wide protection.
+
+### Merge When Checks Pass
+
+**Merge When Checks Pass** — per-repository opt-in, non-nullable `bool`, default `false`. When on, Foundry merges the pull request it opened itself once its checks gate resolves `Passed`, pinned to the head SHA the gate verified. Read by the Monitoring module's merge step when it runs, never snapshotted. Not the provider's native auto-merge, which Foundry never arms ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md)).
+Set on the add request (`mergeWhenChecksPass`, default `false`) and toggled from the repository form through the update request (`mergeWhenChecksPass`; omitted leaves it unchanged); surfaced on the repository summary and as a "Merges on pass" chip on the repository list. Existing rows migrate to `false`.
+The live value is also copied onto `ChecksVerdictResolved.AutoMerge` when the poller records a verdict, so switching it on while an issue is in `checks_pending` merges that issue. Switched off between the verdict and the merge step, the issue resolves `MergeOutcome.Disabled` and goes to review unmerged.
 
 ### Branch Rules Outcome
 
@@ -630,6 +637,16 @@ GitHub error contract (`updatePullRequestBranch` with `updateMethod: REBASE` and
 GitLab contract (`PUT /projects/:id/merge_requests/:iid/rebase`, polled with `GET /projects/:id/merge_requests/:iid?include_diverged_commits_count=true&include_rebase_in_progress=true`; derived from GitLab's API docs and its `RebaseService` — the live spike against a throwaway project is still to be recorded): the head is `sha` and `diverged_commits_count` is how far the branch is behind its target. A `202` (`{"rebase_in_progress": true}`) queues the rebase; there is no expected-head guard. While awaiting it: a new `sha` → `Rebased`; `rebase_in_progress: true` → stay `rebase_pending`; `rebase_in_progress: false` with `merge_error: null` → `Rebased`; with a non-null `merge_error` → `Conflict` when the merge request itself reports a conflict (`has_conflicts: true` or `detailed_merge_status: conflict`), otherwise `Skipped(rebase-failed)`. GitLab writes one generic `merge_error` for every rebase failure ("Rebase failed: Rebase locally, resolve all conflicts, then push the branch."), so the message text is never a conflict signal; a `merge_error` seen before the request is left over from an earlier rebase and is ignored. Refusals: `403 Source branch is protected from force push` → `Skipped(force-push-protected)`; `403 Cannot push to source branch` (or any other `403`, or `401`) → `Skipped(permission-denied)`; `403 Source branch does not exist` or `404` → `Skipped(not-found)`; `409 Failed to enqueue the rebase operation`, a 5xx, a `429` or a rate-limited `403` → transient, retried with the same bounded backoff as GitHub; any other status → `Skipped(unrecognised-error)`. A rebase found already running when the step starts is awaited rather than requested again.
 The dashboard badges only `Skipped(reason)` and `Conflict` on the issue card; the issue detail shows every outcome.
 
+## Merge Outcome
+
+**Merge Outcome** — how Foundry's own merge of the pull request resolved when the issue left `merge_pending` ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md)). A closed union (`MergeOutcome`, Issues `Domain/ValueObjects/`), modelled on [Rebase Outcome](#rebase-outcome):
+
+- **`Merged`** — the provider merged the pull request (or someone else merged it first); the issue completes.
+- **`Disabled`** — [Merge When Checks Pass](#merge-when-checks-pass) was off when the merge step ran.
+- **`Skipped(reason)`** — the merge did not happen: `not_mergeable` (the provider refused: conflicts, a branch rule, missing approvals, or no merge implementation), `unauthorized` (the token may not merge), `head_moved` (new commits reached the pull request after the verdict, so the pinned merge was refused) or `provider_error` (transient failures exhausted the retry budget).
+
+`Disabled` and `Skipped` are persisted on `ReviewIssue` (`merge_outcome` JSON column, null for a review issue that never entered `merge_pending`) and exposed on the issue DTOs as `mergeOutcome` plus `mergeSkippedReason`. The dashboard reads a skipped merge as the **Merge skipped** reason in Needs you and badges it on the issue card; `Disabled` reads as an ordinary "PR ready".
+
 ## Claim
 
 The act of assigning a queued issue to a specific worker run — the transition from a queued state variant to an in-progress one, paired with the `IssueClaimed` integration event that tells the Workers module to start a container.
@@ -777,10 +794,19 @@ Entering raises `IssueEnteredRebasePending`, which nudges Monitoring's rebase st
 The step: if `RebaseAfterRun` is off → `Disabled`; otherwise it reads the PR head and compares it with the base (`behind_by = 0` → `UpToDate`, no rebase call); otherwise it asks the provider to rebase, guarded by the head it read, and the issue stays `rebase_pending` until the PR head differs from that pre-rebase head (`Rebased`), or (GitLab) the provider reports the rebase finished, or 5 minutes pass (`Skipped(timeout)`). A stale head (a push landed in between) re-reads the head and retries, up to 3 times (`Skipped(stale-head)`). Transient provider failures (5xx, timeouts, rate limits) back off exponentially (30 s doubling, capped at 10 min) driven by nudges and the backstop poll; after 5 the outcome is `Skipped(provider-error)`.
 Transitions: `ResolveRebase(RebaseOutcome)` → `RevisionQueuedIssue` with a `RebaseConflict` trigger (a `Conflict` below the [conflict cap](#rebase-conflict-attempts); raises `IssueRevisionQueued`) or else `MarkChecksPending(RebaseOutcome)` → `ChecksPendingIssue` (raises `IssueChecksPending`, so checks nudges start only after the rebase landed); `Complete()` → `CompletedIssue` (issue closed) and `Fail()` → `ContinuableFailedIssue` (PR closed without merge) — the same exits `ChecksPendingIssue` takes. A checks nudge never applies a verdict to a rebase-pending issue.
 
+## Merge Pending Issue
+
+**Merge Pending Issue** — a lifecycle state (`merge_pending`, Active / In flow, [Code step](#code-step) `merging`, stage Implement, never Needs action) for an issue whose checks gate resolved `Passed` on a repository with [Merge When Checks Pass](#merge-when-checks-pass) on: Foundry is merging the pull request it opened ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md)). The state, step and event mirror [Rebase Pending Issue](#rebase-pending-issue).
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `HeadSha` (the [Verified Head](#verified-head) the merge is pinned to), `ChecksOutcome`, `RebaseOutcome`, `RebaseConflictAttempts`, `FeedbackCutoffAt` and `EnteredMergePendingAt`.
+Entered only from `ChecksPendingIssue.ResolveVerdict`, the single transition that routes a checks verdict: `Passed` with `AutoMerge` and a known head → `MergePendingIssue`; a red verdict naming failing checks under the fix cap → a `FailedChecks` revision; everything else → `ReviewIssue`. A `Passed` verdict with no head goes to review, because a merge must be pinned to a commit.
+Entering raises `IssueEnteredMergePending`, which nudges Monitoring's merge step; the scheduled poll is its backstop. Transient-failure progress is persisted per episode in `pending_merges`.
+The step: if `MergeWhenChecksPass` is off → `Disabled`; if the provider issue is closed → `ProviderIssueClosed`; if the pull request was merged elsewhere → `Merged`, closed without merge → `ProviderPullRequestClosed`; otherwise it calls the provider merge pinned to `HeadSha` (`Merged`; `HeadMoved` → `Skipped(head_moved)`; `NotMergeable` and `Unsupported` → `Skipped(not_mergeable)`; `Unauthorized` → `Skipped(unauthorized)`). Transient failures back off exponentially (30 s doubling, capped at 10 min); after 5 the outcome is `Skipped(provider_error)`. The outcome reaches Issues as `MergeResolved`; a stale one for an issue no longer in `merge_pending` is ignored.
+Transitions: `Complete()` → `CompletedIssue` (merged, or provider issue closed); `ToReview(MergeOutcome)` → `ReviewIssue` via `ReviewIssue.FromMergePending`, carrying the checks, rebase and merge outcomes; `Fail()` → `ContinuableFailedIssue` (`PrClosed`, pull request closed without merge). Not a resting state: untracking preserves it.
+
 ## Review Issue
 
 A lifecycle state for an issue whose worker completed successfully and produced a PR.
-Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable — and a nullable [`MergeOutcome`](#merge-outcome), set when the issue came from `merge_pending` without a merge (`ReviewIssue.FromMergePending`, which also stores the merge's pinned head as the Verified Head).
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
 `FeedbackCutoffAt` filters stale feedback — only review comments created after this timestamp are considered actionable. Tracks consumed feedback: set to the worker run's start time on first entry to review; updated to the newest consumed comment's timestamp on re-entry after a review-feedback revision. A revision that consumed no comments (a `FailedChecks` or `RebaseConflict` trigger) keeps the cutoff of the checks-pending or rebase-pending state it started from, carried as `PriorFeedbackCutoffAt` through `RevisionQueuedIssue`, `RevisionInProgressIssue`, `RevisionFailedIssue`, `PublishBlockedIssue` and `PublishFailedIssue` (column `prior_feedback_cutoff_at`), so a comment posted while the issue waited is still read; without one (an `InputProvided` trigger, or a row that predates the column) it falls back to the run's start time. In steady state the cutoff never uses the worker run's completion time.
 Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `RecheckAfterHeadMoved()` → `ChecksPendingIssue` via `ChecksPendingIssue.FromReview` (the [Verified Head](#verified-head) no longer matches the PR's head; fix budget reset to 0; raises `IssueChecksPending`); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
@@ -832,7 +858,8 @@ Terminal lifecycle state — the issue is resolved via a merged PR.
 Carries `BranchName`, `PullRequestUrl`, and `CompletedAt` — all non-nullable.
 Created two ways:
 
-- **Provider issue closed** (`ProviderIssueClosed`) — from `ReviewIssue`, `ChecksPendingIssue`, `RebasePendingIssue`, `AwaitingInputIssue`, `PublishBlockedIssue`, or `PublishFailedIssue` via each state's `Complete()`. A publish-blocked or publish-failed issue keeps its branch and its pull request (empty for an implement run, the revised pull request for a revision), and its completion also raises `IssueClosedWithUnpublishedRun` carrying its `WorkerRunId`, so Workers discards the run.
+- **Provider issue closed** (`ProviderIssueClosed`) — from `ReviewIssue`, `ChecksPendingIssue`, `RebasePendingIssue`, `MergePendingIssue`, `AwaitingInputIssue`, `PublishBlockedIssue`, or `PublishFailedIssue` via each state's `Complete()`. A publish-blocked or publish-failed issue keeps its branch and its pull request (empty for an implement run, the revised pull request for a revision), and its completion also raises `IssueClosedWithUnpublishedRun` carrying its `WorkerRunId`, so Workers discards the run.
+- **Foundry merged the pull request** (`MergeResolved` with `merged`) — from `MergePendingIssue.Complete()` via `CompletedIssue.FromMergePending`, keeping its branch and pull request ([Merge Pending Issue](#merge-pending-issue)). A provider that does not auto-close the issue leaves it open on the provider; `completed` is preserved by untracking.
 - **Pull request already merged when the run ends** — from `InProgressIssue.MarkCompleted()`, when the worker outcome resolver reads the run's merge request as merged ([ADR 0060](docs/adr/0060-mr-state-first-outcome-resolution.md)).
 
 Preserved when the issue is subsequently untracked (completion wins over provider closure).
@@ -1004,7 +1031,7 @@ Suppression clears automatically on the first later cycle whose listing is compl
 The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states (`Issue.IsRestingState()`): `detected`, `triage_queued`, `queued`, `revision_queued`, `continuation_queued`, `blocked`, `triage_blocked`, `failed`, `triage_failed`, `continuable_failed`, `revision_failed`, `branch_diverged`, and `unchanged`.
 `completed` is preserved — completion wins over provider closure.
 `triage_in_progress`, `in_progress`, and `revision_in_progress` are preserved — a live worker is running. Untracking never stops a worker; stopping one is an explicit user action (see Run Cancellation).
-`review`, `checks_pending`, `rebase_pending`, `awaiting_input`, `publish_failed`, and `publish_blocked` are preserved — each asks the provider whether the issue is closed (`ProviderIssueClosed`) and completes when it is.
+`review`, `checks_pending`, `rebase_pending`, `merge_pending`, `awaiting_input`, `publish_failed`, and `publish_blocked` are preserved — each asks the provider whether the issue is closed (`ProviderIssueClosed`) and completes when it is.
 For `publish_failed` and `publish_blocked` that close check runs in the listing pass, and only for an issue missing from a complete listing: absence alone cannot tell a closed issue from a removed trigger label, and an issue still in the listing is not asked about. Their completion raises `IssueClosedWithUnpublishedRun`, and Workers discards the run and deletes its Hand-off volume. Until then their run's unpublished work waits in that volume, and an issue still open leaves only when the run is discarded or the volume's time to live expires.
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 

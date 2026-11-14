@@ -75,6 +75,14 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// </summary>
     public bool RebaseAfterRun { get; private set; } = true;
 
+    /// <summary>
+    /// Whether Foundry merges the pull request it opened itself once its checks gate resolves <c>Passed</c>,
+    /// pinned to the head the gate verified (ADR 0105). Read when the checks verdict is recorded and when the merge
+    /// step runs, never snapshotted. Defaults to <see langword="false"/>: opting in is a trust decision about one
+    /// repository's CI. Not the provider's native auto-merge, which Foundry never arms.
+    /// </summary>
+    public bool MergeWhenChecksPass { get; private set; }
+
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
     /// <summary>
@@ -103,7 +111,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         int position = 0,
         int maxConcurrentWorkers = DefaultMaxConcurrentWorkers,
         bool applyBranchRules = false,
-        bool rebaseAfterRun = true)
+        bool rebaseAfterRun = true,
+        bool mergeWhenChecksPass = false)
     {
         if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
         {
@@ -133,6 +142,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             WriteProbeVerdict = new WriteProbeVerdict.Unknown(),
             ApplyBranchRules = applyBranchRules,
             RebaseAfterRun = rebaseAfterRun,
+            MergeWhenChecksPass = mergeWhenChecksPass,
             WebhookHookId = NewWebhookHookId(),
             WebhookSecret = NewWebhookSecret(),
             WebhookStatus = WebhookStatus.NotRegistered,
@@ -315,6 +325,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public void SetRebaseAfterRun(bool rebaseAfterRun)
     {
         RebaseAfterRun = rebaseAfterRun;
+    }
+
+    /// <summary>Sets the operator opt-in for Foundry merging its pull requests when checks pass (ADR 0105).</summary>
+    public void SetMergeWhenChecksPass(bool mergeWhenChecksPass)
+    {
+        MergeWhenChecksPass = mergeWhenChecksPass;
     }
 
     public void MarkPolled(DateTimeOffset polledAt)

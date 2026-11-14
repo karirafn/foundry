@@ -167,6 +167,21 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<MergePendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new MergePendingIssueInfo(
+                i.IssueNumber,
+                i.PullRequestUrl,
+                i.HeadSha,
+                i.EnteredMergePendingAt))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
@@ -352,6 +367,7 @@ internal sealed class IssueQueries(
         IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases)
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
+        MergeOutcome? mergeOutcome = GetMergeOutcome(issue);
         string? publishPhase = PublishPhaseName(issue, publishPhases);
 
         return new IssueSummary(
@@ -378,6 +394,8 @@ internal sealed class IssueQueries(
             PullRequestUrl: issue.LinkedPullRequestUrl,
             RebaseOutcome: rebaseOutcome?.Discriminator,
             RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason,
+            MergeOutcome: mergeOutcome?.Discriminator,
+            MergeSkippedReason: (mergeOutcome as MergeOutcome.Skipped)?.Reason,
             ProviderType: displayInfo?.ProviderType,
             RevisionTriggerKind: GetRevisionTriggerKind(issue),
             PublishPhase: publishPhase);
@@ -399,6 +417,7 @@ internal sealed class IssueQueries(
         {
             (IssueCodeStep.Rebasing, _) => IssueSummary.RebasingStep,
             (IssueCodeStep.Checks, _) => IssueSummary.ChecksStep,
+            (IssueCodeStep.Merging, _) => IssueSummary.MergingStep,
             (null, IssueSummary.PublishingPhase) => IssueSummary.PublishingStep,
             (null, IssueSummary.RetryingPhase) => IssueSummary.PublishRetryingStep,
             (null, _) => null,
@@ -436,6 +455,14 @@ internal sealed class IssueQueries(
         {
             ReviewIssue review => review.RebaseOutcome,
             ChecksPendingIssue checksPending => checksPending.RebaseOutcome,
+            MergePendingIssue mergePending => mergePending.RebaseOutcome,
+            _ => null,
+        };
+
+    private static MergeOutcome? GetMergeOutcome(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.MergeOutcome,
             _ => null,
         };
 
@@ -502,6 +529,7 @@ internal sealed class IssueQueries(
             RevisionFailedIssue => "revision_failed",
             ChecksPendingIssue => "checks_pending",
             RebasePendingIssue => "rebase_pending",
+            MergePendingIssue => "merge_pending",
             AwaitingInputIssue => "awaiting_input",
             TriageQueuedIssue => "triage_queued",
             TriageInProgressIssue => "triage_in_progress",
@@ -667,7 +695,9 @@ internal sealed class IssueQueries(
                 ChecksOutcome: review.ChecksOutcome.Discriminator,
                 FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null,
                 RebaseOutcome: review.RebaseOutcome?.Discriminator,
-                RebaseSkippedReason: (review.RebaseOutcome as RebaseOutcome.Skipped)?.Reason),
+                RebaseSkippedReason: (review.RebaseOutcome as RebaseOutcome.Skipped)?.Reason,
+                MergeOutcome: review.MergeOutcome?.Discriminator,
+                MergeSkippedReason: (review.MergeOutcome as MergeOutcome.Skipped)?.Reason),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,
@@ -780,6 +810,19 @@ internal sealed class IssueQueries(
                 CompletedAt: null,
                 BlockedBy: null,
                 TransientRetry: null),
+
+            MergePendingIssue mergePending => new IssueStateDetails(
+                WorkerRunId: mergePending.WorkerRunId.Value,
+                BranchName: mergePending.BranchName,
+                FeedbackCutoffAt: mergePending.FeedbackCutoffAt,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                ChecksOutcome: mergePending.ChecksOutcome.Discriminator,
+                RebaseOutcome: mergePending.RebaseOutcome?.Discriminator,
+                RebaseSkippedReason: (mergePending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason),
 
             TriageInProgressIssue triageInProgress => new IssueStateDetails(
                 WorkerRunId: triageInProgress.WorkerRunId.Value,

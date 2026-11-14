@@ -96,6 +96,11 @@ internal sealed class StubIssueQueries(int issueNumber = 42, string title = "Add
     public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
+    public Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<MergePendingIssueInfo>>([]);
+
     public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 

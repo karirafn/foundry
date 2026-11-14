@@ -49,7 +49,9 @@ public sealed record TriageVerdictDetails(
 /// <paramref name="SideBranchUrl"/> and <paramref name="DivergenceReason"/> are set only for <c>branch_diverged</c>: the
 /// issue branch and the side branch the run's work was pushed to, with their web URLs on the provider, and why
 /// (<c>branch-moved</c> or <c>force-push-protected</c>). <paramref name="ChecksPendingReason"/> is set only for
-/// <c>checks_pending</c>: <c>after_run</c> or <c>head_moved</c>.
+/// <c>checks_pending</c>: <c>after_run</c> or <c>head_moved</c>. <paramref name="MergeOutcome"/> and
+/// <paramref name="MergeSkippedReason"/> are set only for a <c>review</c> issue that left merge-pending without a
+/// merge (ADR 0105).
 /// </summary>
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
@@ -72,7 +74,9 @@ public sealed record IssueStateDetails(
     string? SideBranchName = null,
     string? SideBranchUrl = null,
     string? DivergenceReason = null,
-    string? ChecksPendingReason = null);
+    string? ChecksPendingReason = null,
+    string? MergeOutcome = null,
+    string? MergeSkippedReason = null);
 
 /// <summary>
 /// An awaiting-input issue's open questions and how their post stands (ADR 0096): <paramref name="PostStatus"/> is

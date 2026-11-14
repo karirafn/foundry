@@ -24,7 +24,7 @@ export type PublishPhase = 'publishing' | 'retrying';
 export type IssueStage = 'triage' | 'implement' | 'awaiting_review' | 'done';
 
 /** The step Foundry's own code runs for the issue, with no worker involved. */
-export type CodeStep = 'publishing' | 'publish_retrying' | 'rebasing' | 'checks';
+export type CodeStep = 'publishing' | 'publish_retrying' | 'rebasing' | 'checks' | 'merging';
 
 export interface IssueSummary {
   id: string;
@@ -40,6 +40,10 @@ export interface IssueSummary {
   checksOutcome?: string | null;
   rebaseOutcome?: string | null;
   rebaseSkippedReason?: string | null;
+  /** Set on a review issue Foundry did not merge itself: `disabled` or `skipped` (ADR 0105). */
+  mergeOutcome?: string | null;
+  /** Set when mergeOutcome is `skipped`: why Foundry did not merge. */
+  mergeSkippedReason?: string | null;
   pullRequestUrl?: string | null;
   providerType?: string | null;
   revisionTriggerKind?: RevisionTriggerKind | null;
@@ -147,6 +151,9 @@ export interface IssueStateDetails {
   rebaseConflictAttempts?: number | null;
   rebaseOutcome?: string | null;
   rebaseSkippedReason?: string | null;
+  /** Set on a review issue Foundry did not merge itself: `disabled` or `skipped` (ADR 0105). */
+  mergeOutcome?: string | null;
+  mergeSkippedReason?: string | null;
   awaitingInput?: AwaitingInputDetails | null;
   /** Set when the state is branch_diverged: the issue branch on the provider (URL built by the API). */
   branchUrl?: string | null;

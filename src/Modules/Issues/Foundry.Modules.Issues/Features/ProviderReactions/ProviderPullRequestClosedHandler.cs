@@ -50,6 +50,13 @@ internal sealed class ProviderPullRequestClosedHandler(
                 break;
             }
 
+            case MergePendingIssue mergePendingIssue:
+            {
+                ContinuableFailedIssue failed = mergePendingIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(mergePendingIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             case AwaitingInputIssue { ResumeTarget: ResumeTarget.Revision } awaitingInputIssue:
             {
                 ContinuableFailedIssue failed = awaitingInputIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
@@ -59,7 +66,7 @@ internal sealed class ProviderPullRequestClosedHandler(
 
             default:
                 logger.LogWarning(
-                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue or AwaitingInputIssue on a pull request (state: {State}); ignoring.",
+                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue, MergePendingIssue or AwaitingInputIssue on a pull request (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

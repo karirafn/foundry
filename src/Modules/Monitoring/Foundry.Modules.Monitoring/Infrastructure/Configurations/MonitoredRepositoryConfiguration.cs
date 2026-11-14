@@ -86,6 +86,10 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
             .HasSentinel(true)
             .HasColumnName("rebase_after_run");
 
+        builder.Property(r => r.MergeWhenChecksPass)
+            .HasDefaultValue(false)
+            .HasColumnName("merge_when_checks_pass");
+
         builder.Property(r => r.MaxConcurrentWorkers)
             .HasDefaultValue(MonitoredRepository.DefaultMaxConcurrentWorkers)
             .HasColumnName("max_concurrent_workers");
