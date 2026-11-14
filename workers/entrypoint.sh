@@ -874,10 +874,52 @@ watch_claude_output() {
     done
 }
 
+# cgroup_value <file> [field] — prints the container cgroup's <file> as it holds
+# it, or the value of <field> in its "key value" lines; ? when the file or the
+# field cannot be read.  Never fails, so it is safe under set -e.
+cgroup_value() {
+    local path="/sys/fs/cgroup/$1" field="${2:-}" content="" key="" value=""
+    if ! content="$(cat -- "$path" 2> /dev/null)" || [[ -z "$content" ]]; then
+        printf '?'
+        return 0
+    fi
+    if [[ -z "$field" ]]; then
+        # Only the first word, so a malformed file cannot split the marker line.
+        read -r value _ <<< "$content"
+        printf '%s' "${value:-?}"
+        return 0
+    fi
+    while read -r key value _; do
+        if [[ "$key" == "$field" && -n "$value" ]]; then
+            printf '%s' "$value"
+            return 0
+        fi
+    done <<< "$content"
+    printf '?'
+}
+
+# report_claude_signaled <status> — when <status> says claude died from a signal,
+# writes one FOUNDRY_CLAUDE_SIGNALED line to stderr with the container's cgroup
+# pid and memory counters: the PID limit and a kernel OOM kill of claude alone
+# are the usual causes, and nothing else in the log names them (#963).
+report_claude_signaled() {
+    local status="$1"
+    if (( status <= 128 )); then
+        return 0
+    fi
+    printf 'FOUNDRY_CLAUDE_SIGNALED signal=%s status=%s pids_current=%s pids_peak=%s pids_max=%s pids_refused=%s mem_current=%s mem_peak=%s mem_max=%s oom_kill=%s\n' \
+        "$(( status - 128 ))" "$status" \
+        "$(cgroup_value pids.current)" "$(cgroup_value pids.peak)" "$(cgroup_value pids.max)" \
+        "$(cgroup_value pids.events max)" \
+        "$(cgroup_value memory.current)" "$(cgroup_value memory.peak)" "$(cgroup_value memory.max)" \
+        "$(cgroup_value memory.events oom_kill)" >&2
+}
+
 # run_claude <args...> — runs claude with <args> in its own process group, its
 # stdout copied to the container log and CLAUDE_OUTPUT_FILE, and sets
 # CLAUDE_STATUS to its exit status, or to the last result's status when the
-# post-result idle stop ended it.
+# post-result idle stop ended it.  When claude died from a signal and the idle
+# stop did not end it, it also writes the FOUNDRY_CLAUDE_SIGNALED marker.
 run_claude() {
     rm -f "$CLAUDE_STDOUT_FIFO" "$CLAUDE_IDLE_STOP_STATUS_FILE"
     mkfifo "$CLAUDE_STDOUT_FIFO"
@@ -893,6 +935,8 @@ run_claude() {
     wait "$reader_pid" || true
     if [[ -s "$CLAUDE_IDLE_STOP_STATUS_FILE" ]]; then
         CLAUDE_STATUS="$(cat "$CLAUDE_IDLE_STOP_STATUS_FILE")"
+    else
+        report_claude_signaled "$CLAUDE_STATUS"
     fi
 }
 
