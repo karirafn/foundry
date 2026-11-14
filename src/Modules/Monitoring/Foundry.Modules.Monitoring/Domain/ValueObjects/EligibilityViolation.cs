@@ -34,6 +34,9 @@ public sealed record EligibilityViolation(string Rule)
     public static EligibilityViolation CredentialUnreadable() =>
         new(EligibilityViolationInfo.CredentialUnreadableRule);
 
+    public static EligibilityViolation CredentialInvalid() =>
+        new(EligibilityViolationInfo.CredentialInvalidRule);
+
     public static EligibilityViolation CannotPush(string slug) =>
         new(EligibilityViolationInfo.CannotPushRule(slug));
 

@@ -1016,6 +1016,8 @@ export interface components {
             tokenStatus: string;
             namespaces: string[];
             branchRulesTokenStatus: string;
+            /** Format: date-time */
+            tokenInvalidSince: null | string;
         };
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];

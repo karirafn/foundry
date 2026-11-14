@@ -43,6 +43,21 @@ internal sealed class CredentialConfiguration(
             .IsUnicode(false)
             .HasColumnName("token");
 
+        // The only concurrency token in the model: a token verdict loaded before a rotation must not
+        // be saved after it, so a save whose loaded version no longer matches is rejected.
+        builder.Property(a => a.TokenVersion)
+            .IsConcurrencyToken()
+            .HasColumnName("token_version");
+
+        // Both null means the token is Valid (TokenValidity is derived from these two columns).
+        builder.Property<DateTimeOffset?>("_tokenInvalidSince")
+            .HasColumnName("token_invalid_since");
+
+        builder.Property<DateTimeOffset?>("_tokenCheckedAt")
+            .HasColumnName("token_checked_at");
+
+        builder.Ignore(a => a.TokenValidity);
+
         // Same encryption mechanism as the account token; the column is nullable because the
         // branch-rules token is optional.
         builder.Property(a => a.BranchRulesToken)

@@ -11,6 +11,7 @@ internal static class RepositoryErrors
     internal const string AccountNotFoundCode = "Repository.AccountNotFound";
     internal const string AccountHasNoTokenCode = "Repository.AccountHasNoToken";
     internal const string AccountTokenUnreadableCode = "Repository.AccountTokenUnreadable";
+    internal const string AccountTokenInvalidCode = "Repository.AccountTokenInvalid";
     internal const string NoTokenCode = "Repository.NoToken";
     internal const string ConflictOnCreateCode = "Repository.ConflictOnCreate";
 
@@ -38,6 +39,10 @@ internal static class RepositoryErrors
     internal static Error AccountTokenUnreadable(CredentialId id) =>
         new(AccountTokenUnreadableCode,
             $"Account with ID '{id.Value}' has an unreadable token — the stored ciphertext could not be decrypted.");
+
+    internal static Error AccountTokenInvalid(CredentialId id) =>
+        new(AccountTokenInvalidCode,
+            $"Account with ID '{id.Value}' has an invalid token — the provider rejected it. Enter a new token on the account.");
 
     internal static Error NoToken(CredentialId id) =>
         new(NoTokenCode, $"Account with ID '{id.Value}' has no token — eligibility cannot be re-checked.");
