@@ -3,7 +3,7 @@
   margin-bottom: var(--fd-spacing-xl);
 }
 
-// The floor-lane section-heading style.
+// The pane's section-heading style.
 .pane-activity__heading {
   align-items: baseline;
   color: var(--fd-text-secondary);
@@ -59,7 +59,7 @@
   background: var(--fd-border-muted);
   border-radius: 2px;
   height: 4px;
-  margin: var(--fd-spacing-xs) 0 var(--fd-spacing-sm);
+  margin: var(--fd-spacing-xs) 0 0;
   overflow: hidden;
 }
 
@@ -69,34 +69,14 @@
   transition: width 300ms var(--fd-ease-glide);
 }
 
-.pane-activity__tool {
-  animation: fd-fade-in 160ms ease both;
-  color: var(--fd-text-secondary);
-  font-family: var(--fd-font-mono);
-  font-size: 0.8125rem;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pane-activity__tool-name {
-  color: var(--fd-text-primary);
-}
-
 .pane-activity__waiting {
   color: var(--fd-text-secondary);
   font-size: 0.8125rem;
   margin: 0;
 }
 
-// The global reduced-motion rule shortens every animation; the tool line is already a fade, so it
-// keeps its duration, and the progress bar snaps.
+// The progress bar snaps.
 @media (prefers-reduced-motion: reduce) {
-  .pane-activity__tool {
-    animation-duration: 160ms !important;
-  }
-
   .pane-activity__fill {
     transition: none;
   }

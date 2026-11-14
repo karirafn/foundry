@@ -96,6 +96,25 @@ public sealed class ResolveVerdict
         next.ShouldBeOfType<ReviewIssue>();
     }
 
+    [Fact]
+    public void WhenPassedAndAutoMergeAfterPersonFeedback_ReturnsReviewWithPassed()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithReviewComments([new ReviewComment("Please rename this.")])
+            .ChecksPendingFromRevision();
+
+        // Act
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, Head, DateTimeOffset.UtcNow);
+
+        // Assert
+        ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
+        review.ShouldSatisfyAllConditions(
+            () => review.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
+            () => review.HasPersonFeedback.ShouldBeTrue(),
+            () => checksPending.DomainEvents.OfType<IssueMergePending>().ShouldBeEmpty());
+    }
+
     public static TheoryData<ChecksOutcome> NotPassedOutcomes() =>
     [
         new ChecksOutcome.NoneDetected(),

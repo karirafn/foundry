@@ -113,7 +113,9 @@ public sealed class ChecksPendingIssue : Issue
     /// <see cref="RevisionTrigger.FailedChecks"/> revision.</item>
     /// <item><b>Review:</b> everything else → <see cref="ReviewIssue"/> carrying the outcome.</item>
     /// </list>
-    /// A passed verdict with no head routes to review: a merge must be pinned to a commit.
+    /// A passed verdict with no head routes to review: a merge must be pinned to a commit. So does one on an issue
+    /// whose revisions a person's review feedback drove (<see cref="Issue.HasPersonFeedback"/>, issue #917), so the
+    /// person sees the fix before it lands.
     /// </summary>
     public Issue ResolveVerdict(
         ChecksOutcome checksOutcome,
@@ -121,7 +123,10 @@ public sealed class ChecksPendingIssue : Issue
         string? headSha,
         DateTimeOffset transitionedAt)
     {
-        if (checksOutcome is ChecksOutcome.Passed passed && autoMerge && !string.IsNullOrWhiteSpace(headSha))
+        if (checksOutcome is ChecksOutcome.Passed passed
+            && autoMerge
+            && !HasPersonFeedback
+            && !string.IsNullOrWhiteSpace(headSha))
         {
             return MarkMergePending(passed, headSha, transitionedAt);
         }

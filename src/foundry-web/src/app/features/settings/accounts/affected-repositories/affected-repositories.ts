@@ -3,9 +3,15 @@ import { AffectedRepository, AffectedRepositoryStatus, affectedStatusLabel } fro
 
 const PANEL_HEADING_ID = 'affected-repos-heading';
 const CREDENTIAL_UNREADABLE_REASON = "Skipped — the account token can't be decrypted. Re-enter it on the account to resume.";
+const CREDENTIAL_INVALID_REASON = 'Skipped — the provider rejected the account token. Enter a new token on the account to resume.';
 
 function isLostAccess(status: AffectedRepositoryStatus): boolean {
-  return status === 'ineligible' || status === 'unreachable' || status === 'credential-unreadable';
+  return (
+    status === 'ineligible' ||
+    status === 'unreachable' ||
+    status === 'credential-unreadable' ||
+    status === 'credential-invalid'
+  );
 }
 
 @Component({
@@ -93,6 +99,9 @@ export class AffectedRepositoriesComponent {
   protected reasonFor(status: string): string | null {
     if ((status as AffectedRepositoryStatus) === 'credential-unreadable') {
       return CREDENTIAL_UNREADABLE_REASON;
+    }
+    if ((status as AffectedRepositoryStatus) === 'credential-invalid') {
+      return CREDENTIAL_INVALID_REASON;
     }
     return null;
   }

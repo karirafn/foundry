@@ -12,7 +12,9 @@ here is one role, baked into the worker image at `/opt/foundry/roles/<role>/`:
 - `verdict.schema.json` (optional, for any role): the JSON schema of the verdict the role returns (ADR 0094).
 
 `shared/` is a plugin loaded for every role. The entrypoint loads the run's role and `shared` with
-`--plugin-dir`. Role names come from Foundry's code (`WorkerRole`); a role without a folder fails the
+`--plugin-dir`. Its `hooks/hooks.json` declares hooks that apply to every role: a PreToolUse
+hook blocks a `pgrep -f`/`pkill -f` Bash command, whose pattern matches the probing shell's own command line
+(tests: `workers/tests/shared-hooks.bats`). Role names come from Foundry's code (`WorkerRole`); a role without a folder fails the
 unit tests and the startup image build. A change here takes effect at the next Foundry restart.
 
 The engineering standards (the Worker Principles) live under `shared/prompts/`. `principles.md` holds only the

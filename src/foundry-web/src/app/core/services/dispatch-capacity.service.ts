@@ -1,7 +1,7 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { components } from '../../api/schema';
-import { LoadOutcome } from '../../core/models/load-outcome';
+import { LoadOutcome } from '../models/load-outcome';
 
 type GeneratedDispatchCapacity = components['schemas']['DispatchCapacity'];
 

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Merge;
@@ -242,8 +243,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 continue;
             }
 
-            (IIssueProvider Provider, Credential Credential)? resolved =
-                await ResolveProviderAsync(repo, credentialResolver, providerFactory, cancellationToken);
+            ResolvedProvider? resolved = await ResolveProviderAsync(
+                repo,
+                scope.ServiceProvider,
+                credentialResolver,
+                providerFactory,
+                now,
+                cancellationToken);
             if (resolved is not { } resolvedProvider)
             {
                 continue;
@@ -254,6 +260,18 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 resolvedProvider.Provider,
                 now,
                 cancellationToken);
+
+            // A listing refused with 401 is confirmed with a token check. Once the account is marked
+            // Invalid, no further call is made with its token this cycle.
+            if (pollResult is Result<PollChanges>.Failure { Error.Kind: ErrorKind.Unauthorized } unauthorized
+                && await ConfirmTokenRejectedAsync(scope.ServiceProvider, poller, repo, resolvedProvider, now, cancellationToken))
+            {
+                _logger.LogWarning(
+                    "Poll failed for repo '{Slug}': {Error}",
+                    repo.Slug,
+                    unauthorized.Error.Message);
+                continue;
+            }
 
             // The scheduled poll is the rebase step's backstop (ADR 0087): it resumes rebases whose nudges
             // were lost, e.g. across a host restart.
@@ -341,8 +359,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         {
             MonitoredRepository repo = repos[group.Key];
 
-            (IIssueProvider Provider, Credential Credential)? resolved =
-                await ResolveProviderAsync(repo, credentialResolver, providerFactory, cancellationToken);
+            ResolvedProvider? resolved = await ResolveProviderAsync(
+                repo,
+                scope.ServiceProvider,
+                credentialResolver,
+                providerFactory,
+                now,
+                cancellationToken);
             if (resolved is not { } resolvedProvider)
             {
                 continue;
@@ -350,31 +373,45 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
             foreach (NudgeKey key in group)
             {
-                await RunNudgedPassAsync(
+                bool tokenRejected = await RunNudgedPassAsync(
+                    scope.ServiceProvider,
                     poller,
                     rebaseStep,
                     mergeStep,
                     awaitingInputStep,
                     repo,
-                    resolvedProvider.Provider,
+                    resolvedProvider,
                     key,
                     now,
                     cancellationToken);
+
+                // The account is now Invalid: its token is not used for the remaining passes.
+                if (tokenRejected)
+                {
+                    break;
+                }
             }
         }
     }
 
-    private async Task RunNudgedPassAsync(
+    /// <summary>
+    /// Runs one nudged pass. Returns <see langword="true"/> when its listing was refused with 401 and the
+    /// token check confirmed it, so the account is now Invalid and its token must not be used again.
+    /// </summary>
+    private async Task<bool> RunNudgedPassAsync(
+        IServiceProvider services,
         RepositoryPoller poller,
         RebaseStep? rebaseStep,
         MergeStep? mergeStep,
         AwaitingInputStep? awaitingInputStep,
         MonitoredRepository repo,
-        IIssueProvider provider,
+        ResolvedProvider resolved,
         NudgeKey key,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        IIssueProvider provider = resolved.Provider;
+
         _logger.LogDebug(
             "Running nudged {Pass} pass for repository '{Slug}' (issue {IssueNumber}).",
             key.Pass,
@@ -387,6 +424,12 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             {
                 Result<bool> listing = await poller.RunListingPassAsync(repo, provider, now, cancellationToken);
                 LogListingFailure(repo, listing);
+
+                if (listing is Result<bool>.Failure { Error.Kind: ErrorKind.Unauthorized }
+                    && await ConfirmTokenRejectedAsync(services, poller, repo, resolved, now, cancellationToken))
+                {
+                    return true;
+                }
 
                 if (listing is Result<bool>.Success { Value: true })
                 {
@@ -403,6 +446,12 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             {
                 Result<bool> listing = await poller.RunListingPassAsync(repo, provider, now, cancellationToken);
                 LogListingFailure(repo, listing);
+
+                if (listing is Result<bool>.Failure { Error.Kind: ErrorKind.Unauthorized }
+                    && await ConfirmTokenRejectedAsync(services, poller, repo, resolved, now, cancellationToken))
+                {
+                    return true;
+                }
 
                 if (listing is Result<bool>.Success)
                 {
@@ -455,6 +504,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             default:
                 throw new ArgumentOutOfRangeException(nameof(key), key.Pass, "Unhandled nudge pass.");
         }
+
+        return false;
     }
 
     private void LogListingFailure(MonitoredRepository repo, Result<bool> listing)
@@ -523,10 +574,12 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         WebhookProviders.From(credential) is { } provider
         && (changes & WebhookProviders.MissedChangeCategories(provider)) != PollChanges.None;
 
-    private async Task<(IIssueProvider Provider, Credential Credential)?> ResolveProviderAsync(
+    private async Task<ResolvedProvider?> ResolveProviderAsync(
         MonitoredRepository repo,
+        IServiceProvider services,
         ICredentialResolver credentialResolver,
         IIssueProviderFactory providerFactory,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         Credential? credential = await credentialResolver.ResolveAsync(
@@ -546,7 +599,12 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         switch (usability)
         {
             case TokenUsability.Usable usable:
-                return (providerFactory.CreateProvider(credential, usable.Token), credential);
+                return new ResolvedProvider(
+                    providerFactory.CreateProvider(credential, usable.Token),
+                    credential,
+                    usable.Token);
+            case TokenUsability.Invalid invalid:
+                return await RecheckInvalidTokenAsync(repo, services, providerFactory, credential, invalid.Token, now, cancellationToken);
             case TokenUsability.Unreadable:
                 _logger.LogWarning(
                     "Credential '{CredentialName}' (id '{CredentialId}') has an unreadable token; skipping poll for repo '{Slug}'.",
@@ -564,4 +622,62 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
     }
+
+    /// <summary>
+    /// The automatic exit from an Invalid account token: once per <see cref="Credential.TokenRecheckCooldown"/>
+    /// the stored token is checked again. The poll runs only when the recheck saved the account as Valid.
+    /// </summary>
+    private async Task<ResolvedProvider?> RecheckInvalidTokenAsync(
+        MonitoredRepository repo,
+        IServiceProvider services,
+        IIssueProviderFactory providerFactory,
+        Credential credential,
+        string token,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (!credential.IsDueForTokenRecheck(now))
+        {
+            _logger.LogDebug(
+                "Credential '{CredentialName}' (id '{CredentialId}') has an invalid token; skipping poll for repo '{Slug}'.",
+                credential.Name,
+                credential.Id,
+                repo.Slug);
+            return null;
+        }
+
+        AccountTokenVerdicts verdicts = services.GetRequiredService<AccountTokenVerdicts>();
+        if (!await verdicts.RecheckAsync(credential, token, now, cancellationToken))
+        {
+            return null;
+        }
+
+        return new ResolvedProvider(providerFactory.CreateProvider(credential, token), credential, token);
+    }
+
+    /// <summary>
+    /// Confirms a listing refused with 401 with a token check. When the account is marked Invalid, the
+    /// repository's eligibility is evaluated again at once, so it shows the invalid-token violation this
+    /// cycle; that evaluation makes no provider call for an Invalid account. Returns whether it was marked.
+    /// </summary>
+    private static async Task<bool> ConfirmTokenRejectedAsync(
+        IServiceProvider services,
+        RepositoryPoller poller,
+        MonitoredRepository repo,
+        ResolvedProvider resolved,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        AccountTokenVerdicts verdicts = services.GetRequiredService<AccountTokenVerdicts>();
+        if (!await verdicts.ConfirmRejectionAsync(resolved.Credential, resolved.Token, now, cancellationToken))
+        {
+            return false;
+        }
+
+        await poller.RunBranchRulesStepAsync(repo, now, cancellationToken);
+        return true;
+    }
+
+    /// <summary>A provider for one repository, with the account and the token it was created with.</summary>
+    private readonly record struct ResolvedProvider(IIssueProvider Provider, Credential Credential, string Token);
 }

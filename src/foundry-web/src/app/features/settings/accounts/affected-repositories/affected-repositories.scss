@@ -112,6 +112,10 @@
     &--credential-unreadable {
       background: var(--fd-text-error);
     }
+
+    &--credential-invalid {
+      background: var(--fd-text-error);
+    }
   }
 
   &__reason {

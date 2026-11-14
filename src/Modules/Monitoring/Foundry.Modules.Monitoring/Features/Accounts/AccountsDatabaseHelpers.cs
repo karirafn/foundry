@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -29,6 +31,23 @@ internal static class AccountsDatabaseHelpers
         };
 
     /// <summary>
+    /// Maps the account token's <see cref="Credential.TokenUsability"/> to its wire string. An
+    /// unreadable token reports <c>unreadable</c> even when the account is also Invalid.
+    /// </summary>
+    internal static string ToAccountTokenStatus(Credential credential)
+    {
+        TokenUsability usability = credential.TokenUsability;
+        return usability switch
+        {
+            TokenUsability.Usable => TokenStatuses.Present,
+            TokenUsability.Unreadable => TokenStatuses.Unreadable,
+            TokenUsability.Invalid => TokenStatuses.Invalid,
+            TokenUsability.Absent => TokenStatuses.Absent,
+            _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),
+        };
+    }
+
+    /// <summary>
     /// Projects a materialized <see cref="Credential"/> to its wire summary. Token values —
     /// including the branch-rules token — are never included; only their statuses.
     /// </summary>
@@ -39,9 +58,13 @@ internal static class AccountsDatabaseHelpers
             credential is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
             credential.BaseUrl.Value.ToString(),
             credential.Token is not null,
-            ToTokenStatus(credential.Token),
+            ToAccountTokenStatus(credential),
             credential.Namespaces.Select(n => n.Value).ToList(),
-            ToTokenStatus(credential.BranchRulesToken));
+            ToTokenStatus(credential.BranchRulesToken),
+            credential.TokenUsability is TokenUsability.Invalid
+                && credential.TokenValidity is TokenValidity.Invalid invalid
+                    ? invalid.DetectedAt
+                    : null);
 
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,

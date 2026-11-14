@@ -120,7 +120,27 @@ jobs:
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: bats workers/tests/entrypoint.bats
+        run: bats workers/tests/entrypoint.bats workers/tests/shared-hooks.bats
+
+      - name: Build publisher image
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: docker build -f workers/publisher/Dockerfile -t foundry-publisher:ci workers/
+
+      - name: Put the publisher image's gitleaks on PATH
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        # Copied out of the image so workers/publisher/Dockerfile stays the only gitleaks version and checksum pin
+        run: |
+          bin_dir="$RUNNER_TEMP/publisher-bin"
+          mkdir -p "$bin_dir"
+          cid=$(docker create foundry-publisher:ci)
+          docker cp "$cid:/usr/local/bin/gitleaks" "$bin_dir/gitleaks"
+          docker rm "$cid"
+          "$bin_dir/gitleaks" version
+          echo "$bin_dir" >> "$GITHUB_PATH"
+
+      - name: Run publisher BATS suite
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: bats workers/tests/publisher.bats
 
       - name: Build base image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'

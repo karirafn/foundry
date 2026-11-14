@@ -8,7 +8,18 @@ namespace Foundry.Modules.Monitoring.Domain.Entities;
 
 public abstract class Credential : AggregateRoot<CredentialId>
 {
+    /// <summary>
+    /// Minimum interval between automatic rechecks of an <see cref="TokenValidity.Invalid"/> account
+    /// token. One recheck per interval per account keeps a dead token from tripping the provider's
+    /// failed-login lockout for sibling accounts with the same login.
+    /// </summary>
+    public static readonly TimeSpan TokenRecheckCooldown = TimeSpan.FromMinutes(15);
+
     private readonly List<CredentialNamespace> _namespaces = [];
+
+    // Both null means Valid; persisted as token_invalid_since / token_checked_at.
+    private DateTimeOffset? _tokenInvalidSince;
+    private DateTimeOffset? _tokenCheckedAt;
 
     protected Credential(CredentialId id) : base(id)
     {
@@ -16,7 +27,52 @@ public abstract class Credential : AggregateRoot<CredentialId>
 
     public string Name { get; private protected set; } = string.Empty;
 
-    public ProviderToken? Token { get; private protected set; }
+    public ProviderToken? Token { get; private set; }
+
+    /// <summary>
+    /// Incremented each time the account token is set. A concurrency token, so a verdict about a
+    /// token that was replaced while it was being checked is never saved against the new one.
+    /// </summary>
+    public int TokenVersion { get; private set; }
+
+    /// <summary>The provider's verdict on the account token.</summary>
+    public TokenValidity TokenValidity => _tokenInvalidSince is { } detectedAt
+        ? new TokenValidity.Invalid(detectedAt, _tokenCheckedAt ?? detectedAt)
+        : new TokenValidity.Valid();
+
+    /// <summary>
+    /// Records that the provider refused the account token at <paramref name="now"/>. An account that is
+    /// already Invalid keeps its first detection time and only stamps the check time.
+    /// </summary>
+    public void MarkTokenInvalid(DateTimeOffset now)
+    {
+        _tokenInvalidSince ??= now;
+        _tokenCheckedAt = now;
+    }
+
+    /// <summary>Records that the provider accepts the account token.</summary>
+    public void MarkTokenValid()
+    {
+        _tokenInvalidSince = null;
+        _tokenCheckedAt = null;
+    }
+
+    /// <summary>
+    /// Whether an Invalid account token is due for a recheck: at least <see cref="TokenRecheckCooldown"/>
+    /// has passed since it was last checked. A Valid token is never due.
+    /// </summary>
+    public bool IsDueForTokenRecheck(DateTimeOffset now) =>
+        TokenValidity is TokenValidity.Invalid invalid && now - invalid.LastCheckedAt >= TokenRecheckCooldown;
+
+    /// <summary>
+    /// Sets a new account token. The provider has not refused a new token, so the account becomes Valid.
+    /// </summary>
+    private protected void SetAccountToken(string token)
+    {
+        Token = new ProviderToken.Present(token);
+        TokenVersion++;
+        MarkTokenValid();
+    }
 
     /// <summary>
     /// Returns the raw decrypted token string when <see cref="Token"/> is <see cref="ProviderToken.Present"/>;
@@ -120,6 +176,8 @@ public abstract class Credential : AggregateRoot<CredentialId>
     /// <summary>Decides whether this account's token can be used for a provider call.</summary>
     public TokenUsability TokenUsability => Token switch
     {
+        ProviderToken.Present present when TokenValidity is TokenValidity.Invalid =>
+            new TokenUsability.Invalid(present.Value),
         ProviderToken.Present present => new TokenUsability.Usable(present.Value),
         ProviderToken.Unreadable => new TokenUsability.Unreadable(),
         null => new TokenUsability.Absent(),

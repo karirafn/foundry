@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -96,6 +97,32 @@ public sealed class HandleAsync : IAsyncDisposable
         ReviewIssue review = (await LoadAsync(repositoryId)).ShouldBeOfType<ReviewIssue>();
         review.MergeOutcome.ShouldBe(new MergeOutcome.Disabled());
         _dispatcher.DispatchedEvents.OfType<IssueInReview>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenFeedback_QueuesAReviewFeedbackRevisionThatHoldsBackTheMerge()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedMergePending(repositoryId);
+        ReviewComment comment = new("Please rename this.", "src/a.cs", 3);
+        DateTimeOffset newest = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
+
+        // Act
+        await _sut.HandleAsync(
+            new MergeResolved(repositoryId, 1, "feedback", Comments: [comment], OmittedCommentCount: 1, NewestCommentAt: newest),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        RevisionQueuedIssue revision = (await LoadAsync(repositoryId)).ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFeedback trigger = revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
+        revision.ShouldSatisfyAllConditions(
+            () => revision.HasPersonFeedback.ShouldBeTrue(),
+            () => revision.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
+            () => trigger.Comments.ShouldHaveSingleItem().ShouldBe(comment),
+            () => trigger.OmittedCommentCount.ShouldBe(1),
+            () => trigger.NewestConsumedCommentAt.ShouldBe(newest));
+        _dispatcher.DispatchedEvents.OfType<IssueRevisionQueued>().ShouldHaveSingleItem();
     }
 
     [Theory]

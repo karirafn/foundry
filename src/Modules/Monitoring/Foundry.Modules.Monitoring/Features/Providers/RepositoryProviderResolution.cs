@@ -51,6 +51,8 @@ internal static class RepositoryProviderResolution
                 (providerFactory.CreateProvider(credential, usable.Token), repo)),
             TokenUsability.Unreadable => Result<(IIssueProvider, MonitoredRepository)>.Fail(
                 PostExitProviderQueriesErrors.CredentialTokenUnreadable(credential.Id)),
+            TokenUsability.Invalid => Result<(IIssueProvider, MonitoredRepository)>.Fail(
+                PostExitProviderQueriesErrors.CredentialTokenInvalid(credential.Id)),
             TokenUsability.Absent => Result<(IIssueProvider, MonitoredRepository)>.Fail(
                 PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id)),
             _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),

@@ -1,12 +1,9 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, Observer, Subject } from 'rxjs';
 import { WorkerActivity } from '../models/worker-activity.model';
-import { AgentActivity, AgentActivityEnded, InFlightTool } from '../models/agent-activity.model';
+import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
 import { LoadOutcome } from '../models/load-outcome';
 import { ConnectionStatus, HubConnections, SharedHubConnection } from './hub-connection';
-
-/** How many recent tool calls the Floor's tool ticker keeps per run. */
-export const RECENT_TOOL_LIMIT = 5;
 
 /** The workers hub method that returns the current activity of every active run. */
 export const GET_CURRENT_ACTIVITY = 'GetCurrentActivity';
@@ -41,7 +38,6 @@ export class WorkerSignalRService {
   private readonly _activityByIssueIdSignal: WritableSignal<ReadonlyMap<string, string>> = signal(new Map());
 
   private readonly _agentActivityByIssueIdSignal: WritableSignal<ReadonlyMap<string, AgentActivity>> = signal(new Map());
-  private readonly _recentToolsByRunIdSignal: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>> = signal(new Map());
 
   /** Every live Agent Activity projection, one per active run, in arrival order. */
   readonly agentActivities: Signal<readonly AgentActivity[]> = computed(() => [...this._agentActivityByIssueIdSignal().values()]);
@@ -72,12 +68,9 @@ export class WorkerSignalRService {
 
     this._hub.on<AgentActivity>('AgentActivity', (activity) => {
       this._arrivedDuringLoad?.agentActivities.set(activity.issueId, activity);
-      const current = this._agentActivityByIssueIdSignal();
-      const replacedRunId = current.get(activity.issueId)?.workerRunId;
-      const next = new Map(current);
+      const next = new Map(this._agentActivityByIssueIdSignal());
       next.set(activity.issueId, activity);
       this._agentActivityByIssueIdSignal.set(next);
-      this._recordTool(activity, replacedRunId !== undefined && replacedRunId !== activity.workerRunId ? replacedRunId : null);
     });
 
     this._hub.on<AgentActivityEnded>('AgentActivityEnded', (ended) => {
@@ -90,7 +83,6 @@ export class WorkerSignalRService {
       const next = new Map(current);
       next.delete(ended.issueId);
       this._agentActivityByIssueIdSignal.set(next);
-      this._forgetTools(ended.workerRunId);
     });
 
     // Events may have been missed while disconnected, so every connect replaces the state.
@@ -116,11 +108,6 @@ export class WorkerSignalRService {
     return this._activityLoad;
   }
 
-  /** Recent tool calls for the run, newest last, accumulated from successive in-flight tools. */
-  recentToolsForRun(workerRunId: string): readonly InFlightTool[] {
-    return this._recentToolsByRunIdSignal().get(workerRunId) ?? [];
-  }
-
   activityFor(workerRunId: string): string | null {
     return this._activityByRunIdSignal().get(workerRunId) ?? null;
   }
@@ -132,36 +119,6 @@ export class WorkerSignalRService {
   /** Returns the live Agent Activity projection for the issue's active run, or null if none has arrived. */
   agentActivityForIssue(issueId: string): AgentActivity | null {
     return this._agentActivityByIssueIdSignal().get(issueId) ?? null;
-  }
-
-  private _recordTool(activity: AgentActivity, replacedRunId: string | null): void {
-    const tool = activity.inFlightTool;
-    const current = this._recentToolsByRunIdSignal();
-    const existing = current.get(activity.workerRunId) ?? [];
-    const last = existing.length > 0 ? existing[existing.length - 1] : null;
-    const isNewTool = tool !== null && (last === null
-      || last.name !== tool.name || last.summary !== tool.summary || last.startedAt !== tool.startedAt);
-    if (!isNewTool && replacedRunId === null) {
-      return;
-    }
-    const next = new Map(current);
-    if (replacedRunId !== null) {
-      next.delete(replacedRunId);
-    }
-    if (isNewTool) {
-      next.set(activity.workerRunId, [...existing, tool].slice(-RECENT_TOOL_LIMIT));
-    }
-    this._recentToolsByRunIdSignal.set(next);
-  }
-
-  private _forgetTools(workerRunId: string): void {
-    const current = this._recentToolsByRunIdSignal();
-    if (!current.has(workerRunId)) {
-      return;
-    }
-    const next = new Map(current);
-    next.delete(workerRunId);
-    this._recentToolsByRunIdSignal.set(next);
   }
 
   private async _fetchActivity(): Promise<LoadOutcome> {
@@ -197,13 +154,6 @@ export class WorkerSignalRService {
       }
     }
     this._agentActivityByIssueIdSignal.set(next);
-
-    const liveRunIds = new Set([...next.values()].map((a) => a.workerRunId));
-    for (const workerRunId of this._recentToolsByRunIdSignal().keys()) {
-      if (!liveRunIds.has(workerRunId)) {
-        this._forgetTools(workerRunId);
-      }
-    }
   }
 
   streamLog(workerRunId: string): Observable<string> {
