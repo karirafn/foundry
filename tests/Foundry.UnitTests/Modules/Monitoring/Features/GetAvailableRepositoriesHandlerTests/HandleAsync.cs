@@ -510,6 +510,42 @@ public sealed class HandleAsync : IAsyncDisposable
         gitLabFake.LastRequest.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenCredentialTokenIsInvalid_ReturnsAccountTokenInvalidErrorWithoutCallingProvider()
+    {
+        // Arrange
+        (Guid accountId, GitHubCredential credential) = await SeedGitHubAccountAsync(namespaces: ["owner"]);
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
+
+        GetAvailableRepositories.Handler sut = new(
+            _dbContext,
+            new GitHubHttpClient(
+                new HttpClient(gitHubFake),
+                NullLogger<GitHubHttpClient>.Instance,
+                new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+                new InMemoryProviderRateBudget(),
+                TimeProvider.System),
+            new GitLabHttpClient(
+                new HttpClient(gitLabFake),
+                NullLogger<GitLabHttpClient>.Instance,
+                new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+                new InMemoryProviderRateBudget(),
+                TimeProvider.System));
+
+        // Act
+        Result<AvailableRepositoriesResponse> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert
+        Result<AvailableRepositoriesResponse>.Failure failure =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Failure>();
+        failure.Error.Code.ShouldBe("Repository.AccountTokenInvalid");
+        gitHubFake.LastRequest.ShouldBeNull();
+    }
     // Seeds a GitHub account with a real token via EF, then overwrites the token column with
     // garbage ciphertext via raw SQL UPDATE. The non-base64 value triggers FormatException in
     // Convert.FromBase64String, which ProviderTokenConverter maps to ProviderToken.Unreadable.

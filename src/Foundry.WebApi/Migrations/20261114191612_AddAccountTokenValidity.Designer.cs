@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    [Migration("20261114191017_AddAccountTokenValidity")]
+    [Migration("20261114191612_AddAccountTokenValidity")]
     partial class AddAccountTokenValidity
     {
         /// <inheritdoc />
@@ -245,7 +245,9 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<int>("TokenVersion")
                         .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
                         .HasColumnName("token_version");
 
                     b.Property<DateTimeOffset?>("_tokenCheckedAt")

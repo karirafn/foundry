@@ -244,7 +244,9 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<int>("TokenVersion")
                         .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
                         .HasColumnName("token_version");
 
                     b.Property<DateTimeOffset?>("_tokenCheckedAt")

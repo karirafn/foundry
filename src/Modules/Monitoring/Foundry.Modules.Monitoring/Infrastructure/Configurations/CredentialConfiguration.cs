@@ -47,6 +47,7 @@ internal sealed class CredentialConfiguration(
         // be saved after it, so a save whose loaded version no longer matches is rejected.
         builder.Property(a => a.TokenVersion)
             .IsConcurrencyToken()
+            .HasDefaultValue(0)
             .HasColumnName("token_version");
 
         // Both null means the token is Valid (TokenValidity is derived from these two columns).
