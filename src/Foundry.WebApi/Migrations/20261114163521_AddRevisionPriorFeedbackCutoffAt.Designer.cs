@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    [Migration("20261113213246_AddRevisionPriorFeedbackCutoffAt")]
+    [Migration("20261114163521_AddRevisionPriorFeedbackCutoffAt")]
     partial class AddRevisionPriorFeedbackCutoffAt
     {
         /// <inheritdoc />
@@ -616,6 +616,14 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("base_run_branch_head");
 
+                    b.Property<string>("ConfirmedFindings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("confirmed_findings");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
@@ -631,6 +639,10 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("divergence_reason");
+
+                    b.Property<DateTimeOffset?>("FalsePositivesConfirmedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("false_positives_confirmed_at");
 
                     b.Property<string>("Image")
                         .HasMaxLength(500)
@@ -1796,6 +1808,12 @@ namespace Foundry.WebApi.Migrations
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
                         .HasColumnName("rebase_outcome");
+
+                    b.Property<string>("VerifiedHeadSha")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verified_head_sha");
 
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()

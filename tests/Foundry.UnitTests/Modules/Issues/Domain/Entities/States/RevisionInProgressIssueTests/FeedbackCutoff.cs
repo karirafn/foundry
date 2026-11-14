@@ -153,7 +153,7 @@ public sealed class FeedbackCutoff
         ReviewIssue review = fixRun
             .MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow)
             .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow)
-            .ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+            .ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         review.FeedbackCutoffAt.ShouldSatisfyAllConditions(
