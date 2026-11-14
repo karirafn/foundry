@@ -13,7 +13,7 @@ namespace Foundry.Modules.Workers.Features.Activity;
 
 /// <summary>
 /// Folds a worker's <c>claude --output-format stream-json</c> log into the Agent Activity
-/// projection: the agent's task list, active subagents and skill, the in-flight tool, token
+/// projection: the agent's task list, active subagents, the in-flight tool, token
 /// totals and <c>LastEventAt</c>. Workflow-agnostic — it reads the agent's own signals.
 /// </summary>
 /// <remarks>
@@ -36,7 +36,6 @@ internal sealed partial class AgentActivityProjection
     private readonly HashSet<string> _countedMessageIds = new(StringComparer.Ordinal);
 
     private long _sequence;
-    private string? _activeSkill;
     private long _inputTokens;
     private long _cacheReadInputTokens;
     private long _cacheCreationInputTokens;
@@ -77,7 +76,7 @@ internal sealed partial class AgentActivityProjection
         switch (type)
         {
             case "assistant":
-                ApplyAssistant(evt, at);
+                ApplyAssistant(evt);
                 break;
 
             case "user":
@@ -94,7 +93,6 @@ internal sealed partial class AgentActivityProjection
                 _pendingTools.Clear();
                 _subagents.Clear();
                 _subagentKeyByTaskId.Clear();
-                _activeSkill = null;
                 _finalOutputTokens = ModelUsageReader.Read(evt).OutputTokens;
                 break;
         }
@@ -114,7 +112,7 @@ internal sealed partial class AgentActivityProjection
 
         List<ActiveSubagent> subagents = _subagents.Values
             .OrderBy(s => s.Sequence)
-            .Select(s => new ActiveSubagent(s.SubagentType, s.Description, s.SpawnDepth, s.LastTool))
+            .Select(s => new ActiveSubagent(s.SubagentType, s.Description, s.LastTool))
             .ToList();
 
         // Prefer an ordinary tool over the Agent call that is pending for a subagent's whole
@@ -122,7 +120,7 @@ internal sealed partial class AgentActivityProjection
         InFlightTool? inFlightTool = _pendingTools.Values
             .OrderBy(t => AgentTranscriptFormatter.IsAgentTool(t.Name) ? 0 : 1)
             .ThenBy(t => t.Sequence)
-            .Select(t => new InFlightTool(t.Name, t.Summary, t.StartedAt))
+            .Select(t => new InFlightTool(t.Name))
             .LastOrDefault();
 
         return new AgentActivity(
@@ -134,7 +132,6 @@ internal sealed partial class AgentActivityProjection
             CurrentTask: currentTask,
             CompletedTaskCount: _tasks.Count(t => t.Status == "completed"),
             Subagents: subagents,
-            ActiveSkill: _activeSkill,
             InFlightTool: inFlightTool,
             Tokens: new AgentTokenTotals(
                 new TokenUsage(_inputTokens, _cacheReadInputTokens, _cacheCreationInputTokens, null)
@@ -142,7 +139,7 @@ internal sealed partial class AgentActivityProjection
                 _finalOutputTokens));
     }
 
-    private void ApplyAssistant(JsonObject evt, DateTimeOffset at)
+    private void ApplyAssistant(JsonObject evt)
     {
         // A claude -c retry continues after a result event: its output is not final any more.
         _finalOutputTokens = null;
@@ -155,7 +152,7 @@ internal sealed partial class AgentActivityProjection
         {
             if (ReadString(block["type"]) == "tool_use")
             {
-                ApplyToolUse(block, parentToolUseId, at);
+                ApplyToolUse(block, parentToolUseId);
             }
         }
     }
@@ -186,20 +183,16 @@ internal sealed partial class AgentActivityProjection
         _cacheCreationInputTokens += ReadLong(usage["cache_creation_input_tokens"]);
     }
 
-    private void ApplyToolUse(JsonObject block, string? parentToolUseId, DateTimeOffset at)
+    private void ApplyToolUse(JsonObject block, string? parentToolUseId)
     {
         string name = ReadString(block["name"]) ?? "tool";
         JsonNode? input = block["input"];
         string? id = ReadString(block["id"]);
         long sequence = ++_sequence;
 
-        string? summary = AgentTranscriptFormatter.SummarizeInput(name, input) is { } raw
-            ? Redact(raw)
-            : null;
-
         if (id is not null)
         {
-            Track(_pendingTools, id, new PendingTool(name, summary, at, sequence, input as JsonObject));
+            Track(_pendingTools, id, new PendingTool(name, sequence, input as JsonObject));
         }
 
         if (parentToolUseId is not null && _subagents.TryGetValue(parentToolUseId, out SubagentEntry? parent))
@@ -213,19 +206,10 @@ internal sealed partial class AgentActivityProjection
                 ApplyTaskUpdate(input, sequence);
                 break;
 
-            case "Skill":
-                _activeSkill = Redact(ReadString(input?["skill"])) ?? _activeSkill;
-                break;
-
             case "Agent" or "Task" when id is not null:
-                int depth = parentToolUseId is not null && _subagents.TryGetValue(parentToolUseId, out SubagentEntry? spawner)
-                    ? spawner.SpawnDepth + 1
-                    : 1;
-
                 Track(_subagents, id, new SubagentEntry(
                     ReadString(input?["subagent_type"]) ?? "subagent",
                     Redact(ReadString(input?["description"])),
-                    depth,
                     sequence));
                 break;
         }
@@ -299,13 +283,11 @@ internal sealed partial class AgentActivityProjection
         string? toolUseId = ReadString(evt["tool_use_id"]);
         string? subagentType = ReadString(evt["subagent_type"]);
         string? description = Redact(ReadString(evt["description"]));
-        int? spawnDepth = ReadNumber(evt["spawn_depth"]) is { } depth ? (int)depth : null;
 
         if (toolUseId is not null && _subagents.TryGetValue(toolUseId, out SubagentEntry? known))
         {
             known.SubagentType = subagentType ?? known.SubagentType;
             known.Description = description ?? known.Description;
-            known.SpawnDepth = spawnDepth ?? known.SpawnDepth;
             Track(_subagentKeyByTaskId, taskId, toolUseId);
             return;
         }
@@ -317,7 +299,7 @@ internal sealed partial class AgentActivityProjection
         }
 
         string key = toolUseId ?? $"task:{taskId}";
-        Track(_subagents, key, new SubagentEntry(subagentType, description, spawnDepth ?? 1, ++_sequence));
+        Track(_subagents, key, new SubagentEntry(subagentType, description, ++_sequence));
         Track(_subagentKeyByTaskId, taskId, key);
     }
 
@@ -437,18 +419,14 @@ internal sealed partial class AgentActivityProjection
 
     private sealed record PendingTool(
         string Name,
-        string? Summary,
-        DateTimeOffset StartedAt,
         long Sequence,
         JsonObject? Input);
 
-    private sealed class SubagentEntry(string subagentType, string? description, int spawnDepth, long sequence)
+    private sealed class SubagentEntry(string subagentType, string? description, long sequence)
     {
         public string SubagentType { get; set; } = subagentType;
 
         public string? Description { get; set; } = description;
-
-        public int SpawnDepth { get; set; } = spawnDepth;
 
         public string? LastTool { get; set; }
 

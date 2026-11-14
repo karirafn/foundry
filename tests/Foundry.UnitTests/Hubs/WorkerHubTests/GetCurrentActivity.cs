@@ -98,8 +98,7 @@ public sealed class GetCurrentActivity
             CurrentTask: null,
             CompletedTaskCount: 0,
             Subagents: [],
-            ActiveSkill: null,
-            InFlightTool: new InFlightTool("Bash", "dotnet test", DateTimeOffset.UtcNow),
+            InFlightTool: new InFlightTool("Bash"),
             Tokens: new AgentTokenTotals(1, 2));
     }
 

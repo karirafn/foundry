@@ -15,7 +15,6 @@ public sealed record AgentActivity(
     AgentTaskItem? CurrentTask,
     int CompletedTaskCount,
     IReadOnlyList<ActiveSubagent> Subagents,
-    string? ActiveSkill,
     InFlightTool? InFlightTool,
     AgentTokenTotals Tokens);
 
@@ -30,14 +29,11 @@ public sealed record AgentTaskItem(
 public sealed record ActiveSubagent(
     string SubagentType,
     string? Description,
-    int SpawnDepth,
     string? LastTool);
 
 /// <summary>The most recent tool call with no matching tool result yet.</summary>
 public sealed record InFlightTool(
-    string Name,
-    string? Summary,
-    DateTimeOffset? StartedAt);
+    string Name);
 
 /// <summary>Billable token totals for the run so far.</summary>
 /// <param name="InputTokens">

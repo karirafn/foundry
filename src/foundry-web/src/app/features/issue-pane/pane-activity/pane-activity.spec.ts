@@ -24,8 +24,7 @@ function activity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     currentTask: tasks[2],
     completedTaskCount: 2,
     subagents: [],
-    activeSkill: null,
-    inFlightTool: { name: 'Bash', summary: 'dotnet test --filter Board', startedAt: '2026-11-13T11:59:50Z' },
+    inFlightTool: { name: 'Bash' },
     tokens: { inputTokens: 100, outputTokens: null },
     ...overrides,
   };

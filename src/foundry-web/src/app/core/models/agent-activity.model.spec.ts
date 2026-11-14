@@ -10,7 +10,6 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
@@ -31,7 +30,7 @@ describe('agentActivitySummary', () => {
       tasks,
       completedTaskCount: 3,
       currentTask: { id: '4', subject: 'Run tests', activeForm: 'Running tests', status: 'in_progress' },
-      subagents: [{ subagentType: 'developer', description: 'Implement', spawnDepth: 1, lastTool: 'Bash' }],
+      subagents: [{ subagentType: 'developer', description: 'Implement', lastTool: 'Bash' }],
     });
 
     // Act / Assert
@@ -54,8 +53,8 @@ describe('agentActivitySummary', () => {
     // Arrange
     const activity = buildActivity({
       subagents: [
-        { subagentType: 'developer', description: null, spawnDepth: 1, lastTool: null },
-        { subagentType: 'Explore', description: null, spawnDepth: 2, lastTool: null },
+        { subagentType: 'developer', description: null, lastTool: null },
+        { subagentType: 'Explore', description: null, lastTool: null },
       ],
     });
 
@@ -66,8 +65,8 @@ describe('agentActivitySummary', () => {
   it('should show the in-flight tool when there is no task list', () => {
     // Arrange
     const activity = buildActivity({
-      subagents: [{ subagentType: 'developer', description: null, spawnDepth: 1, lastTool: null }],
-      inFlightTool: { name: 'Bash', summary: 'dotnet test', startedAt: null },
+      subagents: [{ subagentType: 'developer', description: null, lastTool: null }],
+      inFlightTool: { name: 'Bash' },
     });
 
     // Act / Assert
@@ -79,7 +78,7 @@ describe('agentActivitySummary', () => {
     const activity = buildActivity({
       tasks,
       completedTaskCount: 3,
-      inFlightTool: { name: 'Read', summary: null, startedAt: null },
+      inFlightTool: { name: 'Read' },
     });
 
     // Act / Assert

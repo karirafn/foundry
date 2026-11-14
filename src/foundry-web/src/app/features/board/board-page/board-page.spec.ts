@@ -188,7 +188,6 @@ function activity(issueId: string, overrides: Partial<AgentActivity> = {}): Agen
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
@@ -522,7 +521,7 @@ describe('BoardPageComponent', () => {
               'w',
               {
                 ...running(),
-                inFlightTool: { name: 'Bash', summary: 'npm test -- --watch=false', startedAt: null },
+                inFlightTool: { name: 'Bash' },
               },
             ],
           ]),
@@ -643,7 +642,7 @@ describe('BoardPageComponent', () => {
               'w',
               activity('w', {
                 lastEventAt: minutesAgo(6.5),
-                inFlightTool: { name: 'Bash', summary: null, startedAt: null },
+                inFlightTool: { name: 'Bash' },
               }),
             ],
           ]),

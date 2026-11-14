@@ -15,7 +15,6 @@ function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivi
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
@@ -2476,7 +2475,7 @@ describe('IssueCardComponent', () => {
         tasks: Array.from({ length: 7 }, (_, i) => ({ id: String(i), subject: 't', activeForm: null, status: 'pending' })),
         completedTaskCount: 3,
         currentTask: { id: '4', subject: 'Run tests', activeForm: 'Running tests', status: 'in_progress' },
-        subagents: [{ subagentType: 'developer', description: null, spawnDepth: 1, lastTool: null }],
+        subagents: [{ subagentType: 'developer', description: null, lastTool: null }],
       });
 
       // Act
@@ -2491,8 +2490,8 @@ describe('IssueCardComponent', () => {
     it('should show the subagent and in-flight tool when there is no task list', () => {
       // Arrange
       const activity = buildAgentActivity({
-        subagents: [{ subagentType: 'developer', description: null, spawnDepth: 1, lastTool: null }],
-        inFlightTool: { name: 'Bash', summary: 'dotnet test', startedAt: null },
+        subagents: [{ subagentType: 'developer', description: null, lastTool: null }],
+        inFlightTool: { name: 'Bash' },
       });
 
       // Act
@@ -2543,7 +2542,7 @@ describe('IssueCardComponent', () => {
       // Arrange
       const activity = buildAgentActivity({
         lastEventAt: minutesAgo(6),
-        inFlightTool: { name: 'Bash', summary: 'dotnet test', startedAt: minutesAgo(6) },
+        inFlightTool: { name: 'Bash' },
       });
 
       // Act
@@ -2713,7 +2712,7 @@ describe('IssueCardComponent', () => {
       const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
       const activity = buildAgentActivity({
         lastEventAt: sevenMinutesAgo,
-        inFlightTool: { name: 'Bash', summary: 'npm test', startedAt: null },
+        inFlightTool: { name: 'Bash' },
       });
 
       // Act
