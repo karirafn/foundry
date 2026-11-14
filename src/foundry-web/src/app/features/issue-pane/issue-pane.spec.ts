@@ -96,7 +96,6 @@ async function setup(withSummary = true) {
           activeAgentCount: signal(0),
           activityForIssue: () => null,
           agentActivityForIssue: () => null,
-          recentToolsForRun: () => [],
           connectionStatus: signal('connected'),
           activityFor: () => null,
           logStreamFor: () => null,

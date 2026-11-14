@@ -15,19 +15,15 @@
   padding: var(--fd-spacing-sm);
 }
 
-.worker-activity__task,
-.worker-activity__tool {
+.worker-activity__task {
+  color: var(--fd-text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
   margin: 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.worker-activity__task {
-  color: var(--fd-text-primary);
-  font-size: 0.8125rem;
-  font-weight: 500;
 }
 
 .worker-activity__steps {
@@ -74,15 +70,6 @@
   flex-shrink: 0;
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
-}
-
-.worker-activity__tool {
-  color: var(--fd-text-secondary);
-  font-family: var(--fd-font-mono);
-  font-size: 0.75rem;
-  // Above the card's stretched button, so the full text in `title` can be hovered.
-  position: relative;
-  z-index: 1;
 }
 
 .worker-activity--starting .worker-activity__task {
