@@ -65,6 +65,9 @@ const runningRun = {
   discardsAt: null,
   secretFindings: [],
   revertedFiles: [],
+  publishBlockedAt: null,
+  falsePositivesConfirmedAt: null,
+  confirmedFindings: [],
 };
 
 @Component({

@@ -29,6 +29,13 @@ export interface SecretFinding {
   readonly ruleId: string;
 }
 
+/** A finding an operator confirmed as a false positive. Like a secret finding, it has no matched value. */
+export interface ConfirmedFinding {
+  readonly path: string;
+  readonly line: number;
+  readonly ruleId: string;
+}
+
 export type RevertedFileReason = 'oversized' | 'binary';
 
 /** A file the diff gate reverted in a separate commit before pushing. */
@@ -67,6 +74,12 @@ export interface WorkerRunDetail {
   readonly secretFindings: readonly SecretFinding[];
   /** Files the diff gate reverted before pushing; empty when none. */
   readonly revertedFiles: readonly RevertedFile[];
+  /** When the diff gate blocked the push; set only while the run state is publish_blocked. A confirmation echoes it. */
+  readonly publishBlockedAt: string | null;
+  /** When an operator last confirmed the run's findings as false positives; null when never. */
+  readonly falsePositivesConfirmedAt: string | null;
+  /** Every finding an operator confirmed as a false positive on this run; empty when none. */
+  readonly confirmedFindings: readonly ConfirmedFinding[];
 }
 
 /** Run states in which the agent has stopped and Foundry owns the run's commits. */

@@ -68,6 +68,9 @@ function runDetail(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     discardsAt: null,
     secretFindings: [],
     revertedFiles: [],
+    publishBlockedAt: null,
+    falsePositivesConfirmedAt: null,
+    confirmedFindings: [],
     ...overrides,
   };
 }
@@ -116,6 +119,8 @@ describe('buildFacts', () => {
       hasStoredLog: true,
       publish: { headSha: 'abcdef1234567890', headCommitUrl: null, pullRequestUrl: null, branchCommitCount: 2 },
       revertedFiles: [{ path: 'a.bin', reason: 'binary', sizeBytes: 10 }],
+      falsePositivesConfirmedAt: '2026-02-01T09:00:00Z',
+      confirmedFindings: [{ path: 'a.env', line: 3, ruleId: 'generic-api-key' }],
     });
     const stats: RunStats = {
       runCount: 2,
@@ -136,6 +141,7 @@ describe('buildFacts', () => {
       'Branch',
       'Published',
       'Reverted files',
+      'Secret findings',
       'Runs',
       'Run',
       'Checks fixes',
@@ -158,6 +164,39 @@ describe('buildFacts', () => {
 
     // Assert
     expect(keys).toEqual(['Kind', 'Author']);
+  });
+
+  describe('Secret findings', () => {
+    it('counts the findings confirmed as false positives, with the confirmation date', () => {
+      // Act
+      const facts = buildFacts(
+        issue('in_progress'),
+        runDetail({
+          state: 'publishing',
+          falsePositivesConfirmedAt: '2026-11-14T12:00:00Z',
+          confirmedFindings: [
+            { path: 'a.env', line: 3, ruleId: 'generic-api-key' },
+            { path: 'b.json', line: 9, ruleId: 'generic-api-key' },
+          ],
+        }),
+        null,
+      );
+
+      // Assert
+      const row = keyed(facts, 'Secret findings');
+      expect(row?.type).toBe('text');
+      expect(row?.type === 'text' ? row.value : null).toMatch(
+        /^2 confirmed as false positives, Nov 14, 2026, \d{1,2}:\d{2}:\d{2}\s[AP]M$/,
+      );
+    });
+
+    it('has no Secret findings row for a run never confirmed', () => {
+      // Act
+      const facts = buildFacts(issue('publish_blocked'), runDetail({ state: 'publish_blocked' }), null);
+
+      // Assert
+      expect(keyed(facts, 'Secret findings')).toBeUndefined();
+    });
   });
 
   describe('Kind', () => {

@@ -18,7 +18,8 @@ let nextId = 0;
  * which provides focus trapping, Escape-to-dismiss and an inert backdrop for free.
  *
  * The parent owns the `open` state: it sets `open` to show the dialog and resets it on
- * `confirmed` or `dismissed`.
+ * `confirmed` or `dismissed`. Content projected into the component renders between the message
+ * and the actions.
  */
 @Component({
   selector: 'fd-confirm-dialog',
@@ -33,6 +34,7 @@ let nextId = 0;
     >
       <h2 class="confirm-dialog__title" [id]="_titleId">{{ title() }}</h2>
       <p class="confirm-dialog__message" [id]="_messageId">{{ message() }}</p>
+      <ng-content />
       <div class="confirm-dialog__actions">
         <button
           class="confirm-dialog__cancel"
@@ -44,6 +46,7 @@ let nextId = 0;
           class="confirm-dialog__confirm"
           type="button"
           [class.confirm-dialog__confirm--destructive]="destructive()"
+          [disabled]="confirmDisabled()"
           (click)="confirm()"
         >{{ confirmLabel() }}</button>
       </div>
@@ -58,6 +61,8 @@ export class ConfirmDialogComponent {
   readonly confirmLabel: InputSignal<string> = input<string>('Confirm');
   readonly cancelLabel: InputSignal<string> = input<string>('Cancel');
   readonly destructive: InputSignal<boolean> = input<boolean>(false);
+  /** Disables only the confirm button, e.g. until a projected acknowledgement is checked. */
+  readonly confirmDisabled: InputSignal<boolean> = input<boolean>(false);
 
   readonly confirmed: OutputEmitterRef<void> = output<void>();
   readonly dismissed: OutputEmitterRef<void> = output<void>();

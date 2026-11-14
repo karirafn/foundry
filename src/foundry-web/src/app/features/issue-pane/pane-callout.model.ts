@@ -23,6 +23,7 @@ export type PaneAction =
   | 'skip_triage'
   | 'retry_publish'
   | 'discard_run'
+  | 'confirm_false_positives'
   | 'retriage';
 
 export interface CalloutChip {
@@ -80,6 +81,16 @@ const INELIGIBLE_LINE =
   'This repository is not dispatchable right now. Check repository settings to make it eligible.';
 
 const CANCEL_NOTE = 'The run finished before the cancel took effect.';
+
+const REBLOCK_LINE = 'Earlier findings on this run were confirmed as false positives. These findings are new.';
+
+/** The count of secret findings as copy reads it: `1 possible secret`, `3 possible secrets`. */
+export function possibleSecrets(count: number): string {
+  if (count === 0) {
+    return 'possible secrets';
+  }
+  return count === 1 ? '1 possible secret' : `${count} possible secrets`;
+}
 
 // Callouts of issues waiting for dispatch: they gain the ineligible-repository line.
 const DISPATCH_WAITING_STATES: ReadonlySet<IssueState> = new Set<IssueState>([...QUEUED_TIER_STATES, 'detected']);
@@ -355,15 +366,17 @@ function awaitingInputCallout(src: CalloutSource): Draft {
 
 function publishBlockedCallout(src: CalloutSource): Draft {
   const findings = src.run?.secretFindings ?? [];
-  const count = findings.length;
-  const secrets = count === 0 ? 'possible secrets' : count === 1 ? '1 possible secret' : `${count} possible secrets`;
   const d = draft('error', 'Push blocked', [
-    `The diff gate found ${secrets} in the run's changes, so nothing was pushed to ${src.branchText}.`,
+    `The diff gate found ${possibleSecrets(findings.length)} in the run's changes, so nothing was pushed to ${src.branchText}.`,
   ]);
-  d.secretFindings = count > 0 ? findings : null;
+  if (src.run?.falsePositivesConfirmedAt) {
+    d.lines.push(REBLOCK_LINE);
+  }
+  d.secretFindings = findings.length > 0 ? findings : null;
   d.notes.push(
-    'Foundry never publishes a run with a detected secret. Discard the run, then retry the issue to start a new '
-      + 'worker from the branch. If a finding is a real credential, rotate it: the worker had it in its workspace.'
+    'Foundry publishes this run only if you confirm that every finding is a false positive. If any finding is a '
+      + 'real credential, discard the run and rotate the credential: the worker had it in its workspace. Then retry '
+      + 'the issue to start a new worker from the branch.'
       + (src.run?.discardsAt
         ? ` If no one acts, the run is discarded automatically on ${medium(src.run.discardsAt)}.`
         : ''),
@@ -585,6 +598,10 @@ function actionsFor(src: CalloutSource): PaneAction[] {
   }
   if (state === 'publish_failed' || state === 'publish_blocked') {
     actions.push('discard_run');
+  }
+  // After Discard run: the outcome that cannot leak anything comes first.
+  if (state === 'publish_blocked') {
+    actions.push('confirm_false_positives');
   }
   if (RETRYABLE_STATES.has(state)) {
     actions.push('retry_issue');

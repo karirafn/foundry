@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import {
   IssueDetail,
   IssueKind,
@@ -193,6 +194,15 @@ function attempts(key: string, count: number | null | undefined, cap: number): P
   return count ? text(key, `${count} of ${cap}`) : null;
 }
 
+/** How many findings an operator confirmed as false positives, and when; null when never. */
+function confirmedFindingsFact(run: WorkerRunDetail | null): PaneFact | null {
+  if (!run?.falsePositivesConfirmedAt) {
+    return null;
+  }
+  const confirmedAt = formatDate(run.falsePositivesConfirmedAt, 'medium', 'en-US');
+  return text('Secret findings', `${run.confirmedFindings.length} confirmed as false positives, ${confirmedAt}`);
+}
+
 function isLong(result: string): boolean {
   return result.length > RESULT_CLAMP_CHARS || result.split('\n').length > RESULT_CLAMP_LINES;
 }
@@ -230,6 +240,7 @@ export function buildFacts(
     run !== null && run.revertedFiles.length > 0
       ? { type: 'reverted_files', key: 'Reverted files', files: run.revertedFiles }
       : null,
+    confirmedFindingsFact(run),
     stats !== null && stats.runCount > 0 ? text('Runs', runsText(stats)) : null,
     runId === null
       ? null
