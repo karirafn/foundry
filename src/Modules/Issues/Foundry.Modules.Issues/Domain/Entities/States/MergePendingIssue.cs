@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
 using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
@@ -100,6 +101,26 @@ public sealed class MergePendingIssue : Issue
         ReviewIssue review = ReviewIssue.FromMergePending(this, mergeOutcome, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
+    }
+
+    /// <summary>
+    /// A person's review feedback arrived before Foundry merged (issue #917): the merge is abandoned and the feedback
+    /// drives a revision, exactly as from checks-pending.
+    /// </summary>
+    public RevisionQueuedIssue Revise(
+        IReadOnlyList<ReviewComment> comments,
+        DateTimeOffset transitionedAt,
+        int omittedCommentCount = 0,
+        DateTimeOffset? newestCommentAt = null)
+    {
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromMergePending(
+            this,
+            comments,
+            omittedCommentCount,
+            newestCommentAt,
+            transitionedAt);
+        AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+        return revisionQueued;
     }
 
     public ContinuableFailedIssue Fail(
