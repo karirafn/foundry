@@ -120,7 +120,7 @@ jobs:
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: bats workers/tests/entrypoint.bats
+        run: bats workers/tests/entrypoint.bats workers/tests/shared-hooks.bats
 
       - name: Build base image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
