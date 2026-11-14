@@ -129,7 +129,12 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         switch (result)
         {
             case PublishResult.Published published:
-                RecordPublishFacts(published.Head, published.BranchCommitCount, divergence: null, published.RevertedFiles);
+                RecordPublishFacts(
+                    published.Head,
+                    published.BranchCommitCount,
+                    divergence: null,
+                    published.RevertedFiles,
+                    published.GenericFindings);
                 PublishedCommitSubjects = published.CommitSubjects;
                 break;
             case PublishResult.Diverged diverged:
@@ -137,7 +142,8 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
                     pushedHead: null,
                     branchCommitCount: null,
                     new BranchDivergence(diverged.SideBranch, diverged.Reason),
-                    diverged.RevertedFiles);
+                    diverged.RevertedFiles,
+                    diverged.GenericFindings);
                 break;
             case PublishResult.NothingToPublish:
                 break;
@@ -169,7 +175,12 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         PendingTranscriptCapturedAt = source.PendingTranscriptCapturedAt;
         CarryDispatchFactsFrom(source);
         RecordVerdict(source.Verdict);
-        RecordPublishFacts(source.PublishedHead, source.PublishedBranchCommitCount, source.Divergence, source.RevertedFiles);
+        RecordPublishFacts(
+            source.PublishedHead,
+            source.PublishedBranchCommitCount,
+            source.Divergence,
+            source.RevertedFiles,
+            source.GenericFindings);
         CarryConfirmationFrom(source);
     }
 }

@@ -95,7 +95,8 @@ public sealed class FailedRun : WorkerRun
             unpublished.PublishedHead,
             unpublished.PublishedBranchCommitCount,
             unpublished.Divergence,
-            unpublished.RevertedFiles);
+            unpublished.RevertedFiles,
+            unpublished.GenericFindings);
         return failed;
     }
 

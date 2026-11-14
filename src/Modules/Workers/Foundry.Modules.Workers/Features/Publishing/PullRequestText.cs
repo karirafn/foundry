@@ -36,6 +36,11 @@ internal sealed partial record PullRequestText(string Title, string Body)
 
     private const string ConfirmedFindingsHeading = "## Secret findings confirmed as false positives";
 
+    private const string GenericFindingsHeading = "## Possible generic secrets for review";
+
+    private const string GenericFindingsExplanation =
+        "Foundry's diff gate matched these lines with a generic secret pattern and published them; check that none of them is a real secret.";
+
     public static PullRequestText Build(
         PullRequestKind kind,
         PullRequestSummary? summary,
@@ -44,14 +49,16 @@ internal sealed partial record PullRequestText(string Title, string Body)
         int issueNumber,
         IReadOnlyList<string> commitSubjects,
         IReadOnlyList<RevertedFile> revertedFiles,
+        IReadOnlyList<SecretFinding> genericFindings,
         FalsePositiveConfirmation? confirmation = null)
     {
         ArgumentNullException.ThrowIfNull(issueTitle);
         ArgumentNullException.ThrowIfNull(commitSubjects);
         ArgumentNullException.ThrowIfNull(revertedFiles);
+        ArgumentNullException.ThrowIfNull(genericFindings);
 
         string title = $"{TypeOf(kind)}: {summary?.Value ?? SummaryFromIssueTitle(issueTitle, issueNumber)}";
-        string body = SummaryComment(description, commitSubjects, revertedFiles, confirmation)
+        string body = SummaryComment(description, commitSubjects, revertedFiles, genericFindings, confirmation)
             + "\n\nCloses #" + issueNumber.ToString(CultureInfo.InvariantCulture);
 
         return new PullRequestText(title, body);
@@ -60,16 +67,19 @@ internal sealed partial record PullRequestText(string Title, string Body)
     /// <summary>
     /// The body of the summary comment posted on an existing pull request after a later run: the description, or the
     /// commit-subject fallback, then the files the Diff gate reverted, then the findings an operator confirmed as false
-    /// positives. It carries no closing keyword, as the pull request body already links the issue.
+    /// positives, then the generic findings it published for review. It carries no closing keyword, as the pull request
+    /// body already links the issue.
     /// </summary>
     public static string SummaryComment(
         PullRequestDescription? description,
         IReadOnlyList<string> commitSubjects,
         IReadOnlyList<RevertedFile> revertedFiles,
+        IReadOnlyList<SecretFinding> genericFindings,
         FalsePositiveConfirmation? confirmation = null)
     {
         ArgumentNullException.ThrowIfNull(commitSubjects);
         ArgumentNullException.ThrowIfNull(revertedFiles);
+        ArgumentNullException.ThrowIfNull(genericFindings);
 
         StringBuilder comment = new(description?.Value ?? BodyFromCommitSubjects(commitSubjects));
 
@@ -81,6 +91,11 @@ internal sealed partial record PullRequestText(string Title, string Body)
         if (confirmation is not null)
         {
             comment.Append("\n\n").Append(ConfirmedFindingsSection(confirmation));
+        }
+
+        if (genericFindings.Count > 0)
+        {
+            comment.Append("\n\n").Append(GenericFindingsSection(genericFindings));
         }
 
         return comment.ToString();
@@ -188,7 +203,24 @@ internal sealed partial record PullRequestText(string Title, string Body)
             .Append(confirmedAt)
             .Append(" UTC, so Foundry published them.\n");
 
-        foreach (SecretFinding finding in confirmation.Findings)
+        AppendFindings(section, confirmation.Findings);
+
+        return section.ToString();
+    }
+
+    // A generic finding is pushed without an operator's decision (#956, ADR 0107), so the pull request is its only review
+    // point. Like the confirmed section it names where and which rule only: a finding never holds a matched value.
+    private static string GenericFindingsSection(IReadOnlyList<SecretFinding> findings)
+    {
+        StringBuilder section = new(GenericFindingsHeading);
+        section.Append("\n\n").Append(GenericFindingsExplanation).Append('\n');
+        AppendFindings(section, findings);
+        return section.ToString();
+    }
+
+    private static void AppendFindings(StringBuilder section, IReadOnlyList<SecretFinding> findings)
+    {
+        foreach (SecretFinding finding in findings)
         {
             section.Append("\n- ")
                 .Append(CodeSpan(finding.Path))
@@ -197,8 +229,6 @@ internal sealed partial record PullRequestText(string Title, string Body)
                 .Append(": rule ")
                 .Append(CodeSpan(finding.RuleId));
         }
-
-        return section.ToString();
     }
 
     private static string ReasonOf(RevertedFileReason reason) => reason switch

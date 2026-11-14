@@ -30,7 +30,7 @@ public sealed class RevertedFiles
     public void WhenFilesWereReverted_ThePullRequestBodyListsThemBeforeTheClosesLine()
     {
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, "Demo", 42, [], Reverted);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, "Demo", 42, [], Reverted, []);
 
         // Assert
         text.Body.ShouldBe($"Adds the demo.\n\n{Section}\n\nCloses #42");
@@ -40,7 +40,7 @@ public sealed class RevertedFiles
     public void WhenFilesWereReverted_TheSummaryCommentListsThem()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], Reverted);
+        string comment = PullRequestText.SummaryComment(Description, [], Reverted, []);
 
         // Assert
         comment.ShouldBe($"Adds the demo.\n\n{Section}");
@@ -50,7 +50,7 @@ public sealed class RevertedFiles
     public void WhenNoFilesWereReverted_TheBodyHasNoRevertedSection()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], []);
+        string comment = PullRequestText.SummaryComment(Description, [], [], []);
 
         // Assert
         comment.ShouldNotContain("Files reverted by Foundry");
@@ -63,7 +63,8 @@ public sealed class RevertedFiles
         string comment = PullRequestText.SummaryComment(
             Description,
             [],
-            [new RevertedFile("odd`name.bin", RevertedFileReason.Binary, 1024)]);
+            [new RevertedFile("odd`name.bin", RevertedFileReason.Binary, 1024)],
+            []);
 
         // Assert
         comment.ShouldEndWith("- ``odd`name.bin``: binary (1 KB)");
@@ -83,7 +84,8 @@ public sealed class RevertedFiles
         string comment = PullRequestText.SummaryComment(
             Description,
             [],
-            [new RevertedFile("f.bin", RevertedFileReason.Binary, sizeBytes)]);
+            [new RevertedFile("f.bin", RevertedFileReason.Binary, sizeBytes)],
+            []);
 
         // Assert
         comment.ShouldEndWith($"- `f.bin`: binary ({expected})");

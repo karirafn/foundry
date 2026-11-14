@@ -34,3 +34,11 @@ id = "anthropic-oauth-token"
 description = "A Claude OAuth access or refresh token, the credential every OAuth worker can read."
 regex = '''\b(sk-ant-o(?:at|rt)01-[a-zA-Z0-9_\-]{20,})(?:[\x60'"\s;]|\\[nr]|$)'''
 keywords = ["sk-ant-oat01", "sk-ant-ort01"]
+
+# A generic pattern (#956, ADR 0107): a rule for a free-form secret shape. Its findings never block the push; the
+# Publisher pushes them and reports them as FOUNDRY_GENERIC_FINDING, and the pull request lists them for review. Every
+# rule not tagged foundry-generic is a provider pattern and blocks. Only tags is set, so the default rule's regex,
+# keywords and allowlist (and the allowlists above) still apply.
+[[rules]]
+id = "generic-api-key"
+tags = ["foundry-generic"]

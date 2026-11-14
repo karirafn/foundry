@@ -87,7 +87,8 @@ public sealed class CompletedRun : WorkerRun
             publishing.PublishedHead,
             publishing.PublishedBranchCommitCount,
             publishing.Divergence,
-            publishing.RevertedFiles);
+            publishing.RevertedFiles,
+            publishing.GenericFindings);
         return completed;
     }
 

@@ -41,6 +41,7 @@ public sealed class ConfirmedFindings
             42,
             [],
             Reverted,
+            [],
             Confirmation);
 
         // Assert
@@ -52,7 +53,7 @@ public sealed class ConfirmedFindings
     public void AConfirmedRevision_ListsTheConfirmedFindingsInTheSummaryComment()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], Confirmation);
+        string comment = PullRequestText.SummaryComment(Description, [], [], [], Confirmation);
 
         // Assert
         comment.ShouldBe($"Adds the store.\n\n{Section}");
@@ -62,7 +63,7 @@ public sealed class ConfirmedFindings
     public void ARunNeverConfirmed_HasNoConfirmedSection()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], confirmation: null);
+        string comment = PullRequestText.SummaryComment(Description, [], [], [], confirmation: null);
 
         // Assert
         comment.ShouldBe("Adds the store.");
@@ -72,7 +73,7 @@ public sealed class ConfirmedFindings
     public void TheSection_NeverCarriesTheFindingsCommit()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], Confirmation);
+        string comment = PullRequestText.SummaryComment(Description, [], [], [], Confirmation);
 
         // Assert
         comment.ShouldNotContain("3333333");

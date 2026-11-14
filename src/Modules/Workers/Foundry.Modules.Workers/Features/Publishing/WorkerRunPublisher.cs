@@ -236,6 +236,7 @@ internal sealed class WorkerRunPublisher(
             issue.IssueNumber,
             run.PublishedCommitSubjects,
             run.RevertedFiles,
+            run.GenericFindings,
             run.FalsePositiveConfirmation);
 
         Result<string> opened = await runPublishingCommands.OpenPullRequestAsync(
@@ -264,6 +265,7 @@ internal sealed class WorkerRunPublisher(
             PullRequestDescription.TryCreate(run.PullRequestBody),
             run.PublishedCommitSubjects,
             run.RevertedFiles,
+            run.GenericFindings,
             run.FalsePositiveConfirmation);
 
         Result posted = await runPublishingCommands.PostRunSummaryAsync(

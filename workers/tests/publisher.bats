@@ -1068,6 +1068,10 @@ reverted_files() {
     grep '^FOUNDRY_REVERTED_FILE ' <<< "$output" || true
 }
 
+generic_findings() {
+    grep '^FOUNDRY_GENERIC_FINDING ' <<< "$output" || true
+}
+
 @test "publish: a run commit adding a secret pushes nothing and reports the finding without its value" {
     start_run
     mkdir -p "$WORKER/config"
@@ -1181,10 +1185,24 @@ publish_one() {
     publish
 }
 
+# assert_published — published with no finding of either kind: the tag-only generic-api-key override (#956) keeps the
+# default rule's allowlist and Foundry's own allowlists.
 assert_published() {
     [ "$status" -eq 0 ]
     [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
     [ -z "$(secret_findings)" ]
+    [ -z "$(generic_findings)" ]
+}
+
+# assert_generic <path-regex> — generic-api-key is a generic pattern (#956): the run is pushed, and its one finding,
+# in <path-regex>, is reported as a generic finding rather than blocking.
+assert_generic() {
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+    [ -z "$(secret_findings)" ]
+    [ "$(generic_findings | wc -l)" -eq 1 ]
+    generic_findings | grep -qE "^FOUNDRY_GENERIC_FINDING commit=[0-9a-f]{40} line=1 rule=generic-api-key path=$1\$"
+    [ -n "$(push_lines)" ]
 }
 
 # assert_blocked <rule> <path-regex> — the publish is blocked by exactly one finding, of <rule> in <path-regex>.
@@ -1231,46 +1249,46 @@ assert_blocked() {
     assert_published
 }
 
-@test "publish: a UUID assigned to an api key outside a test file blocks the push" {
+@test "publish: a UUID assigned to an api key outside a test file is published as a generic finding" {
     publish_one src/store.ts "const apiKey = '$FIXTURE_UUID';"
 
-    assert_blocked generic-api-key 'src/store\.ts'
+    assert_generic 'src/store\.ts'
 }
 
-@test "publish: a UUID in a directory whose name merely ends in test blocks the push" {
+@test "publish: a UUID in a directory whose name merely ends in test is published as a generic finding" {
     publish_one src/Contest/Scores.cs "var apiKey = \"$FIXTURE_UUID\";"
 
-    assert_blocked generic-api-key 'src/Contest/Scores\.cs'
+    assert_generic 'src/Contest/Scores\.cs'
 }
 
-@test "publish: a UUID in a file whose name merely ends in test blocks the push" {
+@test "publish: a UUID in a file whose name merely ends in test is published as a generic finding" {
     publish_one web/latest.ts "const apiKey = '$FIXTURE_UUID';"
 
-    assert_blocked generic-api-key 'web/latest\.ts'
+    assert_generic 'web/latest\.ts'
 }
 
-@test "publish: a random key in a spec file blocks the push" {
+@test "publish: a random key in a spec file is published as a generic finding" {
     publish_one src/mix.service.spec.ts "const apiKey = '$RANDOM_KEY';"
 
-    assert_blocked generic-api-key 'src/mix\.service\.spec\.ts'
+    assert_generic 'src/mix\.service\.spec\.ts'
 }
 
-@test "publish: a versioned name with digits inside a segment blocks the push" {
+@test "publish: a versioned name with digits inside a segment is published as a generic finding" {
     publish_one src/store.ts "const SESSION_KEY = '$DOTTED_VERSIONED_KEY';"
 
-    assert_blocked generic-api-key 'src/store\.ts'
+    assert_generic 'src/store\.ts'
 }
 
-@test "publish: a version suffix beyond three digits blocks the push" {
+@test "publish: a version suffix beyond three digits is published as a generic finding" {
     publish_one src/store.ts "const RECENT_KEY = '${VERSIONED_NAME}234';"
 
-    assert_blocked generic-api-key 'src/store\.ts'
+    assert_generic 'src/store\.ts'
 }
 
-@test "publish: a dotted value with a random segment blocks the push" {
+@test "publish: a dotted value with a random segment is published as a generic finding" {
     publish_one src/store.ts "const STRIPE_SECRET = '$DOTTED_RANDOM_KEY';"
 
-    assert_blocked generic-api-key 'src/store\.ts'
+    assert_generic 'src/store\.ts'
 }
 
 @test "publish: a provider rule still flags a UUID in a test file" {
@@ -1316,6 +1334,171 @@ ANTHROPIC_API_KEY="sk-ant-api03-$(printf '%s%s' Lm4Qz8RtW2yXk6VbN3pH9sJd5FgC1aEu
     secret_findings | grep -qE ' line=1 rule=anthropic-api-key path=src/client\.ts$'
     [ -z "$(secret_findings | grep ' rule=anthropic-oauth-token ' || true)" ]
     [ -z "$(push_lines)" ]
+}
+
+# ---------------------------------------------------------------------------
+# Generic patterns (#956, ADR 0107): a rule tagged foundry-generic in gitleaks.toml
+# (generic-api-key) never blocks. Its findings are pushed and reported as
+# FOUNDRY_GENERIC_FINDING lines; every other rule is a provider pattern and blocks.
+# ---------------------------------------------------------------------------
+
+SECOND_RANDOM_KEY="$(printf '%s' Pn5tW8zQ2rLk7XcV4bMh9JsD3fGa6YeU)"
+
+@test "publish: the scan report template prints each finding's tags" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    cat > "$FAKE_BIN_DIR/gitleaks" <<SCANNER
+#!/bin/sh
+previous=
+for arg in "\$@"; do
+    [ "\$previous" = --report-template ] && cp "\$arg" "$BATS_TEST_TMPDIR/scan_template"
+    previous="\$arg"
+done
+exec "$(command -v gitleaks)" "\$@"
+SCANNER
+    chmod +x "$FAKE_BIN_DIR/gitleaks"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    grep -q '{{ range .Tags }}' "$BATS_TEST_TMPDIR/scan_template"
+}
+
+@test "publish: a finding line whose tags cannot be read fails the publish instead of passing as generic" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    cat > "$FAKE_BIN_DIR/gitleaks" <<'SCANNER'
+#!/bin/sh
+previous=
+for arg in "$@"; do
+    [ "$previous" = --report-path ] && report="$arg"
+    previous="$arg"
+done
+printf '%s\n' \
+    "FOUNDRY_SECRET_FINDING commit=0123456789abcdef0123456789abcdef01234567 line=1 rule=generic-api-key tags=,foundry-generic, path=a.txt" \
+    "FOUNDRY_SECRET_FINDING commit=0123456789abcdef0123456789abcdef01234567 line=1 rule=custom tags=,a tag, path=a.txt" \
+    > "$report"
+exit 3
+SCANNER
+    chmod +x "$FAKE_BIN_DIR/gitleaks"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason=the secret scan wrote a finding that cannot be read" ]]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a scan with no findings publishes and reports no generic findings" {
+    publish_one src/a.ts "export const a = 1;"
+
+    assert_published
+}
+
+@test "publish: generic findings are pushed and listed sorted and de-duplicated before the result line" {
+    start_run
+    mkdir -p "$WORKER/src"
+    wcommit src/b.ts "const apiKey = '$RANDOM_KEY';" "second file first"
+    wcommit src/a.ts "$(printf "const apiKey = '%s';\nconst apiKey2 = '%s'; const secretKey = '%s';" \
+        "$SECOND_RANDOM_KEY" "$RANDOM_KEY" "$SECOND_RANDOM_KEY")" "first file second"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$(remote_sha "$RUN_BRANCH") commits=2" ]
+    [ -z "$(secret_findings)" ]
+    [ "$(generic_findings)" = "$(generic_findings | sort -u)" ]
+    [ "$(generic_findings | wc -l)" -eq 3 ]
+    generic_findings | grep -qE ' line=1 rule=generic-api-key path=src/b\.ts$'
+    generic_findings | grep -qE ' line=1 rule=generic-api-key path=src/a\.ts$'
+    generic_findings | grep -qE ' line=2 rule=generic-api-key path=src/a\.ts$'
+    [ "$(remote_git show "$RUN_BRANCH:src/b.ts")" = "const apiKey = '$RANDOM_KEY';" ]
+    [[ "$output" != *"$RANDOM_KEY"* && "$stderr" != *"$RANDOM_KEY"* ]]
+    [[ "$output" != *"$SECOND_RANDOM_KEY"* && "$stderr" != *"$SECOND_RANDOM_KEY"* ]]
+}
+
+@test "publish: a generic finding names the run commit as rewritten" {
+    publish_one src/store.ts "const apiKey = '$RANDOM_KEY';"
+
+    [ "$status" -eq 0 ]
+    local commit
+    commit="$(generic_findings | sed -n 's/.* commit=\([0-9a-f]*\) .*/\1/p')"
+    [ "$commit" = "$(remote_sha "$RUN_BRANCH")" ]
+}
+
+@test "publish: a run already on its branch still reports its generic findings" {
+    publish_one src/store.ts "const apiKey = '$RANDOM_KEY';"
+    [ "$status" -eq 0 ]
+    local first_findings
+    first_findings="$(generic_findings)"
+    : > "$BATS_TEST_TMPDIR/git_args"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+    [ -z "$(push_lines)" ]
+    [ -n "$first_findings" ]
+    [ "$(generic_findings)" = "$first_findings" ]
+}
+
+@test "publish: a diverged run reports its generic findings" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wcommit shared.txt "const apiKey = '$RANDOM_KEY';" "run work"
+    worker_bundle
+    seed_commit "$RUN_BRANCH_NAME" shared.txt "human version" "human work"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=diverged "* ]]
+    [ -z "$(secret_findings)" ]
+    [ "$(generic_findings | wc -l)" -eq 1 ]
+    generic_findings | grep -qE '^FOUNDRY_GENERIC_FINDING commit=[0-9a-f]{40} line=1 rule=generic-api-key path=shared\.txt$'
+    [[ "$output" != *"$RANDOM_KEY"* && "$stderr" != *"$RANDOM_KEY"* ]]
+}
+
+@test "publish: a provider finding blocks the push and lists only the provider findings" {
+    start_run
+    wcommit a.env "TOKEN=$GITHUB_PAT" "provider"
+    mkdir -p "$WORKER/src"
+    wcommit src/store.ts "const apiKey = '$RANDOM_KEY';" "generic"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    [ "$(secret_findings | wc -l)" -eq 1 ]
+    secret_findings | grep -qE '^FOUNDRY_SECRET_FINDING commit=[0-9a-f]{40} line=1 rule=github-pat path=a\.env$'
+    [ -z "$(generic_findings)" ]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a confirmed provider finding publishes and the generic finding is reported" {
+    start_run
+    wcommit a.env "TOKEN=$GITHUB_PAT" "provider"
+    mkdir -p "$WORKER/src"
+    wcommit src/store.ts "const apiKey = '$RANDOM_KEY';" "generic"
+    worker_bundle
+    publish
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+
+    export CONFIRMED_FINDINGS
+    CONFIRMED_FINDINGS="$(secret_findings | sed -n 's/^FOUNDRY_SECRET_FINDING commit=\([0-9a-f]*\) line=\([0-9]*\) rule=\([^ ]*\) path=\(.*\)$/\1:\4:\3:\2/p')"
+    : > "$BATS_TEST_TMPDIR/git_args"
+    publish
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+    [ -z "$(secret_findings)" ]
+    [ "$(generic_findings | wc -l)" -eq 1 ]
+    generic_findings | grep -qE ' line=1 rule=generic-api-key path=src/store\.ts$'
+    [ -n "$(push_lines)" ]
 }
 
 @test "publish: a scanner that fails is a failed publish, never a clean scan" {
