@@ -25,7 +25,12 @@ export type TokenRequirements = Schemas['TokenRequirements'];
 // TokenStatus refines CredentialSummary.tokenStatus and CredentialSummary.branchRulesTokenStatus.
 // Update these unions when the corresponding C# contract values change.
 export type ProviderType = 'GitHub' | 'GitLab';
-export type AffectedRepositoryStatus = 'eligible' | 'ineligible' | 'unreachable' | 'credential-unreadable';
+export type AffectedRepositoryStatus =
+  | 'eligible'
+  | 'ineligible'
+  | 'unreachable'
+  | 'credential-unreadable'
+  | 'credential-invalid';
 export type TokenValidationKind =
   | 'authenticated'
   | 'authenticationFailed'
@@ -33,9 +38,17 @@ export type TokenValidationKind =
   | 'identityUnresolved'
   | 'providerMismatch';
 
-export type TokenStatus = 'present' | 'absent' | 'unreadable';
+export type TokenStatus = 'present' | 'absent' | 'unreadable' | 'invalid';
 
 const KNOWN_TOKEN_STATUSES: ReadonlySet<TokenStatus> = new Set<TokenStatus>([
+  'present',
+  'absent',
+  'unreadable',
+  'invalid',
+]);
+
+// The branch-rules token has no Invalid state, so a stray 'invalid' falls back to absent.
+const KNOWN_BRANCH_RULES_TOKEN_STATUSES: ReadonlySet<TokenStatus> = new Set<TokenStatus>([
   'present',
   'absent',
   'unreadable',
@@ -56,7 +69,7 @@ export function resolveTokenStatus(account: AccountSummary): TokenStatus {
 /** Narrows the open-string branch-rules token status; a response predating the field reads as absent. */
 export function resolveBranchRulesTokenStatus(account: AccountSummary): TokenStatus {
   const raw = (account as { branchRulesTokenStatus?: string }).branchRulesTokenStatus;
-  if (raw && KNOWN_TOKEN_STATUSES.has(raw as TokenStatus)) {
+  if (raw && KNOWN_BRANCH_RULES_TOKEN_STATUSES.has(raw as TokenStatus)) {
     return raw as TokenStatus;
   }
   return 'absent';
@@ -72,6 +85,8 @@ export function affectedStatusLabel(status: AffectedRepositoryStatus | string): 
       return 'Unable to verify branch protection';
     case 'credential-unreadable':
       return 'Token unreadable';
+    case 'credential-invalid':
+      return 'Token invalid';
     default:
       return status;
   }
