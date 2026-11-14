@@ -10,6 +10,8 @@ status: accepted
 
 > **2026-11-14 — Amended:** the Decision's sentence that the settings toggle states the security cost inline, and the `INSTALL_DOCKER=true` condition on the image packages, are replaced by [ADR 0109](0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md): Docker is installed unconditionally and its allowances follow the run's capability profile, so there is no toggle.
 
+> **2026-11-14 — Amended:** the preceding note's "so there is no toggle" is replaced by [ADR 0110](0110-nested-docker-privileges-stay-an-operator-switch.md): an operator switch, separate from the image, decides whether `Full` runs get these allowances, and Settings states their security cost beside it as this Decision required of the old toggle.
+
 ## Context
 
 [ADR 0021](0021-rootless-docker-in-docker-for-worker-tests.md) gives Docker-enabled workers their own rootless `dockerd` under a minimal allowance set (`seccomp=unconfined`, `apparmor=unconfined`, `/dev/fuse`). This ADR replaces 0021's allowance-set clause, its fuse-overlayfs storage default, and its claim that nested rootless DinD cannot start on Docker Desktop / WSL2. 0021's rejection of the host socket and of `--privileged` still stands.
