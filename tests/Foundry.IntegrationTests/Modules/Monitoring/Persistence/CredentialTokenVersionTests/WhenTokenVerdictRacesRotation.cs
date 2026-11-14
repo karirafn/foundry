@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -140,6 +141,43 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
             () => stored.TokenVersion.ShouldBe(loadedVersion + 1));
     }
 
+    [Fact]
+    public async Task WhenConfirmMarksInvalidBeforeRotationSaves_RotationLeavesNewTokenValid()
+    {
+        // Arrange — the rotation loads the Valid account, then a confirm about the old token marks it Invalid.
+        CredentialId accountId = await SeedValidAccountAsync();
+        using IServiceScope rotationScope = _factory.Services.CreateScope();
+        DbContext rotationDb = rotationScope.ServiceProvider.GetRequiredService<DbContext>();
+        GitHubCredential rotating = (GitHubCredential)await rotationDb.Set<Credential>()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+
+        using (IServiceScope confirmScope = _factory.Services.CreateScope())
+        {
+            DbContext confirmDb = confirmScope.ServiceProvider.GetRequiredService<DbContext>();
+            Credential resolved = await confirmDb.Set<Credential>()
+                .AsNoTracking()
+                .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+            AccountTokenVerdicts verdicts = new(
+                confirmDb,
+                new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+                NullLogger<AccountTokenVerdicts>.Instance);
+            await verdicts.ConfirmRejectionAsync(
+                resolved,
+                ((TokenUsability.Usable)resolved.TokenUsability).Token,
+                DetectedAt,
+                TestContext.Current.CancellationToken);
+        }
+
+        (await LoadAsync(accountId)).TokenValidity.ShouldBeOfType<TokenValidity.Invalid>();
+        rotating.Update(rotating.Name, string.Concat("ghp_", "rotated"), rotating.BaseUrl);
+        CredentialConfiguration.WriteTokenValidity(rotationDb.Entry<Credential>(rotating));
+
+        // Act
+        await rotationDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(accountId)).TokenValidity.ShouldBeOfType<TokenValidity.Valid>();
+    }
     private async Task<CredentialId> SeedValidAccountAsync()
     {
         Guid id = await AccountSeeder.SeedGitHubAccountAsync(_factory, token: string.Concat("ghp_", "original"));

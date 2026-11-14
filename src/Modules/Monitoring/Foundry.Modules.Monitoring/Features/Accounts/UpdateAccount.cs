@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -164,6 +165,7 @@ internal static partial class UpdateAccount
                 accountName = resolved.AccountName;
 
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
+                CredentialConfiguration.WriteTokenValidity(dbContext.Entry(credential));
 
                 try
                 {
