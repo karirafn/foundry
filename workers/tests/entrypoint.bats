@@ -19,7 +19,59 @@ TESTCONTAINERS_CONNECTION_VARS=(
     TESTCONTAINERS_FUTURE_SETTING
 )
 
+# Prints $PATH with every directory that holds <name> replaced by a shadow directory
+# of symlinks to all its other entries (dotfiles included), so `command -v <name>`
+# no longer finds it while every sibling tool still resolves. Other entries (also
+# empty ones and missing directories) are kept as they are, in order. Shadows go
+# under the current test's temp dir, or the file's when called from setup_file.
+# A plain fake in $FAKE_BIN_DIR cannot hide a real binary: command -v skips a
+# non-executable file and reports a function, so the real directory must leave PATH.
+shadow_from_path() (
+    local name="$1"
+    shopt -s nullglob dotglob
+    local shadow_root
+    shadow_root="$(mktemp -d "${BATS_TEST_TMPDIR:-$BATS_FILE_TMPDIR}/path-shadow.XXXXXX")" || return 1
+    local rest="$PATH" dir result="" separator="" index=0
+    while :; do
+        dir="${rest%%:*}"
+        if [ -n "$dir" ] && { [ -e "$dir/$name" ] || [ -L "$dir/$name" ]; }; then
+            local source_dir shadow_dir="$shadow_root/$index" entry
+            source_dir="$(cd "$dir" && pwd)" || return 1
+            local entries=()
+            for entry in "$source_dir"/*; do
+                [ "${entry##*/}" = "$name" ] || entries+=("$entry")
+            done
+            mkdir "$shadow_dir" || return 1
+            if [ "${#entries[@]}" -gt 0 ]; then
+                ln -s "${entries[@]}" "$shadow_dir/" || return 1
+            fi
+            dir="$shadow_dir"
+        fi
+        result+="$separator$dir"
+        separator=":"
+        index=$((index + 1))
+        [[ "$rest" == *:* ]] || break
+        rest="${rest#*:}"
+    done
+    printf '%s\n' "$result"
+)
+
+setup_file() {
+    # Worker images ship the real dockerd-rootless.sh; tests that assume it is absent
+    # (as on CI) would otherwise start real rootless daemons and exhaust the worker's
+    # PID limit. Shadow it once per file so every test sees the CI host.
+    local shadowed_path
+    shadowed_path="$(shadow_from_path dockerd-rootless.sh)" || return 1
+    export PATH="$shadowed_path"
+}
+
 setup() {
+    local leaked_dockerd
+    if leaked_dockerd="$(command -v dockerd-rootless.sh)"; then
+        echo "dockerd-rootless.sh is still on PATH at $leaked_dockerd; shadow_from_path missed it" >&2
+        return 1
+    fi
+
     # Create a per-test fake-bin directory and prepend it to PATH so fakes
     # shadow real binaries without touching committed files.
     export FAKE_BIN_DIR="$BATS_TEST_TMPDIR/bin"
@@ -655,31 +707,16 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Helper: build a sanitized PATH that excludes the named binaries (e.g.
-# csharp-ls) while retaining all other tools the entrypoint needs.
-# Placing FAKE_BIN_DIR first is insufficient when no fake is written —
-# command -v walks PATH until it finds an executable match.  This helper
-# symlinks all /usr/bin and /bin executables EXCEPT the named ones into a
-# per-test sanitized dir and prepends it, so the real binaries are shadowed.
+# Helper: build a PATH that excludes the named binaries (e.g. csharp-ls)
+# while retaining all other tools the entrypoint needs. It shadows them from
+# the current PATH, which setup_file has already stripped of dockerd-rootless.sh.
 make_sanitized_path_without() {
     # Args: names to exclude (e.g. "csharp-ls")
-    local exclude_dir="$BATS_TEST_TMPDIR/sanitized-bin"
-    mkdir -p "$exclude_dir"
-    local excluded=("$@")
-    for src_dir in /usr/bin /usr/local/bin /usr/sbin /bin; do
-        for bin_path in "$src_dir"/*; do
-            local name
-            name="$(basename "$bin_path")"
-            local skip=false
-            for exc in "${excluded[@]}"; do
-                [ "$name" = "$exc" ] && skip=true && break
-            done
-            $skip && continue
-            [ -f "$bin_path" ] && [ -x "$bin_path" ] || continue
-            ln -sf "$bin_path" "$exclude_dir/$name" 2>/dev/null || true
-        done
+    local sanitized="$PATH" name
+    for name in "$@"; do
+        sanitized="$(PATH="$sanitized" shadow_from_path "$name")" || return 1
     done
-    printf '%s' "$FAKE_BIN_DIR:$exclude_dir"
+    printf '%s' "$sanitized"
 }
 
 @test "invalid BRANCH_NAME characters guard emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
@@ -3270,4 +3307,80 @@ FAKE
     [ "$exit_status" -eq 143 ]
     grep -q "SIGTERM received" "$BATS_TEST_TMPDIR/stderr"
     ! grep -q "claude idle" "$BATS_TEST_TMPDIR/stderr"
+}
+
+# ---------------------------------------------------------------------------
+# shadow_from_path
+# ---------------------------------------------------------------------------
+
+# Writes an executable script named $2 into directory $1.
+make_executable() {
+    /bin/mkdir -p "$1"
+    printf '#!/bin/sh\nexit 0\n' > "$1/$2"
+    chmod +x "$1/$2"
+}
+
+@test "shadow_from_path: the named script is hidden while a sibling tool still resolves" {
+    local dir="$BATS_TEST_TMPDIR/host-bin"
+    make_executable "$dir" dockerd-rootless.sh
+    make_executable "$dir" sibling-tool
+
+    local shadowed
+    shadowed="$(PATH="$dir:$PATH" shadow_from_path dockerd-rootless.sh)"
+
+    run env PATH="$shadowed" bash -c 'command -v dockerd-rootless.sh'
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+    run env PATH="$shadowed" bash -c 'command -v sibling-tool'
+    [ "$status" -eq 0 ]
+    [ "$(readlink -f "$output")" = "$(readlink -f "$dir/sibling-tool")" ]
+}
+
+@test "shadow_from_path: copies in two PATH directories, one a symlink to the other, are both hidden" {
+    local dir="$BATS_TEST_TMPDIR/usr-bin"
+    make_executable "$dir" dockerd-rootless.sh
+    make_executable "$dir" sibling-tool
+    ln -s "$dir" "$BATS_TEST_TMPDIR/bin-link"
+
+    local shadowed
+    shadowed="$(PATH="$dir:$BATS_TEST_TMPDIR/bin-link:$PATH" shadow_from_path dockerd-rootless.sh)"
+
+    run env PATH="$shadowed" bash -c 'type -a -p dockerd-rootless.sh'
+    [ -z "$output" ]
+    run env PATH="$shadowed" bash -c 'command -v sibling-tool'
+    [ "$status" -eq 0 ]
+}
+
+@test "shadow_from_path: a shadowed directory keeps its dotfiles" {
+    local dir="$BATS_TEST_TMPDIR/host-bin"
+    make_executable "$dir" dockerd-rootless.sh
+    make_executable "$dir" .hidden-tool
+
+    local shadowed
+    shadowed="$(PATH="$dir:$PATH" shadow_from_path dockerd-rootless.sh)"
+
+    local shadow_dir="${shadowed%%:*}"
+    [ "$shadow_dir" != "$dir" ]
+    [ -L "$shadow_dir/.hidden-tool" ]
+    [ ! -e "$shadow_dir/dockerd-rootless.sh" ]
+}
+
+@test "shadow_from_path: directories without the name, empty entries and missing directories are kept in order" {
+    local with="$BATS_TEST_TMPDIR/with"
+    local without="$BATS_TEST_TMPDIR/without"
+    make_executable "$with" dockerd-rootless.sh
+    make_executable "$without" other-tool
+    local missing="$BATS_TEST_TMPDIR/missing"
+
+    local shadowed
+    shadowed="$(PATH="$without::$missing:$with:$without:$PATH" shadow_from_path dockerd-rootless.sh)"
+
+    local entries
+    IFS=: read -r -a entries <<< "$shadowed"
+    [ "${entries[0]}" = "$without" ]
+    [ -z "${entries[1]}" ]
+    [ "${entries[2]}" = "$missing" ]
+    [ "${entries[3]}" != "$with" ]
+    [ ! -e "${entries[3]}/dockerd-rootless.sh" ]
+    [ "${entries[4]}" = "$without" ]
 }
