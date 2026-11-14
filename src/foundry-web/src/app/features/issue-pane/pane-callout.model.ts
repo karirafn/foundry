@@ -449,6 +449,22 @@ function publishRetryingCallout(src: CalloutSource): Draft {
   return d;
 }
 
+function checksPendingCallout(src: CalloutSource): Draft {
+  // Only head_moved changes the copy, so after_run, a missing field and a reason a newer backend adds keep today's.
+  if (src.details?.checksPendingReason !== 'head_moved') {
+    return draft('working', 'Checks running', [`Waiting for CI checks on the ${src.pullRequest}.`]);
+  }
+  const d = draft('working', 'Checks re-running', [
+    `The ${src.pullRequest}'s branch changed on ${src.providerName} after its checks finished, so it left your review.`,
+    'Waiting for CI checks on the new commits.',
+  ]);
+  const link = src.prLink();
+  if (link !== null) {
+    d.links.push(link);
+  }
+  return d;
+}
+
 function reviewCallout(src: CalloutSource): Draft {
   const link = src.prLink();
   let d: Draft;
@@ -550,7 +566,7 @@ function winningCallout(src: CalloutSource): Draft {
     case 'rebase_pending':
       return draft('working', 'Rebasing', ['Foundry is rebasing the branch onto the default branch.']);
     case 'checks_pending':
-      return draft('working', 'Checks running', [`Waiting for CI checks on the ${src.pullRequest}.`]);
+      return checksPendingCallout(src);
     case 'review':
       return reviewCallout(src);
     case 'detected':

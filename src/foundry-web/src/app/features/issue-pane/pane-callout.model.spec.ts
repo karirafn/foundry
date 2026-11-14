@@ -585,6 +585,79 @@ describe('buildCallout', () => {
       expect(callout.lines).toEqual(['Waiting for CI checks on the merge request.']);
     });
 
+    it('explains that new commits on GitHub sent the issue back from review, linking the pull request', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'head_moved' }),
+        null,
+        summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('working');
+      expect(callout.title).toBe('Checks re-running');
+      expect(callout.lines).toEqual([
+        'The pull request\'s branch changed on GitHub after its checks finished, so it left your review.',
+        'Waiting for CI checks on the new commits.',
+      ]);
+      expect(callout.links).toEqual([
+        { label: 'View PR', href: 'https://github.com/acme/api/pull/7', ariaLabel: 'View pull request for issue #42' },
+      ]);
+    });
+
+    it('explains new commits on a merge request in GitLab terms', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'head_moved' }),
+        null,
+        summary({ state: 'checks_pending', providerType: 'gitlab' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Checks re-running');
+      expect(callout.lines[0]).toBe(
+        'The merge request\'s branch changed on GitLab after its checks finished, so it left your review.',
+      );
+    });
+
+    for (const [name, reason] of [
+      ['after_run', 'after_run'],
+      ['null', null],
+      ['an unknown value', 'from_the_future'],
+    ] as const) {
+      it(`keeps today's pending-checks copy when the reason is ${name}`, () => {
+        // Act
+        const callout = buildCallout(
+          detail('checks_pending', { checksPendingReason: reason as IssueStateDetails['checksPendingReason'] }),
+          null,
+          summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+          null,
+        );
+
+        // Assert
+        expect(callout.title).toBe('Checks running');
+        expect(callout.lines).toEqual(['Waiting for CI checks on the pull request.']);
+        expect(callout.links).toEqual([]);
+      });
+    }
+
+    it('keeps today\'s pending-checks copy when the reason is missing', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending'),
+        null,
+        summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Checks running');
+      expect(callout.lines).toEqual(['Waiting for CI checks on the pull request.']);
+      expect(callout.links).toEqual([]);
+    });
+
     it('shows a review whose checks failed with no failing check identified', () => {
       // Act
       const callout = buildCallout(

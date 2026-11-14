@@ -105,4 +105,17 @@ public sealed class RecheckAfterHeadMoved
             () => domainEvent.IssueNumber.ShouldBe(42),
             () => domainEvent.EnteredChecksPendingAt.ShouldBe(TransitionedAt));
     }
+
+    [Fact]
+    public void WhenHeadMoved_RecordsHeadMovedReason()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+
+        // Act
+        ChecksPendingIssue checksPending = review.RecheckAfterHeadMoved(TransitionedAt);
+
+        // Assert
+        checksPending.Reason.ShouldBe(new ChecksPendingReason.HeadMoved());
+    }
 }

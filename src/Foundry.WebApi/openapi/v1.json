@@ -3749,6 +3749,12 @@
               "null",
               "string"
             ]
+          },
+          "checksPendingReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
