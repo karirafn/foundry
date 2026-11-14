@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -42,19 +44,16 @@ internal static class RepositoryProviderResolution
                 PostExitProviderQueriesErrors.CredentialNotFound(repositoryId));
         }
 
-        if (credential.Token is ProviderToken.Unreadable)
+        TokenUsability usability = credential.TokenUsability;
+        return usability switch
         {
-            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.CredentialTokenUnreadable(credential.Id));
-        }
-
-        if (credential.Token is not ProviderToken.Present present)
-        {
-            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id));
-        }
-
-        IIssueProvider provider = providerFactory.CreateProvider(credential, present.Value);
-        return Result<(IIssueProvider, MonitoredRepository)>.Ok((provider, repo));
+            TokenUsability.Usable usable => Result<(IIssueProvider, MonitoredRepository)>.Ok(
+                (providerFactory.CreateProvider(credential, usable.Token), repo)),
+            TokenUsability.Unreadable => Result<(IIssueProvider, MonitoredRepository)>.Fail(
+                PostExitProviderQueriesErrors.CredentialTokenUnreadable(credential.Id)),
+            TokenUsability.Absent => Result<(IIssueProvider, MonitoredRepository)>.Fail(
+                PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id)),
+            _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),
+        };
     }
 }

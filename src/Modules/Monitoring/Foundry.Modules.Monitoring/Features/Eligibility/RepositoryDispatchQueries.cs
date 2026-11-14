@@ -36,12 +36,16 @@ internal sealed class RepositoryDispatchQueries(
             return null;
         }
 
-        if (credential.Token is ProviderToken.Unreadable)
+        TokenUsability usability = credential.TokenUsability;
+        string? token = usability switch
         {
-            return null;
-        }
+            TokenUsability.Usable usable => usable.Token,
+            TokenUsability.Unreadable => null,
+            TokenUsability.Absent => null,
+            _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),
+        };
 
-        if (credential.Token is not ProviderToken.Present present)
+        if (token is null)
         {
             return null;
         }
@@ -58,7 +62,7 @@ internal sealed class RepositoryDispatchQueries(
         return new RepositoryDispatchInfo(
             repo.Slug.ToString(),
             new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
-            present.Value,
+            token,
             provider,
             issueApiUrlBase,
             repo.Host);

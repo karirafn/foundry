@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -521,25 +523,26 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             return null;
         }
 
-        if (credential.Token is ProviderToken.Unreadable)
+        TokenUsability usability = credential.TokenUsability;
+        switch (usability)
         {
-            _logger.LogWarning(
-                "Credential '{CredentialName}' (id '{CredentialId}') has an unreadable token; skipping poll for repo '{Slug}'.",
-                credential.Name,
-                credential.Id,
-                repo.Slug);
-            return null;
+            case TokenUsability.Usable usable:
+                return (providerFactory.CreateProvider(credential, usable.Token), credential);
+            case TokenUsability.Unreadable:
+                _logger.LogWarning(
+                    "Credential '{CredentialName}' (id '{CredentialId}') has an unreadable token; skipping poll for repo '{Slug}'.",
+                    credential.Name,
+                    credential.Id,
+                    repo.Slug);
+                return null;
+            case TokenUsability.Absent:
+                _logger.LogDebug(
+                    "Credential '{CredentialName}' has no token configured; skipping poll for repo '{Slug}'.",
+                    credential.Name,
+                    repo.Slug);
+                return null;
+            default:
+                throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
-
-        if (credential.Token is not ProviderToken.Present present)
-        {
-            _logger.LogDebug(
-                "Credential '{CredentialName}' has no token configured; skipping poll for repo '{Slug}'.",
-                credential.Name,
-                repo.Slug);
-            return null;
-        }
-
-        return (providerFactory.CreateProvider(credential, present.Value), credential);
     }
 }
