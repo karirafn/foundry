@@ -3146,7 +3146,8 @@
           "hasToken",
           "tokenStatus",
           "namespaces",
-          "branchRulesTokenStatus"
+          "branchRulesTokenStatus",
+          "tokenInvalidSince"
         ],
         "type": "object",
         "properties": {
@@ -3177,6 +3178,13 @@
           },
           "branchRulesTokenStatus": {
             "type": "string"
+          },
+          "tokenInvalidSince": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },

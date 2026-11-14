@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { AccountFormComponent } from './account-form';
 import { AccountSummary, CreateAccountRequest, NamespaceConflict, TokenRequirements, TokenValidationResult, UpdateAccountRequest } from '../account.model';
@@ -12,6 +13,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -23,6 +25,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -1173,6 +1176,7 @@ describe('AccountFormComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const gitlabRequirements: TokenRequirements = {
@@ -2018,6 +2022,7 @@ describe('AccountFormComponent', () => {
     hasToken: true,
     tokenStatus: 'unreadable',
     branchRulesTokenStatus: 'absent',
+    tokenInvalidSince: null,
     namespaces: [],
   };
 
@@ -2125,6 +2130,98 @@ describe('AccountFormComponent', () => {
     // Assert
     const successBand = el.querySelector('.account-form__token-on-file');
     expect(successBand).toBeNull();
+  });
+
+  describe('invalid token', () => {
+    const INVALID_SINCE = '2026-11-12T15:04:05Z';
+    const MOCK_INVALID_ACCOUNT: AccountSummary = {
+      ...MOCK_ACCOUNT,
+      name: 'rejected-account',
+      tokenStatus: 'invalid',
+      tokenInvalidSince: INVALID_SINCE,
+    };
+
+    it('should render the invalid callout naming the provider and the medium-format date in a time element', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_INVALID_ACCOUNT });
+
+      // Assert
+      const callout = el.querySelector('#account-form-token-invalid');
+      expect(callout?.classList).toContain('account-form__token-invalid');
+      expect(callout?.getAttribute('role')).toBeNull();
+      expect(callout?.textContent).toContain('Token invalid.');
+      expect(callout?.textContent).toContain(`${MOCK_INVALID_ACCOUNT.providerType} rejected this token on`);
+      expect(callout?.textContent).toContain('Enter a new token below to resume now.');
+      const time = callout?.querySelector('time');
+      expect(time?.getAttribute('datetime')).toBe(INVALID_SINCE);
+      expect(time?.textContent).toBe(new DatePipe('en-US').transform(INVALID_SINCE, 'medium'));
+    });
+
+    it('should drop the date phrase when tokenInvalidSince is null', () => {
+      // Arrange / Act
+      const { el } = setup({ account: { ...MOCK_INVALID_ACCOUNT, tokenInvalidSince: null } });
+
+      // Assert
+      const callout = el.querySelector('#account-form-token-invalid');
+      expect(callout?.querySelector('time')).toBeNull();
+      expect(callout?.textContent?.replace(/\s+/g, ' ')).toContain(
+        `${MOCK_INVALID_ACCOUNT.providerType} rejected this token. It may have expired or been revoked.`,
+      );
+    });
+
+    it('should include an sr-only "Error:" prefix in the callout', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_INVALID_ACCOUNT });
+
+      // Assert
+      const srOnly = el.querySelector('#account-form-token-invalid .sr-only');
+      expect(srOnly?.textContent?.trim()).toBe('Error:');
+    });
+
+    it('should render neither the token-on-file line nor the keep-token hint', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_INVALID_ACCOUNT });
+
+      // Assert
+      expect(el.querySelector('#account-form-token-on-file')).toBeNull();
+      expect(el.querySelector('#account-form-token-hint')).toBeNull();
+    });
+
+    it('should show "Enter a new token for {name}" as heading', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_INVALID_ACCOUNT });
+
+      // Assert
+      expect(el.querySelector('.account-form__heading')?.textContent?.trim()).toBe('Enter a new token for rejected-account');
+    });
+
+    it('should label the token field "New token"', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_INVALID_ACCOUNT });
+
+      // Assert
+      expect(el.querySelector('label[for="account-form-token"]')?.textContent?.trim()).toBe('New token');
+    });
+
+    it('should describe the token input with the callout and not with the hint or on-file line', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_INVALID_ACCOUNT });
+
+      // Assert
+      const describedBy = el.querySelector('#account-form-token')?.getAttribute('aria-describedby') ?? '';
+      expect(describedBy.split(' ')).toContain('account-form-token-invalid');
+      expect(describedBy).not.toContain('account-form-token-hint');
+      expect(describedBy).not.toContain('account-form-token-on-file');
+    });
+
+    it('should show the unreadable callout, not the invalid one, when the token is unreadable', () => {
+      // Arrange / Act
+      const { el } = setup({ account: { ...MOCK_INVALID_ACCOUNT, tokenStatus: 'unreadable' } });
+
+      // Assert
+      expect(el.querySelector('#account-form-token-unreadable')).toBeTruthy();
+      expect(el.querySelector('#account-form-token-invalid')).toBeNull();
+    });
   });
 
   describe('branch-rules token', () => {

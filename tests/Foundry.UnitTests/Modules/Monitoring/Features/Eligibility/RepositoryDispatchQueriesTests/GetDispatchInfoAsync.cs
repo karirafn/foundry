@@ -73,6 +73,28 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCredentialTokenIsInvalid_ReturnsNull()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync();
+        GitHubCredential invalidCredential = GitHubCredential.Create(
+            "my-org",
+            string.Concat("ghp_", "rejected"),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        invalidCredential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+
+        RepositoryDispatchQueries sut = BuildSut(new StubCredentialResolver(invalidCredential));
+
+        // Act
+        RepositoryDispatchInfo? result = await sut.GetDispatchInfoAsync(
+            repoId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenRepositoryNotFound_ReturnsNull()
     {
         // Arrange

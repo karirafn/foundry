@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Services;
+using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
@@ -73,6 +74,8 @@ public static class MonitoringModule
         services.AddScoped<TokenAccountResolver>();
         services.AddScoped<IIssueProviderFactory, IssueProviderFactory>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
+        services.AddScoped<IAccountTokenValidator, AccountTokenValidator>();
+        services.AddScoped<AccountTokenVerdicts>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IHostRepositoryQueries, HostRepositoryQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();

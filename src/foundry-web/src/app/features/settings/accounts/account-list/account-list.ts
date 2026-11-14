@@ -93,6 +93,9 @@ const MAX_VISIBLE_NAMESPACES = 4;
                 @case ('unreadable') {
                   <!-- rendered as a warning line below the strip -->
                 }
+                @case ('invalid') {
+                  <!-- rendered as a warning line below the strip -->
+                }
               }
               <span class="account-list__url">{{ account.baseUrl }}</span>
               @if (account.namespaces.length > 0) {
@@ -111,8 +114,8 @@ const MAX_VISIBLE_NAMESPACES = 4;
               }
             </div>
 
-            <!-- TIER 3 — warning line (unreadable only) -->
-            @if (status === 'unreadable') {
+            <!-- TIER 3 — warning line (unreadable or invalid) -->
+            @if (status === 'unreadable' || status === 'invalid') {
               <div class="account-list__token-warning"
                    role="group"
                    [attr.aria-label]="'Token status for ' + account.name">
@@ -124,11 +127,19 @@ const MAX_VISIBLE_NAMESPACES = 4;
                     <line x1="12" y1="9" x2="12" y2="13"></line>
                     <line x1="12" y1="17" x2="12.01" y2="17"></line>
                   </svg>
-                  <span class="account-list__token-reason-text">Token unreadable</span>
-                  <button type="button"
-                          class="account-list__reenter-btn"
-                          [attr.aria-label]="'Re-enter token for ' + account.name"
-                          (click)="edit.emit(account)">Re-enter token</button>
+                  @if (status === 'invalid') {
+                    <span class="account-list__token-reason-text">Token invalid</span>
+                    <button type="button"
+                            class="account-list__reenter-btn"
+                            [attr.aria-label]="'Enter new token for ' + account.name"
+                            (click)="edit.emit(account)">Enter new token</button>
+                  } @else {
+                    <span class="account-list__token-reason-text">Token unreadable</span>
+                    <button type="button"
+                            class="account-list__reenter-btn"
+                            [attr.aria-label]="'Re-enter token for ' + account.name"
+                            (click)="edit.emit(account)">Re-enter token</button>
+                  }
                 </div>
               </div>
             }

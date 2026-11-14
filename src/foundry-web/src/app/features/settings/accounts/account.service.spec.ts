@@ -14,6 +14,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -25,6 +26,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 

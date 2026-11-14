@@ -18,6 +18,7 @@ import {
   runInInjectionContext,
   signal,
 } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import {
   AccountSummary,
   CreateAccountRequest,
@@ -43,7 +44,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 @Component({
   selector: 'fd-account-form',
   standalone: true,
-  imports: [ProviderSelectorComponent, SpinnerComponent],
+  imports: [DatePipe, ProviderSelectorComponent, SpinnerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="account-form" role="region" aria-label="Account form" [attr.aria-busy]="saving() ? 'true' : null">
@@ -57,7 +58,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
       </button>
 
       <h2 class="account-form__heading" #formHeading tabindex="-1">
-        {{ _isEditMode() ? (_tokenUnreadable() ? 'Re-enter token for ' + account()!.name : 'Edit Account') : 'Add Account' }}
+        {{ _isEditMode() ? (_tokenUnreadable() ? 'Re-enter token for ' + account()!.name : (_tokenInvalid() ? 'Enter a new token for ' + account()!.name : 'Edit Account')) : 'Add Account' }}
       </h2>
 
       @if (_isEditMode()) {
@@ -146,6 +147,31 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               resume polling.
             </span>
           </div>
+        } @else if (_tokenInvalid()) {
+          <div
+            id="account-form-token-invalid"
+            class="account-form__token-invalid"
+          >
+            <span class="account-form__token-unreadable-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </span>
+            <span class="account-form__token-unreadable-text">
+              <span class="sr-only">Error:</span>
+              <strong>Token invalid.</strong>
+              @if (account()!.tokenInvalidSince; as since) {
+                {{ account()!.providerType }} rejected this token on
+                <time [attr.datetime]="since">{{ since | date: 'medium' }}</time>.
+              } @else {
+                {{ account()!.providerType }} rejected this token.
+              }
+              It may have expired or been revoked. Monitoring for this account is paused, and Foundry
+              keeps rechecking the token automatically. Enter a new token below to resume now.
+            </span>
+          </div>
         } @else if (account()!.hasToken) {
           <div
             id="account-form-token-on-file"
@@ -161,7 +187,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 
       <div class="account-form__field">
         <label class="account-form__field-label" for="account-form-token">
-          {{ _tokenUnreadable() ? 'Re-enter token' : (_isEditMode() ? 'Replace token' : 'Token') }}
+          {{ _tokenUnreadable() ? 'Re-enter token' : (_tokenInvalid() ? 'New token' : (_isEditMode() ? 'Replace token' : 'Token')) }}
         </label>
         <div
           class="account-form__token-wrapper"
@@ -200,7 +226,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
           </button>
         </div>
 
-        @if (_isEditMode() && !_tokenUnreadable()) {
+        @if (_isEditMode() && !_tokenUnreadable() && !_tokenInvalid()) {
           <span id="account-form-token-hint" class="account-form__field-hint">
             Leave empty to keep the current token
           </span>
@@ -486,6 +512,14 @@ export class AccountFormComponent implements OnInit {
     return resolveTokenStatus(acc) === 'unreadable';
   });
 
+  protected readonly _tokenInvalid: Signal<boolean> = computed(() => {
+    const acc = this.account();
+    if (acc === null) {
+      return false;
+    }
+    return resolveTokenStatus(acc) === 'invalid';
+  });
+
   protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
   protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
@@ -655,6 +689,8 @@ export class AccountFormComponent implements OnInit {
     if (this._isEditMode()) {
       if (this._tokenUnreadable()) {
         parts.unshift('account-form-token-unreadable');
+      } else if (this._tokenInvalid()) {
+        parts.unshift('account-form-token-invalid');
       } else {
         parts.unshift('account-form-token-hint');
         if (this.account()?.hasToken) {

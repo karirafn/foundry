@@ -91,6 +91,50 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     }
 
     [Fact]
+    public async Task WhenCredentialTokenIsInvalid_SetsEligibilityToIneligibleWithCredentialInvalidViolation()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateInvalidCredential()),
+            providerFactory: new NullProviderFactory());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem();
+        ineligible.Violations[0].Rule.ShouldBe(EligibilityViolationInfo.CredentialInvalidRule);
+    }
+
+    [Fact]
+    public async Task WhenCredentialTokenIsInvalid_DoesNotInvokeProviderFactory()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        TrackingProviderFactory trackingFactory = new();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateInvalidCredential()),
+            providerFactory: trackingFactory);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        trackingFactory.WasInvoked.ShouldBeFalse();
+    }
+
+    private static GitHubCredential CreateInvalidCredential()
+    {
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            string.Concat("ghp_", "rejected"),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        return credential;
+    }
+    [Fact]
     public async Task WhenNoCredentialCoversRepo_SetsEligibilityToIneligibleWithNoCredentialViolation()
     {
         // Arrange

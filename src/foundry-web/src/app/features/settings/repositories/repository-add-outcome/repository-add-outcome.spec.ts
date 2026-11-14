@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { RepositoryAddOutcomeComponent } from './repository-add-outcome';
+import { RepositoryAddOutcomeComponent, isAccessViolation } from './repository-add-outcome';
 import {
   BranchRulesOutcome,
   CreateRepositoryResponse,
@@ -138,11 +138,22 @@ describe('RepositoryAddOutcomeComponent', () => {
     expect(el.querySelector('.repository-add-outcome__rules')).toBeTruthy();
   });
 
+  describe('isAccessViolation', () => {
+    it('should treat credential-invalid as an access violation', () => {
+      // Act
+      const result = isAccessViolation({ rule: 'credential-invalid', description: 'rejected' });
+
+      // Assert
+      expect(result).toBe(true);
+    });
+  });
+
   describe('access row', () => {
     it.each([
       ['cannot-push:my-org/my-repo', 'Token cannot push to my-org/my-repo.'],
       ['no-credential:my-org', 'No credential for namespace my-org.'],
       ['credential-unreadable', "The account token can't be decrypted."],
+      ['credential-invalid', 'The provider rejected the account token. Enter a new token on the account to resume.'],
     ])('should fail when eligibility has the %s access violation and list its description', (rule, description) => {
       // Arrange / Act
       const { row } = setup(

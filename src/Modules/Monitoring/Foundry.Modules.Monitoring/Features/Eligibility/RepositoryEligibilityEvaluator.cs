@@ -50,6 +50,10 @@ internal sealed class RepositoryEligibilityEvaluator(
                 repo.SetEligibility(new RepositoryEligibility.Ineligible(
                     [EligibilityViolation.CredentialUnreadable()]));
                 return;
+            case TokenUsability.Invalid:
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CredentialInvalid()]));
+                return;
             case TokenUsability.Absent:
                 string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
                 repo.SetEligibility(new RepositoryEligibility.Ineligible(
@@ -118,6 +122,10 @@ internal sealed class RepositoryEligibilityEvaluator(
             case TokenUsability.Unreadable:
                 repo.SetEligibility(new RepositoryEligibility.Ineligible(
                     [EligibilityViolation.CredentialUnreadable()]));
+                return;
+            case TokenUsability.Invalid:
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CredentialInvalid()]));
                 return;
             case TokenUsability.Absent:
                 string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
