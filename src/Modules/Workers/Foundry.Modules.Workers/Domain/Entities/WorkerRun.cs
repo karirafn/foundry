@@ -1,6 +1,9 @@
+using System.Linq.Expressions;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -8,6 +11,13 @@ namespace Foundry.Modules.Workers.Domain.Entities;
 
 public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<WorkerRun>
 {
+    /// <summary>
+    /// Whether a run holds a Worker Slot. A slot bounds concurrent Claude token use, so only a run that is starting or
+    /// running <c>claude</c> holds one; once its container stops, publishing and any other <see cref="UnpublishedRun"/>
+    /// state hold none.
+    /// </summary>
+    public static readonly Expression<Func<WorkerRun, bool>> HoldsSlot = r => r is StartingRun || r is ActiveRun;
+
     // Private parameterless constructor for EF Core materialization.
     protected WorkerRun() : base(WorkerRunId.New())
     {

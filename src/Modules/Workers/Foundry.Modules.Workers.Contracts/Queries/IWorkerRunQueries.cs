@@ -40,6 +40,15 @@ public interface IWorkerRunQueries
     Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The subset of <paramref name="issueIds"/> that has a run whose <c>claude</c> container ended with commits not yet
+    /// published (publishing, retrying, exhausted or blocked; ADR 0100). Such a run holds no Worker Slot, so the issue
+    /// does not count against the Repository Worker Limit.
+    /// </summary>
+    Task<IReadOnlySet<Guid>> GetIssueIdsWithUnpublishedRunAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

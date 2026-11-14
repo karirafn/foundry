@@ -317,6 +317,26 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         return phases;
     }
 
+    public async Task<IReadOnlySet<Guid>> GetIssueIdsWithUnpublishedRunAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken)
+    {
+        if (issueIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        List<IssueId> ids = issueIds.Select(IssueId.From).ToList();
+
+        List<IssueId> unpublished = await db.Set<UnpublishedRun>()
+            .AsNoTracking()
+            .Where(r => ids.Contains(r.IssueId))
+            .Select(r => r.IssueId)
+            .ToListAsync(cancellationToken);
+
+        return unpublished.Select(id => id.Value).ToHashSet();
+    }
+
     public async Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
         CancellationToken cancellationToken)
     {

@@ -49,7 +49,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
     }
 
@@ -369,7 +369,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         // Act
@@ -415,7 +415,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         // Act
@@ -459,7 +459,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         // Act
@@ -501,7 +501,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         // Act
@@ -547,7 +547,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(consecutiveTransientRuns: 0),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         // Act
@@ -588,7 +588,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         // Act
@@ -618,7 +618,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(consecutiveTransientRuns),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
 
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(issue.Id, TestContext.Current.CancellationToken);

@@ -69,7 +69,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             slugQueries,
             eligibilityQuery,
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             globalSettingsQueries);
 
     private FreshQueuedIssue SeedQueuedIssue(

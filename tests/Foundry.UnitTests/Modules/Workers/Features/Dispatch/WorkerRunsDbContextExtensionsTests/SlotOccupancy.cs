@@ -279,4 +279,119 @@ public sealed class SlotOccupancy : IAsyncDisposable
             () => ids.ShouldContain(starting.Id),
             () => ids.ShouldContain(active.Id));
     }
+
+    private static readonly DateTimeOffset Now = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
+
+    private static PublishingRun BeginPublishing()
+    {
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
+        ActiveRun active = starting.Activate(
+            ContainerId.From("container-" + Guid.NewGuid()),
+            BranchName.From("feat/3-publishing"),
+            MonitoredRepositoryId.New());
+        return active.BeginPublishing(
+            new RunExit(0, OomKilled: false, RunStopReason.Exited, Now),
+            containerOutput: null,
+            verdict: null,
+            pullRequestText: null);
+    }
+
+    private static PublishBlockedRun BlockPublish() =>
+        BeginPublishing().BlockPublish(
+            [new SecretFinding("src/appsettings.json", 14, CommitSha.From("3333333333333333333333333333333333333333"), "aws-access-token")],
+            Now);
+
+    private async Task SeedAsync(WorkerRun run)
+    {
+        _dbContext.Set<WorkerRun>().Add(run);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenRunIsPublishing_DoesNotCountIt()
+    {
+        // Arrange
+        await SeedAsync(BeginPublishing());
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenRunWaitsToRetryAPublish_DoesNotCountIt()
+    {
+        // Arrange
+        PublishFailedRun retrying = BeginPublishing().FailPublish("provider down", transient: true, Now);
+        await SeedAsync(retrying);
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenPublishIsExhaustedOrBlocked_DoesNotCountThem()
+    {
+        // Arrange
+        await SeedAsync(BeginPublishing().FailPublish("invalid", transient: false, Now));
+        await SeedAsync(BlockPublish());
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyRunIdsAsync_WhenRunsArePublishingOrRetrying_ReturnsOnlyTheActiveRun()
+    {
+        // Arrange
+        ActiveRun active = await SeedActiveRunAsync();
+        await SeedAsync(BeginPublishing());
+        await SeedAsync(BeginPublishing().FailPublish("provider down", transient: true, Now));
+
+        // Act
+        IReadOnlySet<WorkerRunId> ids = await _dbContext.GetSlotOccupancyRunIdsAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ids.ShouldBe([active.Id]);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenAnOperatorConfirmsFalsePositivesUnderFullCapacity_StaysAtCapacity()
+    {
+        // Arrange
+        await SeedActiveRunAsync();
+        await SeedActiveRunAsync();
+        await SeedAsync(BlockPublish().ConfirmFalsePositives(Now));
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenAnOperatorRetriesAnExhaustedPublishUnderFullCapacity_StaysAtCapacity()
+    {
+        // Arrange
+        await SeedActiveRunAsync();
+        await SeedActiveRunAsync();
+        PublishFailedRun exhausted = BeginPublishing().FailPublish("invalid", transient: false, Now);
+        await SeedAsync(exhausted.RequestRetry());
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(2);
+    }
 }

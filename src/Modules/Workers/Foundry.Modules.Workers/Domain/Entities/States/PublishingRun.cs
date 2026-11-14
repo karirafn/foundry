@@ -9,7 +9,8 @@ namespace Foundry.Modules.Workers.Domain.Entities.States;
 
 /// <summary>
 /// A run whose container ended and whose commits Foundry is publishing (ADR 0100): the Publisher pushes the Run bundle,
-/// then code opens or updates the pull request and resolves the outcome. The run holds its dispatch slot until then.
+/// then code opens or updates the pull request and resolves the outcome. Its <c>claude</c> container has stopped, so the
+/// run holds no Worker Slot (<see cref="WorkerRun.HoldsSlot"/>).
 /// </summary>
 public sealed class PublishingRun : UnpublishedRun, ITerminableRun
 {

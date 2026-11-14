@@ -141,4 +141,34 @@ public sealed class WhenDispatchCapacityRequested : IAsyncDisposable
             () => capacity.OccupiedSlots.ShouldBe(0),
             () => capacity.FreeSlots.ShouldBe(3));
     }
+
+    [Fact]
+    public async Task WhenARunIsPublishing_ItHoldsNoSlot()
+    {
+        // Arrange — the run's claude container stopped, so publishing it takes no token and holds no slot.
+        await SeedSettingsAsync(maxConcurrent: 2);
+        using (IServiceScope scope = _factory.Services.CreateScope())
+        {
+            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+            dbContext.Set<WorkerRun>().Add(StartingRun.Begin(IssueId.New(), WorkerRunId.New())
+                .Activate(
+                    ContainerId.From("container-capacity-publishing"),
+                    BranchName.From("feat/3-capacity-publishing"),
+                    MonitoredRepositoryId.New())
+                .BeginPublishing(
+                    new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
+                    containerOutput: null,
+                    verdict: null,
+                    pullRequestText: null));
+            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        DispatchCapacity capacity = await GetCapacityAsync();
+
+        // Assert
+        capacity.ShouldSatisfyAllConditions(
+            () => capacity.OccupiedSlots.ShouldBe(0),
+            () => capacity.FreeSlots.ShouldBe(2));
+    }
 }

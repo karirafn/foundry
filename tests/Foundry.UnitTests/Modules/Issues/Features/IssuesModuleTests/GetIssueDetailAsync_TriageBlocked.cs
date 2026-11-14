@@ -45,7 +45,7 @@ public sealed class GetIssueDetailAsync_TriageBlocked : IAsyncDisposable
             slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries());
     }
 

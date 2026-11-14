@@ -2,6 +2,12 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
+using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Runs;
+using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -38,7 +44,7 @@ public sealed class GetCountsAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private InFlightWorkerCountQuery BuildSut() => new(_dbContext);
+    private InFlightWorkerCountQuery BuildSut() => new(_dbContext, new WorkerRunQueries(_dbContext));
 
     private async Task SeedInProgressAsync(MonitoredRepositoryId repoId, int issueNumber)
     {
@@ -180,5 +186,142 @@ public sealed class GetCountsAsync : IAsyncDisposable
         counts.Count.ShouldBe(2);
         counts[repoA].ShouldBe(1);
         counts[repoB].ShouldBe(1);
+    }
+
+    private static readonly DateTimeOffset ExitedAt = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
+
+    private async Task<InProgressIssue> SeedInProgressIssueAsync(MonitoredRepositoryId repoId)
+    {
+        InProgressIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(7)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+        return issue;
+    }
+
+    private async Task SeedRunAsync(WorkerRun run)
+    {
+        _dbContext.Set<WorkerRun>().Add(run);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    private static ActiveRun ActiveRunFor(Issue issue) =>
+        StartingRun.Begin(issue.Id, WorkerRunId.New()).Activate(
+            ContainerId.From("container-" + Guid.NewGuid()),
+            BranchName.From("feat/7-run"),
+            issue.MonitoredRepositoryId);
+
+    private static PublishingRun PublishingRunFor(Issue issue) =>
+        ActiveRunFor(issue).BeginPublishing(
+            new RunExit(0, OomKilled: false, RunStopReason.Exited, ExitedAt),
+            containerOutput: null,
+            verdict: null,
+            pullRequestText: null);
+
+    [Fact]
+    public async Task WhenAnIssueWasJustClaimedAndHasNoRunYet_CountsIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        await SeedInProgressIssueAsync(repoId);
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts = await BuildSut().GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts[repoId].ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenARevisionWasJustClaimedAndItsOnlyRunIsCompleted_CountsIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revision = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(8)
+            .RevisionInProgress();
+        _dbContext.Set<Issue>().Add(revision);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+        await SeedRunAsync(ActiveRunFor(revision).Complete(exitCode: 0, branchName: null, pullRequestUrl: null));
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts = await BuildSut().GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts[repoId].ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenAnIssuesRunIsActive_CountsIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        InProgressIssue issue = await SeedInProgressIssueAsync(repoId);
+        await SeedRunAsync(ActiveRunFor(issue));
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts = await BuildSut().GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts[repoId].ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenAnIssuesRunIsPublishing_DoesNotCountIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        InProgressIssue issue = await SeedInProgressIssueAsync(repoId);
+        await SeedRunAsync(PublishingRunFor(issue));
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts = await BuildSut().GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts.ContainsKey(repoId).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenAnIssuesRunWaitsToRetryAPublish_DoesNotCountIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        InProgressIssue issue = await SeedInProgressIssueAsync(repoId);
+        await SeedRunAsync(PublishingRunFor(issue).FailPublish("provider down", transient: true, ExitedAt));
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts = await BuildSut().GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts.ContainsKey(repoId).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenOneIssuePublishesAndAnotherRuns_CountsOnlyTheRunningOne()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        InProgressIssue publishing = await SeedInProgressIssueAsync(repoId);
+        RevisionInProgressIssue running = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(9)
+            .RevisionInProgress();
+        _dbContext.Set<Issue>().Add(running);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+        await SeedRunAsync(PublishingRunFor(publishing));
+        await SeedRunAsync(ActiveRunFor(running));
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts = await BuildSut().GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts[repoId].ShouldBe(1);
     }
 }

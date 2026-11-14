@@ -81,7 +81,7 @@ public sealed class LinkWrittenAfterPoll : IAsyncDisposable
             _dbContext,
             new StubRepositoryDispatchQueries(DispatchInfo),
             new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new StubIssueBlockerQueries().WithBlockers(IssueNumber, BlockerNumber),
             IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
             new NullGlobalSettingsQueries(),

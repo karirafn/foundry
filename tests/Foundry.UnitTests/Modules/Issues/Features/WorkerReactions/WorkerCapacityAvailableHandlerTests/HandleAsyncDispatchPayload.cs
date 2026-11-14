@@ -52,7 +52,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             _dbContext,
             repositoryDispatchQueries,
             new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(_dbContext),
+            new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),

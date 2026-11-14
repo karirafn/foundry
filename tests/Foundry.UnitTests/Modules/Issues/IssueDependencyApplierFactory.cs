@@ -22,7 +22,7 @@ internal static class IssueDependencyApplierFactory
                 new NullRepositorySlugQueries(),
                 new NullRepositoryEligibilityQuery(),
                 new NullWorkerRunQueries(),
-                new InFlightWorkerCountQuery(db),
+                new InFlightWorkerCountQuery(db, new NullWorkerRunQueries()),
                 new NullGlobalSettingsQueries()),
             dispatcher, TimeProvider.System);
 }
