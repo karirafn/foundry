@@ -77,6 +77,26 @@ public sealed class CompletedIssue : Issue
         return completed;
     }
 
+    internal static CompletedIssue FromPublishBlocked(PublishBlockedIssue source, DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = new(source.Id, completedAt);
+        completed.CopySharedPropertiesFrom(source);
+        completed.BranchName = source.BranchName;
+        completed.PullRequestUrl = source.PullRequestUrl;
+        completed.CompletedAt = completedAt;
+        return completed;
+    }
+
+    internal static CompletedIssue FromPublishFailed(PublishFailedIssue source, DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = new(source.Id, completedAt);
+        completed.CopySharedPropertiesFrom(source);
+        completed.BranchName = source.BranchName;
+        completed.PullRequestUrl = source.PullRequestUrl;
+        completed.CompletedAt = completedAt;
+        return completed;
+    }
+
     internal static CompletedIssue FromInProgress(
         InProgressIssue source,
         string branchName,

@@ -14,6 +14,8 @@ public sealed class Transitions
 {
     private static readonly DateTimeOffset DiscardedAt = new(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
 
+    private static readonly DateTimeOffset ClosedAt = new(2026, 11, 13, 9, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public void AnImplementRunBlocked_KeepsTheRunAndBranch()
     {
@@ -121,5 +123,57 @@ public sealed class Transitions
             () => revision.Trigger.ShouldBe(blocked.Trigger),
             () => revision.ChecksFixAttempts.ShouldBe(blocked.ChecksFixAttempts),
             () => revision.RebaseConflictAttempts.ShouldBe(blocked.RebaseConflictAttempts));
+    }
+
+    [Fact]
+    public void WhenProviderIssueClosesOnAnImplementRun_CompletesOnItsBranchWithNoPullRequest()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = new IssueBuilder().WithBranchName("feat/1-test").PublishBlocked();
+
+        // Act
+        CompletedIssue completed = blocked.Complete(ClosedAt);
+
+        // Assert
+        completed.ShouldSatisfyAllConditions(
+            () => completed.Id.ShouldBe(blocked.Id),
+            () => completed.BranchName.ShouldBe("feat/1-test"),
+            () => completed.PullRequestUrl.ShouldBeEmpty(),
+            () => completed.CompletedAt.ShouldBe(ClosedAt),
+            () => completed.EnteredStateAt.ShouldBe(ClosedAt));
+    }
+
+    [Fact]
+    public void WhenProviderIssueClosesOnARevision_CompletesWithTheRevisedPullRequest()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = new IssueBuilder()
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/2")
+            .PublishBlockedFromRevision();
+
+        // Act
+        CompletedIssue completed = blocked.Complete(ClosedAt);
+
+        // Assert
+        completed.ShouldSatisfyAllConditions(
+            () => completed.BranchName.ShouldBe(blocked.BranchName),
+            () => completed.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"));
+    }
+
+    [Fact]
+    public void WhenProviderIssueCloses_RaisesIssueCompletedAndIssueClosedWithUnpublishedRun()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = new IssueBuilder().PublishBlocked();
+
+        // Act
+        blocked.Complete(ClosedAt);
+
+        // Assert
+        blocked.ShouldSatisfyAllConditions(
+            () => blocked.DomainEvents.Count.ShouldBe(2),
+            () => blocked.DomainEvents.OfType<IssueCompleted>().ShouldHaveSingleItem().IssueId.ShouldBe(blocked.Id),
+            () => blocked.DomainEvents.OfType<IssueClosedWithUnpublishedRun>().ShouldHaveSingleItem()
+                .WorkerRunId.ShouldBe(blocked.WorkerRunId));
     }
 }
