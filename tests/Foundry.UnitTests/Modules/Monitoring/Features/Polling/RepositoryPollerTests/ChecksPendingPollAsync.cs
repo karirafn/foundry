@@ -61,9 +61,13 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private MonitoredRepository SeedRepository()
+    private MonitoredRepository SeedRepository(bool mergeWhenChecksPass = false)
     {
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
+        MonitoredRepository repository = MonitoredRepository.Create(
+            ValidSlug,
+            "github.com",
+            null,
+            mergeWhenChecksPass: mergeWhenChecksPass).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();
         return repository;
@@ -288,6 +292,55 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         resolved.ShouldSatisfyAllConditions(
             () => resolved.Outcome.ShouldBe(expectedOutcome),
             () => resolved.HeadSha.ShouldBe(headSha));
+    }
+
+    // --- Every verdict carries the live Merge When Checks Pass setting (ADR 0105) ---
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenVerdictResolves_CarriesTheRepositoryMergeSettingAsAutoMerge(bool mergeWhenChecksPass)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository(mergeWhenChecksPass);
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Green()),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: 42, Now, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<ChecksVerdictResolved>()
+            .ShouldHaveSingleItem()
+            .AutoMerge.ShouldBe(mergeWhenChecksPass);
+    }
+
+    [Fact]
+    public async Task WhenSettingTurnedOnAfterEnteringChecksPending_VerdictReadsTheLiveSetting()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository(mergeWhenChecksPass: false);
+        repository.SetMergeWhenChecksPass(true);
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Green()),
+            });
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: 42, Now, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem().AutoMerge.ShouldBeTrue();
     }
 
     // --- NoneDetected within grace window → no event ---

@@ -230,6 +230,17 @@ public sealed class IssueBuilder
 
     public ChecksPendingIssue ChecksPending() => RebasePending().MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
+    /// <summary>
+    /// Builds a <see cref="MergePendingIssue"/>: the checks gate passed on a repository that opted in to Merge When
+    /// Checks Pass, pinned to the configured verified head (<see cref="WithVerifiedHeadSha"/>).
+    /// </summary>
+    public MergePendingIssue MergePending() =>
+        (MergePendingIssue)ChecksPending().ResolveVerdict(
+            new ChecksOutcome.Passed(),
+            autoMerge: true,
+            _verifiedHeadSha,
+            _transitionedAt);
+
     public ChecksPendingIssue ChecksPendingFromRevision() => RebasePendingFromRevision().MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
     /// <summary>
