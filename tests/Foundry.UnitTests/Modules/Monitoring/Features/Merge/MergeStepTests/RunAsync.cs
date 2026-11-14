@@ -34,6 +34,7 @@ public sealed class RunAsync : IAsyncDisposable
     private const int IssueNumber = 42;
 
     private static readonly DateTimeOffset EnteredAt = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FeedbackCutoff = EnteredAt.AddMinutes(-30);
     private static readonly DateTimeOffset Now = EnteredAt.AddSeconds(5);
 
     private readonly SqliteConnection _connection;
@@ -75,8 +76,9 @@ public sealed class RunAsync : IAsyncDisposable
 
     private MergeStep BuildSut(params MergePendingIssueInfo[] pending) =>
         new(
-            new StubIssueQueries(pending.Length == 0 ? [new MergePendingIssueInfo(IssueNumber, PrUrl, VerifiedHead, EnteredAt)] : pending),
+            new StubIssueQueries(pending.Length == 0 ? [new MergePendingIssueInfo(IssueNumber, PrUrl, VerifiedHead, FeedbackCutoff, EnteredAt)] : pending),
             _dbContext,
+            new PostedCommentRegistry(_dbContext),
             _dispatcher,
             _nudgeQueue,
             NullLogger<MergeStep>.Instance);
@@ -168,6 +170,117 @@ public sealed class RunAsync : IAsyncDisposable
         MergeResolved resolved = SingleResolved();
         resolved.Outcome.ShouldBe("skipped");
         resolved.Reason.ShouldBe(expectedReason);
+    }
+
+    [Fact]
+    public async Task WhenNoFeedback_ReadsFeedbackSinceTheCutoffThenMerges()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.FeedbackReads.ShouldHaveSingleItem().ShouldBe((PrUrl, FeedbackCutoff));
+        _provider.MergeCalls.ShouldHaveSingleItem();
+        SingleResolved().Outcome.ShouldBe("merged");
+    }
+
+    [Fact]
+    public async Task WhenPersonLeftFeedback_ResolvesFeedbackWithTheCommentsWithoutMerging()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        DateTimeOffset newest = Now.AddMinutes(-3);
+        ReviewComment comment = new("Please rename this.", "src/a.cs", 3);
+        _provider.Feedback = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment], 2, newest));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe("feedback"),
+            () => resolved.Reason.ShouldBeNull(),
+            () => resolved.Comments.ShouldNotBeNull().ShouldHaveSingleItem().ShouldBe(comment),
+            () => resolved.OmittedCommentCount.ShouldBe(2),
+            () => resolved.NewestCommentAt.ShouldBe(newest));
+        _provider.MergeCalls.ShouldBeEmpty();
+        LoadProgress().IsResolved.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenFeedbackIsHeldBack_WaitsForItWithoutMergingOrCountingAFailure()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        DateTimeOffset heldBackUntil = Now.AddMinutes(2);
+        _provider.Feedback = Result<ReviewFeedback>.Ok(new ReviewFeedback([], 0, null, heldBackUntil));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.MergeCalls.ShouldBeEmpty();
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.TransientFailures.ShouldBe(0),
+            () => progress.IsResolved.ShouldBeFalse());
+        Nudge nudge = DrainNudges().ShouldHaveSingleItem();
+        nudge.ShouldSatisfyAllConditions(
+            () => nudge.Key.Pass.ShouldBe(NudgePass.Merge),
+            () => nudge.Key.IssueNumber.ShouldBe(IssueNumber),
+            () => nudge.NotBefore.ShouldBe(heldBackUntil));
+    }
+
+    [Fact]
+    public async Task WhenFeedbackHasCommentsAndMoreHeldBack_TheCommentsWin()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.Feedback = Result<ReviewFeedback>.Ok(
+            new ReviewFeedback([new ReviewComment("Please rename this.")], 0, Now.AddMinutes(-3), Now.AddMinutes(2)));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("feedback");
+        _provider.MergeCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenFeedbackReadFailsTransiently_CountsAgainstTheMergeBudgetWithoutMerging()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.Feedback = Result<ReviewFeedback>.Fail(new Error("GitHub.ServerError", "502 Bad Gateway"));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.MergeCalls.ShouldBeEmpty();
+        LoadProgress().TransientFailures.ShouldBe(1);
+        DrainNudges().ShouldHaveSingleItem().Key.Pass.ShouldBe(NudgePass.Merge);
+    }
+
+    [Fact]
+    public async Task WhenSettingIsOff_DoesNotReadFeedback()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository(mergeWhenChecksPass: false);
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.FeedbackReads.ShouldBeEmpty();
     }
 
     [Fact]
@@ -325,7 +438,7 @@ public sealed class RunAsync : IAsyncDisposable
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
 
         // Act
-        await BuildSut(new MergePendingIssueInfo(IssueNumber, PrUrl, VerifiedHead, EnteredAt.AddHours(1)))
+        await BuildSut(new MergePendingIssueInfo(IssueNumber, PrUrl, VerifiedHead, FeedbackCutoff, EnteredAt.AddHours(1)))
             .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -355,7 +468,7 @@ public sealed class RunAsync : IAsyncDisposable
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
 
         // Act
-        await new MergeStep(new StubIssueQueries([]), _dbContext, _dispatcher, _nudgeQueue, NullLogger<MergeStep>.Instance)
+        await new MergeStep(new StubIssueQueries([]), _dbContext, new PostedCommentRegistry(_dbContext), _dispatcher, _nudgeQueue, NullLogger<MergeStep>.Instance)
             .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -467,6 +580,10 @@ public sealed class RunAsync : IAsyncDisposable
 
         public Exception? ThrowOnMerge { get; set; }
 
+        public Result<ReviewFeedback> Feedback { get; set; } = Result<ReviewFeedback>.Ok(new ReviewFeedback([], 0, null));
+
+        public List<(string PullRequestUrl, DateTimeOffset Since)> FeedbackReads { get; } = [];
+
         public Task<Result<MergeRequestOutcome>> MergePullRequestAsync(
             RepositorySlug slug,
             string pullRequestUrl,
@@ -512,7 +629,10 @@ public sealed class RunAsync : IAsyncDisposable
             DateTimeOffset since,
             PostedCommentIds postedComments,
             CancellationToken cancellationToken)
-            => throw new NotSupportedException();
+        {
+            FeedbackReads.Add((pullRequestUrl, since));
+            return Task.FromResult(Feedback);
+        }
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(RepositorySlug slug, CancellationToken cancellationToken)
             => throw new NotSupportedException();

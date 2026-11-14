@@ -105,6 +105,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("entered_state_at");
 
+                    b.Property<bool>("HasPersonFeedback")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_person_feedback");
+
                     b.Property<int>("IssueNumber")
                         .HasColumnType("INTEGER")
                         .HasColumnName("issue_number");
