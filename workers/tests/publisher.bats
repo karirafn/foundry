@@ -1279,6 +1279,45 @@ assert_blocked() {
     assert_blocked heroku-api-key 'tests/x\.spec\.ts'
 }
 
+# Claude OAuth tokens (#955), the credentials every OAuth worker can read: a prefix plus a random body, built at run
+# time like the values above. The API key's body is 93 characters then AA, the shape gitleaks' upstream rule pins.
+CLAUDE_OAUTH_ACCESS_TOKEN="sk-ant-oat01-$(printf '%s' Hq3vT8kZpW2mXr7LnB5yCd9FsJ4gKa6EuQ1oRi0tYwVh-Nc_Mz8bPl2xSe5DfGu7)"
+CLAUDE_OAUTH_REFRESH_TOKEN="sk-ant-ort01-$(printf '%s' Wd4nY7qLk2ZsB9vXm5HtR3pGc8JfA1uEo6KiTy0Qb-Vh_Nr3xMz7lCw9SgPe4Dj2)"
+ANTHROPIC_API_KEY="sk-ant-api03-$(printf '%s%s' Lm4Qz8RtW2yXk6VbN3pH9sJd5FgC1aEu7KoTi0Yw-Bh_Rc2Mx8nPl5 Zq3vS7eDf4Gu9JkA6tWo1HyLi8Xb2Nm5Cr7Ts0V)AA"
+
+# One token per line: findings are de-duplicated by commit, line, rule and path, so two tokens on one line are one finding.
+@test "publish: a Claude OAuth credentials file blocks the push and reports both tokens" {
+    publish_one .claude/.credentials.json "$(printf '{\n  "claudeAiOauth": {\n    "accessToken": "%s",\n    "refreshToken": "%s"\n  }\n}' \
+        "$CLAUDE_OAUTH_ACCESS_TOKEN" "$CLAUDE_OAUTH_REFRESH_TOKEN")"
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=2" ]
+    secret_findings | grep -qE ' line=3 rule=anthropic-oauth-token path=\.claude/\.credentials\.json$'
+    secret_findings | grep -qE ' line=4 rule=anthropic-oauth-token path=\.claude/\.credentials\.json$'
+    [ -z "$(push_lines)" ]
+    [[ "$output" != *"$CLAUDE_OAUTH_ACCESS_TOKEN"* && "$stderr" != *"$CLAUDE_OAUTH_ACCESS_TOKEN"* ]]
+    [[ "$output" != *"$CLAUDE_OAUTH_REFRESH_TOKEN"* && "$stderr" != *"$CLAUDE_OAUTH_REFRESH_TOKEN"* ]]
+}
+
+@test "publish: a Claude OAuth access token in a TypeScript literal blocks the push" {
+    publish_one src/auth.ts "const accessToken = \"$CLAUDE_OAUTH_ACCESS_TOKEN\";"
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=secret_detected "* ]]
+    secret_findings | grep -qE ' line=1 rule=anthropic-oauth-token path=src/auth\.ts$'
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: an Anthropic API key is still reported by the upstream API-key rule, not the OAuth one" {
+    publish_one src/client.ts "const apiKey = \"$ANTHROPIC_API_KEY\";"
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=secret_detected "* ]]
+    secret_findings | grep -qE ' line=1 rule=anthropic-api-key path=src/client\.ts$'
+    [ -z "$(secret_findings | grep ' rule=anthropic-oauth-token ' || true)" ]
+    [ -z "$(push_lines)" ]
+}
+
 @test "publish: a scanner that fails is a failed publish, never a clean scan" {
     start_run
     wcommit a.txt a "first"

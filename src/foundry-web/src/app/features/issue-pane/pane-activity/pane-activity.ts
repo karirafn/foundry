@@ -11,12 +11,12 @@ import {
   signal,
 } from '@angular/core';
 import { Observable } from 'rxjs';
-import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, InFlightTool } from '../../../core/models/agent-activity.model';
+import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity } from '../../../core/models/agent-activity.model';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { formatElapsed, laneStepText, taskOrdinal } from '../../../shared/utils/agent-activity-format';
 
-/** The elapsed text ticks on the same cadence as the Floor's. */
+/** How often the elapsed text refreshes while connected. */
 const CLOCK_INTERVAL_MS = 5_000;
 
 let nextId = 0;
@@ -31,16 +31,10 @@ interface ElapsedDisplay {
   readonly silent: boolean;
 }
 
-interface ToolLine {
-  readonly key: string;
-  readonly name: string;
-  readonly summary: string | null;
-}
-
 /**
- * What the issue's running worker is doing (#863): its current step, task progress, latest tool and
- * time since the last event, with the live log collapsed behind Show log. The pane renders it only
- * while a worker runs.
+ * What the issue's running worker is doing (#863): its current step, task progress and time since
+ * the last event, with the live log collapsed behind Show log. The pane renders it only while a
+ * worker runs.
  */
 @Component({
   selector: 'fd-pane-activity',
@@ -98,20 +92,7 @@ export class PaneActivityComponent {
     return `${Math.min(100, (a.completedTaskCount / a.tasks.length) * 100)}%`;
   });
 
-  protected readonly tool: Signal<ToolLine | null> = computed(() => {
-    const a = this.activity();
-    if (a === null) {
-      return null;
-    }
-    const recent = this._workerSignalR.recentToolsForRun(a.workerRunId);
-    const tool: InFlightTool | null = a.inFlightTool ?? (recent.length > 0 ? recent[recent.length - 1] : null);
-    if (tool === null) {
-      return null;
-    }
-    return { key: `${tool.name}|${tool.summary}|${tool.startedAt}`, name: tool.name, summary: tool.summary };
-  });
-
-  /** Same wording and silence rule as a Floor lane. */
+  /** Same wording and silence rule as a worker card's last-event line. */
   protected readonly elapsed: Signal<ElapsedDisplay | null> = computed(() => {
     const since = this.activity()?.lastEventAt ?? null;
     if (since === null) {

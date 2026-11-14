@@ -23,14 +23,14 @@ function setup(gate = new FakeConnectionGate()) {
 }
 
 describe('AgentsChipComponent', () => {
-  it('links to the Floor with the working count while live', () => {
+  it('links to the Board with the working count while live', () => {
     // Arrange / Act
     const { el } = setup();
 
     // Assert
     const link = el.querySelector('a.agents-chip');
-    expect(link?.getAttribute('aria-label')).toBe('3 agents working. Open the Floor');
-    expect(link?.getAttribute('href')).toBe('/floor');
+    expect(link?.getAttribute('aria-label')).toBe('3 agents working. Open the Board');
+    expect(link?.getAttribute('href')).toBe('/');
   });
 
   it('shows a placeholder image, out of the tab order, while the gate is up', () => {

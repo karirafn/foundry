@@ -200,6 +200,10 @@ $text-warning: token.$token-status-warning;
     @extend .account-form__token-on-file;
   }
 
+  &__token-invalid {
+    @extend .account-form__token-unreadable;
+  }
+
   &__branch-rules-status--unreadable {
     @extend .account-form__token-unreadable;
   }

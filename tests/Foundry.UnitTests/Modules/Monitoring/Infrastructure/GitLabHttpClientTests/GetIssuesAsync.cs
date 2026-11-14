@@ -71,6 +71,46 @@ public sealed class GetIssuesAsync
     }
 
     [Fact]
+    public async Task WhenGitLabReturns401_ReturnsUnauthorizedKind()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Unauthorized, """{"message":"401 Unauthorized"}""");
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "glpat_token123",
+            CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Failure failure = result.ShouldBeOfType<Result<IssueListing>.Failure>();
+        failure.Error.Kind.ShouldBe(ErrorKind.Unauthorized);
+    }
+
+    [Fact]
+    public async Task WhenGitLabReturns403_DoesNotReturnUnauthorizedKind()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Forbidden, """{"message":"403 Forbidden"}""");
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "glpat_token123",
+            CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Failure failure = result.ShouldBeOfType<Result<IssueListing>.Failure>();
+        failure.Error.Kind.ShouldNotBe(ErrorKind.Unauthorized);
+    }
+
+    [Fact]
     public async Task WhenCalled_UsesPrivateTokenHeader()
     {
         // Arrange

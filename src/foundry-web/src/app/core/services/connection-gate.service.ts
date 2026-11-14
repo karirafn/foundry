@@ -42,8 +42,8 @@ function wait(ms: number): Promise<void> {
 }
 
 /**
- * Combines the issues, system and workers hubs into one {@link GatePhase} for the live pages (Board
- * and Floor) and the top bar. While a gated page's data may be out of date it is not shown at all.
+ * Combines the issues, system and workers hubs into one {@link GatePhase} for the live page (the
+ * Board) and the top bar. While a gated page's data may be out of date it is not shown at all.
  */
 @Injectable({ providedIn: 'root' })
 export class ConnectionGateService {

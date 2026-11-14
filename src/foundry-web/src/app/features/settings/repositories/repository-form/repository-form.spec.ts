@@ -20,6 +20,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -31,6 +32,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -1288,6 +1290,7 @@ describe('RepositoryFormComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: ['team-alpha'],
     };
     const accountB: AccountSummary = {
@@ -1298,6 +1301,7 @@ describe('RepositoryFormComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: ['team-beta'],
     };
 

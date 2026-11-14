@@ -9,8 +9,7 @@ import {
   input,
   output,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { AgentActivity, InFlightTool } from '../../../../core/models/agent-activity.model';
+import { AgentActivity } from '../../../../core/models/agent-activity.model';
 import { WorkerSignalRService } from '../../../../core/services/worker-signalr.service';
 import { RoleTagComponent } from '../../../../shared/components/role-tag/role-tag';
 import { formatElapsed } from '../../../../shared/utils/agent-activity-format';
@@ -26,12 +25,11 @@ import {
 } from '../worker-activity/worker-activity.model';
 
 /**
- * A running worker: its role, issue, how long it has run and its live activity, with a way to
- * watch it on the Floor.
+ * A running worker: its role, issue, how long it has run and its live activity.
  */
 @Component({
   selector: 'fd-worker-card',
-  imports: [IssueRefComponent, RoleTagComponent, RouterLink, WorkerActivityComponent],
+  imports: [IssueRefComponent, RoleTagComponent, WorkerActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'item().issue.id',
@@ -59,10 +57,6 @@ export class WorkerCardComponent {
     const base = this.idBase();
     return this.live() ? `${base}-meta ${base}-task ${base}-status` : `${base}-meta ${base}-status`;
   });
-  /** The Floor lane heading's id, which the Floor scrolls to and focuses. */
-  protected readonly laneFragment: Signal<string> = computed(
-    () => `floor-lane-${this.item().issue.id}`,
-  );
   protected readonly elapsed: Signal<string> = computed(() =>
     formatElapsed(this.now() - Date.parse(this.item().issue.enteredStateAt)),
   );
@@ -70,23 +64,13 @@ export class WorkerCardComponent {
   private readonly _activity: Signal<AgentActivity | null> = computed(() =>
     this._workerSignalR.agentActivityForIssue(this.item().issue.id),
   );
-  // The in-flight tool clears between calls; the latest recorded call stays until the next.
-  private readonly _latestTool: Signal<InFlightTool | null> = computed(() => {
-    const activity = this._activity();
-    if (activity === null) {
-      return null;
-    }
-    return (
-      this._workerSignalR.recentToolsForRun(activity.workerRunId).at(-1) ?? activity.inFlightTool
-    );
-  });
 
   /** The run's role once its activity names it; until then, the one the issue state implies. */
   protected readonly role: Signal<string> = computed(
     () => this._activity()?.role ?? this.item().role,
   );
   protected readonly panel: Signal<ActivityPanel> = computed(() =>
-    activityPanel(this._activity(), this._latestTool()),
+    activityPanel(this._activity()),
   );
   protected readonly lastEvent: Signal<LastEventLine | null> = computed(() =>
     this.live() ? lastEventLine(this._activity(), this.now()) : null,

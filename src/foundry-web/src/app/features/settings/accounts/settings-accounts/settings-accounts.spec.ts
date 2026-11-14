@@ -142,6 +142,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -190,6 +191,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -273,6 +275,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -304,6 +307,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     }));
   });
@@ -359,6 +363,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -394,6 +399,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -426,6 +432,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -464,6 +471,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -505,6 +513,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -564,6 +573,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -595,6 +605,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -625,6 +636,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -656,6 +668,7 @@ describe('SettingsAccountsComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
