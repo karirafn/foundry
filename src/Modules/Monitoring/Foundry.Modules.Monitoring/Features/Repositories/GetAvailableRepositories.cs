@@ -45,16 +45,21 @@ internal static class GetAvailableRepositories
                     RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            if (credential.Token is ProviderToken.Unreadable)
+            TokenUsability usability = credential.TokenUsability;
+            string token;
+            switch (usability)
             {
-                return Result<AvailableRepositoriesResponse>.Fail(
-                    RepositoryErrors.AccountTokenUnreadable(credentialId));
-            }
-
-            if (credential.Token is not ProviderToken.Present present)
-            {
-                return Result<AvailableRepositoriesResponse>.Fail(
-                    RepositoryErrors.AccountHasNoToken(credentialId));
+                case TokenUsability.Usable usable:
+                    token = usable.Token;
+                    break;
+                case TokenUsability.Unreadable:
+                    return Result<AvailableRepositoriesResponse>.Fail(
+                        RepositoryErrors.AccountTokenUnreadable(credentialId));
+                case TokenUsability.Absent:
+                    return Result<AvailableRepositoriesResponse>.Fail(
+                        RepositoryErrors.AccountHasNoToken(credentialId));
+                default:
+                    throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
             }
 
             string providerType = credential switch
@@ -68,11 +73,11 @@ internal static class GetAvailableRepositories
             {
                 GitLabCredential => await gitLabHttpClient.ListRepositoriesAsync(
                     credential.ApiBaseUrl,
-                    present.Value,
+                    token,
                     cancellationToken),
                 _ => await gitHubHttpClient.ListRepositoriesAsync(
                     credential.ApiBaseUrl,
-                    present.Value,
+                    token,
                     cancellationToken),
             };
 

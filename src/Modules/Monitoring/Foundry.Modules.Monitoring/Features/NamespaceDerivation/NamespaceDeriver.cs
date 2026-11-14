@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -18,16 +20,18 @@ internal sealed class NamespaceDeriver(
         Credential credential,
         CancellationToken cancellationToken)
     {
-        if (credential.Token is not ProviderToken.Present present)
+        TokenUsability usability = credential.TokenUsability;
+        return usability switch
         {
-            return Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable());
-        }
-
-        return DeriveAsync(
-            credential.ApiBaseUrl,
-            present.Value,
-            credential is GitLabCredential,
-            cancellationToken);
+            TokenUsability.Usable usable => DeriveAsync(
+                credential.ApiBaseUrl,
+                usable.Token,
+                credential is GitLabCredential,
+                cancellationToken),
+            TokenUsability.Unreadable or TokenUsability.Absent =>
+                Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable()),
+            _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),
+        };
     }
 
     public async Task<NamespaceDerivationOutcome> DeriveAsync(

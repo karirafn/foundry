@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
@@ -37,22 +39,25 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        if (credential.Token is ProviderToken.Unreadable)
+        TokenUsability usability = credential.TokenUsability;
+        string token;
+        switch (usability)
         {
-            repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.CredentialUnreadable()]));
-            return;
+            case TokenUsability.Usable usable:
+                token = usable.Token;
+                break;
+            case TokenUsability.Unreadable:
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CredentialUnreadable()]));
+                return;
+            case TokenUsability.Absent:
+                string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.NoCredential(topLevelNamespace)]));
+                return;
+            default:
+                throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
-
-        if (credential.Token is not ProviderToken.Present present)
-        {
-            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
-            repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.NoCredential(topLevelNamespace)]));
-            return;
-        }
-
-        string token = present.Value;
 
         try
         {
@@ -103,22 +108,25 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        if (credential.Token is ProviderToken.Unreadable)
+        TokenUsability usability = credential.TokenUsability;
+        string token;
+        switch (usability)
         {
-            repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.CredentialUnreadable()]));
-            return;
+            case TokenUsability.Usable usable:
+                token = usable.Token;
+                break;
+            case TokenUsability.Unreadable:
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.CredentialUnreadable()]));
+                return;
+            case TokenUsability.Absent:
+                string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
+                repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                    [EligibilityViolation.NoCredential(topLevelNamespace)]));
+                return;
+            default:
+                throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
-
-        if (credential.Token is not ProviderToken.Present present)
-        {
-            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
-            repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.NoCredential(topLevelNamespace)]));
-            return;
-        }
-
-        string token = present.Value;
 
         try
         {

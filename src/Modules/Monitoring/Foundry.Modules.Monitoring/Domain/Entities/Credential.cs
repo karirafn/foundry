@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
@@ -114,6 +116,15 @@ public abstract class Credential : AggregateRoot<CredentialId>
     /// the stored ciphertext could not be decrypted and the credential is treated as ineligible.
     /// </summary>
     public bool IsTokenUnreadable => Token is ProviderToken.Unreadable;
+
+    /// <summary>Decides whether this account's token can be used for a provider call.</summary>
+    public TokenUsability TokenUsability => Token switch
+    {
+        ProviderToken.Present present => new TokenUsability.Usable(present.Value),
+        ProviderToken.Unreadable => new TokenUsability.Unreadable(),
+        null => new TokenUsability.Absent(),
+        _ => throw new UnreachableException($"Unhandled ProviderToken variant: {Token.GetType().Name}"),
+    };
 
     internal bool Covers(RepositorySlug slug) => ResolveCoveringNamespace(slug) is not null;
 
