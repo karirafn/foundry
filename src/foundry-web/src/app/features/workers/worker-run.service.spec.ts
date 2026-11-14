@@ -27,6 +27,9 @@ const mockDetail: WorkerRunDetail = {
   discardsAt: null,
   secretFindings: [],
   revertedFiles: [],
+  publishBlockedAt: null,
+  falsePositivesConfirmedAt: null,
+  confirmedFindings: [],
 };
 
 function setup() {
@@ -300,6 +303,70 @@ describe('WorkerRunService', () => {
 
     // Assert
     expect(result).toBe('Failed to discard the run.');
+    errorSpy.mockRestore();
+  });
+
+  // requestConfirmFalsePositives (#900)
+  it('should POST the rendered publishBlockedAt to the confirm-false-positives endpoint and emit null on 202', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestConfirmFalsePositives('run-abc', '2026-11-14T09:00:00+00:00').subscribe((r) => (result = r));
+    const req = controller.expectOne('/api/workers/runs/run-abc/confirm-false-positives');
+    req.flush({ workerRunId: 'run-abc' }, { status: 202, statusText: 'Accepted' });
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ publishBlockedAt: '2026-11-14T09:00:00+00:00' });
+    expect(result).toBeNull();
+  });
+
+  it('should emit a findings-changed message when confirm-false-positives returns 409', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestConfirmFalsePositives('run-abc', '2026-11-14T09:00:00+00:00').subscribe((r) => (result = r));
+    controller
+      .expectOne('/api/workers/runs/run-abc/confirm-false-positives')
+      .flush(null, { status: 409, statusText: 'Conflict' });
+
+    // Assert
+    expect(result).toBe('The findings changed or this run is no longer blocked. Review the current state.');
+  });
+
+  it('should emit a not-found message when confirm-false-positives returns 404', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestConfirmFalsePositives('run-abc', '2026-11-14T09:00:00+00:00').subscribe((r) => (result = r));
+    controller
+      .expectOne('/api/workers/runs/run-abc/confirm-false-positives')
+      .flush(null, { status: 404, statusText: 'Not Found' });
+
+    // Assert
+    expect(result).toBe('The run was not found.');
+  });
+
+  it('should emit a generic message when confirm-false-positives fails otherwise', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
+    svc.requestConfirmFalsePositives('run-abc', '2026-11-14T09:00:00+00:00').subscribe((r) => (result = r));
+    controller
+      .expectOne('/api/workers/runs/run-abc/confirm-false-positives')
+      .flush(null, { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(result).toBe('Failed to confirm the findings.');
     errorSpy.mockRestore();
   });
 });

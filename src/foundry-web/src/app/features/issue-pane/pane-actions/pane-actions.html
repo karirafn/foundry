@@ -6,7 +6,7 @@
         @case ('stop_worker') {
           <button
             type="button"
-            [class]="buttonClass(first)"
+            [class]="buttonClass(action, first)"
             [disabled]="!canCancel()"
             [attr.aria-label]="'Stop worker for issue #' + d.issueNumber"
             [attr.aria-describedby]="cancelHint() ? hintId : null"
@@ -19,8 +19,8 @@
         @case ('retry_publish') {
           <button
             type="button"
-            [class]="buttonClass(first)"
-            [disabled]="publishRetryPending() || discardPending()"
+            [class]="buttonClass(action, first)"
+            [disabled]="publishActionPending()"
             [attr.aria-label]="'Retry publishing for issue #' + d.issueNumber"
             (click)="openPublishRetryConfirm()"
           >{{ publishRetryPending() ? 'Retrying publish…' : 'Retry publish' }}</button>
@@ -28,16 +28,26 @@
         @case ('discard_run') {
           <button
             type="button"
-            [class]="buttonClass(first)"
-            [disabled]="discardPending() || publishRetryPending()"
+            [class]="buttonClass(action, first)"
+            [disabled]="publishActionPending()"
             [attr.aria-label]="'Discard run for issue #' + d.issueNumber"
             (click)="openDiscardConfirm()"
           >{{ discardPending() ? 'Discarding…' : 'Discard run' }}</button>
         }
+        @case ('confirm_false_positives') {
+          <!-- Disabled until the blocked run has loaded: the dialog lists its findings and echoes its block time. -->
+          <button
+            type="button"
+            [class]="buttonClass(action, first)"
+            [disabled]="publishActionPending() || run()?.publishBlockedAt == null"
+            [attr.aria-label]="'Confirm all findings as false positives and publish issue #' + d.issueNumber"
+            (click)="openConfirmFalsePositives()"
+          >{{ confirmFalsePositivesPending() ? 'Confirming…' : 'Confirm all as false positives and publish' }}</button>
+        }
         @case ('retry_issue') {
           <button
             type="button"
-            [class]="buttonClass(first)"
+            [class]="buttonClass(action, first)"
             [disabled]="issueService.retrying()"
             [attr.aria-label]="'Retry issue #' + d.issueNumber"
             (click)="retryIssue()"
@@ -46,7 +56,7 @@
         @case ('retry_fresh') {
           <button
             type="button"
-            [class]="buttonClass(first)"
+            [class]="buttonClass(action, first)"
             [disabled]="issueService.retrying()"
             [attr.aria-label]="'Retry issue #' + d.issueNumber + ' from a fresh branch'"
             (click)="confirmRetryFreshOpen.set(true)"
@@ -55,7 +65,7 @@
         @case ('retry_triage') {
           <button
             type="button"
-            [class]="buttonClass(first)"
+            [class]="buttonClass(action, first)"
             [disabled]="triagePending() !== null"
             [attr.aria-label]="'Retry triage for issue #' + d.issueNumber"
             (click)="retryTriage()"
@@ -64,7 +74,7 @@
         @case ('skip_triage') {
           <button
             type="button"
-            [class]="buttonClass(first)"
+            [class]="buttonClass(action, first)"
             [disabled]="triagePending() !== null"
             [attr.aria-label]="'Skip triage for issue #' + d.issueNumber"
             (click)="confirmSkipTriageOpen.set(true)"
@@ -73,7 +83,7 @@
         @case ('retriage') {
           <button
             type="button"
-            [class]="buttonClass(first)"
+            [class]="buttonClass(action, first)"
             [disabled]="triagePending() !== null"
             [attr.aria-label]="'Re-triage issue #' + d.issueNumber"
             (click)="confirmRetriageOpen.set(true)"
@@ -127,6 +137,37 @@
     (dismissed)="confirmDiscardOpen.set(false)"
   />
 }
+@if (offers('confirm_false_positives')) {
+  <fd-confirm-dialog
+    [open]="confirmFalsePositivesOpen()"
+    [title]="confirmFalsePositivesTitle()"
+    [message]="confirmFalsePositivesMessage()"
+    confirmLabel="Confirm and publish"
+    cancelLabel="Keep blocked"
+    [destructive]="true"
+    [confirmDisabled]="!falsePositivesAcknowledged()"
+    (confirmed)="confirmFalsePositives()"
+    (dismissed)="confirmFalsePositivesOpen.set(false)"
+  >
+    <div
+      class="pane-actions__findings-scroll"
+      tabindex="0"
+      [attr.aria-labelledby]="'confirm-findings-' + d.issueNumber"
+    >
+      <fd-secret-findings [findings]="run()?.secretFindings ?? []" [headingId]="'confirm-findings-' + d.issueNumber" />
+    </div>
+    <p class="pane-actions__dialog-line">This confirms only these findings. If the push turns up others, it is blocked again.</p>
+    <div class="pane-actions__checkbox-row">
+      <input
+        type="checkbox"
+        [id]="'confirm-false-positives-ack-' + d.issueNumber"
+        [checked]="falsePositivesAcknowledged()"
+        (change)="falsePositivesAcknowledged.set($any($event.target).checked)"
+      />
+      <label [for]="'confirm-false-positives-ack-' + d.issueNumber">I checked every finding, and none is a real credential.</label>
+    </div>
+  </fd-confirm-dialog>
+}
 @if (offers('retry_fresh')) {
   <fd-confirm-dialog
     [open]="confirmRetryFreshOpen()"
@@ -177,4 +218,7 @@
 }}</span>
 <span class="pane-actions__success pane-actions__success--discard sr-only" aria-live="polite" aria-atomic="true">{{
   discardSuccess() ?? ''
+}}</span>
+<span class="pane-actions__success pane-actions__success--confirm-false-positives sr-only" aria-live="polite" aria-atomic="true">{{
+  confirmFalsePositivesSuccess() ?? ''
 }}</span>

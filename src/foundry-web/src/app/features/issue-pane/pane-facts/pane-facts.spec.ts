@@ -67,6 +67,9 @@ function runDetail(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     discardsAt: null,
     secretFindings: [],
     revertedFiles: [],
+    publishBlockedAt: null,
+    falsePositivesConfirmedAt: null,
+    confirmedFindings: [],
     ...overrides,
   };
 }

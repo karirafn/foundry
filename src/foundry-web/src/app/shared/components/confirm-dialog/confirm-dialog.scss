@@ -25,6 +25,7 @@
 
   &__actions {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--fd-spacing-sm);
     justify-content: flex-end;
   }
@@ -43,8 +44,13 @@
     min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--fd-bg-card-hover);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
     }
 
     &:focus-visible {
