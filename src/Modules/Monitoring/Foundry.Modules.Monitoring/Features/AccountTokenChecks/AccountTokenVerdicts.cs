@@ -19,6 +19,7 @@ namespace Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 internal sealed class AccountTokenVerdicts(
     DbContext dbContext,
     IAccountTokenValidator validator,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<AccountTokenVerdicts> logger)
 {
     /// <summary>
@@ -145,10 +146,11 @@ internal sealed class AccountTokenVerdicts(
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
-            return true;
         }
         catch (DbUpdateConcurrencyException ex)
         {
+            stored.ClearDomainEvents();
+
             // Not retried: the tested token is no longer the account's, and the next cycle tests the new one.
             foreach (EntityEntry entry in ex.Entries)
             {
@@ -160,6 +162,13 @@ internal sealed class AccountTokenVerdicts(
                 tested.Id);
             return false;
         }
+
+        // Dispatched only once the verdict is committed, so a dropped save never announces a transition.
+        IDomainEvent[] events = [.. stored.DomainEvents];
+        stored.ClearDomainEvents();
+        await domainEventDispatcher.DispatchAsync(events, cancellationToken);
+
+        return true;
     }
 
     private enum CheckVerdict

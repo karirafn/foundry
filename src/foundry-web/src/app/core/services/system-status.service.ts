@@ -28,6 +28,7 @@ export class SystemStatusService {
     return this._http.get<SystemStatusResponse>('/api/system/status').pipe(
       tap((response) => {
         this._signalR.applyDockerAvailability(response.dockerAvailable);
+        this._signalR.applyAccountTokenStatus(response.accountTokenMessage ?? null);
       }),
       catchError((err: HttpErrorResponse) => {
         console.error('[SystemStatusService] Failed to fetch system status', err);

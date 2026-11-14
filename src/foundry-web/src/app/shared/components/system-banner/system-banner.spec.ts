@@ -170,7 +170,7 @@ describe('SystemBannerComponent', () => {
       expect(creditsIndex).toBeLessThan(dispatchIndex);
     });
 
-    it('should render fd-host-pause-banner right after fd-dispatch-banner', () => {
+    it('should render fd-dispatch-banner, then fd-account-token-banner, then fd-host-pause-banner', () => {
       // Arrange / Act
       const { fixture } = setup();
       const el = fixture.nativeElement as HTMLElement;
@@ -179,7 +179,11 @@ describe('SystemBannerComponent', () => {
       const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
       const dispatchIndex = children.indexOf('fd-dispatch-banner');
       expect(dispatchIndex).toBeGreaterThanOrEqual(0);
-      expect(children[dispatchIndex + 1]).toBe('fd-host-pause-banner');
+      expect(children.slice(dispatchIndex, dispatchIndex + 3)).toEqual([
+        'fd-dispatch-banner',
+        'fd-account-token-banner',
+        'fd-host-pause-banner',
+      ]);
     });
   });
 

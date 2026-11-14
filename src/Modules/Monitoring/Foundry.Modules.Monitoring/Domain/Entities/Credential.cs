@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -42,19 +43,35 @@ public abstract class Credential : AggregateRoot<CredentialId>
 
     /// <summary>
     /// Records that the provider refused the account token at <paramref name="now"/>. An account that is
-    /// already Invalid keeps its first detection time and only stamps the check time.
+    /// already Invalid keeps its first detection time and only stamps the check time; only the move from
+    /// Valid raises <see cref="CredentialTokenInvalidated"/>.
     /// </summary>
     public void MarkTokenInvalid(DateTimeOffset now)
     {
+        bool wasValid = _tokenInvalidSince is null;
         _tokenInvalidSince ??= now;
         _tokenCheckedAt = now;
+
+        if (wasValid)
+        {
+            AddDomainEvent(new CredentialTokenInvalidated(Id));
+        }
     }
 
-    /// <summary>Records that the provider accepts the account token.</summary>
+    /// <summary>
+    /// Records that the provider accepts the account token. Only the move from Invalid raises
+    /// <see cref="CredentialTokenRevalidated"/>.
+    /// </summary>
     public void MarkTokenValid()
     {
+        bool wasInvalid = _tokenInvalidSince is not null;
         _tokenInvalidSince = null;
         _tokenCheckedAt = null;
+
+        if (wasInvalid)
+        {
+            AddDomainEvent(new CredentialTokenRevalidated(Id));
+        }
     }
 
     /// <summary>
