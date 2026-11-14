@@ -138,9 +138,9 @@ The checks the [Publisher](#publisher) runs on a [Run bundle](#run-bundle) befor
 
 A git hosting platform (GitHub, GitLab).
 Each provider has its own API client, label format (flat on GitHub, scoped on GitLab), and CLI tooling (`gh`, `glab`).
-The provider is carried on `ClaimedIssueDispatch` so the worker dispatch knows which CLI tooling and credential env var apply.
-Inside the worker, the provider CLI is registered as git's credential helper (e.g. `gh auth setup-git`), authenticated by the Account PAT injected as the provider-specific token env var (`GH_TOKEN` for GitHub, `GITLAB_TOKEN` for GitLab) — this authenticates both `git push` and PR/MR creation without embedding the PAT in the repo's git config.
-The provider CLIs (`gh`, `glab`) are unconditionally baked into the worker base image (`Dockerfile.base`); when `GH_TOKEN`/`GITLAB_TOKEN` is set but the corresponding CLI is absent, the entrypoint fails bootstrap (`stage=auth`) rather than warning and continuing.
+The provider is carried on `ClaimedIssueDispatch` so the worker dispatch knows which provider the run targets.
+No worker holds a provider credential ([ADR 0100](docs/adr/0100-workers-hold-no-provider-credential-and-foundry-publishes.md)): Foundry sets no `GH_TOKEN`, `GITLAB_TOKEN` or `GIT_PAT`, and the entrypoint unsets any that leaked into its environment. The Account PAT is used only by Foundry itself and by the [Publisher](#publisher), which fetches the base and pushes the run's branch.
+The provider CLIs (`gh`, `glab`) are still baked into the worker base image (`Dockerfile.base`), unauthenticated.
 
 ## Provider Rate Budget
 
