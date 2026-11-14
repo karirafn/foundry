@@ -14,6 +14,12 @@ status: accepted
 > last paragraph; Consequences, first bullet) is replaced by [ADR 0080](0080-all-worker-settings-in-global-settings.md),
 > which moves every operator-facing worker setting into `GlobalSettings`.
 
+> **2026-11-14 — Amended:** the remaining toolchain flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`,
+> `INSTALL_DOCKER`) in Decision, and the flag-change rebuild trigger they drive, are replaced by
+> [ADR 0109](0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md): the image installs every
+> toolchain, and what it contains is read from the built image. The image tag, build toggle, rebuild operation,
+> build state and dispatch gate stand.
+
 ## Context
 
 The worker image preinstall flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_GLAB`, `INSTALL_GH`) were free-form entries in `Workers:ImageBuild:BuildArgs` (`IConfiguration`), deliberately excluded from the DB-backed `GlobalSettings` aggregate — DOMAIN.md records "infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`".
