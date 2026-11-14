@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { Subject } from 'rxjs';
-import { AgentActivity, InFlightTool } from '../../../core/models/agent-activity.model';
+import { AgentActivity } from '../../../core/models/agent-activity.model';
 import { ConnectionStatus } from '../../../core/services/hub-connection';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { PaneActivityComponent } from './pane-activity';
@@ -33,7 +33,6 @@ function activity(overrides: Partial<AgentActivity> = {}): AgentActivity {
 
 interface Fakes {
   readonly activity: WritableSignal<AgentActivity | null>;
-  readonly tools: WritableSignal<readonly InFlightTool[]>;
   readonly status: WritableSignal<ConnectionStatus>;
   readonly log: Subject<string>;
   readonly streamLog: ReturnType<typeof vi.fn>;
@@ -43,7 +42,6 @@ function setup(initial: AgentActivity | null = activity()) {
   vi.useFakeTimers({ now: NOW, toFake: ['Date', 'setInterval', 'clearInterval'] });
   const fakes: Fakes = {
     activity: signal(initial),
-    tools: signal([]),
     status: signal('connected'),
     log: new Subject<string>(),
     streamLog: vi.fn(),
@@ -57,7 +55,6 @@ function setup(initial: AgentActivity | null = activity()) {
         provide: WorkerSignalRService,
         useValue: {
           agentActivityForIssue: () => fakes.activity(),
-          recentToolsForRun: () => fakes.tools(),
           connectionStatus: fakes.status,
           streamLog: fakes.streamLog,
         },
@@ -121,29 +118,12 @@ describe('PaneActivityComponent', () => {
     expect(bar.querySelector<HTMLElement>('.pane-activity__fill')?.style.width).toBe('50%');
   });
 
-  it('shows the latest tool with its summary', () => {
+  it('shows no tool line while a tool is in flight', () => {
     // Act
     const { el } = setup();
 
     // Assert
-    const tool = el.querySelector('.pane-activity__tool');
-    expect(text(tool?.querySelector('.pane-activity__tool-name'))).toBe('Bash');
-    expect(text(tool?.querySelector('.pane-activity__tool-summary'))).toBe('dotnet test --filter Board');
-  });
-
-  it('falls back to the most recent finished tool when none is in flight', () => {
-    // Arrange
-    const { fixture, el, fakes } = setup(activity({ inFlightTool: null }));
-
-    // Act
-    fakes.tools.set([
-      { name: 'Read', summary: 'a.ts', startedAt: null },
-      { name: 'Edit', summary: 'b.ts', startedAt: null },
-    ]);
-    fixture.detectChanges();
-
-    // Assert
-    expect(text(el.querySelector('.pane-activity__tool-name'))).toBe('Edit');
+    expect(el.textContent).not.toContain('dotnet test --filter Board');
   });
 
   it('shows the time since the last event and advances it on the 5 s clock', () => {

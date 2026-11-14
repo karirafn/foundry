@@ -1,7 +1,6 @@
 import {
   AGENT_SILENCE_THRESHOLD_MINUTES,
   AgentActivity,
-  InFlightTool,
 } from '../../../../core/models/agent-activity.model';
 import {
   formatElapsed,
@@ -21,7 +20,6 @@ export interface ActivityPanel {
   readonly segments: readonly TaskSegment[];
   /** "task 3 of 7"; null when the run has no task list. */
   readonly progress: string | null;
-  readonly tool: string;
 }
 
 /** The card footer's line on the last event, and whether the run has gone silent. */
@@ -32,19 +30,15 @@ export interface LastEventLine {
 
 const STARTING_PANEL: ActivityPanel = {
   starting: true,
-  taskLine: 'Starting…',
+  taskLine: "Waiting for the agent's first event",
   segments: [],
   progress: null,
-  tool: "Waiting for the agent's first event",
 };
 
 const SILENCE_THRESHOLD_MS = AGENT_SILENCE_THRESHOLD_MINUTES * 60_000;
 
 /** The panel for a run's live Agent Activity; `null` activity means none has arrived yet. */
-export function activityPanel(
-  activity: AgentActivity | null,
-  latestTool: InFlightTool | null,
-): ActivityPanel {
+export function activityPanel(activity: AgentActivity | null): ActivityPanel {
   if (activity === null) {
     return STARTING_PANEL;
   }
@@ -58,7 +52,6 @@ export function activityPanel(
       t.status === 'completed' ? 'done' : t.id === task?.id ? 'current' : 'empty',
     ),
     progress: total > 0 ? `task ${taskOrdinal(activity)} of ${total}` : null,
-    tool: latestTool === null ? 'No tool calls yet' : toolText(latestTool),
   };
 }
 
@@ -87,8 +80,4 @@ export function silenceEpisode(activity: AgentActivity, now: number): string | n
     return null;
   }
   return `${activity.workerRunId}@${since}`;
-}
-
-function toolText(tool: InFlightTool): string {
-  return tool.summary ? `${tool.name} ${tool.summary}` : tool.name;
 }

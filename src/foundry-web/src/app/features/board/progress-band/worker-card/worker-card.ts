@@ -9,7 +9,7 @@ import {
   input,
   output,
 } from '@angular/core';
-import { AgentActivity, InFlightTool } from '../../../../core/models/agent-activity.model';
+import { AgentActivity } from '../../../../core/models/agent-activity.model';
 import { WorkerSignalRService } from '../../../../core/services/worker-signalr.service';
 import { RoleTagComponent } from '../../../../shared/components/role-tag/role-tag';
 import { formatElapsed } from '../../../../shared/utils/agent-activity-format';
@@ -64,23 +64,13 @@ export class WorkerCardComponent {
   private readonly _activity: Signal<AgentActivity | null> = computed(() =>
     this._workerSignalR.agentActivityForIssue(this.item().issue.id),
   );
-  // The in-flight tool clears between calls; the latest recorded call stays until the next.
-  private readonly _latestTool: Signal<InFlightTool | null> = computed(() => {
-    const activity = this._activity();
-    if (activity === null) {
-      return null;
-    }
-    return (
-      this._workerSignalR.recentToolsForRun(activity.workerRunId).at(-1) ?? activity.inFlightTool
-    );
-  });
 
   /** The run's role once its activity names it; until then, the one the issue state implies. */
   protected readonly role: Signal<string> = computed(
     () => this._activity()?.role ?? this.item().role,
   );
   protected readonly panel: Signal<ActivityPanel> = computed(() =>
-    activityPanel(this._activity(), this._latestTool()),
+    activityPanel(this._activity()),
   );
   protected readonly lastEvent: Signal<LastEventLine | null> = computed(() =>
     this.live() ? lastEventLine(this._activity(), this.now()) : null,
