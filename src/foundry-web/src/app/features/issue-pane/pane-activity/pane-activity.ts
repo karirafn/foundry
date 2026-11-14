@@ -16,7 +16,7 @@ import { WorkerSignalRService } from '../../../core/services/worker-signalr.serv
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { formatElapsed, laneStepText, taskOrdinal } from '../../../shared/utils/agent-activity-format';
 
-/** The elapsed text ticks on the same cadence as the Floor's. */
+/** How often the elapsed text refreshes while connected. */
 const CLOCK_INTERVAL_MS = 5_000;
 
 let nextId = 0;
@@ -111,7 +111,7 @@ export class PaneActivityComponent {
     return { key: `${tool.name}|${tool.summary}|${tool.startedAt}`, name: tool.name, summary: tool.summary };
   });
 
-  /** Same wording and silence rule as a Floor lane. */
+  /** Same wording and silence rule as a worker card's last-event line. */
   protected readonly elapsed: Signal<ElapsedDisplay | null> = computed(() => {
     const since = this.activity()?.lastEventAt ?? null;
     if (since === null) {

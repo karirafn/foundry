@@ -41,6 +41,7 @@ internal sealed class RepositoryDispatchQueries(
         {
             TokenUsability.Usable usable => usable.Token,
             TokenUsability.Unreadable => null,
+            TokenUsability.Invalid => null,
             TokenUsability.Absent => null,
             _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),
         };

@@ -441,6 +441,53 @@ public sealed class ExecuteGraphQlAsync
         failure.Error.Message.ShouldContain("***");
     }
 
+    [Fact]
+    public async Task WhenResponseIs401_ReturnsUnauthorizedKind()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Unauthorized, """{"message":"Bad credentials"}""");
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(
+            httpClient,
+            NullLogger<GitHubHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
+            GitHubComBaseUrl,
+            "query { viewer { login } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<TestData>.Failure failure = result.ShouldBeOfType<Result<TestData>.Failure>();
+        failure.Error.Kind.ShouldBe(ErrorKind.Unauthorized);
+    }
+
+    [Fact]
+    public async Task WhenResponseIs403_DoesNotReturnUnauthorizedKind()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Forbidden, """{"message":"Resource not accessible"}""");
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(
+            httpClient,
+            NullLogger<GitHubHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
+            GitHubComBaseUrl,
+            "query { viewer { login } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<TestData>.Failure failure = result.ShouldBeOfType<Result<TestData>.Failure>();
+        failure.Error.Kind.ShouldNotBe(ErrorKind.Unauthorized);
+    }
     // Helper DTO for testing — matches a simple GraphQL response shape
     internal sealed record TestData(string? State);
 }

@@ -68,6 +68,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
+        revisionQueued.RecordPersonFeedback();
         revisionQueued.ChecksFixAttempts = 0;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
@@ -85,6 +86,25 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
+        revisionQueued.RecordPersonFeedback();
+        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        return revisionQueued;
+    }
+
+    internal static RevisionQueuedIssue FromMergePending(
+        MergePendingIssue source,
+        IReadOnlyList<ReviewComment> comments,
+        int omittedCommentCount,
+        DateTimeOffset? newestCommentAt,
+        DateTimeOffset transitionedAt)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
+        revisionQueued.CopySharedPropertiesFrom(source);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
+        revisionQueued.RecordPersonFeedback();
         revisionQueued.ChecksFixAttempts = 0;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;

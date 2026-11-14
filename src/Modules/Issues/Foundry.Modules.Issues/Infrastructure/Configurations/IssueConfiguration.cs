@@ -176,6 +176,11 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         builder.Ignore(i => i.OpenClarification);
 
+        builder.Property(i => i.HasPersonFeedback)
+            .IsRequired()
+            .HasDefaultValue(false)
+            .HasColumnName("has_person_feedback");
+
         builder.Property(i => i.TriageVerdict)
             .HasConversion((ValueConverter)TriageVerdictJsonConversion.Converter, TriageVerdictJsonConversion.Comparer)
             .HasMaxLength(int.MaxValue)

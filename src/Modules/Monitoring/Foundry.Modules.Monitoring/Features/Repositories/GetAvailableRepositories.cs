@@ -55,6 +55,9 @@ internal static class GetAvailableRepositories
                 case TokenUsability.Unreadable:
                     return Result<AvailableRepositoriesResponse>.Fail(
                         RepositoryErrors.AccountTokenUnreadable(credentialId));
+                case TokenUsability.Invalid:
+                    return Result<AvailableRepositoriesResponse>.Fail(
+                        RepositoryErrors.AccountTokenInvalid(credentialId));
                 case TokenUsability.Absent:
                     return Result<AvailableRepositoriesResponse>.Fail(
                         RepositoryErrors.AccountHasNoToken(credentialId));

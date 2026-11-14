@@ -49,7 +49,7 @@ let nextId = 0;
 export class ConnectionGateComponent implements OnInit {
   /** The page's refetch, run once every hub is back. */
   readonly reload: InputSignal<GateReload> = input.required<GateReload>();
-  /** What to announce once the page is back and current, e.g. "Floor is up to date." */
+  /** What to announce once the page is back and current, e.g. "Board is up to date." */
   readonly upToDate: InputSignal<() => string> = input.required<() => string>();
 
   protected readonly content: Signal<TemplateRef<unknown>> = contentChild.required(TemplateRef);

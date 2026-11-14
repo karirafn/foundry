@@ -105,6 +105,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("entered_state_at");
 
+                    b.Property<bool>("HasPersonFeedback")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_person_feedback");
+
                     b.Property<int>("IssueNumber")
                         .HasColumnType("INTEGER")
                         .HasColumnName("issue_number");
@@ -241,6 +247,21 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("token");
+
+                    b.Property<int>("TokenVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("token_version");
+
+                    b.Property<DateTimeOffset?>("_tokenCheckedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_checked_at");
+
+                    b.Property<DateTimeOffset?>("_tokenInvalidSince")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_invalid_since");
 
                     b.Property<string>("type")
                         .IsRequired()

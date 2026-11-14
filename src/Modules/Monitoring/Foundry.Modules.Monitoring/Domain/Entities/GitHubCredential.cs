@@ -32,10 +32,14 @@ public sealed class GitHubCredential : Credential
         GitHubCredential credential = new(CredentialId.New())
         {
             Name = name,
-            Token = token is not null ? new ProviderToken.Present(token) : null,
             BaseUrl = baseUrl,
             Host = baseUrl.Value.Host,
         };
+
+        if (token is not null)
+        {
+            credential.SetAccountToken(token);
+        }
 
         if (branchRulesToken is not null)
         {
@@ -68,7 +72,7 @@ public sealed class GitHubCredential : Credential
 
         if (token is not null)
         {
-            Token = new ProviderToken.Present(token);
+            SetAccountToken(token);
         }
     }
 }

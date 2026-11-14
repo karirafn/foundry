@@ -10,6 +10,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -21,6 +22,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: false,
   tokenStatus: 'absent',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -32,9 +34,21 @@ const MOCK_ACCOUNT_UNREADABLE: AccountSummary = {
   hasToken: true,
   tokenStatus: 'unreadable',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
+const MOCK_ACCOUNT_INVALID: AccountSummary = {
+  id: '00000000-0000-0000-0000-000000000006',
+  name: 'rejected-github',
+  providerType: 'GitHub',
+  baseUrl: 'https://github.com',
+  hasToken: true,
+  tokenStatus: 'invalid',
+  branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: '2026-11-12T15:04:05Z',
+  namespaces: [],
+};
 const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000003',
   name: 'api-github',
@@ -43,6 +57,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -54,6 +69,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -281,6 +297,43 @@ describe('AccountListComponent', () => {
     expect(emittedAccount).toEqual(MOCK_ACCOUNT_UNREADABLE);
   });
 
+  describe('invalid token', () => {
+    it('should render the warning line reading "Token invalid" without a token dot', () => {
+      // Arrange / Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
+
+      // Assert
+      const group = el.querySelector('.account-list__token-warning');
+      expect(group?.getAttribute('role')).toBe('group');
+      expect(group?.getAttribute('aria-label')).toBe('Token status for rejected-github');
+      expect(el.querySelector('.account-list__token-reason-text')?.textContent?.trim()).toBe('Token invalid');
+      expect(el.querySelector('.account-list__token-reason svg')).toBeTruthy();
+      expect(el.querySelector('.account-list__token-dot')).toBeNull();
+    });
+
+    it('should render the "Enter new token" button with an account-scoped aria-label', () => {
+      // Arrange / Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
+
+      // Assert
+      const btn = el.querySelector('.account-list__reenter-btn');
+      expect(btn?.textContent?.trim()).toBe('Enter new token');
+      expect(btn?.getAttribute('aria-label')).toBe('Enter new token for rejected-github');
+    });
+
+    it('should emit edit with the account when "Enter new token" is clicked', () => {
+      // Arrange
+      const { el, component } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
+      let emittedAccount: AccountSummary | undefined;
+      component.edit.subscribe((a: AccountSummary) => { emittedAccount = a; });
+
+      // Act
+      (el.querySelector('.account-list__reenter-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(emittedAccount).toEqual(MOCK_ACCOUNT_INVALID);
+    });
+  });
   // Cycle 7: edit and delete action icon buttons with aria-labels (rendered via fd-row-actions)
   it('should render edit and delete icon buttons with accessible labels', () => {
     // Arrange / Act

@@ -28,7 +28,7 @@ internal sealed class NamespaceDeriver(
                 usable.Token,
                 credential is GitLabCredential,
                 cancellationToken),
-            TokenUsability.Unreadable or TokenUsability.Absent =>
+            TokenUsability.Unreadable or TokenUsability.Invalid or TokenUsability.Absent =>
                 Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable()),
             _ => throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}"),
         };

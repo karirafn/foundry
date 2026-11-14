@@ -85,6 +85,14 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public IReadOnlyList<Clarification> Clarifications { get; private set; } = [];
 
+    /// <summary>
+    /// True once a person's review feedback has driven a revision (issue #917): Foundry then never merges the pull
+    /// request on its own, and the issue waits in review for the person. Set only by a review-feedback revision and
+    /// carried through every transition with the shared properties, so no detour (a failed run, a question, a retry)
+    /// drops it.
+    /// </summary>
+    public bool HasPersonFeedback { get; private set; }
+
     /// <summary>The round still waiting for input, or <see langword="null"/> when every round is answered.</summary>
     public Clarification? OpenClarification =>
         Clarifications.Count > 0 && Clarifications[^1].IsOpen ? Clarifications[^1] : null;
@@ -190,6 +198,13 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         _labelledKind = source._labelledKind;
         TriageVerdict = source.TriageVerdict;
         Clarifications = source.Clarifications;
+        HasPersonFeedback = source.HasPersonFeedback;
+    }
+
+    /// <summary>A person's review feedback drives this revision: Foundry no longer merges on its own.</summary>
+    private protected void RecordPersonFeedback()
+    {
+        HasPersonFeedback = true;
     }
 
     // Only a label decides the label half: a classification derived from labels is Labelled or Unclassified.

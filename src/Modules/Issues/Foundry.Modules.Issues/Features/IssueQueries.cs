@@ -178,6 +178,7 @@ internal sealed class IssueQueries(
                 i.IssueNumber,
                 i.PullRequestUrl,
                 i.HeadSha,
+                i.FeedbackCutoffAt,
                 i.EnteredMergePendingAt))
             .ToListAsync(cancellationToken);
     }

@@ -16,6 +16,7 @@ const ACCOUNT_1: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 
@@ -27,6 +28,7 @@ const ACCOUNT_2: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  tokenInvalidSince: null,
   namespaces: [],
 };
 

@@ -12,7 +12,8 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
 /// <summary>
 /// Applies Monitoring's merge step outcome to a merge-pending issue (ADR 0105): <c>merged</c> completes it, and
-/// <c>disabled</c> or <c>skipped</c> sends it to review with the outcome recorded. Any other state — including an
+/// <c>disabled</c> or <c>skipped</c> sends it to review with the outcome recorded, and <c>feedback</c> revises it with
+/// the person's comments (issue #917). Any other state — including an
 /// issue that already left merge-pending on an earlier delivery — is ignored, so redelivery is a no-op beyond
 /// inbox dedup.
 /// </summary>
@@ -39,11 +40,24 @@ internal sealed class MergeResolvedHandler(
             return;
         }
 
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // A person's review feedback stopped the merge (issue #917): it drives a revision, as from checks-pending.
+        if (@event.Outcome == MergeResolved.FeedbackOutcome)
+        {
+            RevisionQueuedIssue revisionQueued = mergePendingIssue.Revise(
+                @event.Comments ?? [],
+                now,
+                @event.OmittedCommentCount,
+                @event.NewestCommentAt);
+            await db.TransitionAsync(mergePendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
         // An unknown discriminator (a newer producer across a deploy boundary) fails safe to review as Skipped.
         MergeOutcome outcome = MergeOutcome.FromDiscriminator(@event.Outcome, @event.Reason)
             ?? new MergeOutcome.Skipped($"unknown-outcome:{@event.Outcome}");
 
-        DateTimeOffset now = timeProvider.GetUtcNow();
         Issue next = outcome is MergeOutcome.Merged
             ? mergePendingIssue.Complete(now)
             : mergePendingIssue.ToReview(outcome, now);

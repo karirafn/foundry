@@ -2,7 +2,9 @@ namespace Foundry.Modules.Monitoring.Contracts;
 
 /// <summary>
 /// Read model for an account. Tokens are never returned — only their status
-/// (<c>present</c>, <c>absent</c> or <c>unreadable</c>).
+/// (<c>present</c>, <c>absent</c>, <c>unreadable</c> or, for the account token, <c>invalid</c>).
+/// <see cref="TokenInvalidSince"/> is when the provider's refusal of the account token was first
+/// confirmed; it is null unless <see cref="TokenStatus"/> is <c>invalid</c>.
 /// </summary>
 public sealed record CredentialSummary(
     Guid Id,
@@ -12,4 +14,5 @@ public sealed record CredentialSummary(
     bool HasToken,
     string TokenStatus,
     IReadOnlyList<string> Namespaces,
-    string BranchRulesTokenStatus);
+    string BranchRulesTokenStatus,
+    DateTimeOffset? TokenInvalidSince);
