@@ -22,6 +22,11 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
     public const string CredentialUnreadableDescription =
         "The account token can't be decrypted. Re-enter it on the account to resume.";
 
+    public const string CredentialInvalidRule = "credential-invalid";
+
+    public const string CredentialInvalidDescription =
+        "The provider rejected the account token. Enter a new token on the account to resume.";
+
     public const string CannotPushRulePrefix = "cannot-push";
 
     public static string CannotPushRule(string slug) =>

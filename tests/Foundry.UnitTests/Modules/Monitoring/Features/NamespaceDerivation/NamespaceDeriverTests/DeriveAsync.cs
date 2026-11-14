@@ -203,6 +203,21 @@ public sealed class DeriveAsync
         outcome.ShouldBeOfType<NamespaceDerivationOutcome.Unavailable>();
     }
 
+    [Fact]
+    public async Task WhenCredentialTokenIsInvalid_ReturnsUnavailableWithoutCallingHttpClient()
+    {
+        // Arrange
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("octocat", string.Concat("ghp_", "rejected"), baseUrl);
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()));
+
+        // Act
+        NamespaceDerivationOutcome outcome = await sut.DeriveAsync(credential, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<NamespaceDerivationOutcome.Unavailable>();
+    }
     private sealed class StaticJsonHandler(HttpStatusCode statusCode, string json) : DelegatingHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(

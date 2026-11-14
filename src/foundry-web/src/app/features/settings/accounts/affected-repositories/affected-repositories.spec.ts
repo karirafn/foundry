@@ -385,4 +385,59 @@ describe('AffectedRepositoriesComponent', () => {
     const label = row?.getAttribute('aria-label');
     expect(label).toContain("can't be decrypted");
   });
+
+  describe('credential-invalid', () => {
+    const INVALID: AffectedRepository = {
+      id: 'repo-5',
+      slug: 'org/rejected',
+      previousStatus: 'eligible',
+      newStatus: 'credential-invalid',
+    };
+
+    it('should display the "Token invalid" label', () => {
+      // Act
+      const { el } = setup([INVALID]);
+
+      // Assert
+      const row = el.querySelector('.affected-repositories__row');
+      expect(row?.textContent).toContain('Token invalid');
+    });
+
+    it('should render the rejected-token reason line', () => {
+      // Act
+      const { el } = setup([INVALID]);
+
+      // Assert
+      const reason = el.querySelector('.affected-repositories__reason');
+      expect(reason?.textContent).toContain(
+        'Skipped — the provider rejected the account token. Enter a new token on the account to resume.',
+      );
+    });
+
+    it('should apply the credential-invalid dot modifier', () => {
+      // Act
+      const { el } = setup([INVALID]);
+
+      // Assert
+      expect(el.querySelector('.affected-repositories__dot--credential-invalid')).toBeTruthy();
+    });
+
+    it('should include credential-invalid repos in the lost-access count', () => {
+      // Act
+      const { el } = setup([ELIGIBLE_TO_INELIGIBLE, INVALID, INELIGIBLE_TO_ELIGIBLE]);
+
+      // Assert
+      const heading = el.querySelector('.affected-repositories__heading');
+      expect(heading?.textContent?.trim()).toMatch(/^2\s/);
+    });
+
+    it('should append the reason to the row aria-label', () => {
+      // Act
+      const { el } = setup([INVALID]);
+
+      // Assert
+      const label = el.querySelector('.affected-repositories__row')?.getAttribute('aria-label');
+      expect(label).toContain('the provider rejected the account token');
+    });
+  });
 });

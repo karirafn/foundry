@@ -9,7 +9,6 @@ import {
   input,
   output,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { AgentActivity, InFlightTool } from '../../../../core/models/agent-activity.model';
 import { WorkerSignalRService } from '../../../../core/services/worker-signalr.service';
 import { RoleTagComponent } from '../../../../shared/components/role-tag/role-tag';
@@ -26,12 +25,11 @@ import {
 } from '../worker-activity/worker-activity.model';
 
 /**
- * A running worker: its role, issue, how long it has run and its live activity, with a way to
- * watch it on the Floor.
+ * A running worker: its role, issue, how long it has run and its live activity.
  */
 @Component({
   selector: 'fd-worker-card',
-  imports: [IssueRefComponent, RoleTagComponent, RouterLink, WorkerActivityComponent],
+  imports: [IssueRefComponent, RoleTagComponent, WorkerActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'item().issue.id',
@@ -59,10 +57,6 @@ export class WorkerCardComponent {
     const base = this.idBase();
     return this.live() ? `${base}-meta ${base}-task ${base}-status` : `${base}-meta ${base}-status`;
   });
-  /** The Floor lane heading's id, which the Floor scrolls to and focuses. */
-  protected readonly laneFragment: Signal<string> = computed(
-    () => `floor-lane-${this.item().issue.id}`,
-  );
   protected readonly elapsed: Signal<string> = computed(() =>
     formatElapsed(this.now() - Date.parse(this.item().issue.enteredStateAt)),
   );

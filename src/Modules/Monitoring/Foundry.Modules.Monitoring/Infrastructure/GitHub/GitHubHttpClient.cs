@@ -1676,6 +1676,11 @@ internal sealed partial class GitHubHttpClient(
             return error with { Kind = ErrorKind.NotFound };
         }
 
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return error with { Kind = ErrorKind.Unauthorized };
+        }
+
         return error;
     }
 

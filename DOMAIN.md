@@ -251,6 +251,15 @@ An unreadable token is distinct from an **absent** token: the token column is nu
 An account whose token is `Unreadable` sends no provider request: eligibility evaluation and every polling path short-circuit before calling the provider, so the account cannot silently degrade to anonymous access. Affected repositories report the credential-specific reason `credential-unreadable` rather than masquerading as inaccessible or unpushable.
 Materialization logs a warning naming `accounts.token` and the credential id. The state is repaired by re-entering the token through the account update path — the degraded credential loads normally and the re-entry never reads the old token, so no manual database edit is required.
 
+### Invalid Token
+
+An account token the provider refused with HTTP 401 on a runtime call. In RFC 6750 §3.1 terms (`invalid_token`) it is expired, revoked, malformed or otherwise invalid; a 401 cannot tell these apart. The provider decides it, unlike an [Unreadable Token](#unreadable-token), which Foundry itself cannot decrypt. A 403 (rate limit, SAML, permission) is not an Invalid Token.
+Modeled as `Credential.TokenValidity` — `Valid`, or `Invalid(DetectedAt, LastCheckedAt)` — persisted in the nullable `accounts.token_invalid_since` / `token_checked_at` columns (both null means `Valid`). A provider client reports a 401 as `ErrorKind.Unauthorized`.
+**Confirm, then mark:** when a repository's issue listing (scheduled or nudged) fails with `Unauthorized`, Foundry checks the token once with the same test as the account form's live token check (`ValidateTokenAsync`). Only `AuthenticationFailed` marks the account Invalid (`MarkTokenInvalid`); an authenticating outcome (`Authenticated` or `ScopesUnverifiable`) leaves it Valid, and a check with no verdict (transport error, 5xx) changes nothing, so the next cycle runs the same path. The repository's eligibility is evaluated again in the same cycle.
+While Invalid, `TokenUsability` is `Invalid`, so no regular provider call uses the token: covered repositories are Ineligible with `credential-invalid`, are not dispatched, and their webhook nudges and post-exit queries fail with `CredentialTokenInvalid`. When the token is also Unreadable, it is reported as Unreadable. The account summary reports `TokenStatus = "invalid"` and `TokenInvalidSince`.
+**Recheck:** once per `Credential.TokenRecheckCooldown` (15 minutes) per account, the poll loop checks the stored token again. An authenticating outcome returns the account to `Valid` (`MarkTokenValid`) and the poll runs that cycle; `AuthenticationFailed` stamps `LastCheckedAt`; no verdict stamps nothing, so the recheck runs again next cycle. Only one check per interval reaches the provider, so a dead token cannot trip the provider's failed-login lockout for sibling accounts with the same login.
+**Rotation:** setting a new account token (account creation, or the update path with a token) returns the account to `Valid` at once and increments `Credential.TokenVersion`, the account's concurrency token. A verdict about a token that was replaced while it was being checked fails the version check and is dropped without retry; the next cycle tests the new token.
+
 ## Namespace Claim
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.
@@ -1110,7 +1119,7 @@ Including `DispatchReservation` in the count prevents over-dispatch during the w
 An unresolved `DispatchReservation` holds its slot for at most `StaleReservationThreshold` (2 minutes) before `StaleReservationService` deletes it.
 An unresolved `StartingRun` holds its slot for at most `StaleStartingRunThreshold` (10 minutes) before `StaleStartingRunService` fails it (see Orphan Reconciliation).
 The query is implemented by `DbContext.GetSlotOccupancyCountAsync` and `DbContext.GetSlotOccupancyRunIdsAsync` extension methods, used by both `WorkerDispatchService` (dispatch gate) and `StaleStartingRunService` (orphan reaping).
-The same count is exposed read-only as `GET /api/workers/capacity` (`MaxConcurrent`, `OccupiedSlots`, `FreeSlots`) for the [Floor](#floor), so the dashboard never recomputes occupancy.
+The same count is exposed read-only as `GET /api/workers/capacity` (`MaxConcurrent`, `OccupiedSlots`, `FreeSlots`) for the Board's in-progress band, so the dashboard never recomputes occupancy.
 
 This occupancy count is **distinct from the per-repository cap**: `MaxConcurrent` is a global ceiling enforced Workers-side via this count; the [Repository Worker Limit](#repository-worker-limit) is a per-repository ceiling enforced Issues-side from `count(InProgressIssue) + count(RevisionInProgressIssue)` grouped by repository.
 Neither count subsumes the other — `DispatchReservation` and `StartingRun` carry no repository identity and are therefore invisible to the per-repository count; `InProgressIssue` and `RevisionInProgressIssue` are not reservation types and are not included in slot occupancy.
@@ -1162,30 +1171,17 @@ The projection is presentation-only: it is never persisted, and text fields are 
 The in-progress issue card shows one line such as `developer · Running tests (3/7)`: the latest active subagent type (or `main agent`), the current task `activeForm`, and task progress; a run with no task list shows the active subagent and the in-flight tool instead.
 The worker system prompt carries one workflow-neutral line asking the agent to track its plan with its task list and keep it current.
 
-## Floor
+## Active-Agents Chip
 
-The dashboard's factory-floor view (`/floor`): one lane per active run showing its live [Agent Activity](#agent-activity), followed by the dispatch slots that hold no lane and the next queued issues.
-
-**Lanes.**
-Lanes come from the `WorkerHub` Agent Activity payloads, so a page reload repopulates them from `GetCurrentActivity`.
-Each lane shows the issue number, title and repository; the task list with the current task highlighted and "N of M done"; active subagents (parallel and nested listed separately, collapsed beyond a visible limit) and the active skill; a tool ticker of the most recent in-flight tools (accumulated client-side from successive payloads, so it restarts on reload); token totals; and the time since `LastEventAt`, styled as silent past the same 5-minute threshold as the issue card.
-A lane leaves the Floor when `AgentActivityEnded` arrives or its issue leaves the working states; the run's cost then appears on the issue via `RunResultSummary`.
-The Floor never shows lanes that may be out of date: it sits behind the [Connection Gate](#connection-gate).
-
-**Slots and queue.**
-Free and starting slots come from the server's [Worker Slot Occupancy](#worker-slot-occupancy) via `GET /api/workers/capacity`: occupied slots without a lane (reservations, starting runs) render as *Starting*, the remaining `FreeSlots` as empty lanes.
-The queue lists the next eligible queued issues in [Dispatch Order](#dispatch-order), reusing the dashboard's server-ordered issue list ([Queue Position](#queue-position), ADR 0067).
-
-**Active-agents chip.**
-The top bar shows `● N agents working` (the count of active runs reporting Agent Activity), or an idle state at zero, linking to the Floor.
-Count changes are announced through the shell's single polite announcer; per-lane step changes are announced politely by the lane, and token or clock ticks are never announced.
+The top bar shows `● N agents working` (the count of active runs reporting Agent Activity), or an idle state at zero, linking to the Board.
+Count changes are announced through the shell's single polite announcer; an open issue pane announces its run's step changes politely, and token or clock ticks are never announced.
 
 ## Connection Gate
 
-The dashboard's guard against showing live data that may be out of date. The Board and the Floor are gated; Settings and History are not.
+The dashboard's guard against showing live data that may be out of date. The Board is gated; Settings and History are not.
 When any of the three SignalR hubs (issues, system, workers) has been down for 2 s, the gated page is destroyed and a reconnect screen takes its place; a drop that recovers within those 2 s leaves the page as it is.
 Each hub retries on its own, with no limit: at once, then after 1, 2, 5 and 10 s, then every 30 s ± 20 %; **Try now** cuts the wait short.
-Once every hub is back the page refetches what it shows (Board: issues, capacity, dispatch settings and repositories; Floor: `GetCurrentActivity`, issues and capacity) and renders afresh only when that has loaded; a failed refetch is retried on the same schedule.
+Once every hub is back the page refetches what it shows (Board: issues, capacity, dispatch settings and repositories) and renders afresh only when that has loaded; a failed refetch is retried on the same schedule.
 While the gate is up the top bar's agent count and usage show placeholders instead of their last-known values.
 
 ## Worker Outcome Detection

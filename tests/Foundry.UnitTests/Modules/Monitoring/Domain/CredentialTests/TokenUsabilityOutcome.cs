@@ -51,4 +51,33 @@ public sealed class TokenUsabilityOutcome
         // Assert
         result.ShouldBeOfType<TokenUsability.Absent>();
     }
+
+    [Fact]
+    public void WhenTokenIsPresentAndInvalid_ReturnsInvalidCarryingTheToken()
+    {
+        // Arrange
+        string token = string.Concat("ghp_", "rejected");
+        GitHubCredential credential = GitHubCredential.Create("my-org", token, GitHubBaseUrl());
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+
+        // Act
+        TokenUsability result = credential.TokenUsability;
+
+        // Assert
+        result.ShouldBeOfType<TokenUsability.Invalid>().Token.ShouldBe(token);
+    }
+
+    [Fact]
+    public void WhenTokenIsUnreadableAndInvalid_ReturnsUnreadable()
+    {
+        // Arrange
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken("my-org", GitHubBaseUrl());
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+
+        // Act
+        TokenUsability result = credential.TokenUsability;
+
+        // Assert
+        result.ShouldBeOfType<TokenUsability.Unreadable>();
+    }
 }

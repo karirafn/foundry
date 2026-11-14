@@ -153,6 +153,33 @@ public sealed class CreateBranchAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCredentialTokenIsInvalid_ReturnsCredentialTokenInvalidWithoutCallingProvider()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync();
+        GitHubCredential invalidCredential = GitHubCredential.Create(
+            "my-org",
+            string.Concat("ghp_", "rejected"),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        invalidCredential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+
+        IPostExitProviderQueries sut = new PostExitProviderQueries(
+            _dbContext,
+            new ThrowingProviderFactory(),
+            new StubCredentialResolver(invalidCredential));
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            repoId,
+            "feat/my-branch",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialTokenInvalid");
+    }
+
+    [Fact]
     public async Task WhenBranchCreatedSuccessfully_ReturnsTrue()
     {
         // Arrange

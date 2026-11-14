@@ -205,4 +205,8 @@ internal static class PostExitProviderQueriesErrors
     public static Error CredentialTokenUnreadable(CredentialId id) =>
         new("PostExitProviderQueries.CredentialTokenUnreadable",
             $"Credential with id '{id.Value}' has an unreadable token — the stored ciphertext could not be decrypted.");
+
+    public static Error CredentialTokenInvalid(CredentialId id) =>
+        new("PostExitProviderQueries.CredentialTokenInvalid",
+            $"Credential with id '{id.Value}' has an invalid token — the provider rejected it.");
 }

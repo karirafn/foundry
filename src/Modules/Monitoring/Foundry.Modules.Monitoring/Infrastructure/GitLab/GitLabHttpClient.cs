@@ -1041,6 +1041,11 @@ internal sealed partial class GitLabHttpClient(
             return error with { Kind = ErrorKind.NotFound };
         }
 
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return error with { Kind = ErrorKind.Unauthorized };
+        }
+
         return error;
     }
 

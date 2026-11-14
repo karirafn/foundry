@@ -25,9 +25,11 @@ export const REQUIRED_BRANCH_RULES: readonly string[] = [
 
 const ACCESS_RULE_PREFIXES: readonly string[] = ['cannot-push:', 'no-credential:'];
 const CREDENTIAL_UNREADABLE_RULE = 'credential-unreadable';
+const CREDENTIAL_INVALID_RULE = 'credential-invalid';
 
 export function isAccessViolation(violation: EligibilityViolation): boolean {
   return violation.rule === CREDENTIAL_UNREADABLE_RULE
+    || violation.rule === CREDENTIAL_INVALID_RULE
     || ACCESS_RULE_PREFIXES.some(prefix => violation.rule.startsWith(prefix));
 }
 

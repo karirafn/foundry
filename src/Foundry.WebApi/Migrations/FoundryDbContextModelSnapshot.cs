@@ -248,6 +248,21 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("token");
 
+                    b.Property<int>("TokenVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("token_version");
+
+                    b.Property<DateTimeOffset?>("_tokenCheckedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_checked_at");
+
+                    b.Property<DateTimeOffset?>("_tokenInvalidSince")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_invalid_since");
+
                     b.Property<string>("type")
                         .IsRequired()
                         .HasMaxLength(20)

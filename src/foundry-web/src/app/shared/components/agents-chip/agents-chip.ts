@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, Signal, computed, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { ConnectionGateService } from '../../../core/services/connection-gate.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 
@@ -12,13 +12,13 @@ export function agentsWorkingText(count: number): string {
 }
 
 /**
- * Top-bar chip showing how many agents are working, linking to the Floor. While the connection gate
+ * Top-bar chip showing how many agents are working, linking to the Board. While the connection gate
  * is up the count may be out of date, so a same-sized placeholder stands in for it. Count changes are announced
  * through the shell's single polite announcer (see App), not a live region of its own.
  */
 @Component({
   selector: 'fd-agents-chip',
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink],
   templateUrl: './agents-chip.html',
   styleUrl: './agents-chip.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,5 +30,5 @@ export class AgentsChipComponent {
   protected readonly count: Signal<number> = this._workerSignalR.activeAgentCount;
   protected readonly idle: Signal<boolean> = computed(() => this.count() === 0);
   protected readonly text: Signal<string> = computed(() => agentsWorkingText(this.count()));
-  protected readonly ariaLabel: Signal<string> = computed(() => `${this.text()}. Open the Floor`);
+  protected readonly ariaLabel: Signal<string> = computed(() => `${this.text()}. Open the Board`);
 }

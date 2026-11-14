@@ -1,0 +1,79 @@
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.UnitTests.Modules.Monitoring.Domain.CredentialTests;
+
+public sealed class TokenVersionIncrements
+{
+    private static BaseUrl GitHubBaseUrl() => BaseUrl.Create("https://github.com").ValueOrThrow();
+
+    private static string Token(string suffix) => string.Concat("ghp_", suffix);
+
+    [Fact]
+    public void WhenAccountIsCreatedWithToken_VersionIsOne()
+    {
+        // Act
+        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+
+        // Assert
+        credential.TokenVersion.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenAccountTokenIsSet_VersionIncrements()
+    {
+        // Arrange
+        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+
+        // Act
+        credential.Update("my-org", Token("b"), GitHubBaseUrl());
+
+        // Assert
+        credential.TokenVersion.ShouldBe(2);
+    }
+
+    [Fact]
+    public void WhenAccountIsUpdatedWithoutToken_VersionIsUnchanged()
+    {
+        // Arrange
+        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+
+        // Act
+        credential.Update("renamed", token: null, GitHubBaseUrl());
+
+        // Assert
+        credential.TokenVersion.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenBranchRulesTokenIsSet_VersionIsUnchanged()
+    {
+        // Arrange
+        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+
+        // Act
+        credential.SetBranchRulesToken(Token("rules"));
+
+        // Assert
+        credential.TokenVersion.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenTokenVerdictIsRecorded_VersionIsUnchanged()
+    {
+        // Arrange
+        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+
+        // Act
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        credential.MarkTokenValid();
+
+        // Assert
+        credential.TokenVersion.ShouldBe(1);
+    }
+}

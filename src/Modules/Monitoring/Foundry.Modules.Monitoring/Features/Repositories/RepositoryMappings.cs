@@ -90,6 +90,10 @@ internal static class RepositoryMappings
                 => EligibilityViolationInfo.AllowForcePushesDescription,
             var r when r == EligibilityViolationInfo.AllowDeletionRule
                 => EligibilityViolationInfo.AllowDeletionDescription,
+            EligibilityViolationInfo.CredentialUnreadableRule
+                => EligibilityViolationInfo.CredentialUnreadableDescription,
+            EligibilityViolationInfo.CredentialInvalidRule
+                => EligibilityViolationInfo.CredentialInvalidDescription,
             _ => "This repository is ineligible for an unknown reason.",
         };
     }
