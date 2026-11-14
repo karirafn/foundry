@@ -333,6 +333,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     [Theory]
     [InlineData("rebase_pending", "rebasing")]
     [InlineData("checks_pending", "checks")]
+    [InlineData("merge_pending", "merging")]
     public async Task WhenStateRunsACodeStep_SummaryCarriesTheCodeStep(string state, string expectedCodeStep)
     {
         // Arrange
@@ -492,6 +493,46 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary summary = result.ShouldNotBeNull();
         summary.State.ShouldBe("checks_pending");
         summary.PullRequestUrl.ShouldBe(ExpectedPrUrl);
+    }
+
+    [Fact]
+    public async Task WhenReviewAfterSkippedMerge_SummaryCarriesMergeOutcomeAndReason()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder()
+            .MergePending()
+            .ToReview(new MergeOutcome.Skipped("head_moved"), DateTimeOffset.UtcNow);
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.State.ShouldBe("review"),
+            () => summary.MergeOutcome.ShouldBe("skipped"),
+            () => summary.MergeSkippedReason.ShouldBe("head_moved"));
+    }
+
+    [Fact]
+    public async Task WhenReviewNeverMergePending_MergeOutcomeIsNullOnSummary()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.MergeOutcome.ShouldBeNull();
+        summary.MergeSkippedReason.ShouldBeNull();
     }
 
     [Fact]
@@ -677,6 +718,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             "review" => builder.Review(),
             "checks_pending" => builder.ChecksPending(),
             "rebase_pending" => builder.RebasePending(),
+            "merge_pending" => builder.MergePending(),
             "revision_queued" => builder.RevisionQueued(),
             "revision_in_progress" => builder.RevisionInProgress(),
             "revision_failed" => builder.RevisionFailed(),

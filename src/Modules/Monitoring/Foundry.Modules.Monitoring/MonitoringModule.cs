@@ -12,6 +12,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.IssueReactions;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
@@ -89,6 +90,7 @@ public static class MonitoringModule
         services.AddScoped<BlockerLinkWriter>();
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
+        services.AddScoped<MergeStep>();
         services.AddScoped<AwaitingInputStep>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
@@ -124,6 +126,7 @@ public static class MonitoringModule
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredRebasePending, IssueEnteredRebasePendingHandler>();
+        services.AddIntegrationEventHandler<IssueEnteredMergePending, IssueEnteredMergePendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredAwaitingInput, IssueEnteredAwaitingInputHandler>();
         services.AddIntegrationEventHandler<TriageBlockersFound, TriageBlockersFoundHandler>();
 

@@ -11,6 +11,7 @@ import { DeleteButtonComponent } from '../../../../shared/components/delete-butt
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 import { TooltipDirective } from '../../../../shared/directives/tooltip/tooltip.directive';
 import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibility-unreachable.util';
+import { providerTerminology } from '../../../../shared/utils/provider.util';
 
 @Component({
   selector: 'fd-repository-list',
@@ -240,6 +241,24 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
                 {{ repo.maxConcurrentWorkers }}
               </span>
 
+              <!-- Merge-when-checks-pass chip -->
+              @if (repo.mergeWhenChecksPass === true) {
+                <span
+                  class="repository-list__chip repository-list__chip--merge"
+                  role="img"
+                  tabindex="0"
+                  [attr.aria-label]="mergeChipTooltip(repo)"
+                  [fdTooltip]="mergeChipTooltip(repo)"
+                >
+                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18" cy="18" r="3" />
+                    <circle cx="6" cy="6" r="3" />
+                    <path d="M6 21V9a9 9 0 0 0 9 9" />
+                  </svg>
+                  Merges on pass
+                </span>
+              }
+
               <!-- Via account name -->
               <span class="repository-list__via">via {{ repo.accountName }}</span>
 
@@ -423,6 +442,10 @@ export class RepositoryListComponent {
 
   maxWorkersTooltip(repo: RepositorySummary): string {
     return `Max ${repo.maxConcurrentWorkers} concurrent worker${repo.maxConcurrentWorkers === 1 ? '' : 's'}`;
+  }
+
+  mergeChipTooltip(repo: RepositorySummary): string {
+    return `Foundry merges its ${providerTerminology(repo.providerType).prAbbrev} when checks pass`;
   }
 
   protected _unreachableExplanation(repo: RepositorySummary): string {

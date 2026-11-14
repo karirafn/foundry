@@ -21,6 +21,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -38,6 +39,7 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   isActive: false,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };

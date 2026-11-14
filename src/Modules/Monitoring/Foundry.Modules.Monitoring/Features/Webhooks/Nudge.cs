@@ -26,6 +26,9 @@ internal enum NudgePass
     /// <summary>The post-run rebase step for one issue (ADR 0087).</summary>
     Rebase,
 
+    /// <summary>The merge step for one issue: merge its pull request after its checks passed (ADR 0105).</summary>
+    Merge,
+
     /// <summary>The awaiting-input step for one issue: post its questions, or read replies (ADR 0096).</summary>
     AwaitingInput,
 }

@@ -1,0 +1,118 @@
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts;
+
+using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
+
+namespace Foundry.Modules.Issues.Domain.Entities.States;
+
+/// <summary>
+/// The checks gate resolved <see cref="ChecksOutcome.Passed"/> on a repository that opted in to Merge When Checks
+/// Pass, and Foundry is merging the pull request it opened, pinned to <see cref="HeadSha"/> (ADR 0105). A merged
+/// pull request completes the issue; any other merge outcome sends it to review with a recorded
+/// <see cref="MergeOutcome"/>.
+/// </summary>
+public sealed class MergePendingIssue : Issue
+{
+    public override IssueStage Stage => IssueStage.Implement;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => false;
+
+    public override bool WaitsOnBlockers => false;
+
+    public override IssueCodeStep? CodeStep => IssueCodeStep.Merging;
+
+    // Private parameterless constructor for EF Core materialization.
+    private MergePendingIssue()
+    {
+    }
+
+    private MergePendingIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
+    {
+    }
+
+    public WorkerRunId WorkerRunId { get; private set; }
+
+    public string BranchName { get; private set; } = string.Empty;
+
+    public string PullRequestUrl { get; private set; } = string.Empty;
+
+    public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
+
+    /// <summary>The head commit the checks gate verified; the merge is refused when the pull request moved on.</summary>
+    public string HeadSha { get; private set; } = string.Empty;
+
+    public ChecksOutcome ChecksOutcome { get; private set; } = new ChecksOutcome.Passed();
+
+    /// <summary>How the post-run rebase resolved, carried from checks-pending (ADR 0087).</summary>
+    public RebaseOutcome? RebaseOutcome { get; private set; }
+
+    public int RebaseConflictAttempts { get; private set; }
+
+    public DateTimeOffset FeedbackCutoffAt { get; private set; }
+
+    public DateTimeOffset EnteredMergePendingAt { get; private set; }
+
+    internal static MergePendingIssue FromChecksPending(
+        ChecksPendingIssue source,
+        ChecksOutcome.Passed checksOutcome,
+        string headSha,
+        DateTimeOffset transitionedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(headSha);
+
+        MergePendingIssue mergePending = new(source.Id, transitionedAt);
+        mergePending.CopySharedPropertiesFrom(source);
+        mergePending.WorkerRunId = source.WorkerRunId;
+        mergePending.BranchName = source.BranchName;
+        mergePending.PullRequestUrl = source.PullRequestUrl;
+        mergePending.HeadSha = headSha;
+        mergePending.ChecksOutcome = checksOutcome;
+        mergePending.RebaseOutcome = source.RebaseOutcome;
+        mergePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        mergePending.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        mergePending.EnteredMergePendingAt = transitionedAt;
+        return mergePending;
+    }
+
+    /// <summary>The pull request merged: the issue is done.</summary>
+    public CompletedIssue Complete(DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = CompletedIssue.FromMergePending(this, completedAt);
+        AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
+        return completed;
+    }
+
+    /// <summary>
+    /// Foundry did not merge (<see cref="MergeOutcome.Disabled"/> or <see cref="MergeOutcome.Skipped"/>): the
+    /// issue waits in review for a person, with the reason recorded.
+    /// </summary>
+    public ReviewIssue ToReview(MergeOutcome mergeOutcome, DateTimeOffset transitionedAt)
+    {
+        if (mergeOutcome is MergeOutcome.Merged)
+        {
+            throw new ArgumentException("A merged pull request completes the issue; it never goes to review.", nameof(mergeOutcome));
+        }
+
+        ReviewIssue review = ReviewIssue.FromMergePending(this, mergeOutcome, transitionedAt);
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        return review;
+    }
+
+    public ContinuableFailedIssue Fail(
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromMergePending(
+            this,
+            failureReason,
+            failureCategory,
+            failedAt);
+        AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
+        return failed;
+    }
+}

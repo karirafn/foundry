@@ -30,6 +30,10 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);

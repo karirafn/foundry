@@ -46,6 +46,13 @@ internal sealed class ProviderIssueClosedHandler(
                 break;
             }
 
+            case MergePendingIssue mergePendingIssue:
+            {
+                CompletedIssue completed = mergePendingIssue.Complete(now);
+                await db.TransitionAsync(mergePendingIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             case AwaitingInputIssue awaitingInputIssue:
             {
                 CompletedIssue completed = awaitingInputIssue.Complete(now);
@@ -69,7 +76,7 @@ internal sealed class ProviderIssueClosedHandler(
 
             default:
                 logger.LogWarning(
-                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue, AwaitingInputIssue, PublishBlockedIssue or PublishFailedIssue (state: {State}); ignoring.",
+                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue, MergePendingIssue, AwaitingInputIssue, PublishBlockedIssue or PublishFailedIssue (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

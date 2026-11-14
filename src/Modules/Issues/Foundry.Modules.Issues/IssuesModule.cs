@@ -62,6 +62,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderPullRequestHeadMoved, ProviderPullRequestHeadMovedHandler>();
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
         services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
+        services.AddIntegrationEventHandler<MergeResolved, MergeResolvedHandler>();
         services.AddIntegrationEventHandler<AwaitingInputArrived, AwaitingInputArrivedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();
@@ -84,6 +85,7 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueChecksPending>(services);
         services.AddScoped<IDomainEventHandler<IssueChecksPending>, IssueChecksPendingNudgeBridge>();
         AddIssueStateChangedHandler<IssueRebasePending>(services);
+        AddIssueStateChangedHandler<IssueMergePending>(services);
         AddIssueStateChangedHandler<IssueAwaitingInput>(services);
         AddIssueStateChangedHandler<IssueTriageQueued>(services);
         AddIssueStateChangedHandler<IssueTriageInProgress>(services);
@@ -93,6 +95,7 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueBranchDiverged>(services);
         services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
+        services.AddScoped<IDomainEventHandler<IssueMergePending>, IssueMergePendingNudgeBridge>();
         services.AddScoped<IDomainEventHandler<TriageBlockersNamed>, TriageBlockersFoundBridge>();
         services.AddScoped<IDomainEventHandler<IssueClosedWithUnpublishedRun>, IssueClosedWithUnpublishedRunBridge>();
 

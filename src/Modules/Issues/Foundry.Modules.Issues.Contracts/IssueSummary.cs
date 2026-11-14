@@ -9,13 +9,17 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="CodeStep"/> place the issue on the board (#851): the server decides, the dashboard renders.
 /// <paramref name="Stage"/> is one of <see cref="TriageStage"/>, <see cref="ImplementStage"/>,
 /// <see cref="AwaitingReviewStage"/> or <see cref="DoneStage"/>; <paramref name="CodeStep"/> is one of
-/// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/> or
-/// <see cref="ChecksStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
+/// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/>,
+/// <see cref="ChecksStep"/> or <see cref="MergingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
 /// </para>
 /// <para>
 /// <paramref name="RepositoryId"/> is the monitored repository's id: the same id as <c>RepositorySummary.Id</c> and the
 /// repository settings route. <paramref name="WaitsOnBlockers"/> is true while the issue waits for its open blockers
 /// to close, and <paramref name="EnteredStateAt"/> is when it entered its current state (#892).
+/// </para>
+/// <para>
+/// <paramref name="MergeOutcome"/> is set for a <c>review</c> issue that left merge-pending without a merge:
+/// <c>disabled</c> or <c>skipped</c>, with <paramref name="MergeSkippedReason"/> for <c>skipped</c> (ADR 0105).
 /// </para>
 /// </summary>
 public sealed record IssueSummary(
@@ -40,6 +44,8 @@ public sealed record IssueSummary(
     string? PullRequestUrl = null,
     string? RebaseOutcome = null,
     string? RebaseSkippedReason = null,
+    string? MergeOutcome = null,
+    string? MergeSkippedReason = null,
     string? ProviderType = null,
     string? RevisionTriggerKind = null,
     string? PublishPhase = null)
@@ -56,4 +62,7 @@ public sealed record IssueSummary(
     public const string PublishRetryingStep = "publish_retrying";
     public const string RebasingStep = "rebasing";
     public const string ChecksStep = "checks";
+
+    /// <summary>Foundry is merging the pull request it opened, after its checks passed (ADR 0105).</summary>
+    public const string MergingStep = "merging";
 }

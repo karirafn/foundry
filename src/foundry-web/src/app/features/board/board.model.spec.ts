@@ -58,6 +58,7 @@ function repository(overrides: Partial<RepositorySummary> = {}): RepositorySumma
     isActive: true,
     maxConcurrentWorkers: 1,
     rebaseAfterRun: true,
+    mergeWhenChecksPass: false,
     lastPolledAt: null,
     eligibility: { status: 'ineligible', violations: [], reason: null },
     ...overrides,
@@ -482,6 +483,16 @@ describe('needs explanations', () => {
     [{ state: 'awaiting_input' }, 'Questions are waiting for your answers'],
     [{ state: 'branch_diverged' }, "The branch moved; the run's work is on a side branch"],
     [{ state: 'review' }, 'Ready for your review'],
+    [
+      { state: 'review', mergeOutcome: 'skipped', mergeSkippedReason: 'head_moved' },
+      "Checks passed; Foundry didn't merge: branch moved after checks",
+    ],
+    [
+      { state: 'review', mergeOutcome: 'skipped', mergeSkippedReason: 'from_the_future' },
+      "Checks passed; Foundry didn't merge: from_the_future",
+    ],
+    [{ state: 'review', mergeOutcome: 'skipped' }, "Checks passed; Foundry didn't merge"],
+    [{ state: 'review', mergeOutcome: 'disabled' }, 'Ready for your review'],
     [{ state: 'unchanged' }, 'The run made no changes'],
     [{ state: 'rebase_pending' }, "Open to see what's needed"],
   ] as [Partial<IssueSummary>, string][])('explains %o as %s', (overrides, text) => {
@@ -517,6 +528,22 @@ describe('needsReason', () => {
     });
   });
 
+  it('reads a skipped merge as a warning', () => {
+    expect(
+      needsReason(
+        buildIssue({ state: 'review', needsAction: true, mergeOutcome: 'skipped', mergeSkippedReason: 'unauthorized' }),
+      ),
+    ).toEqual({ label: 'Merge skipped', tone: 'warning' });
+  });
+
+  it('reads red checks before a skipped merge', () => {
+    expect(
+      needsReason(
+        buildIssue({ state: 'review', needsAction: true, checksOutcome: 'still_failing', mergeOutcome: 'skipped' }),
+      )?.label,
+    ).toBe('Checks red');
+  });
+
   it('reads a ready merge request for a GitLab review', () => {
     expect(
       needsReason(buildIssue({ state: 'review', needsAction: true, providerType: 'gitlab' }))
@@ -546,6 +573,7 @@ describe('code steps', () => {
       publish_retrying: 'Retrying publish…',
       rebasing: 'Rebasing…',
       checks: 'Checks running…',
+      merging: 'Merging…',
     });
   });
 
@@ -555,6 +583,10 @@ describe('code steps', () => {
 
   it('reads other steps in the working tone', () => {
     expect(codeStepTone('checks')).toBe('working');
+  });
+
+  it('reads merging in the working tone', () => {
+    expect(codeStepTone('merging')).toBe('working');
   });
 });
 

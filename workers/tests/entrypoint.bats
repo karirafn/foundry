@@ -3061,3 +3061,213 @@ FAKE
     [ "$(bundle_run_commits main)" = "$(printf '%s\n' "wip: uncommitted changes at run end" "before stop")" ]
     grep -q "Run bundle: 2 commit(s)" "$BATS_TEST_TMPDIR/stderr"
 }
+
+# ---------------------------------------------------------------------------
+# Post-result idle stop (#945): once claude has written a result event and then
+# nothing on stdout for CLAUDE_POST_RESULT_IDLE_SECONDS, the entrypoint stops it
+# and exits with the status the last result reports.  The limit and the stop
+# timeout are shortened through their FOUNDRY_* overrides.
+# ---------------------------------------------------------------------------
+
+# make_fake_dockerd_absent — a dockerd that never starts, so a run that keeps claude
+# alive for seconds leaves no rootless daemon state behind (degraded mode).
+make_fake_dockerd_absent() {
+    printf '#!/bin/bash\nexit 1\n' > "$FAKE_BIN_DIR/dockerd-rootless.sh"
+    chmod +x "$FAKE_BIN_DIR/dockerd-rootless.sh"
+}
+
+# make_fake_claude_script <body> — a claude stub running <body>, which may use
+# the result_ok / result_error / init_line helpers to write stream lines.
+make_fake_claude_script() {
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+result_ok() { printf '%s\n' '{"duration_api_ms":1,"is_error":false,"result":"Done","subtype":"success","type":"result"}'; }
+result_error() { printf '%s\n' '{"duration_api_ms":1,"is_error":true,"result":"Failed","subtype":"error_during_execution","type":"result"}'; }
+init_line() { printf '%s\n' '{"type":"system","subtype":"init"}'; }
+echo "\$\$" > "$BATS_TEST_TMPDIR/claude_pid"
+$1
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+prepare_idle_stop_test() {
+    set_required_env
+    make_fake_git
+    make_fake_dockerd_absent
+    export FOUNDRY_CLAUDE_POST_RESULT_IDLE_SECONDS=2
+    export FOUNDRY_CLAUDE_STOP_TIMEOUT_SECONDS=2
+}
+
+@test "idle stop: claude exiting soon after its result keeps claude's own exit status" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_ok; exit 3'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 3 ]
+    [[ "$output" != *"claude idle"* ]]
+}
+
+@test "idle stop: a successful result followed by silence stops claude and exits 0" {
+    prepare_idle_stop_test
+    make_fake_claude_script "result_ok; trap 'echo term > \"$BATS_TEST_TMPDIR/claude_got_term\"; exit 143' TERM; sleep 60 & wait"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_got_term" ]
+}
+
+@test "idle stop: an error result followed by silence exits 1" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_error; sleep 60'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"claude idle"* ]]
+}
+
+@test "idle stop: claude ignoring TERM is killed after the stop timeout" {
+    prepare_idle_stop_test
+    make_fake_claude_script "result_ok; trap 'echo term >> \"$BATS_TEST_TMPDIR/claude_got_term\"' TERM; while true; do sleep 0.2; done"
+
+    local started=$SECONDS
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_got_term" ]
+    ! kill -0 "$(cat "$BATS_TEST_TMPDIR/claude_pid")" 2> /dev/null
+    (( SECONDS - started < 20 ))
+}
+
+@test "idle stop: logs one line naming the limit and the idle time" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_ok; sleep 60'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c 'claude idle' <<< "$output")" -eq 1 ]
+    grep -Eq '^claude idle [0-9]+s after its result \(limit 2s\); stopping it$' <<< "$output"
+}
+
+@test "idle stop: a stream line after the result cancels the idle timer" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_ok; sleep 1; printf "%s\n" "{\"type\":\"system\",\"subtype\":\"task_notification\"}"; sleep 4; exit 7'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 7 ]
+    [[ "$output" != *"claude idle"* ]]
+}
+
+@test "idle stop: only the next result restarts the timer, and the last result sets the status" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_ok; sleep 1; init_line; sleep 3; result_error; sleep 60'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 1 ]
+    [ "$(grep -c 'claude idle' <<< "$output")" -eq 1 ]
+}
+
+@test "idle stop: the last of several results decides a successful exit" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_error; init_line; result_ok; sleep 60'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claude idle"* ]]
+}
+
+@test "idle stop: a run that never writes a result is never stopped for idleness" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'init_line; sleep 4; exit 5'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 5 ]
+    [[ "$output" != *"claude idle"* ]]
+}
+
+@test "idle stop: a non-JSON line mentioning a result does not start the timer" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'printf "%s\n" "not json \"type\":\"result\"" "{\"type\":\"result\""; sleep 4; exit 5'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 5 ]
+    [[ "$output" != *"claude idle"* ]]
+}
+
+@test "idle stop: a JSON line that only quotes a result event does not start the timer" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'printf "%s\n" "{\"type\":\"assistant\",\"text\":\"\\\"type\\\":\\\"result\\\"\"}"; sleep 4; exit 5'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 5 ]
+    [[ "$output" != *"claude idle"* ]]
+}
+
+@test "idle stop: the stop also ends claude's background tasks before the run is finalized" {
+    prepare_run_bundle_test
+    export FOUNDRY_CLAUDE_POST_RESULT_IDLE_SECONDS=2
+    make_fake_dockerd_absent
+    export FOUNDRY_CLAUDE_STOP_TIMEOUT_SECONDS=2
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_script "git commit -q --allow-empty -m 'agent work'
+bash -c 'trap \"\" TERM; echo \$\$ > \"$BATS_TEST_TMPDIR/bg_pid\"; while true; do sleep 0.2; done' > /dev/null 2>&1 &
+result_ok
+sleep 60"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/bg_pid" ]
+    ! kill -0 "$(cat "$BATS_TEST_TMPDIR/bg_pid")" 2> /dev/null
+    [ "$(bundle_run_commits main)" = "agent work" ]
+}
+
+@test "idle stop: the transient-error resume gets its own idle stop" {
+    prepare_idle_stop_test
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+echo call >> "$BATS_TEST_TMPDIR/claude_calls"
+if [ "\$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    exit 1
+fi
+printf '%s\n' '{"duration_api_ms":1,"is_error":false,"result":"Done","type":"result"}'
+sleep 60
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")" -eq 2 ]
+    [ "$(grep -c 'claude idle' <<< "$output")" -eq 1 ]
+}
+
+@test "idle stop: SIGTERM during the idle wait takes the stop path and exits 143" {
+    set_required_env
+    make_fake_git
+    export FOUNDRY_CLAUDE_POST_RESULT_IDLE_SECONDS=60
+    make_fake_dockerd_absent
+    make_fake_claude_script "result_ok; touch \"$BATS_TEST_TMPDIR/claude_started\"; trap 'exit 143' TERM; sleep 60 & wait"
+
+    bash "$ENTRYPOINT" > "$BATS_TEST_TMPDIR/stdout" 2> "$BATS_TEST_TMPDIR/stderr" 3>&- &
+    local pid=$!
+    wait_for_file "$BATS_TEST_TMPDIR/claude_started"
+    kill -TERM "$pid"
+    local exit_status=0
+    wait "$pid" || exit_status=$?
+
+    [ "$exit_status" -eq 143 ]
+    grep -q "SIGTERM received" "$BATS_TEST_TMPDIR/stderr"
+    ! grep -q "claude idle" "$BATS_TEST_TMPDIR/stderr"
+}
