@@ -2,6 +2,8 @@
 
 > **2026-11-10 — Amended:** the **Conflicts** clause in Decision (resolve in a merge commit, never rebase) is replaced by [ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md). Residue missing from the start: on a repository that allows only rebase merges or requires linear history, a merge commit leaves the pull request unmergeable. The rebase step records the merged branch as `UpToDate` and never linearises it.
 
+> **2026-11-14 — Amended:** the Consequences clause that re-syncing open pull requests is not covered is narrowed by [ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md): a pull request whose merge Foundry attempts and the provider refuses for being behind is rebased through a serialized catch-up queue. Pull requests waiting in `review` are still not re-synced.
+
 ## Context
 
 A worker exits with its branch based on whatever the default branch was at clone time, so a long run or a PR that waits through revisions falls behind and can conflict. The agent cannot catch the branch up by rebasing: once the branch is pushed, a rebase needs a force push, and the safety preamble (`SystemPromptBuilder.SafetyPreambleTemplate`) and the deny list (`WorkerSettingsBuilder.BaseDenyList`, `Bash(git push --force:*)`) forbid one. A prefix deny rule cannot scope a force push to "the worker's own branch only".
