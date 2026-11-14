@@ -111,7 +111,7 @@
   overflow-y: auto;
 }
 
-// Two rows: logo and status first, then the three nav links as equal 44px tabs.
+// Two rows: logo and status first, then the two nav links as equal 44px tabs.
 @media (width < $compact-breakpoint) {
   .app-header {
     align-content: flex-start;

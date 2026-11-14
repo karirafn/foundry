@@ -196,7 +196,7 @@ describe('App', () => {
     expect(compiled.querySelector('a.app-header__logo')?.getAttribute('href')).toBe('/');
   });
 
-  it('navigates between Board, Floor and History from the main nav', async () => {
+  it('navigates between Board and History from the main nav', async () => {
     // Arrange
     const { fixture } = setupApp();
     await fixture.whenStable();
@@ -209,7 +209,6 @@ describe('App', () => {
     // Assert
     expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
       ['Board', '/'],
-      ['Floor', '/floor'],
       ['History', '/issues'],
     ]);
   });
@@ -396,7 +395,7 @@ describe('App', () => {
   });
 
   describe('active-agents chip', () => {
-    it('should render the chip before the usage widget, linking to the Floor', () => {
+    it('should render the chip before the usage widget, linking to the Board', () => {
       // Arrange
       const { fixture } = setupApp();
       const compiled = fixture.nativeElement as HTMLElement;
@@ -408,7 +407,7 @@ describe('App', () => {
       const link = agentsChip?.querySelector('a');
 
       // Assert
-      expect(link?.getAttribute('href')).toBe('/floor');
+      expect(link?.getAttribute('href')).toBe('/');
       expect(navChildren.indexOf(agentsChip as Element)).toBeLessThan(
         navChildren.indexOf(nav?.querySelector('fd-usage-widget') as Element));
     });
@@ -424,7 +423,7 @@ describe('App', () => {
       // Assert
       expect(link?.classList).toContain('agents-chip--idle');
       expect(link?.textContent).toContain('Agents idle');
-      expect(link?.getAttribute('aria-label')).toBe('Agents idle. Open the Floor');
+      expect(link?.getAttribute('aria-label')).toBe('Agents idle. Open the Board');
     });
 
     it('should update the count live as agent activity arrives', () => {

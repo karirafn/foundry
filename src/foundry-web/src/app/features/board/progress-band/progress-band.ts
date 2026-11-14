@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { StepChipComponent } from '../../../shared/components/step-chip/step-chip';
-import { DispatchCapacityService } from '../../floor/dispatch-capacity.service';
+import { DispatchCapacityService } from '../../../core/services/dispatch-capacity.service';
 import { IssueService } from '../../issues/issue.service';
 import { BoardBandComponent } from '../board-band/board-band';
 import { BoardRowComponent } from '../board-row/board-row';
@@ -73,7 +73,7 @@ export class ProgressBandComponent {
   });
 
   constructor() {
-    // Refetch capacity whenever a run starts or ends, as the Floor does.
+    // Refetch capacity whenever a run starts or ends, so the pips and slot count stay current.
     effect(() => {
       void this._workerSignalR.activeAgentCount();
       void this._issueService.liveIssueCount();
