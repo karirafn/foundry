@@ -10,6 +10,8 @@ status: accepted
 
 > **2026-11-03 — Amended:** the Decision's claim that Ryuk resolves under rootless "with no extra configuration" was false from the start, not drifted. Inside a worker Testcontainers resolves the container host to the default bridge gateway (`172.17.0.1`), which under rootless DinD lives in rootlesskit's network namespace and refuses connections to published ports, so `TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1` is required (IPv4 loopback rather than the name `localhost`, which may resolve to `::1` first). The entrypoint now exports it alongside `DOCKER_HOST`.
 
+> **2026-11-14 — Amended:** the Decision's clauses that the allowances are set only when `WorkerImageConfiguration.InstallDocker` is true, and that the entrypoint starts the daemon whenever `dockerd-rootless.sh` is on `PATH`, are replaced by [ADR 0109](0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md): rootless Docker follows the run's capability profile, so only `Full` runs get the allowances and a daemon.
+
 ## Context
 
 Workers run arbitrary repository code, including Testcontainers-based integration tests that need a Docker daemon (e.g. `Testcontainers.MsSql`).
