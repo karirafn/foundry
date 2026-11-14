@@ -43,6 +43,10 @@ RUN GLAB_VERSION=$(curl -fsSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fc
 
 # Disable telemetry and auto-update
 ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+# The task-list tools (TaskCreate/TaskGet/TaskList/TaskUpdate) are off by default on current
+# models; the worker prompt asks the agent to track its plan with them, and Agent Activity reads
+# that task list for the dashboard's task progress. workers/tests/task_tools.bats guards this.
+ENV CLAUDE_CODE_ENABLE_TODO_TOOLS=1
 ENV DISABLE_AUTOUPDATER=1
 
 # Install the Claude Code CLI from workers/package.json + package-lock.json — the single place the
