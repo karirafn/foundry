@@ -750,51 +750,150 @@ finalize_run() {
 
 # ---------------------------------------------------------------------------
 # Invoke claude in headless stream-json mode.  stream-json emits one event per
-# line as the run progresses (the final line is the "result" event), so stdout
-# is streamed through tee via a FIFO: each line reaches the container log as it
-# is produced while a copy is kept for transient-error classification.  stderr
-# streams through live.  --verbose is mandatory: the CLI rejects stream-json
-# with --print unless --verbose is also set.  When the role has a verdict
-# schema, --json-schema (VERDICT_SCHEMA_ARGS) makes the final result event carry
-# the role's verdict as structured_output (ADR 0094).
+# line as the run progresses, so stdout goes through a FIFO to a line reader
+# (watch_claude_output) that copies each line to the container log as it is
+# produced and to CLAUDE_OUTPUT_FILE for transient-error classification.
+# stderr streams through live.  --verbose is mandatory: the CLI rejects
+# stream-json with --print unless --verbose is also set.  When the role has a
+# verdict schema, --json-schema (VERDICT_SCHEMA_ARGS) makes the result event
+# carry the role's verdict as structured_output (ADR 0094).
+#
+# Post-result idle stop (#945): claude -p does not exit after its result event
+# while a background task it started (a Bash command, a Monitor watch, a
+# background subagent) is still running, and such a task may never end.  So
+# once the reader sees a result event followed by no stdout line for
+# CLAUDE_POST_RESULT_IDLE_SECONDS, it stops claude's process group (TERM, then
+# KILL after CLAUDE_STOP_TIMEOUT_SECONDS) and the run exits with the status the
+# LAST result reports: 0 for "is_error": false, otherwise 1 — the same result
+# whose structured_output RunVerdictReader reads.  Any later stream line (a
+# finished background task starting a new turn) cancels the timer; only the
+# next result starts it again.  A run that never writes a result is left to
+# Foundry's TimeoutMinutes.  claude runs in its own process group (setsid) so
+# the stop reaches its background tasks too, and the reader drains the FIFO
+# before the run is finalized, so the sweep never races a leftover task.
 #
 # claude runs in the background and the shell waits on it, so the SIGTERM trap
 # (docker stop at a timeout or cancel) runs while claude is still alive: it
 # forwards TERM to claude, waits for it (bounded by CLAUDE_STOP_TIMEOUT_SECONDS,
-# then KILL), sweeps and bundles, and exits 143.  The exit status is claude's
-# own, read from `wait` on its PID rather than from the pipeline.
+# then KILL), sweeps and bundles, and exits 143.  Otherwise the exit status is
+# claude's own, read from `wait` on its PID rather than from a pipeline, unless
+# the idle stop decided it.
 #
 # If the first run classifies as a transient API error (mirrors
 # ContainerOutputParser.IsTransientApiError), resume the interrupted session
 # ONCE via "claude -c" with the same output flags before giving up.  The
 # resume's result event becomes the last result in the log — if it also fails
-# transiently, Foundry's outer retry bound (#368) still applies.
+# transiently, Foundry's outer retry bound (#368) still applies.  The resume
+# gets its own idle stop.
 # ---------------------------------------------------------------------------
 # The turn budget is a cost breaker for a runaway run; the transient-error resume
 # gets the same budget, so both read it from here (#798).
 readonly CLAUDE_MAX_TURNS=300
 # How long a stopped claude gets to exit before it is killed, leaving the rest of
 # the container's stop grace period for the sweep and the bundle.
-readonly CLAUDE_STOP_TIMEOUT_SECONDS=20
+readonly CLAUDE_STOP_TIMEOUT_SECONDS="${FOUNDRY_CLAUDE_STOP_TIMEOUT_SECONDS:-20}"
+# How long claude may write nothing after a result event before it is stopped.
+# 30 minutes matches the CLI's own documented default limit for background
+# commands, which a background task that never ends can outlive.
+readonly CLAUDE_POST_RESULT_IDLE_SECONDS="${FOUNDRY_CLAUDE_POST_RESULT_IDLE_SECONDS:-1800}"
 CLAUDE_TMP_DIR="$(mktemp -d)"
 CLAUDE_OUTPUT_FILE="$CLAUDE_TMP_DIR/output"
 CLAUDE_STDOUT_FIFO="$CLAUDE_TMP_DIR/stdout.fifo"
+# Written by the reader when the idle stop fires: the exit status the last
+# result reports.
+CLAUDE_IDLE_STOP_STATUS_FILE="$CLAUDE_TMP_DIR/idle-stop-status"
 CLAUDE_PID=""
 trap 'rm -rf "${CLAUDE_TMP_DIR:-}"' EXIT
 
-# run_claude <args...> — runs claude with <args>, its stdout teed to the
-# container log and CLAUDE_OUTPUT_FILE, and sets CLAUDE_STATUS to its exit status.
+# result_exit_status <line> — prints 0 or 1 when <line> is a JSON result event
+# (0 when its "is_error" is false), and nothing for any other line, JSON or not.
+result_exit_status() {
+    # Every result event names its type; skipping lines that cannot be one
+    # spares a jq process per stream line.
+    if [[ "$1" != *'"result"'* ]]; then
+        return 0
+    fi
+    jq -r 'select(type == "object" and .type == "result") | if .is_error == false then 0 else 1 end' \
+        <<< "$1" 2> /dev/null || true
+}
+
+# stop_claude_group <pgid> — TERM to claude's process group, then KILL once
+# CLAUDE_STOP_TIMEOUT_SECONDS pass with any member still alive.
+stop_claude_group() {
+    local pgid="$1"
+    kill -TERM -- "-$pgid" 2> /dev/null || true
+    local deadline=$(( SECONDS + CLAUDE_STOP_TIMEOUT_SECONDS ))
+    while kill -0 -- "-$pgid" 2> /dev/null && (( SECONDS < deadline )); do
+        sleep 0.2
+    done
+    kill -KILL -- "-$pgid" 2> /dev/null || true
+}
+
+# watch_claude_output <claude_pid> — reads claude's stdout line by line from
+# stdin, copying each line to stdout and CLAUDE_OUTPUT_FILE, and runs the
+# post-result idle stop.  Lines read after the stop are still copied; the exit
+# status has already been decided.
+watch_claude_output() {
+    local claude_pid="$1"
+    local line="" partial="" result_status="" line_status="" stopped="" rc=0 idle_since=0
+    : > "$CLAUDE_OUTPUT_FILE"
+    while true; do
+        rc=0
+        if [[ -n "$result_status" && -z "$stopped" ]]; then
+            idle_since=$SECONDS
+            IFS= read -r -t "$CLAUDE_POST_RESULT_IDLE_SECONDS" line || rc=$?
+        else
+            IFS= read -r line || rc=$?
+        fi
+        if (( rc > 128 )); then
+            # Timed out; a partly read line stays buffered for the next read.
+            partial+="$line"
+            echo "claude idle $(( SECONDS - idle_since ))s after its result (limit ${CLAUDE_POST_RESULT_IDLE_SECONDS}s); stopping it" >&2
+            printf '%s' "$result_status" > "$CLAUDE_IDLE_STOP_STATUS_FILE"
+            stopped=1
+            stop_claude_group "$claude_pid"
+            continue
+        fi
+        line="$partial$line"
+        partial=""
+        if (( rc != 0 )) && [[ -z "$line" ]]; then
+            break
+        fi
+        printf '%s\n' "$line"
+        printf '%s\n' "$line" >> "$CLAUDE_OUTPUT_FILE"
+        line_status="$(result_exit_status "$line")"
+        if [[ -n "$line_status" ]]; then
+            result_status="$line_status"
+        elif [[ -n "$result_status" ]]; then
+            # Another turn has started; only its own result re-arms the timer.
+            result_status=""
+        fi
+        if (( rc != 0 )); then
+            break
+        fi
+    done
+}
+
+# run_claude <args...> — runs claude with <args> in its own process group, its
+# stdout copied to the container log and CLAUDE_OUTPUT_FILE, and sets
+# CLAUDE_STATUS to its exit status, or to the last result's status when the
+# post-result idle stop ended it.
 run_claude() {
-    rm -f "$CLAUDE_STDOUT_FIFO"
+    rm -f "$CLAUDE_STDOUT_FIFO" "$CLAUDE_IDLE_STOP_STATUS_FILE"
     mkfifo "$CLAUDE_STDOUT_FIFO"
-    tee "$CLAUDE_OUTPUT_FILE" < "$CLAUDE_STDOUT_FIFO" &
-    local tee_pid=$!
-    claude "$@" > "$CLAUDE_STDOUT_FIFO" &
+    # A background job is never a process group leader in this non-interactive
+    # shell, so setsid execs claude in place: its PID is its process group ID.
+    setsid claude "$@" > "$CLAUDE_STDOUT_FIFO" &
     CLAUDE_PID=$!
+    watch_claude_output "$CLAUDE_PID" < "$CLAUDE_STDOUT_FIFO" &
+    local reader_pid=$!
     CLAUDE_STATUS=0
     wait "$CLAUDE_PID" || CLAUDE_STATUS=$?
     CLAUDE_PID=""
-    wait "$tee_pid" || true
+    wait "$reader_pid" || true
+    if [[ -s "$CLAUDE_IDLE_STOP_STATUS_FILE" ]]; then
+        CLAUDE_STATUS="$(cat "$CLAUDE_IDLE_STOP_STATUS_FILE")"
+    fi
 }
 
 # on_sigterm — stops claude, then sweeps and bundles the run, and exits 143.
