@@ -105,6 +105,47 @@ public sealed class ChecksPendingIssue : Issue
     }
 
     /// <summary>
+    /// Routes the checks verdict to the next state:
+    /// <list type="bullet">
+    /// <item><b>Merge:</b> <see cref="ChecksOutcome.Passed"/> with <paramref name="autoMerge"/> on and a known
+    /// <paramref name="headSha"/> → <see cref="MergePendingIssue"/>, pinned to that head (ADR 0105).</item>
+    /// <item><b>Fix:</b> <see cref="ChecksOutcome.StillFailing"/> naming failing checks, under the fix cap → a
+    /// <see cref="RevisionTrigger.FailedChecks"/> revision.</item>
+    /// <item><b>Review:</b> everything else → <see cref="ReviewIssue"/> carrying the outcome.</item>
+    /// </list>
+    /// A passed verdict with no head routes to review: a merge must be pinned to a commit.
+    /// </summary>
+    public Issue ResolveVerdict(
+        ChecksOutcome checksOutcome,
+        bool autoMerge,
+        string? headSha,
+        DateTimeOffset transitionedAt)
+    {
+        if (checksOutcome is ChecksOutcome.Passed passed && autoMerge && !string.IsNullOrWhiteSpace(headSha))
+        {
+            return MarkMergePending(passed, headSha, transitionedAt);
+        }
+
+        if (checksOutcome is ChecksOutcome.StillFailing stillFailing && CanFixChecks(stillFailing.FailingChecks))
+        {
+            return FixChecks(stillFailing.FailingChecks, transitionedAt);
+        }
+
+        return ToReview(checksOutcome, headSha, transitionedAt);
+    }
+
+    private MergePendingIssue MarkMergePending(ChecksOutcome.Passed passed, string headSha, DateTimeOffset transitionedAt)
+    {
+        MergePendingIssue mergePending = MergePendingIssue.FromChecksPending(this, passed, headSha, transitionedAt);
+        AddDomainEvent(new Events.IssueMergePending(
+            Id,
+            MonitoredRepositoryId,
+            mergePending.IssueNumber,
+            mergePending.EnteredMergePendingAt));
+        return mergePending;
+    }
+
+    /// <summary>
     /// Resolves the gate to review. <paramref name="verifiedHeadSha"/> is the head commit the status read returned
     /// in the poll that resolved <paramref name="checksOutcome"/>, or <see langword="null"/> when it is unknown.
     /// </summary>

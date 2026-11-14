@@ -34,7 +34,8 @@ internal static class RepositoryMappings
             ToEligibilityInfo(repo.Eligibility, providerType),
             repo.UntrackSuppressedSince,
             ToWebhookStatusToken(repo.EffectiveWebhookStatus(webhookIngressConfigured)),
-            repo.RebaseAfterRun);
+            repo.RebaseAfterRun,
+            repo.MergeWhenChecksPass);
 
     internal static string ToWebhookStatusToken(WebhookStatus status) =>
         status switch

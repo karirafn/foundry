@@ -46,16 +46,6 @@ internal sealed class ChecksVerdictResolvedHandler(
                 $"Unknown ChecksOutcome discriminator '{@event.Outcome}' on ChecksVerdictResolved for repository {@event.RepositoryId} issue {@event.IssueNumber}."),
         };
 
-        if (outcome is ChecksOutcome.StillFailing stillFailing
-            && checksPendingIssue.CanFixChecks(stillFailing.FailingChecks))
-        {
-            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(
-                stillFailing.FailingChecks,
-                timeProvider.GetUtcNow());
-            await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
-            return;
-        }
-
         if (outcome is ChecksOutcome.StillFailing { FailingChecks.Count: 0 })
         {
             logger.LogInformation(
@@ -64,7 +54,11 @@ internal sealed class ChecksVerdictResolvedHandler(
                 @event.IssueNumber);
         }
 
-        ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome, @event.HeadSha, timeProvider.GetUtcNow());
-        await db.TransitionAsync(checksPendingIssue, reviewIssue, domainEventDispatcher, cancellationToken);
+        Issue next = checksPendingIssue.ResolveVerdict(
+            outcome,
+            @event.AutoMerge,
+            @event.HeadSha,
+            timeProvider.GetUtcNow());
+        await db.TransitionAsync(checksPendingIssue, next, domainEventDispatcher, cancellationToken);
     }
 }

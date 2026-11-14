@@ -621,6 +621,11 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ReviewIssueInfo>>([]);
 
+        public Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<MergePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

@@ -81,6 +81,11 @@ public sealed class LoadTrackingContextAsync
             CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 
+        public Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<MergePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken) =>

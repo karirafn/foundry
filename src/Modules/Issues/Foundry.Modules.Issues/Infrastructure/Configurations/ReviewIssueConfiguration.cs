@@ -48,5 +48,11 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
             .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
             .IsUnicode(false)
             .HasColumnName("verified_head_sha");
+
+        builder.Property(i => i.MergeOutcome)
+            .HasConversion(MergeOutcomeJsonConversion.Converter, MergeOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("merge_outcome");
     }
 }

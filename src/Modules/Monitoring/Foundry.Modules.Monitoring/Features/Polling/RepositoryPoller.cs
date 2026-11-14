@@ -690,7 +690,8 @@ internal sealed class RepositoryPoller(
                 checksPendingIssue.IssueNumber,
                 outcome,
                 failingChecks,
-                prStatusSuccess.Value.HeadSha));
+                prStatusSuccess.Value.HeadSha,
+                repository.MergeWhenChecksPass));
 
             // Only a provider-driven verdict counts as a webhook-mapped change; the grace-window and
             // upper-bound exits are time-based (deadline nudges), never announced by a delivery.
