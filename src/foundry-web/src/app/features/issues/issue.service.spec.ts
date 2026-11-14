@@ -121,7 +121,7 @@ describe('IssueService', () => {
     expect(loaded.providerType).toBe('gitlab');
   });
 
-  it('should carry publishPhase through loadIssues so the card and Floor can show the publish phase', () => {
+  it('should carry publishPhase through loadIssues so the card and Board can show the publish phase', () => {
     // Arrange
     const publishing: IssueSummary = { ...mockSummary, state: 'in_progress', publishPhase: 'retrying' };
     const running: IssueSummary = { ...mockSummary, id: 'b0000000-0000-0000-0000-000000000002', state: 'in_progress' };

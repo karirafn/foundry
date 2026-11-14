@@ -13,7 +13,7 @@ import { FakeConnectionGate, provideFakeConnectionGate } from '../../../core/tes
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { AgentActivity, InFlightTool } from '../../../core/models/agent-activity.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
-import { DispatchCapacityService } from '../../floor/dispatch-capacity.service';
+import { DispatchCapacityService } from '../../../core/services/dispatch-capacity.service';
 import { AccountService } from '../../settings/accounts/account.service';
 import { RepositorySummary } from '../../settings/repositories/repository.model';
 import { RepositoryService } from '../../settings/repositories/repository.service';
@@ -458,7 +458,7 @@ describe('BoardPageComponent', () => {
   });
 
   describe('In progress', () => {
-    it('shows a worker card with its role, elapsed time and a link to its Floor lane', async () => {
+    it('shows a worker card with its role, elapsed time and a status-only footer', async () => {
       // Act
       const { el } = await loaded([
         item('w', 3, {
@@ -479,9 +479,8 @@ describe('BoardPageComponent', () => {
       expect(text(meta.querySelector('fd-issue-ref .issue-ref__number'))).toBe('#3');
       const status = card.querySelector('.worker-card__footer .worker-card__status')!;
       expect(text(status.querySelector('.worker-card__elapsed'))).toBe('Running for running 12m');
-      const link = card.querySelector('a')!;
-      expect(text(link)).toBe('Watch on Floor');
-      expect(link.getAttribute('href')).toBe('/floor#floor-lane-w');
+      expect(card.querySelector('.worker-card__footer')!.children.length).toBe(1);
+      expect(card.querySelector('a')).toBeNull();
     });
 
     describe('worker activity', () => {
