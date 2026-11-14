@@ -61,11 +61,28 @@ describe('UsageWidgetComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   describe('while the connection gate is up', () => {
-    function gatedSetup() {
+    const creditsWithLimit = {
+      isEnabled: true,
+      monthlyLimit: 50000,
+      usedCredits: 16568,
+      utilization: null,
+      currency: 'USD',
+      percent: 33.136,
+      severity: 'normal',
+    };
+
+    function gatedSetup(snapshot: UsageSnapshot | null = buildSnapshot()) {
       const gate = new FakeConnectionGate();
       gate.phase.set('reconnecting');
-      const fixture = setup(buildSnapshot(), gate);
+      const fixture = setup(snapshot, gate);
       return { fixture, el: fixture.nativeElement as HTMLElement };
+    }
+
+    function inlineFigures(el: HTMLElement) {
+      return [...el.querySelectorAll('.usage-widget__inline .usage-meter')].map((m) => [
+        m.querySelector('.usage-meter__label')?.textContent?.trim(),
+        m.querySelector('.usage-meter__percent')?.textContent?.trim(),
+      ]);
     }
 
     it('shows a placeholder image with dashes instead of the figures', () => {
@@ -73,20 +90,166 @@ describe('UsageWidgetComponent', () => {
       const { el } = gatedSetup();
 
       // Assert
-      const placeholder = el.querySelector('.usage-widget__placeholder');
+      const placeholder = el.querySelector('.usage-widget__box--placeholder');
       expect(placeholder?.getAttribute('role')).toBe('img');
       expect(placeholder?.getAttribute('aria-label')).toBe('Usage unavailable while reconnecting');
-      expect([...el.querySelectorAll('.usage-widget__inline .usage-meter__percent')].map((p) => p.textContent?.trim())).toEqual(['—', '—']);
-      expect(el.textContent).not.toContain('42%');
+      expect(inlineFigures(el)).toEqual([
+        ['Session', '—'],
+        ['Weekly', '—'],
+      ]);
+      expect(el.textContent).not.toContain('%');
     });
 
-    it('leaves the tab order and offers no popover', () => {
+    it('shares the box class with the live trigger and has no separate placeholder class', () => {
       // Arrange / Act
       const { el } = gatedSetup();
 
       // Assert
+      expect(el.querySelector('.usage-widget__box.usage-widget__box--placeholder')).not.toBeNull();
+      expect(el.querySelector('.usage-widget__placeholder')).toBeNull();
+      expect(el.querySelector('.usage-widget')).toBeNull();
+    });
+
+    it('leaves the tab order and offers no popover', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(buildSnapshot({ extraUsage: creditsWithLimit }));
+
+      // Assert
       expect(el.querySelector('button, a, [tabindex]')).toBeNull();
       expect(el.querySelector('[popover]')).toBeNull();
+      expect(el.querySelector('[popovertarget]')).toBeNull();
+    });
+
+    it('exposes only the placeholder name: no track has a role or label', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(buildSnapshot({ extraUsage: creditsWithLimit }));
+
+      // Assert
+      expect([...el.querySelectorAll('[role]')].map((n) => n.getAttribute('role'))).toEqual(['img']);
+      expect(el.querySelectorAll('[aria-label]').length).toBe(1);
+      const tracks = [...el.querySelectorAll('.usage-meter__track')];
+      expect(tracks.length).toBe(3);
+      for (const track of tracks) {
+        expect(track.hasAttribute('role')).toBe(false);
+        expect(track.hasAttribute('aria-label')).toBe(false);
+      }
+    });
+
+    it('hides every child of the placeholder from assistive technology', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(buildSnapshot({ extraUsage: creditsWithLimit }));
+
+      // Assert
+      const children = [...el.querySelector('.usage-widget__box--placeholder')!.children];
+      expect(children.length).toBe(4);
+      for (const child of children) {
+        expect(child.getAttribute('aria-hidden')).toBe('true');
+      }
+    });
+
+    it('renders the divider and an Extra column with a dash when the last snapshot had credits', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(buildSnapshot({ extraUsage: creditsWithLimit }));
+
+      // Assert
+      expect(el.querySelector('.usage-widget__box--placeholder .usage-widget__divider')).not.toBeNull();
+      const credits = el.querySelector('.usage-widget__box--placeholder .usage-widget__credits');
+      expect(credits?.querySelector('.usage-meter__label')?.textContent?.trim()).toBe('Extra');
+      expect(credits?.querySelector('.usage-widget__credits-amount')?.textContent?.trim()).toBe('—');
+      expect(credits?.querySelector('.usage-meter__percent')?.textContent?.trim()).toBe('—');
+      expect(credits?.querySelector('.usage-meter__track')).not.toBeNull();
+      expect(el.textContent).not.toContain('$');
+      expect(el.textContent).not.toContain('%');
+    });
+
+    it('renders the Extra column without a track when the credits were amount-only', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(
+        buildSnapshot({ extraUsage: { ...creditsWithLimit, monthlyLimit: null, percent: null, severity: null } }),
+      );
+
+      // Assert
+      const credits = el.querySelector('.usage-widget__credits');
+      expect(credits?.querySelector('.usage-widget__credits-amount')?.textContent?.trim()).toBe('—');
+      expect(credits?.querySelector('.usage-meter__track')).toBeNull();
+    });
+
+    it('renders no divider or credits column when the last snapshot had no credits', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(buildSnapshot({ extraUsage: { ...creditsWithLimit, isEnabled: false } }));
+
+      // Assert
+      expect(el.querySelector('.usage-widget__divider')).toBeNull();
+      expect(el.querySelector('.usage-widget__credits')).toBeNull();
+    });
+
+    it('renders Session and Weekly dashes when there is no snapshot yet', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(null);
+
+      // Assert
+      expect(el.querySelector('.usage-widget__box--placeholder')).not.toBeNull();
+      expect(inlineFigures(el)).toEqual([
+        ['Session', '—'],
+        ['Weekly', '—'],
+      ]);
+    });
+
+    it('renders Session and Weekly dashes, not the warning chip, when no poll has succeeded', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(
+        buildSnapshot({ capturedAt: null, limits: [], lastRefreshFailedAt: '2026-10-30T01:00:00Z', source: null }),
+      );
+
+      // Assert
+      expect(inlineFigures(el)).toEqual([
+        ['Session', '—'],
+        ['Weekly', '—'],
+      ]);
+      expect(el.querySelector('.usage-widget__unavailable')).toBeNull();
+    });
+
+    it('keeps the live inline labels when the snapshot had only a weekly limit', () => {
+      // Arrange / Act
+      const { el } = gatedSetup(
+        buildSnapshot({
+          limits: [
+            { kind: 'weekly_all', percent: 55, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'warning', isActive: true },
+          ],
+        }),
+      );
+
+      // Assert
+      expect(inlineFigures(el)).toEqual([['Weekly', '—']]);
+    });
+
+    it('renders a neutral collapsed dash', () => {
+      // Arrange / Act
+      const { el } = gatedSetup();
+
+      // Assert
+      const collapsed = el.querySelector('.usage-widget__box--placeholder .usage-widget__collapsed');
+      expect(collapsed?.querySelector('.usage-meter__percent')?.textContent?.trim()).toBe('—');
+      expect(collapsed?.querySelector('.usage-widget__severity-dot')?.classList).toContain('usage-meter--neutral');
+    });
+
+    it('resets the popover state when the gate rises while it is open', () => {
+      // Arrange
+      const gate = new FakeConnectionGate();
+      const fixture = setup(buildSnapshot(), gate);
+      fixture.componentInstance.isOpen.set(true);
+      fixture.detectChanges();
+
+      // Act
+      gate.phase.set('reconnecting');
+      fixture.detectChanges();
+      gate.phase.set('live');
+      fixture.detectChanges();
+
+      // Assert
+      expect(fixture.componentInstance.isOpen()).toBe(false);
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector('.usage-widget__trigger');
+      expect(trigger?.getAttribute('aria-expanded')).toBe('false');
     });
 
     it('shows the figures again once the gate is live', () => {
@@ -101,8 +264,8 @@ describe('UsageWidgetComponent', () => {
 
       // Assert
       const el = fixture.nativeElement as HTMLElement;
-      expect(el.querySelector('.usage-widget__placeholder')).toBeNull();
-      expect(el.querySelector('.usage-widget__trigger')).not.toBeNull();
+      expect(el.querySelector('.usage-widget__box--placeholder')).toBeNull();
+      expect(el.querySelector('.usage-widget__box.usage-widget__trigger')).not.toBeNull();
     });
   });
 

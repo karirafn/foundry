@@ -1,29 +1,35 @@
 :host {
   display: contents;
-}
 
-// Local component custom properties
-.usage-widget {
+  // Declared on the host so every branch of the template inherits them (custom
+  // properties inherit through `display: contents`), not only the live widget.
   --usage-meter-track-size: 56px;
   --usage-meter-track-height: 6px;
 }
 
-// ─── Trigger button ─────────────────────────────────────────────────────────
+// ─── Box (shared by the trigger and the reconnect placeholder) ──────────────
 
-.usage-widget__trigger {
+.usage-widget__box {
   display: inline-flex;
   align-items: center;
   height: 28px;
   gap: var(--fd-spacing-sm);
   padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
-  border: 1px solid var(--fd-border-default);
+  border: 1px solid transparent;
   border-radius: var(--fd-radius-sm);
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+// ─── Trigger button ─────────────────────────────────────────────────────────
+
+.usage-widget__trigger {
+  border-color: var(--fd-border-default);
   background: transparent;
   color: var(--fd-text-secondary);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.75rem;
-  line-height: 1;
   transition: background-color 0.15s ease;
 
   &:hover {
@@ -38,18 +44,20 @@
 
 // ─── Placeholder while the connection gate is up ────────────────────────────
 
-.usage-widget__placeholder {
-  align-items: center;
-  border: 1px dashed var(--fd-border-placeholder);
-  border-radius: var(--fd-radius-sm);
-  display: inline-flex;
-  font-size: 0.75rem;
-  height: 28px;
-  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+.usage-widget__box--placeholder {
+  border-style: dashed;
+  border-color: var(--fd-border-placeholder);
+  color: var(--fd-text-placeholder);
 
   .usage-meter__label,
-  .usage-meter__percent {
+  .usage-meter__percent,
+  .usage-widget__credits-amount {
     color: var(--fd-text-placeholder);
+  }
+
+  .usage-widget__severity-dot {
+    background: transparent;
+    border: 1px solid var(--fd-text-tertiary);
   }
 }
 

@@ -1,92 +1,95 @@
-@if (unavailable()) {
-  <!-- Same size as the trigger; no popover while the figures may be out of date -->
-  <span class="usage-widget__placeholder" role="img" aria-label="Usage unavailable while reconnecting">
-    <span class="usage-widget__inline" aria-hidden="true">
-      @for (label of ['Session', 'Weekly']; track label) {
-        <span class="usage-meter">
-          <span class="usage-meter__label">{{ label }}</span>
-          <span class="usage-meter__track"></span>
-          <span class="usage-meter__percent">—</span>
-        </span>
+<!-- The face of the box, shared by the live trigger and the reconnect placeholder so both keep one layout.
+     When masked, the figures are dashes and nothing inside is exposed: the placeholder's own name stands in. -->
+<ng-template #usageFace let-vm let-masked="masked">
+  <!-- No poll has succeeded yet and the last attempt failed — shown at every width (live only) -->
+  @if (vm.unavailable) {
+    <span class="usage-widget__unavailable">
+      <svg class="usage-widget__unavailable-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      Usage unavailable
+    </span>
+  }
+
+  <!-- Inline meters (session + weekly_all) — hidden at narrow width -->
+  <div class="usage-widget__inline" [attr.aria-hidden]="masked || null">
+    @for (meter of vm.inlineMeters; track meter.kind) {
+      <div class="usage-meter" [ngClass]="meter.severityClass">
+        <span class="usage-meter__label">{{ meter.label }}</span>
+        <div
+          class="usage-meter__track"
+          [attr.role]="masked ? null : 'img'"
+          [attr.aria-label]="masked ? null : meter.accessibleName"
+        >
+          <div
+            class="usage-meter__fill"
+            [style.inline-size.%]="meter.percent"
+            aria-hidden="true"
+          ></div>
+        </div>
+        <span class="usage-meter__percent">{{ meter.percentLabel }}</span>
+      </div>
+    }
+  </div>
+
+  <!-- Extra-usage credits column — second column beside Session/Weekly; hidden at mid and narrow width -->
+  @if (vm.credits; as cr) {
+    <span class="usage-widget__divider" aria-hidden="true"></span>
+    <div class="usage-widget__credits" [attr.aria-hidden]="masked || null">
+      <div class="usage-widget__credits-head">
+        <span class="usage-meter__label">Extra</span>
+        <span class="usage-widget__credits-amount">{{ cr.amountLabel }}</span>
+      </div>
+      @if (cr.meter; as m) {
+        <div class="usage-meter usage-widget__credits-meter" [ngClass]="m.severityClass">
+          <div
+            class="usage-meter__track"
+            [attr.role]="masked ? null : 'img'"
+            [attr.aria-label]="masked ? null : m.accessibleName"
+          >
+            <div class="usage-meter__fill" [style.inline-size.%]="m.percent" aria-hidden="true"></div>
+          </div>
+          <span class="usage-meter__percent">{{ m.percentLabel }}</span>
+        </div>
       }
-    </span>
-    <span class="usage-widget__collapsed" aria-hidden="true">
-      <span class="usage-meter__percent">—</span>
-    </span>
+    </div>
+  }
+
+  <!-- Collapsed single figure — shown only at narrow width; hidden when no limits -->
+  @if (vm.collapsedMeter; as cm) {
+    <div class="usage-widget__collapsed" [attr.aria-hidden]="masked || null">
+      <span
+        class="usage-widget__severity-dot"
+        [ngClass]="cm.severityClass"
+        aria-hidden="true"
+      ></span>
+      <span class="usage-meter__percent">{{ cm.percentLabel }}</span>
+    </div>
+  }
+</ng-template>
+
+@if (unavailable()) {
+  <!-- Same box and layout as the trigger; no popover while the figures may be out of date -->
+  <span
+    class="usage-widget__box usage-widget__box--placeholder"
+    role="img"
+    aria-label="Usage unavailable while reconnecting"
+  >
+    <ng-container *ngTemplateOutlet="usageFace; context: { $implicit: maskedView(), masked: true }" />
   </span>
 } @else if (view(); as vm) {
   <div [class]="'usage-widget' + (vm.failed ? ' usage-widget--failed' : '')">
     <button
       type="button"
-      class="usage-widget__trigger"
+      class="usage-widget__box usage-widget__trigger"
       [attr.popovertarget]="popoverId"
       [attr.aria-expanded]="isOpen()"
       [attr.aria-controls]="popoverId"
       [attr.aria-label]="buildTriggerLabel(vm)"
     >
-      <!-- No poll has succeeded yet and the last attempt failed — shown at every width -->
-      @if (vm.unavailable) {
-        <span class="usage-widget__unavailable">
-          <svg class="usage-widget__unavailable-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-          Usage unavailable
-        </span>
-      }
-
-      <!-- Inline meters (session + weekly_all) — hidden at narrow width -->
-      <div class="usage-widget__inline">
-        @for (meter of vm.inlineMeters; track meter.kind) {
-          <div class="usage-meter" [ngClass]="meter.severityClass">
-            <span class="usage-meter__label">{{ meter.label }}</span>
-            <div
-              class="usage-meter__track"
-              role="img"
-              [attr.aria-label]="meter.accessibleName"
-            >
-              <div
-                class="usage-meter__fill"
-                [style.inline-size.%]="meter.percent"
-                aria-hidden="true"
-              ></div>
-            </div>
-            <span class="usage-meter__percent">{{ meter.percentLabel }}</span>
-          </div>
-        }
-      </div>
-
-      <!-- Extra-usage credits column — second column beside Session/Weekly; hidden at mid and narrow width -->
-      @if (vm.credits; as cr) {
-        <span class="usage-widget__divider" aria-hidden="true"></span>
-        <div class="usage-widget__credits">
-          <div class="usage-widget__credits-head">
-            <span class="usage-meter__label">Extra</span>
-            <span class="usage-widget__credits-amount">{{ cr.amountLabel }}</span>
-          </div>
-          @if (cr.meter; as m) {
-            <div class="usage-meter usage-widget__credits-meter" [ngClass]="m.severityClass">
-              <div class="usage-meter__track" role="img" [attr.aria-label]="m.accessibleName">
-                <div class="usage-meter__fill" [style.inline-size.%]="m.percent" aria-hidden="true"></div>
-              </div>
-              <span class="usage-meter__percent">{{ m.percentLabel }}</span>
-            </div>
-          }
-        </div>
-      }
-
-      <!-- Collapsed single figure — shown only at narrow width; hidden when no limits -->
-      @if (vm.collapsedMeter; as cm) {
-        <div class="usage-widget__collapsed">
-          <span
-            class="usage-widget__severity-dot"
-            [ngClass]="cm.severityClass"
-            aria-hidden="true"
-          ></span>
-          <span class="usage-meter__percent">{{ cm.percentLabel }}</span>
-        </div>
-      }
+      <ng-container *ngTemplateOutlet="usageFace; context: { $implicit: vm, masked: false }" />
     </button>
 
     <!-- Popover — always in DOM for aria-controls; browser top-layer hides it when closed -->

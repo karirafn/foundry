@@ -1,5 +1,15 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, OnDestroy, signal } from '@angular/core';
-import { NgClass } from '@angular/common';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  inject,
+  OnDestroy,
+  signal,
+} from '@angular/core';
+import { NgClass, NgTemplateOutlet } from '@angular/common';
 import { ConnectionGateService } from '../../../core/services/connection-gate.service';
 import { UsageService } from '../../../core/services/usage.service';
 import { UsageExtraCredits, UsageSnapshot } from '../../../core/models/usage.model';
@@ -263,6 +273,65 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
   };
 }
 
+const MASKED_FIGURE = '—';
+
+/** The placeholder labels when the last snapshot gives no inline meters to copy. */
+const MASKED_DEFAULT_INLINE: readonly { readonly kind: string; readonly label: string }[] = [
+  { kind: 'session', label: 'Session' },
+  { kind: 'weekly_all', label: 'Weekly' },
+];
+
+function buildMaskedMeterVm(kind: string, label: string): UsageMeterVm {
+  return {
+    kind,
+    modelDisplayName: null,
+    label,
+    popoverLabel: label,
+    percent: 0,
+    percentLabel: MASKED_FIGURE,
+    severityClass: 'usage-meter--neutral',
+    severityWord: '',
+    resetsAtLocal: null,
+    accessibleName: '',
+    isActive: false,
+  };
+}
+
+/**
+ * The live layout with every figure replaced by a dash, so the placeholder keeps the
+ * trigger's rows and columns without showing numbers that may be out of date.
+ */
+function buildMaskedWidgetVm(live: UsageWidgetVm | null): UsageWidgetVm {
+  const liveInline = live === null || live.unavailable ? [] : live.inlineMeters;
+  const inlineSource = liveInline.length === 0 ? MASKED_DEFAULT_INLINE : liveInline;
+  const liveCredits = live?.credits ?? null;
+  const credits: UsageCreditsVm | null =
+    liveCredits === null
+      ? null
+      : {
+          usedFormatted: MASKED_FIGURE,
+          limitFormatted: null,
+          amountLabel: MASKED_FIGURE,
+          meter:
+            liveCredits.meter === null
+              ? null
+              : { percent: 0, percentLabel: MASKED_FIGURE, severityClass: 'usage-meter--neutral', accessibleName: '' },
+          accessibleSummary: '',
+        };
+  return {
+    inlineMeters: inlineSource.map((m) => buildMaskedMeterVm(m.kind, m.label)),
+    collapsedMeter: buildMaskedMeterVm('collapsed', ''),
+    allLimits: [],
+    credits,
+    limitedDetail: false,
+    accountEmail: '',
+    capturedRelative: '',
+    failed: false,
+    failedText: null,
+    unavailable: false,
+  };
+}
+
 let _nextId = 0;
 
 /** Mirrors `@container app-header-nav (max-width: 240px)` in usage-widget.scss. */
@@ -272,7 +341,7 @@ const CREDITS_HIDE_THRESHOLD_PX = 360;
 
 @Component({
   selector: 'fd-usage-widget',
-  imports: [NgClass],
+  imports: [NgClass, NgTemplateOutlet],
   templateUrl: './usage-widget.html',
   styleUrl: './usage-widget.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -313,7 +382,18 @@ export class UsageWidgetComponent implements OnDestroy {
     return buildWidgetVm(snapshot);
   });
 
+  /** The placeholder's face: the live layout with every figure replaced by a dash. */
+  readonly maskedView = computed<UsageWidgetVm>(() => buildMaskedWidgetVm(this.view()));
+
   constructor() {
+    // The gate removes the popover without a toggle event, so the open state would
+    // otherwise come back as a stale aria-expanded="true" when the trigger returns.
+    effect(() => {
+      if (this.unavailable()) {
+        this.isOpen.set(false);
+      }
+    });
+
     afterNextRender(() => {
       if (typeof ResizeObserver === 'undefined') {
         return;
