@@ -16,7 +16,7 @@ import { DOCUMENT } from '@angular/common';
 import { LoadOutcome, combineOutcomes } from '../../../core/models/load-outcome';
 import { SettingsService } from '../../../core/services/settings.service';
 import { ConnectionGateComponent } from '../../../shared/components/connection-gate/connection-gate';
-import { DispatchCapacityService } from '../../floor/dispatch-capacity.service';
+import { DispatchCapacityService } from '../../../core/services/dispatch-capacity.service';
 import { RepositoryService } from '../../settings/repositories/repository.service';
 import { SideSheetComponent } from '../../../shared/components/side-sheet/side-sheet';
 import { IssuePaneComponent, ISSUE_PANE_TITLE_ID } from '../../issue-pane/issue-pane';

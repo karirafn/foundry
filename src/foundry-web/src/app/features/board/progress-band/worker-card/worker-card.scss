@@ -137,27 +137,6 @@
   flex-shrink: 0;
 }
 
-// Sits above the stretched button, so links never nest inside it.
-.worker-card__floor {
-  align-items: center;
-  border-radius: var(--fd-radius-sm);
-  color: var(--fd-text-link);
-  display: inline-flex;
-  font-size: 0.8125rem;
-  margin-inline-start: auto;
-  min-height: 32px;
-  position: relative;
-  z-index: 1;
-
-  &:focus-visible {
-    @include focus-ring;
-  }
-
-  @media (any-pointer: coarse) {
-    min-height: 44px;
-  }
-}
-
 @media (forced-colors: active) {
   .worker-card {
     border-inline-start-color: CanvasText;
