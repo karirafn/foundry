@@ -79,7 +79,7 @@ function toPublishPhase(value: string | null | undefined): PublishPhase | null {
 }
 
 const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>(['triage', 'implement', 'awaiting_review', 'done']);
-const CODE_STEPS: ReadonlySet<string> = new Set<CodeStep>(['publishing', 'publish_retrying', 'rebasing', 'checks']);
+const CODE_STEPS: ReadonlySet<string> = new Set<CodeStep>(['publishing', 'publish_retrying', 'rebasing', 'checks', 'merging']);
 
 // Narrows the wire value to a known stage; a stage this dashboard doesn't know reads as null, and
 // the board leaves that card out rather than guess its column.

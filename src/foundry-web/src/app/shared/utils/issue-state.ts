@@ -7,6 +7,7 @@ export type IssueState =
   | 'review'
   | 'rebase_pending'
   | 'checks_pending'
+  | 'merge_pending'
   | 'awaiting_input'
   | 'unchanged'
   | 'failed'

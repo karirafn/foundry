@@ -140,6 +140,14 @@ class CalloutSource {
     return (this.summary?.checksOutcome ?? this.details?.checksOutcome) === 'still_failing';
   }
 
+  get mergeSkipped(): boolean {
+    return (this.summary?.mergeOutcome ?? this.details?.mergeOutcome) === 'skipped';
+  }
+
+  get mergeSkippedReason(): string | null {
+    return this.summary?.mergeSkippedReason ?? this.details?.mergeSkippedReason ?? null;
+  }
+
   prLink(): CalloutLink | null {
     if (this.pullRequestUrl === null) {
       return null;
@@ -465,6 +473,27 @@ function checksPendingCallout(src: CalloutSource): Draft {
   return d;
 }
 
+function mergeSkippedLine(src: CalloutSource): string {
+  const provider = src.providerName;
+  const pr = src.pullRequest;
+  switch (src.mergeSkippedReason) {
+    case 'not_mergeable':
+      return `Checks passed, but ${provider} refused the merge: conflicts, a branch rule or missing approvals. `
+        + `Resolve it on ${provider} and merge the ${pr} yourself.`;
+    case 'unauthorized':
+      return `Checks passed, but the account's token isn't allowed to merge on ${provider}. `
+        + `Grant it merge access, or merge the ${pr} yourself.`;
+    case 'head_moved':
+      return `Checks passed, but new commits reached the ${pr} after the checks ran, so Foundry didn't merge `
+        + `unchecked work. Review the ${pr} on ${provider}.`;
+    case 'provider_error':
+      return `Checks passed, but ${provider} kept failing when Foundry tried to merge. `
+        + `Merge the ${pr} yourself on ${provider}.`;
+    default:
+      return `Checks passed, but Foundry didn't merge the ${pr}. Review it on ${provider}.`;
+  }
+}
+
 function reviewCallout(src: CalloutSource): Draft {
   const link = src.prLink();
   let d: Draft;
@@ -483,6 +512,11 @@ function reviewCallout(src: CalloutSource): Draft {
       d.list = list;
     }
     d.shows.add('failing_checks');
+  } else if (src.mergeSkipped) {
+    d = draft('warning', 'Merge skipped', [
+      mergeSkippedLine(src),
+      'Foundry addresses review comments in a revision run.',
+    ]);
   } else {
     d = draft('success', `${src.prAbbrev} ready for review`, [
       `Review the ${src.pullRequest} on ${src.providerName}. Foundry addresses review comments in a revision run.`,
@@ -567,6 +601,10 @@ function winningCallout(src: CalloutSource): Draft {
       return draft('working', 'Rebasing', ['Foundry is rebasing the branch onto the default branch.']);
     case 'checks_pending':
       return checksPendingCallout(src);
+    case 'merge_pending':
+      return draft('working', 'Merging', [
+        `Checks passed. Foundry is merging the ${src.pullRequest} on ${src.providerName}.`,
+      ]);
     case 'review':
       return reviewCallout(src);
     case 'detected':

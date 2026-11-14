@@ -62,7 +62,9 @@ export class NeedsCardComponent {
 
   protected readonly reviewLink: Signal<ReviewLink | null> = computed(() => {
     const { issue, reason } = this.item();
-    if (reason.tone !== 'ready' || !issue.pullRequestUrl) {
+    // A skipped merge still leaves a pull request for the person to review.
+    const reviewable = reason.tone === 'ready' || (issue.state === 'review' && issue.mergeOutcome === 'skipped');
+    if (!reviewable || !issue.pullRequestUrl) {
       return null;
     }
     const provider = issue.providerType ?? 'github';

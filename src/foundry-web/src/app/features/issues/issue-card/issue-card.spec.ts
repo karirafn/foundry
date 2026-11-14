@@ -1834,6 +1834,48 @@ describe('IssueCardComponent', () => {
     expect(checksStatus).toBeFalsy();
   });
 
+  // --- Merge outcome badge (ADR 0105): only a skipped merge is badged ---
+
+  it('should render "Merge skipped: <reason>" badge for a skipped mergeOutcome', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', mergeOutcome: 'skipped', mergeSkippedReason: 'head_moved' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__merge-badge');
+    expect(badge?.textContent?.trim()).toBe('Merge skipped: branch moved after checks');
+    expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
+  });
+
+  it('should include the merge badge label in the card aria-label', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', mergeOutcome: 'skipped', mergeSkippedReason: 'unauthorized' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__toggle')?.getAttribute('aria-label')).toContain('Merge skipped: no merge permission.');
+  });
+
+  for (const outcome of ['merged', 'disabled']) {
+    it(`should not render a merge badge for ${outcome}`, () => {
+      // Arrange
+      const issue: IssueSummary = { ...mockIssue, state: 'review', mergeOutcome: outcome };
+
+      // Act
+      const fixture = createComponent(issue);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-card__merge-badge')).toBeNull();
+    });
+  }
+
   // --- Rebase outcome badge (#684): only skipped and conflict are badged ---
 
   it('should render "Rebase conflict" badge for conflict rebaseOutcome', () => {

@@ -435,6 +435,26 @@ describe('BoardPageComponent', () => {
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
       expect(text(link)).toBe('Review MR ↗ (opens GitLab in a new tab)');
     });
+
+    it('keeps the review link on a pull request Foundry did not merge', async () => {
+      // Act
+      const { el } = await loaded([
+        item('r', 7, {
+          stage: 'awaiting_review',
+          state: 'review',
+          needsAction: true,
+          providerType: 'github',
+          mergeOutcome: 'skipped',
+          mergeSkippedReason: 'not_mergeable',
+          pullRequestUrl: 'https://github.com/acme/api/pull/3',
+        }),
+      ]);
+
+      // Assert
+      const link = el.querySelector<HTMLAnchorElement>('fd-needs-card a')!;
+      expect(link.getAttribute('href')).toBe('https://github.com/acme/api/pull/3');
+      expect(text(link)).toBe('Review PR ↗ (opens GitHub in a new tab)');
+    });
   });
 
   describe('In progress', () => {

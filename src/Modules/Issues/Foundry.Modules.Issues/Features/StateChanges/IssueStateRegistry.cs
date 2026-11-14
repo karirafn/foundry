@@ -28,6 +28,7 @@ internal static class IssueStateRegistry
         ["revision_failed"] = typeof(RevisionFailedIssue),
         ["checks_pending"] = typeof(ChecksPendingIssue),
         ["rebase_pending"] = typeof(RebasePendingIssue),
+        ["merge_pending"] = typeof(MergePendingIssue),
         ["awaiting_input"] = typeof(AwaitingInputIssue),
         ["triage_queued"] = typeof(TriageQueuedIssue),
         ["triage_in_progress"] = typeof(TriageInProgressIssue),

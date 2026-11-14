@@ -111,6 +111,23 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         return failed;
     }
 
+    internal static ContinuableFailedIssue FromMergePending(
+        MergePendingIssue source,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
+        failed.CopySharedPropertiesFrom(source);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.BranchName = source.BranchName;
+        failed.PullRequestUrl = source.PullRequestUrl;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
     internal static ContinuableFailedIssue FromReview(
         ReviewIssue source,
         string failureReason,

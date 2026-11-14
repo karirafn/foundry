@@ -33,6 +33,7 @@ function createdResponse(
       isActive: true,
       maxConcurrentWorkers: 1,
       rebaseAfterRun: true,
+      mergeWhenChecksPass: false,
       lastPolledAt: null,
       eligibility: { status: 'eligible', violations: [], reason: null },
     },

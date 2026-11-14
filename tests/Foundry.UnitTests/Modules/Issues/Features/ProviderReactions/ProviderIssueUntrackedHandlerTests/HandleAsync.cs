@@ -467,6 +467,32 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenMergePendingIssue_PreservesRecord()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        MergePendingIssue mergePending = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .MergePending();
+        _dbContext.Set<Issue>().Add(mergePending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        ProviderIssueUntracked @event = new(repositoryId, 1);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.Id == mergePending.Id,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<MergePendingIssue>();
+    }
+
+    [Fact]
     public async Task WhenCompletedIssue_PreservesRecord()
     {
         // Arrange

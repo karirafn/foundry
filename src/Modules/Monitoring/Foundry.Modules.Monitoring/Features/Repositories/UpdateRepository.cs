@@ -24,7 +24,8 @@ internal static class UpdateRepository
         int? PollIntervalSeconds,
         bool IsActive,
         int MaxConcurrentWorkers,
-        bool? RebaseAfterRun = null) : ICommand<RepositorySummary>;
+        bool? RebaseAfterRun = null,
+        bool? MergeWhenChecksPass = null) : ICommand<RepositorySummary>;
 
     internal sealed class Handler(
         DbContext dbContext,
@@ -72,6 +73,11 @@ internal static class UpdateRepository
                 repository.SetRebaseAfterRun(rebaseAfterRun);
             }
 
+            if (command.MergeWhenChecksPass is { } mergeWhenChecksPass)
+            {
+                repository.SetMergeWhenChecksPass(mergeWhenChecksPass);
+            }
+
             await dbContext.SaveChangesAsync(cancellationToken);
 
             string providerType = credential switch
@@ -104,7 +110,8 @@ internal static class UpdateRepository
             int? PollIntervalSeconds,
             bool IsActive,
             int MaxConcurrentWorkers,
-            bool? RebaseAfterRun = null);
+            bool? RebaseAfterRun = null,
+            bool? MergeWhenChecksPass = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -121,7 +128,8 @@ internal static class UpdateRepository
                         body.PollIntervalSeconds,
                         body.IsActive,
                         body.MaxConcurrentWorkers,
-                        body.RebaseAfterRun);
+                        body.RebaseAfterRun,
+                        body.MergeWhenChecksPass);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<RepositorySummary>, ProblemHttpResult>>(

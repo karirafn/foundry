@@ -75,6 +75,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 "ck_issues_rebase_pending_fields",
                 "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
             t.HasCheckConstraint(
+                "ck_issues_merge_pending_fields",
+                "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+            t.HasCheckConstraint(
                 "ck_issues_awaiting_input_fields",
                 "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
             t.HasCheckConstraint(
@@ -229,6 +232,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<RevisionFailedIssue>("revision_failed")
             .HasValue<ChecksPendingIssue>("checks_pending")
             .HasValue<RebasePendingIssue>("rebase_pending")
+            .HasValue<MergePendingIssue>("merge_pending")
             .HasValue<AwaitingInputIssue>("awaiting_input")
             .HasValue<TriageQueuedIssue>("triage_queued")
             .HasValue<TriageInProgressIssue>("triage_in_progress")

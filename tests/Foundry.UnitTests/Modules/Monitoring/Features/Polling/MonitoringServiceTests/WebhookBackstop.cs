@@ -650,6 +650,11 @@ public sealed class WebhookBackstop : IAsyncDisposable
             return Task.FromResult<IReadOnlyList<ReviewIssueInfo>>([]);
         }
 
+        public Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<MergePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

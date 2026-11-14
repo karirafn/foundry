@@ -3085,6 +3085,12 @@
               "null",
               "boolean"
             ]
+          },
+          "mergeWhenChecksPass": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -3755,6 +3761,18 @@
               "null",
               "string"
             ]
+          },
+          "mergeOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mergeSkippedReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -3875,6 +3893,18 @@
             ]
           },
           "rebaseSkippedReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mergeOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mergeSkippedReason": {
             "type": [
               "null",
               "string"
@@ -4296,6 +4326,10 @@
           "rebaseAfterRun": {
             "type": "boolean",
             "default": true
+          },
+          "mergeWhenChecksPass": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -4914,6 +4948,12 @@
             "format": "int32"
           },
           "rebaseAfterRun": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "mergeWhenChecksPass": {
             "type": [
               "null",
               "boolean"

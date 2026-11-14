@@ -471,6 +471,19 @@ describe('StateBadgeComponent', () => {
     expect(el.querySelector('span')?.classList.contains('badge--rebase-pending')).toBe(true);
   });
 
+  // merge_pending state (ADR 0105)
+  it('should display "MERGING" with aria-label "State: merging" and badge--merge-pending for merge_pending', () => {
+    // Arrange / Act
+    const fixture = createComponent('merge_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const span = el.querySelector('span');
+    expect(span?.textContent?.trim()).toBe('MERGING');
+    expect(span?.getAttribute('aria-label')).toBe('State: merging');
+    expect(span?.classList.contains('badge--merge-pending')).toBe(true);
+  });
+
   // Triage states (#772)
   const triageCases: { state: IssueState; label: string; aria: string; cssClass: string }[] = [
     { state: 'triage_queued', label: 'TRIAGE QUEUED', aria: 'State: triage queued', cssClass: 'badge--triage-queued' },
