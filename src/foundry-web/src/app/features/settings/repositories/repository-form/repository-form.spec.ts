@@ -47,6 +47,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -657,6 +658,7 @@ describe('RepositoryFormComponent', () => {
       maxConcurrentWorkers: 1,
       applyBranchRules: true,
       rebaseAfterRun: true,
+      mergeWhenChecksPass: false,
     });
   });
 
@@ -683,6 +685,7 @@ describe('RepositoryFormComponent', () => {
       isActive: true,
       maxConcurrentWorkers: 1,
       rebaseAfterRun: true,
+      mergeWhenChecksPass: false,
     });
   });
 
@@ -754,6 +757,49 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     expect((emitted as UpdateRepositoryRequest).rebaseAfterRun).toBe(true);
+  });
+
+  // Merge when checks pass toggle (ADR 0105)
+  it('should seed the Merge when checks pass toggle from the repository in edit mode', () => {
+    // Arrange / Act
+    const { el } = setup({ repository: { ...MOCK_REPOSITORY, mergeWhenChecksPass: true } });
+
+    // Assert
+    const toggle = el.querySelector('#repository-merge-when-checks-pass') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    expect(toggle.getAttribute('aria-describedby')).toBe('repository-merge-when-checks-pass-hint');
+    expect(el.querySelector('label[for="repository-merge-when-checks-pass"]')?.textContent).toContain('Merge when checks pass');
+    expect(el.querySelector('#repository-merge-when-checks-pass-hint')?.textContent).toContain(
+      "This is Foundry's own merge, not the provider's auto-merge.",
+    );
+  });
+
+  it('should show the Merge when checks pass toggle unchecked when adding a repository', () => {
+    // Arrange / Act
+    const { el } = setup({ repository: null, accounts: [MOCK_ACCOUNT], availableRepositories: MOCK_AVAILABLE });
+
+    // Assert
+    const toggle = el.querySelector('#repository-merge-when-checks-pass') as HTMLInputElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.checked).toBe(false);
+  });
+
+  it('should send mergeWhenChecksPass true in UpdateRepositoryRequest when the toggle is turned on', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ repository: { ...MOCK_REPOSITORY, mergeWhenChecksPass: false } });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    const toggle = el.querySelector('#repository-merge-when-checks-pass') as HTMLInputElement;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act
+    (el.querySelector('.repository-form__save-btn') as HTMLButtonElement).click();
+
+    // Assert
+    expect((emitted as UpdateRepositoryRequest).mergeWhenChecksPass).toBe(true);
   });
 
   // Cycle 20: keyboard navigation — ArrowDown opens dropdown

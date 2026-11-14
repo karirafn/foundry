@@ -19,6 +19,7 @@ const MOCK_REPO: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 2,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -36,6 +37,7 @@ const MOCK_REPO_2: RepositorySummary = {
   isActive: false,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -53,6 +55,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: {
     status: 'ineligible',
@@ -76,6 +79,7 @@ const MOCK_REPO_MULTI_VIOLATIONS: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: {
     status: 'ineligible',
@@ -100,6 +104,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: null,
   eligibility: null,
 };
@@ -117,6 +122,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: null },
 };
@@ -134,6 +140,7 @@ const MOCK_REPO_RATE_LIMITED: RepositorySummary = {
   isActive: true,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: 'rate-limited' },
 };
@@ -151,6 +158,7 @@ const MOCK_REPO_PAUSED: RepositorySummary = {
   isActive: false,
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
+  mergeWhenChecksPass: false,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -667,6 +675,38 @@ describe('RepositoryListComponent', () => {
     const chip = el.querySelector('.repository-list__chip--max-workers');
     expect(chip?.textContent?.trim()).toContain('2');
     expect(chip?.getAttribute('aria-label')).toBe('Max 2 concurrent workers');
+  });
+
+  // ─── Merge-when-checks-pass chip (ADR 0105) ───────────────────────────────────
+
+  it('should render the merge chip when the repository merges on pass', () => {
+    // Act
+    const { el } = setup({ repositories: [{ ...MOCK_REPO, mergeWhenChecksPass: true }] });
+
+    // Assert
+    const chip = el.querySelector('.repository-list__chip--merge');
+    expect(chip?.textContent?.trim()).toBe('Merges on pass');
+    expect(chip?.getAttribute('role')).toBe('img');
+    expect(chip?.getAttribute('tabindex')).toBe('0');
+    expect(chip?.getAttribute('aria-label')).toBe('Foundry merges its PR when checks pass');
+    expect(chip?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('should name a merge request in the merge chip for GitLab', () => {
+    // Act
+    const { el } = setup({ repositories: [{ ...MOCK_REPO, providerType: 'gitlab', mergeWhenChecksPass: true }] });
+
+    // Assert
+    expect(el.querySelector('.repository-list__chip--merge')?.getAttribute('aria-label'))
+      .toBe('Foundry merges its MR when checks pass');
+  });
+
+  it('should not render the merge chip when the repository does not merge on pass', () => {
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    expect(el.querySelector('.repository-list__chip--merge')).toBeNull();
   });
 
   // ─── Keyboard-focusable metadata chips ───────────────────────────────────────

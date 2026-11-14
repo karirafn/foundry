@@ -19,6 +19,7 @@ import { TickerService } from '../../../core/services/ticker.service';
 import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
 import { ProviderTerminology, providerTerminology } from '../../../shared/utils/provider.util';
 import { RebaseOutcomeBadge, rebaseOutcomeBadge } from '../rebase-outcome.format';
+import { MergeOutcomeBadge, mergeOutcomeBadge } from '../merge-outcome.format';
 import {
   describeTokenTotal,
   formatCost as _formatCostImpl,
@@ -173,6 +174,15 @@ function isUntracked(tokens: TokenTotal): boolean {
                 [attr.aria-label]="rebase.label"
                 aria-hidden="true"
               >{{ rebase.label }}</span>
+            }
+            @if (_mergeOutcomeDisplay(); as merge) {
+              <span
+                class="badge issue-card__checks-badge issue-card__merge-badge"
+                [class]="merge.cssClass"
+                role="img"
+                [attr.aria-label]="merge.label"
+                aria-hidden="true"
+              >{{ merge.label }}</span>
             }
             @if (repoWarningLabel()) {
               <span
@@ -366,6 +376,9 @@ export class IssueCardComponent {
   protected readonly _rebaseOutcomeDisplay = computed((): RebaseOutcomeBadge | null =>
     rebaseOutcomeBadge(this.issue().rebaseOutcome, this.issue().rebaseSkippedReason));
 
+  protected readonly _mergeOutcomeDisplay = computed((): MergeOutcomeBadge | null =>
+    mergeOutcomeBadge(this.issue().mergeOutcome, this.issue().mergeSkippedReason));
+
   protected readonly _queuePositionDisplay = computed((): string => {
     const pos = this.queuePosition();
     return typeof pos === 'number' ? String(pos) : EM_DASH;
@@ -486,11 +499,13 @@ export class IssueCardComponent {
     const checksPart = outcome ? ` ${outcome.label}.` : '';
     const rebase = this._rebaseOutcomeDisplay();
     const rebasePart = rebase ? ` ${rebase.label}.` : '';
+    const merge = this._mergeOutcomeDisplay();
+    const mergePart = merge ? ` ${merge.label}.` : '';
     const waitingPart = this._isChecksPending() ? ' Waiting on checks.' : '';
     const runStatsPart = this._buildRunStatsAriaText();
     const publishPart = this._buildPublishAriaText();
     const activityPart = this._buildActivityAriaText();
-    return `${base}${warningPart}${checksPart}${rebasePart}${waitingPart}${runStatsPart}${publishPart}${activityPart}`;
+    return `${base}${warningPart}${checksPart}${rebasePart}${mergePart}${waitingPart}${runStatsPart}${publishPart}${activityPart}`;
   });
 
   private _buildQueuePositionAriaClause(): string {

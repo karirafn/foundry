@@ -1,4 +1,5 @@
 import { CodeStep, IssueStage, IssueSummary } from '../issues/issue.model';
+import { formatMergeSkippedReason } from '../issues/merge-outcome.format';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { getFailureCategoryDisplay } from '../../shared/utils/failure-category';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
@@ -33,6 +34,7 @@ export const CODE_STEP_LABELS: Readonly<Record<CodeStep, string>> = {
   publish_retrying: 'Retrying publish…',
   rebasing: 'Rebasing…',
   checks: 'Checks running…',
+  merging: 'Merging…',
 };
 
 export function codeStepTone(step: CodeStep): StepTone {
@@ -178,10 +180,26 @@ const CHECKS_RED: ReasonCopy = {
   explanation: () => 'Checks failed',
 };
 
+function mergeSkippedExplanation(issue: IssueSummary): string {
+  const reason = formatMergeSkippedReason(issue.mergeSkippedReason);
+  return reason !== null
+    ? `Checks passed; Foundry didn't merge: ${reason}`
+    : "Checks passed; Foundry didn't merge";
+}
+
+const MERGE_SKIPPED: ReasonCopy = {
+  label: 'Merge skipped',
+  tone: 'warning',
+  explanation: mergeSkippedExplanation,
+};
+
 function reasonCopy(issue: IssueSummary): ReasonCopy {
   if (issue.state === 'review') {
     if (issue.checksOutcome === 'still_failing') {
       return CHECKS_RED;
+    }
+    if (issue.mergeOutcome === 'skipped') {
+      return MERGE_SKIPPED;
     }
     return {
       label: `${providerTerminology(issue.providerType ?? 'github').prAbbrev} ready`,

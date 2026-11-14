@@ -694,6 +694,104 @@ describe('buildCallout', () => {
       expect(callout.links.map((l) => l.label)).toEqual(['View PR']);
     });
 
+    it('shows Foundry merging a pull request whose checks passed', () => {
+      // Act
+      const callout = buildCallout(detail('merge_pending'), null, summary({ state: 'merge_pending' }), null);
+
+      // Assert
+      expect(callout.tone).toBe('working');
+      expect(callout.title).toBe('Merging');
+      expect(callout.lines).toEqual(['Checks passed. Foundry is merging the pull request on GitHub.']);
+    });
+
+    it('shows Foundry merging a merge request in GitLab terms', () => {
+      // Act
+      const callout = buildCallout(
+        detail('merge_pending'),
+        null,
+        summary({ state: 'merge_pending', providerType: 'gitlab' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.lines).toEqual(['Checks passed. Foundry is merging the merge request on GitLab.']);
+    });
+
+    for (const [reason, line] of [
+      [
+        'not_mergeable',
+        'Checks passed, but GitHub refused the merge: conflicts, a branch rule or missing approvals. '
+          + 'Resolve it on GitHub and merge the pull request yourself.',
+      ],
+      [
+        'unauthorized',
+        "Checks passed, but the account's token isn't allowed to merge on GitHub. "
+          + 'Grant it merge access, or merge the pull request yourself.',
+      ],
+      [
+        'head_moved',
+        "Checks passed, but new commits reached the pull request after the checks ran, so Foundry didn't merge "
+          + 'unchecked work. Review the pull request on GitHub.',
+      ],
+      [
+        'provider_error',
+        'Checks passed, but GitHub kept failing when Foundry tried to merge. Merge the pull request yourself on GitHub.',
+      ],
+      ['from_the_future', "Checks passed, but Foundry didn't merge the pull request. Review it on GitHub."],
+      [null, "Checks passed, but Foundry didn't merge the pull request. Review it on GitHub."],
+    ] as const) {
+      it(`explains a skipped merge (${reason ?? 'no reason'}) and links the pull request`, () => {
+        // Act
+        const callout = buildCallout(
+          detail('review', { checksOutcome: 'passed', mergeOutcome: 'skipped', mergeSkippedReason: reason }),
+          null,
+          summary({
+            state: 'review',
+            checksOutcome: 'passed',
+            mergeOutcome: 'skipped',
+            mergeSkippedReason: reason,
+            pullRequestUrl: 'https://github.com/acme/api/pull/7',
+          }),
+          null,
+        );
+
+        // Assert
+        expect(callout.tone).toBe('warning');
+        expect(callout.title).toBe('Merge skipped');
+        expect(callout.lines).toEqual([line, 'Foundry addresses review comments in a revision run.']);
+        expect(callout.links.map((l) => l.label)).toEqual(['View PR']);
+      });
+    }
+
+    it('explains a skipped merge on GitLab in merge-request terms', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { mergeOutcome: 'skipped', mergeSkippedReason: 'head_moved' }),
+        null,
+        summary({ state: 'review', providerType: 'gitlab', mergeOutcome: 'skipped', mergeSkippedReason: 'head_moved' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.lines[0]).toBe(
+        "Checks passed, but new commits reached the merge request after the checks ran, so Foundry didn't merge "
+          + 'unchecked work. Review the merge request on GitLab.',
+      );
+    });
+
+    it('shows a review whose merge setting was off as ready for review', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { mergeOutcome: 'disabled' }),
+        null,
+        summary({ state: 'review', mergeOutcome: 'disabled' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('PR ready for review');
+    });
+
     it('shows a merge request ready for review on GitLab', () => {
       // Act
       const callout = buildCallout(

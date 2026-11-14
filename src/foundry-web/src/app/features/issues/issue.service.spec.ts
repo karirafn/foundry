@@ -2829,6 +2829,21 @@ describe('IssueService board placement (#851)', () => {
     });
   });
 
+  it('maps the merging code step so the board shows Foundry merging', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [{ ...placedItem, state: 'merge_pending', codeStep: 'merging' }],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0].codeStep).toBe('merging');
+  });
+
   it('maps the checks outcome so the board can tell red checks from a ready pull request', () => {
     // Arrange
     const { svc, http } = setup();
