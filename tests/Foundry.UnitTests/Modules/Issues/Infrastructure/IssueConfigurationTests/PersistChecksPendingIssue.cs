@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -98,5 +99,29 @@ public sealed class PersistChecksPendingIssue : IAsyncDisposable
         // Assert
         ChecksPendingIssue reloaded = result.ShouldBeOfType<ChecksPendingIssue>();
         reloaded.EnteredChecksPendingAt.ShouldBe(savedAt);
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingAfterHeadMoved_ReasonIsPersisted()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithIssueNumber(44)
+            .WithTitle("Checks pending after head moved")
+            .WithLabels([])
+            .Review()
+            .RecheckAfterHeadMoved(DateTimeOffset.UtcNow);
+
+        _dbContext.Set<Issue>().Add(checksPending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([checksPending.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<ChecksPendingIssue>().Reason.ShouldBe(new ChecksPendingReason.HeadMoved());
     }
 }

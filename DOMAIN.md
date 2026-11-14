@@ -789,6 +789,10 @@ Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `RecheckA
 
 **Verified Head** — the head commit of a pull request, as read by the PR status read in the poll that resolved its checks verdict. It is stored on `ReviewIssue` (`VerifiedHeadSha`) and carried on `ChecksVerdictResolved.HeadSha` for every outcome. When the review pass reads a different head, or the stored value is null (rows that predate the field), the issue returns to `checks_pending`. Because the status read runs before the checks read, the stored commit always equals or precedes the commit the verdict actually describes, so a mismatch errs toward re-checking.
 
+### Checks Pending Reason
+
+**Checks Pending Reason** — why an issue is in `checks_pending`: `AfterRun` (a worker run or revision left an open PR, via the post-run rebase) or `HeadMoved` (new commits reached a review issue's PR after its verdict). A closed union on `ChecksPendingIssue`. It is shown in the pane callout and does not change gate behaviour.
+
 
 ## Unchanged Issue
 

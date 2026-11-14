@@ -754,7 +754,8 @@ internal sealed class IssueQueries(
                 BlockedBy: null,
                 TransientRetry: null,
                 RebaseOutcome: checksPending.RebaseOutcome?.Discriminator,
-                RebaseSkippedReason: (checksPending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason),
+                RebaseSkippedReason: (checksPending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason,
+                ChecksPendingReason: checksPending.Reason.Discriminator),
 
             RebasePendingIssue rebasePending => new IssueStateDetails(
                 WorkerRunId: rebasePending.WorkerRunId.Value,

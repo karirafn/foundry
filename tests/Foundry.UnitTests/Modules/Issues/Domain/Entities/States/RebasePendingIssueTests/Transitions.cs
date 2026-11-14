@@ -38,6 +38,19 @@ public sealed class Transitions
     }
 
     [Fact]
+    public void MarkChecksPending_RecordsAfterRunReason()
+    {
+        // Arrange
+        RebasePendingIssue rebasePending = new IssueBuilder().RebasePending();
+
+        // Act
+        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.Rebased(), DateTimeOffset.UtcNow);
+
+        // Assert
+        checksPending.Reason.ShouldBe(new ChecksPendingReason.AfterRun());
+    }
+
+    [Fact]
     public void MarkChecksPending_SetsEnteredChecksPendingAtToNow()
     {
         // Arrange

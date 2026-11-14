@@ -155,10 +155,15 @@ export interface IssueStateDetails {
   sideBranchUrl?: string | null;
   /** Set when the state is branch_diverged: why the run's work went to the side branch (ADR 0101). */
   divergenceReason?: DivergenceReason | null;
+  /** Set when the state is checks_pending: why Foundry is waiting for CI on the PR/MR. */
+  checksPendingReason?: ChecksPendingReason | null;
 }
 
 /** Why the Publisher pushed a run's work to a side branch: the branch moved during the run, or it is protected from force pushes. */
 export type DivergenceReason = 'branch-moved' | 'force-push-protected';
+
+/** Why an issue is in checks_pending: a run left an open PR/MR, or new commits reached it after its checks resolved. */
+export type ChecksPendingReason = 'after_run' | 'head_moved';
 
 export interface IssueDetail extends IssueSummary {
   author: string;
