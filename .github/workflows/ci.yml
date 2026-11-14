@@ -143,6 +143,10 @@ jobs:
             || { echo "FAIL: DISABLE_AUTOUPDATER and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC must both be 1"; exit 1; }
           echo "PASS: auto-updater and nonessential traffic disabled"
 
+      - name: Image test — workers get the task-list tools
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: WORKER_IMAGE=foundry-worker:ci bats workers/tests/task_tools.bats
+
       - name: Image contract check — csharp-ls matches workers/.config/dotnet-tools.json, plugin baked, rq-cli absent
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |
