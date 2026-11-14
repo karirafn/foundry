@@ -5,11 +5,12 @@ import { DispatchBannerComponent } from './components/dispatch-banner/dispatch-b
 import { DockerBannerComponent } from './components/docker-banner/docker-banner';
 import { CreditsBannerComponent } from './components/credits-banner/credits-banner';
 import { HostPauseBannerComponent } from './components/host-pause-banner/host-pause-banner';
+import { AccountTokenBannerComponent } from './components/account-token-banner/account-token-banner';
 
 @Component({
   selector: 'fd-system-banner',
   standalone: true,
-  imports: [SystemNotificationsComponent, DockerBannerComponent, ImageBuildBannerComponent, CreditsBannerComponent, DispatchBannerComponent, HostPauseBannerComponent],
+  imports: [SystemNotificationsComponent, DockerBannerComponent, ImageBuildBannerComponent, CreditsBannerComponent, DispatchBannerComponent, AccountTokenBannerComponent, HostPauseBannerComponent],
   templateUrl: './system-banner.html',
   styleUrl: './system-banner.scss',
 })

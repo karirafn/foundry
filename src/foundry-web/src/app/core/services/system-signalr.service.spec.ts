@@ -3,6 +3,7 @@ import { SystemSignalRService } from './system-signalr.service';
 import { HubConnections } from './hub-connection';
 import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 import {
+  ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
   CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
   DOCKER_NOTIFICATION_CATEGORY,
@@ -433,5 +434,50 @@ describe('SystemSignalRService', () => {
 
     // Assert
     expect((svc.usageSnapshotUpdated as unknown as { next?: unknown }).next).toBeUndefined();
+  });
+
+  describe('applyAccountTokenStatus', () => {
+    it('should show the account-token message when given one', () => {
+      // Arrange
+      const { svc } = setup();
+      const message = '1 account has an invalid token — enter a new one to resume monitoring.';
+
+      // Act
+      svc.applyAccountTokenStatus(message);
+
+      // Assert
+      expect(svc.notifications()).toEqual([
+        { category: ACCOUNT_TOKEN_NOTIFICATION_CATEGORY, isActive: true, message },
+      ]);
+    });
+
+    it('should remove the account-token notification when given null', () => {
+      // Arrange
+      const { svc } = setup();
+      svc.applyAccountTokenStatus('1 account has an invalid token — enter a new one to resume monitoring.');
+
+      // Act
+      svc.applyAccountTokenStatus(null);
+
+      // Assert
+      expect(svc.notifications()).toEqual([]);
+    });
+
+    it('should not raise a reload trigger for an account-token notification', () => {
+      // Arrange
+      const { svc, hub } = setup();
+      let reloads = 0;
+      svc.reloadTrigger.subscribe(() => reloads++);
+
+      // Act
+      hub.emit('SystemNotificationReceived', {
+        category: ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
+        isActive: true,
+        message: '2 accounts have invalid tokens — enter new ones to resume monitoring.',
+      });
+
+      // Assert
+      expect(reloads).toBe(0);
+    });
   });
 });

@@ -1,10 +1,12 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,6 +54,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         AccountTokenVerdicts verdicts = new(
             recheckDb,
             new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+            new NullDomainEventDispatcher(),
             NullLogger<AccountTokenVerdicts>.Instance);
 
         // Act
@@ -84,6 +87,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         AccountTokenVerdicts verdicts = new(
             confirmDb,
             new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+            new NullDomainEventDispatcher(),
             NullLogger<AccountTokenVerdicts>.Instance);
 
         // Act
@@ -96,6 +100,119 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         // Assert
         marked.ShouldBeFalse();
         (await LoadAsync(accountId)).TokenValidity.ShouldBeOfType<TokenValidity.Valid>();
+    }
+
+    [Fact]
+    public async Task WhenRotationCommitsBeforeConfirmSaves_DroppedVerdictDispatchesNothing()
+    {
+        // Arrange
+        CredentialId accountId = await SeedValidAccountAsync();
+        using IServiceScope confirmScope = _factory.Services.CreateScope();
+        DbContext confirmDb = confirmScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await confirmDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        await RotateAsync(accountId, string.Concat("ghp_", "rotated"));
+        CapturingDomainEventDispatcher dispatcher = new();
+        AccountTokenVerdicts verdicts = new(
+            confirmDb,
+            new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+            dispatcher,
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        await verdicts.ConfirmRejectionAsync(
+            resolved,
+            ((TokenUsability.Usable)resolved.TokenUsability).Token,
+            DetectedAt,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenConfirmSaves_DispatchesCredentialTokenInvalidated()
+    {
+        // Arrange
+        CredentialId accountId = await SeedValidAccountAsync();
+        using IServiceScope confirmScope = _factory.Services.CreateScope();
+        DbContext confirmDb = confirmScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await confirmDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        CapturingDomainEventDispatcher dispatcher = new();
+        AccountTokenVerdicts verdicts = new(
+            confirmDb,
+            new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+            dispatcher,
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        await verdicts.ConfirmRejectionAsync(
+            resolved,
+            ((TokenUsability.Usable)resolved.TokenUsability).Token,
+            DetectedAt,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.DispatchedEvents.ShouldBe([new CredentialTokenInvalidated(accountId)]);
+    }
+
+    [Fact]
+    public async Task WhenRecheckAuthenticates_DispatchesCredentialTokenRevalidated()
+    {
+        // Arrange
+        CredentialId accountId = await SeedInvalidAccountAsync();
+        using IServiceScope recheckScope = _factory.Services.CreateScope();
+        DbContext recheckDb = recheckScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await recheckDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        CapturingDomainEventDispatcher dispatcher = new();
+        AccountTokenVerdicts verdicts = new(
+            recheckDb,
+            new FixedTokenValidator(TokenValidationOutcome.Authenticated("octocat", [])),
+            dispatcher,
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        await verdicts.RecheckAsync(
+            resolved,
+            ((TokenUsability.Invalid)resolved.TokenUsability).Token,
+            RecheckAt,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.DispatchedEvents.ShouldBe([new CredentialTokenRevalidated(accountId)]);
+    }
+
+    [Fact]
+    public async Task WhenRecheckStampsAnInvalidAccount_DispatchesNothing()
+    {
+        // Arrange
+        CredentialId accountId = await SeedInvalidAccountAsync();
+        using IServiceScope recheckScope = _factory.Services.CreateScope();
+        DbContext recheckDb = recheckScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await recheckDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        CapturingDomainEventDispatcher dispatcher = new();
+        AccountTokenVerdicts verdicts = new(
+            recheckDb,
+            new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+            dispatcher,
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        await verdicts.RecheckAsync(
+            resolved,
+            ((TokenUsability.Invalid)resolved.TokenUsability).Token,
+            RecheckAt,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
 
     [Fact]
@@ -118,6 +235,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
             AccountTokenVerdicts verdicts = new(
                 recheckDb,
                 new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+                new NullDomainEventDispatcher(),
                 NullLogger<AccountTokenVerdicts>.Instance);
             await verdicts.RecheckAsync(
                 resolved,
@@ -160,6 +278,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
             AccountTokenVerdicts verdicts = new(
                 confirmDb,
                 new FixedTokenValidator(TokenValidationOutcome.AuthenticationFailed()),
+                new NullDomainEventDispatcher(),
                 NullLogger<AccountTokenVerdicts>.Instance);
             await verdicts.ConfirmRejectionAsync(
                 resolved,

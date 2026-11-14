@@ -103,6 +103,7 @@ internal static partial class UpdateAccount
         CredentialRotationService rotationService,
         OptedInBranchRuleApplier branchRuleApplier,
         ProviderHostGuard hostGuard,
+        IDomainEventDispatcher domainEventDispatcher,
         AccountWebhookRegistrar? webhookRegistrar = null)
     {
         public async Task<Outcome> HandleAsync(
@@ -193,7 +194,12 @@ internal static partial class UpdateAccount
                 }
             }
 
-            // The update is committed: the rules writes run after it and never fail it. Only a newly
+            // The update is committed, so a token-validity transition may now be announced.
+            IDomainEvent[] events = [.. credential.DomainEvents];
+            credential.ClearDomainEvents();
+            await domainEventDispatcher.DispatchAsync(events, cancellationToken);
+
+            // The rules writes run after the commit and never fail it. Only a newly
             // supplied branch-rules token triggers them — a clear or an untouched token never does.
             if (command.BranchRulesToken is not null)
             {

@@ -20,7 +20,7 @@ internal sealed class CredentialConfiguration(
     private const int DiscriminatorMaxLength = 20;
     private const int HostMaxLength = 253;
 
-    private const string TokenInvalidSinceField = "_tokenInvalidSince";
+    internal const string TokenInvalidSinceField = "_tokenInvalidSince";
     private const string TokenCheckedAtField = "_tokenCheckedAt";
 
     /// <summary>

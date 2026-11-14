@@ -2093,7 +2093,7 @@
         "tags": [
           "System"
         ],
-        "summary": "Returns system availability state, including whether the Docker daemon is reachable",
+        "summary": "Returns system availability state: whether the Docker daemon is reachable and how many accounts have an invalid token",
         "operationId": "GetSystemStatus",
         "responses": {
           "200": {
@@ -4646,12 +4646,28 @@
       },
       "SystemStatus": {
         "required": [
-          "dockerAvailable"
+          "dockerAvailable",
+          "invalidTokenAccountCount",
+          "accountTokenMessage"
         ],
         "type": "object",
         "properties": {
           "dockerAvailable": {
             "type": "boolean"
+          },
+          "invalidTokenAccountCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "accountTokenMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

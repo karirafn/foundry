@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
@@ -7,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
+using Foundry.Modules.Monitoring.Features.AccountTokenHealth;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -64,7 +66,8 @@ public sealed class HandleAsync : IAsyncDisposable
         INamespaceDeriver? deriver = null,
         IRepositoryEligibilityEvaluator? evaluator = null,
         ProviderHostGuard? hostGuard = null,
-        IIssueProviderFactory? providerFactory = null)
+        IIssueProviderFactory? providerFactory = null,
+        IDomainEventDispatcher? domainEventDispatcher = null)
     {
         IRepositoryEligibilityEvaluator resolvedEvaluator = evaluator ?? new NoOpEligibilityEvaluator();
         RepositoryEligibilityDiffer differ = new(
@@ -96,7 +99,8 @@ public sealed class HandleAsync : IAsyncDisposable
             tokenAccountResolver,
             rotationService,
             branchRuleApplier,
-            hostGuard ?? BuildPassingGuard());
+            hostGuard ?? BuildPassingGuard(),
+            domainEventDispatcher ?? new NullDomainEventDispatcher());
     }
 
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
@@ -1183,6 +1187,68 @@ public sealed class HandleAsync : IAsyncDisposable
             }
 
             return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task WhenInvalidAccountGetsNewToken_DispatchesRevalidatedAfterTheSave()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        credential.ClearDomainEvents();
+        CommittedCountDispatcher dispatcher = new(_connection);
+        UpdateAccount.Handler handler = BuildHandler(domainEventDispatcher: dispatcher);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — the dispatch saw the account already committed as Valid.
+        dispatcher.ShouldSatisfyAllConditions(
+            () => dispatcher.Events.ShouldBe([new CredentialTokenRevalidated(credential.Id)]),
+            () => dispatcher.InvalidCountsAtDispatch.ShouldBe([0]));
+    }
+
+    [Fact]
+    public async Task WhenValidAccountGetsNewToken_DispatchesNothing()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        CommittedCountDispatcher dispatcher = new(_connection);
+        UpdateAccount.Handler handler = BuildHandler(domainEventDispatcher: dispatcher);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Events.ShouldBeEmpty();
+    }
+
+    /// <summary>Records each dispatched event and the committed count of Invalid accounts when it was dispatched.</summary>
+    private sealed class CommittedCountDispatcher(SqliteConnection connection) : IDomainEventDispatcher
+    {
+        private readonly List<IDomainEvent> _events = [];
+        private readonly List<int> _counts = [];
+
+        public IReadOnlyList<IDomainEvent> Events => _events;
+
+        public IReadOnlyList<int> InvalidCountsAtDispatch => _counts;
+
+        public async Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
+        {
+            List<IDomainEvent> batch = [.. events];
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            _events.AddRange(batch);
+            await using FoundryDbContext reader = new(
+                new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(connection).Options);
+            _counts.Add(await new AccountTokenHealthQueries(reader).CountInvalidAsync(cancellationToken));
         }
     }
 

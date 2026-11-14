@@ -13,6 +13,7 @@ function createMockSignalRService() {
   return {
     reconnected: reconnected$.asObservable(),
     applyDockerAvailability: vi.fn(),
+    applyAccountTokenStatus: vi.fn(),
     notifications: signal([]).asReadonly(),
     _reconnected$: reconnected$,
   };
@@ -45,7 +46,7 @@ describe('SystemStatusService', () => {
   it('should call applyDockerAvailability(true) when GET returns dockerAvailable: true', () => {
     // Arrange
     const { http, mockSignalR } = setup();
-    const response: SystemStatusResponse = { dockerAvailable: true };
+    const response: SystemStatusResponse = { dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null };
 
     // Act
     const req = http.expectOne('/api/system/status');
@@ -59,7 +60,7 @@ describe('SystemStatusService', () => {
   it('should call applyDockerAvailability(false) when GET returns dockerAvailable: false', () => {
     // Arrange
     const { http, mockSignalR } = setup();
-    const response: SystemStatusResponse = { dockerAvailable: false };
+    const response: SystemStatusResponse = { dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null };
 
     // Act
     const req = http.expectOne('/api/system/status');
@@ -87,13 +88,13 @@ describe('SystemStatusService', () => {
     // Arrange
     const { http, mockSignalR } = setup();
     const initReq = http.expectOne('/api/system/status');
-    initReq.flush({ dockerAvailable: true });
+    initReq.flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null });
 
     // Act — trigger reconnect
     mockSignalR._reconnected$.next();
 
     const reconnectReq = http.expectOne('/api/system/status');
-    reconnectReq.flush({ dockerAvailable: false });
+    reconnectReq.flush({ dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null });
 
     // Assert
     expect(mockSignalR.applyDockerAvailability).toHaveBeenCalledTimes(2);
@@ -108,15 +109,60 @@ describe('SystemStatusService', () => {
 
     // Initial seed: Docker is down
     const initReq = http.expectOne('/api/system/status');
-    initReq.flush({ dockerAvailable: false });
+    initReq.flush({ dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null });
     expect(mockSignalR.applyDockerAvailability).toHaveBeenLastCalledWith(false);
 
     // Act — reconnect, Docker now available
     mockSignalR._reconnected$.next();
     const reconnectReq = http.expectOne('/api/system/status');
-    reconnectReq.flush({ dockerAvailable: true });
+    reconnectReq.flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null });
 
     // Assert — true passed (clear the banner)
     expect(mockSignalR.applyDockerAvailability).toHaveBeenLastCalledWith(true);
+  });
+
+  describe('account-token seed', () => {
+    it('should seed the account-token banner from accountTokenMessage', () => {
+      // Arrange
+      const { http, mockSignalR } = setup();
+      const message = '2 accounts have invalid tokens — enter new ones to resume monitoring.';
+      const response: SystemStatusResponse = {
+        dockerAvailable: true,
+        invalidTokenAccountCount: 2,
+        accountTokenMessage: message,
+      };
+
+      // Act
+      http.expectOne('/api/system/status').flush(response);
+
+      // Assert
+      expect(mockSignalR.applyAccountTokenStatus).toHaveBeenCalledWith(message);
+    });
+
+    it('should clear the account-token banner when accountTokenMessage is null', () => {
+      // Arrange
+      const { http, mockSignalR } = setup();
+
+      // Act
+      http.expectOne('/api/system/status').flush({
+        dockerAvailable: true,
+        invalidTokenAccountCount: 0,
+        accountTokenMessage: null,
+      });
+
+      // Assert
+      expect(mockSignalR.applyAccountTokenStatus).toHaveBeenCalledWith(null);
+    });
+
+    it('should treat a missing accountTokenMessage as null', () => {
+      // Arrange
+      const { http, mockSignalR } = setup();
+
+      // Act
+      http.expectOne('/api/system/status').flush({ dockerAvailable: true });
+
+      // Assert
+      expect(mockSignalR.applyAccountTokenStatus).toHaveBeenCalledWith(null);
+    });
   });
 });

@@ -661,7 +661,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns system availability state, including whether the Docker daemon is reachable */
+        /** Returns system availability state: whether the Docker daemon is reachable and how many accounts have an invalid token */
         get: operations["GetSystemStatus"];
         put?: never;
         post?: never;
@@ -1357,6 +1357,9 @@ export interface components {
         };
         SystemStatus: {
             dockerAvailable: boolean;
+            /** Format: int32 */
+            invalidTokenAccountCount: number | string;
+            accountTokenMessage: null | string;
         };
         TakeoverValidationResponse: {
             invalidNamespaces: string[];

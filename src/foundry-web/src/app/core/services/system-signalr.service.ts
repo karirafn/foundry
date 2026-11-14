@@ -1,6 +1,7 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import {
+  ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
   CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
   DOCKER_NOTIFICATION_CATEGORY,
@@ -75,6 +76,16 @@ export class SystemSignalRService {
       category: DOCKER_NOTIFICATION_CATEGORY,
       isActive: !available,
       message: DOCKER_UNAVAILABLE_MESSAGE,
+    };
+    this._applyNotification(notification);
+  }
+
+  /** Seeds the account-token banner with the server-built message; null removes it. */
+  applyAccountTokenStatus(message: string | null): void {
+    const notification: SystemNotification = {
+      category: ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
+      isActive: message !== null,
+      message: message ?? '',
     };
     this._applyNotification(notification);
   }
