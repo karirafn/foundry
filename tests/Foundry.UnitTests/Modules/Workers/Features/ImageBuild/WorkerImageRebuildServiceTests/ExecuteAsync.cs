@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -38,6 +39,7 @@ public sealed class ExecuteAsync
             queue,
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
+            new FoundryImageSweep(new NullImageOperations(), NullLogger<FoundryImageSweep>.Instance),
             new StubHostEnvironment(string.Empty),
             new WorkerRoleCatalogStore(),
             new CapturingLoggerAdapter<WorkerImageRebuildService>(logger));

@@ -21,6 +21,7 @@ internal sealed class WorkerImageRebuildService(
     IWorkerImageRebuildQueue rebuildQueue,
     IServiceScopeFactory scopeFactory,
     IImageOperations imageOperations,
+    FoundryImageSweep imageSweep,
     IHostEnvironment hostEnvironment,
     IWorkerRoleCatalogStore roleCatalogStore,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
@@ -57,11 +58,12 @@ internal sealed class WorkerImageRebuildService(
         IWorkerImageRebuildQueue rebuildQueue,
         IServiceScopeFactory scopeFactory,
         IImageOperations imageOperations,
+        FoundryImageSweep imageSweep,
         IHostEnvironment hostEnvironment,
         IWorkerRoleCatalogStore roleCatalogStore,
         ILogger<WorkerImageRebuildService> logger,
         ImageBuildRetryPolicy retryPolicy)
-        : this(rebuildQueue, scopeFactory, imageOperations, hostEnvironment, roleCatalogStore, logger)
+        : this(rebuildQueue, scopeFactory, imageOperations, imageSweep, hostEnvironment, roleCatalogStore, logger)
     {
         _retryPolicy = retryPolicy;
     }
@@ -265,6 +267,9 @@ internal sealed class WorkerImageRebuildService(
             await publisher.PublishAsync(new ImageBuildSucceeded(), cancellationToken);
 
             logger.LogInformation("Worker image '{Image}' built successfully.", imageTag);
+
+            // Every tag has moved to the new images by now, so the images they pointed to before are dangling.
+            await imageSweep.SweepAsync(cancellationToken);
         }
         else
         {

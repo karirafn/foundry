@@ -4,6 +4,7 @@
 # supplies the shell tooling publisher.sh needs. Foundry builds it from the workers/ context
 # (docker build -f publisher/Dockerfile workers/).
 FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+LABEL dev.foundry.image=publisher
 
 RUN apk add --no-cache git
 

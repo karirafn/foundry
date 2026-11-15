@@ -5,7 +5,7 @@ namespace Foundry.IntegrationTests.Smoke;
 
 /// <summary>
 /// Docker image operations whose first build is held open until the test releases it, standing in for
-/// a slow startup image build. Every build then succeeds and every inspect finds the image.
+/// a slow startup image build. Every build then succeeds, every inspect finds the image, and no untagged image is left to sweep.
 /// </summary>
 internal sealed class HeldImageBuild : IImageOperations
 {
@@ -39,7 +39,10 @@ internal sealed class HeldImageBuild : IImageOperations
         => throw new NotSupportedException();
 #pragma warning restore CS0618
 
-    public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => throw new NotSupportedException();
+    // No untagged Foundry images, so the image sweep after each build finds nothing to remove.
+    public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken)
+        => Task.FromResult<IList<ImagesListResponse>>([]);
+
     public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => throw new NotSupportedException();
