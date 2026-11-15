@@ -103,6 +103,7 @@ internal static partial class SystemPromptBuilder
     {
         ArgumentNullException.ThrowIfNull(principles);
         ArgumentNullException.ThrowIfNull(issue);
+        ArgumentNullException.ThrowIfNull(toolchain);
 
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string prePrSection = toolchain.Has(DockerTool) ? "\n\n" + BuildPrePrSection() : string.Empty;
@@ -236,6 +237,7 @@ internal static partial class SystemPromptBuilder
     {
         ArgumentNullException.ThrowIfNull(principles);
         ArgumentNullException.ThrowIfNull(issue);
+        ArgumentNullException.ThrowIfNull(toolchain);
 
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string csharpLspSection = CSharpLspSection(toolchain);
@@ -634,12 +636,12 @@ internal static partial class SystemPromptBuilder
             """;
     }
 
-    // The worker entrypoint loads the csharp-lsp plugin only after the repository restores
-    // cleanly, so the LSP tool may be absent even on a .NET image — hence the grep fallback.
-    // Claude Code exposes LSP as a deferred tool, so the agent must load it via ToolSearch.
     private static string CSharpLspSection(Toolchain toolchain) =>
         toolchain.Has(CSharpLsTool) ? "\n\n" + BuildCSharpLspSection() : string.Empty;
 
+    // The worker entrypoint loads the csharp-lsp plugin only after the repository restores
+    // cleanly, so the LSP tool may be absent even on a .NET image — hence the grep fallback.
+    // Claude Code exposes LSP as a deferred tool, so the agent must load it via ToolSearch.
     private static string BuildCSharpLspSection()
     {
         return $"""
