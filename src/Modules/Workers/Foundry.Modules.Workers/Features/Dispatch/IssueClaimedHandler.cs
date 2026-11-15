@@ -462,7 +462,7 @@ internal sealed class IssueClaimedHandler(
             VolumeMounts = volumeMounts,
         });
 
-        return installsDocker
+        return installsDocker && role.Capability.UsesDocker()
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))
             : Result<WorkerContainerSpec>.Ok(spec);
     }

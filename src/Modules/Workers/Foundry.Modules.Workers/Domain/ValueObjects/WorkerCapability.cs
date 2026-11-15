@@ -33,3 +33,19 @@ public static class WorkerCapabilityNames
             _ => throw new ArgumentOutOfRangeException(nameof(capability), capability, "Unknown worker capability."),
         };
 }
+
+public static class WorkerCapabilityProfiles
+{
+    /// <summary>
+    /// Whether a run under <paramref name="capability"/> may get the nested rootless Docker daemon and its container
+    /// allowances (ADR 0098): only a <see cref="WorkerCapability.Full"/> run can execute commands, so a
+    /// <see cref="WorkerCapability.Restricted"/> run could never use Docker and must not hold its privileges.
+    /// </summary>
+    public static bool UsesDocker(this WorkerCapability capability) =>
+        capability switch
+        {
+            WorkerCapability.Restricted => false,
+            WorkerCapability.Full => true,
+            _ => throw new ArgumentOutOfRangeException(nameof(capability), capability, "Unknown worker capability."),
+        };
+}
