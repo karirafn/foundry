@@ -321,6 +321,95 @@ public sealed class Apply
         Snapshot().Subagents.ShouldHaveSingleItem().Description.ShouldNotBeNull().ShouldNotContain(token);
     }
 
+    [Fact]
+    public void WhenBackgroundTasksChanged_ListsTheTasksInEventOrder()
+    {
+        // Act: the first task is a worker log line captured from CLI 2.1.319 (uuid and session_id elided).
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"b9gv898ty","run_id":"0mwgmyzmf-000393e4","task_type":"local_bash","description":"timeout 3000 dotnet test 2>&1 | tail -40 > /tmp/dotnet-test.log; tail -30 /tmp/dotnet-test.log"},{"task_id":"c2","task_type":"local_bash","description":"npx ng test"}]}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldBe(
+        [
+            new BackgroundTask("local_bash", "timeout 3000 dotnet test 2>&1 | tail -40 > /tmp/dotnet-test.log; tail -30 /tmp/dotnet-test.log"),
+            new BackgroundTask("local_bash", "npx ng test"),
+        ]);
+    }
+
+    [Fact]
+    public void WhenBackgroundTasksChangedAgain_TheNewSetReplacesThePrevious()
+    {
+        // Arrange
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a","task_type":"local_bash","description":"dotnet test"},{"task_id":"b","task_type":"local_bash","description":"npm test"}]}""");
+
+        // Act: task "a" completed, so the full live set now holds only "b".
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"b","task_type":"local_bash","description":"npm test"}]}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldHaveSingleItem().ShouldBe(new BackgroundTask("local_bash", "npm test"));
+    }
+
+    [Fact]
+    public void WhenBackgroundTasksChangedIsEmpty_ClearsTheList()
+    {
+        // Arrange
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a","task_type":"local_bash","description":"dotnet test"}]}""");
+
+        // Act
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[]}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenResultArrives_KeepsBackgroundTasks()
+    {
+        // Arrange
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a","task_type":"local_bash","description":"dotnet test"}]}""");
+
+        // Act
+        ApplySystem("""{"type":"result","subtype":"success","is_error":false}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldHaveSingleItem().Description.ShouldBe("dotnet test");
+    }
+
+    [Fact]
+    public void WhenBackgroundTaskDescriptionContainsSecret_RedactsIt()
+    {
+        // Arrange
+        string token = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789";
+
+        // Act
+        ApplySystem($$"""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a","task_type":"local_bash","description":"git push https://x-access-token:{{token}}@github.com/o/r"}]}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldHaveSingleItem().Description.ShouldNotContain(token);
+    }
+
+    [Fact]
+    public void WhenBackgroundTaskDescriptionIsLong_CollapsesItToTheSummaryLength()
+    {
+        // Arrange
+        string command = "echo " + new string('x', 400);
+
+        // Act
+        ApplySystem($$"""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a","task_type":"local_bash","description":"{{command}}"}]}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldHaveSingleItem().Description.ShouldBe(command[..200] + "…");
+    }
+
+    [Fact]
+    public void WhenBackgroundTaskHasBlankDescriptionAndNoType_KeepsItWithEmptyText()
+    {
+        // Act
+        ApplySystem("""{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a","description":"   "}]}""");
+
+        // Assert
+        Snapshot().BackgroundTasks.ShouldHaveSingleItem().ShouldBe(new BackgroundTask(string.Empty, string.Empty));
+    }
+
     private void CreateTask(string toolUseId, string taskId, string subject, string activeForm)
     {
         ApplyToolUse(toolUseId, "TaskCreate", $$"""{"subject":"{{subject}}","activeForm":"{{activeForm}}"}""");
