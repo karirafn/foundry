@@ -116,15 +116,13 @@ public sealed class Apply
     }
 
     [Fact]
-    public void WhenToolUseHasNoResultYet_ItIsTheInFlightToolWithInputSummary()
+    public void WhenToolUseHasNoResultYet_ItIsTheInFlightTool()
     {
         // Act
         ApplyToolUse("t1", "Bash", """{"command":"dotnet test"}""");
 
         // Assert
-        InFlightTool tool = Snapshot().InFlightTool.ShouldNotBeNull();
-        tool.Name.ShouldBe("Bash");
-        tool.Summary.ShouldBe("dotnet test");
+        Snapshot().InFlightTool.ShouldBe(new InFlightTool("Bash"));
     }
 
     [Fact]
@@ -154,24 +152,14 @@ public sealed class Apply
     }
 
     [Fact]
-    public void WhenSkillIsCalled_RecordsActiveSkill()
-    {
-        // Act
-        ApplyToolUse("s1", "Skill", """{"skill":"code-review","args":"high"}""");
-
-        // Assert
-        Snapshot().ActiveSkill.ShouldBe("code-review");
-    }
-
-    [Fact]
-    public void WhenAgentIsCalled_TracksSubagentWithTypeDescriptionAndDepth()
+    public void WhenAgentIsCalled_TracksSubagentWithTypeAndDescription()
     {
         // Act
         ApplyToolUse("a1", "Agent", """{"subagent_type":"developer","description":"Implement parser"}""");
 
         // Assert
         ActiveSubagent subagent = Snapshot().Subagents.ShouldHaveSingleItem();
-        subagent.ShouldBe(new ActiveSubagent("developer", "Implement parser", 1, null));
+        subagent.ShouldBe(new ActiveSubagent("developer", "Implement parser", null));
     }
 
     [Fact]
@@ -206,26 +194,33 @@ public sealed class Apply
     }
 
     [Fact]
-    public void WhenSubagentSpawnsSubagent_NestedSubagentHasDepthTwo()
+    public void WhenStreamHasSkillNestedSubagentAndPendingTool_SnapshotKeepsSubagentsAndInFlightToolName()
     {
         // Arrange
+        ApplyToolUse("s1", "Skill", """{"skill":"code-review","args":"high"}""");
         ApplyToolUse("a1", "Agent", """{"subagent_type":"developer","description":"Implement"}""");
 
         // Act
         ApplyToolUse("a2", "Agent", """{"subagent_type":"Explore","description":"Look"}""", parentToolUseId: "a1");
+        ApplyToolUse("t1", "Grep", """{"pattern":"Foo"}""", parentToolUseId: "a2");
 
         // Assert
-        Snapshot().Subagents.Select(s => s.SpawnDepth).ShouldBe([1, 2]);
+        AgentActivity snapshot = Snapshot();
+        snapshot.Subagents.ShouldBe([
+            new ActiveSubagent("developer", "Implement", "Agent"),
+            new ActiveSubagent("Explore", "Look", "Grep"),
+        ]);
+        snapshot.InFlightTool.ShouldBe(new InFlightTool("Grep"));
     }
 
     [Fact]
-    public void WhenTaskStartedCarriesSpawnDepth_UsesIt()
+    public void WhenTaskStartedHasNoAgentCall_TracksTheSubagent()
     {
         // Act
         ApplySystem("""{"type":"system","subtype":"task_started","task_id":"t-9","subagent_type":"reviewer","description":"Review","spawn_depth":3}""");
 
         // Assert
-        Snapshot().Subagents.ShouldHaveSingleItem().ShouldBe(new ActiveSubagent("reviewer", "Review", 3, null));
+        Snapshot().Subagents.ShouldHaveSingleItem().ShouldBe(new ActiveSubagent("reviewer", "Review", null));
     }
 
     [Fact]
@@ -314,13 +309,16 @@ public sealed class Apply
     }
 
     [Fact]
-    public void WhenSummaryContainsSecret_RedactsIt()
+    public void WhenSubagentDescriptionContainsSecret_RedactsIt()
     {
+        // Arrange
+        string token = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789";
+
         // Act
-        ApplyToolUse("t1", "Bash", """{"command":"git push https://x-access-token:ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r"}""");
+        ApplyToolUse("a1", "Agent", $$"""{"subagent_type":"developer","description":"push https://x-access-token:{{token}}@github.com/o/r"}""");
 
         // Assert
-        Snapshot().InFlightTool.ShouldNotBeNull().Summary.ShouldNotBeNull().ShouldNotContain("ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+        Snapshot().Subagents.ShouldHaveSingleItem().Description.ShouldNotBeNull().ShouldNotContain(token);
     }
 
     private void CreateTask(string toolUseId, string taskId, string subject, string activeForm)

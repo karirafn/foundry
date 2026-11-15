@@ -36,7 +36,6 @@ function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivi
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
@@ -108,8 +107,8 @@ describe('WorkerSignalRService', () => {
       vi.useFakeTimers();
       const { svc, hub } = setup();
       await vi.advanceTimersByTimeAsync(0);
-      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1', inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
-      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2', inFlightTool: { name: 'Bash', summary: null, startedAt: null } }));
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-1', issueId: 'issue-1', inFlightTool: { name: 'Bash' } }));
+      hub.emit('AgentActivity', buildAgentActivity({ workerRunId: 'run-2', issueId: 'issue-2', inFlightTool: { name: 'Bash' } }));
       // run-2 ended while disconnected, so the hub reports only run-1.
       hub.invokeResult = () => Promise.resolve({
         workerActivities: [],

@@ -13,15 +13,12 @@ export interface AgentTaskItem {
 export interface ActiveSubagent {
   readonly subagentType: string;
   readonly description: string | null;
-  readonly spawnDepth: number;
   readonly lastTool: string | null;
 }
 
 /** The most recent tool call with no matching tool result yet. */
 export interface InFlightTool {
   readonly name: string;
-  readonly summary: string | null;
-  readonly startedAt: string | null;
 }
 
 /** Billable token totals; the server computes them, the client never sums token buckets. */
@@ -43,7 +40,6 @@ export interface AgentActivity {
   readonly currentTask: AgentTaskItem | null;
   readonly completedTaskCount: number;
   readonly subagents: readonly ActiveSubagent[];
-  readonly activeSkill: string | null;
   readonly inFlightTool: InFlightTool | null;
   readonly tokens: AgentTokenTotals;
 }
