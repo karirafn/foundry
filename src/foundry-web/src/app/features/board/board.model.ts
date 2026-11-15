@@ -3,7 +3,7 @@ import { formatMergeSkippedReason } from '../issues/merge-outcome.format';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { getFailureCategoryDisplay } from '../../shared/utils/failure-category';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
-import { providerTerminology } from '../../shared/utils/provider.util';
+import { providerDisplayName, providerTerminology } from '../../shared/utils/provider.util';
 
 /** The stages the board shows; a completed (`done`) issue leaves the board. */
 export type BoardStage = Exclude<IssueStage, 'done'>;
@@ -180,6 +180,14 @@ const CHECKS_RED: ReasonCopy = {
   explanation: () => 'Checks failed',
 };
 
+// Warning, not error: no job ran the code, so nothing is known to be wrong with it; the person retries CI.
+const INFRA_FAILED: ReasonCopy = {
+  label: "CI couldn't run",
+  tone: 'warning',
+  explanation: (issue) =>
+    `CI failed before running any code; retry it on ${providerDisplayName(issue.providerType ?? '') || 'the provider'}`,
+};
+
 function mergeSkippedExplanation(issue: IssueSummary): string {
   const reason = formatMergeSkippedReason(issue.mergeSkippedReason);
   return reason !== null
@@ -197,6 +205,9 @@ function reasonCopy(issue: IssueSummary): ReasonCopy {
   if (issue.state === 'review') {
     if (issue.checksOutcome === 'still_failing') {
       return CHECKS_RED;
+    }
+    if (issue.checksOutcome === 'infrastructure_failed') {
+      return INFRA_FAILED;
     }
     if (issue.mergeOutcome === 'skipped') {
       return MERGE_SKIPPED;

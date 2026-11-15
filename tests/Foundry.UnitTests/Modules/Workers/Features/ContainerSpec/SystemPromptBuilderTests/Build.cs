@@ -1604,6 +1604,23 @@ public sealed class Build
         SystemPromptBuilder.TaskListInstruction.ShouldNotContain("\n");
     }
 
+    [Fact]
+    public void WhenBuilt_TaskListInstructionTellsTheAgentToLoadTheDeferredTaskTools()
+    {
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            Principles,
+            1, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            Issue,
+            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        result.ShouldContain("ToolSearch");
+        result.ShouldContain("select:TaskCreate,TaskUpdate");
+    }
+
     // =========================================================
     // Pre-PR section tests (Issue #592 step 1)
     // =========================================================
@@ -2023,7 +2040,7 @@ public sealed class Build
         // Assert
         result.ShouldSatisfyAllConditions(
             () => result.ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker),
-            () => result.ShouldNotContain("ToolSearch"));
+            () => result.ShouldNotContain("load the `LSP` tool via ToolSearch"));
     }
 
     [Fact]

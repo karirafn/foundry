@@ -50,6 +50,7 @@ public sealed class ProcessRebuildAsync
             queue ?? new NullWorkerImageRebuildQueue(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
+            new FoundryImageSweep(imageOperations, NullLogger<FoundryImageSweep>.Instance),
             hostEnv,
             roleCatalogStore ?? new WorkerRoleCatalogStore(),
             NullLogger<WorkerImageRebuildService>.Instance);
@@ -1260,6 +1261,78 @@ public sealed class ProcessRebuildAsync
         }
     }
 
+    [Fact]
+    public async Task WhenBuildSucceeds_RemovesUntaggedFoundryImagesAfterTheLastTagMoved()
+    {
+        // Arrange — the host holds one labelled dangling image left by an earlier build.
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            CallRecordingImageOperations images = new(danglingImageId: "sha256:previous-worker");
+            WorkerImageRebuildService sut = BuildService(images, contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — the sweep removed it, and listed only after the fourth (publisher) build moved its tag.
+            images.Calls.ShouldContain("delete:sha256:previous-worker");
+            images.Calls.IndexOf("list").ShouldBeGreaterThan(images.Calls.LastIndexOf("build"));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildFails_DoesNotRemoveImages()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            CallRecordingImageOperations images = new(danglingImageId: "sha256:previous-worker", buildError: "layer error");
+            WorkerImageRebuildService sut = BuildService(images, contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            images.Calls.ShouldNotContain("list");
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenImageRemovalFails_BuildStillSucceeds()
+    {
+        // Arrange — listing images throws, as when the daemon goes away between the build and the sweep.
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            CallRecordingImageOperations images = new(listFailure: new HttpRequestException("Connection refused"));
+            WorkerImageRebuildService sut = BuildService(images, dispatcher: dispatcher, contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            images.Calls.ShouldContain("list");
+            dispatcher.Published[^1].ShouldBeOfType<ImageBuildSucceeded>();
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
     /// <summary>Writes the minimal valid role catalog (the implement role, the shared plugin and the Worker Principles) under <c>workersDir/roles</c>.</summary>
     private static void WriteRoleFixture(string workersDir)
     {
@@ -1645,4 +1718,81 @@ public sealed class ProcessRebuildAsync
         }
     }
 
+
+    /// <summary>
+    /// Records the image calls in order. Lists one labelled dangling image until it is deleted, can report a build
+    /// error on every build, and can throw from <see cref="ListImagesAsync"/>.
+    /// </summary>
+    private sealed class CallRecordingImageOperations(
+        string? danglingImageId = null,
+        string? buildError = null,
+        Exception? listFailure = null) : IImageOperations
+    {
+        private string? _danglingImageId = danglingImageId;
+
+        public List<string> Calls { get; } = [];
+
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+        {
+            Calls.Add("build");
+
+            if (buildError is not null)
+            {
+                progress.Report(new JSONMessage { Error = new JSONError { Message = buildError } });
+            }
+
+            return Task.CompletedTask;
+        }
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken)
+        {
+            Calls.Add("list");
+
+            if (listFailure is not null)
+            {
+                throw listFailure;
+            }
+
+            IList<ImagesListResponse> images = _danglingImageId is null ? [] : [new ImagesListResponse { ID = _danglingImageId }];
+            return Task.FromResult(images);
+        }
+
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken)
+        {
+            Calls.Add($"delete:{name}");
+            _danglingImageId = null;
+            return Task.FromResult<IList<IDictionary<string, string>>>([new Dictionary<string, string> { ["Deleted"] = name }]);
+        }
+
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken)
+        {
+            Calls.Add("inspect");
+            return Task.FromResult(new ImageInspectResponse());
+        }
+
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
 }

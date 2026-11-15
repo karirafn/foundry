@@ -58,7 +58,6 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,

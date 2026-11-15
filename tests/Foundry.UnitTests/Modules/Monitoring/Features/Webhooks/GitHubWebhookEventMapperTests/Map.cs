@@ -17,10 +17,13 @@ public sealed class Map
 
     // Issue 10 is tracked (detected) and blocked by untracked issue 77; 20 is in review on PR 21 and
     // blocks tracked issue 30; 30 is checks-pending on PR 31; 40 awaits input on its own thread;
-    // 50 awaits input on PR 51.
+    // 50 awaits input on PR 51; 60 is in review with checks that are not passed on PR 61.
     private static readonly WebhookTrackingContext Tracked = new(
-        new HashSet<int> { 10, 20, 30, 40, 50 },
-        [new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At, null)],
+        new HashSet<int> { 10, 20, 30, 40, 50, 60 },
+        [
+            new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At, null, ChecksPassed: true),
+            new ReviewIssueInfo(60, "https://github.com/owner/repo/pull/61", At, null, ChecksPassed: false),
+        ],
         [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)],
         new HashSet<int> { 77, 20 },
         [new AwaitingInputThread(40, null), new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51")]);
@@ -179,6 +182,41 @@ public sealed class Map
     {
         MapEvent("status", """{"state":"success","branches":[{"name":"feat/30-thing"}]}""")
             .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
+    }
+
+    [Fact]
+    public void WhenCheckSuiteCompletedForReviewPullRequestWithChecksNotPassed_NudgesReviewPass()
+    {
+        MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"main","pull_requests":[{"number":61}]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 60));
+    }
+
+    [Fact]
+    public void WhenCheckSuiteCompletedForReviewIssueWithChecksPassed_IsDropped()
+    {
+        MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"feat/20-thing","pull_requests":[{"number":21}]}}""")
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenCheckSuiteCompletedMatchesChecksPendingAndReviewIssue_NudgesChecksPass()
+    {
+        MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"feat/30-thing","pull_requests":[{"number":61}]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
+    }
+
+    [Fact]
+    public void WhenStatusOnReviewIssueBranchWithChecksNotPassed_NudgesReviewPass()
+    {
+        MapEvent("status", """{"state":"success","branches":[{"name":"feat/60-thing"}]}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 60));
+    }
+
+    [Fact]
+    public void WhenStatusOnReviewIssueBranchWithChecksPassed_IsDropped()
+    {
+        MapEvent("status", """{"state":"success","branches":[{"name":"feat/20-thing"}]}""")
+            .ShouldBeNull();
     }
 
     [Theory]

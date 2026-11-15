@@ -11,7 +11,6 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
@@ -73,7 +72,7 @@ describe('activityPanel', () => {
   it('falls back to the working subagent without a current task', () => {
     // Arrange
     const activity = buildActivity({
-      subagents: [{ subagentType: 'Explore', description: null, spawnDepth: 1, lastTool: null }],
+      subagents: [{ subagentType: 'Explore', description: null, lastTool: null }],
     });
 
     // Act
@@ -162,7 +161,7 @@ describe('lastEventLine', () => {
     // Arrange
     const activity = buildActivity({
       lastEventAt: secondsBefore(5 * 60),
-      inFlightTool: { name: 'Bash', summary: 'npm test', startedAt: null },
+      inFlightTool: { name: 'Bash' },
     });
 
     // Act

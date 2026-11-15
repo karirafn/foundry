@@ -60,8 +60,10 @@ internal static partial class SystemPromptBuilder
 
     // Workflow-neutral: Foundry reads the agent's task list to show live progress on the
     // dashboard (Agent Activity), so ask the agent to keep it current without prescribing stages.
+    // Claude Code exposes TaskCreate and TaskUpdate as deferred tools: an agent not told to load
+    // them via ToolSearch cannot call them, so its run shows no task list.
     internal const string TaskListInstruction =
-        "Track your plan with your task list (TaskCreate / TaskUpdate) and keep it current as you work: mark each task in progress when you start it and completed when it is done.";
+        "Track your plan with your task list: TaskCreate and TaskUpdate are deferred tools, so load them with ToolSearch using the query `select:TaskCreate,TaskUpdate` before you call them, then create your task list before your first edit and keep it current as you work: mark each task in progress when you start it and completed when it is done.";
 
     internal const string SafetyPreamble =
         """

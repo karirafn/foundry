@@ -78,7 +78,8 @@ public sealed class GetWorkerRunDetailAsync_DiffGate : IAsyncDisposable
                 [
                     new RevertedFile("assets/demo.mp4", RevertedFileReason.Oversized, 50_540_134),
                     new RevertedFile("tools/protoc.exe", RevertedFileReason.Binary, 3_250_585),
-                ]),
+                ],
+                []),
             PublishingRunFixture.ExitedAt);
         CompletedRun completed = publishing.Complete(0, PublishingRunFixture.Branch, pullRequestUrl: null);
         await SeedAsync(completed);

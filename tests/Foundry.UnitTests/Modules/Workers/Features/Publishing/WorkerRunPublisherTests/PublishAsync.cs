@@ -52,7 +52,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
         FakePublisher publisher = new FakePublisher().WithPublishResults(
-            new PublishResult.Published(Head, 2, ["feat: add retry"], []));
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
@@ -86,7 +86,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
-        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], []));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], [], []));
         StubPostExitProviderQueries provider = new(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
@@ -110,7 +110,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishingRun(new RunExit(1, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
-        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 1, ["wip"], []));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 1, ["wip"], [], []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
@@ -172,6 +172,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             BranchName.From($"{Branch}-run-1"),
             Head,
             BranchDivergenceReason.BranchMoved,
+            [],
             []));
 
         // Act
@@ -194,6 +195,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             BranchName.From($"{Branch}-run-1"),
             Head,
             BranchDivergenceReason.ForcePushProtected,
+            [],
             []));
 
         // Act
@@ -242,7 +244,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
         RevertedFile reverted = new("assets/demo.mp4", RevertedFileReason.Oversized, 50_540_134);
         FakePublisher publisher = new FakePublisher().WithPublishResults(
-            new PublishResult.Published(Head, 3, ["feat: add retry"], [reverted]));
+            new PublishResult.Published(Head, 3, ["feat: add retry"], [reverted], []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
@@ -263,7 +265,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             Head,
             3,
             ["fix: b"],
-            [new RevertedFile("tools/protoc.exe", RevertedFileReason.Binary, 3_250_585)]));
+            [new RevertedFile("tools/protoc.exe", RevertedFileReason.Binary, 3_250_585)],
+            []));
         StubPostExitProviderQueries provider = new(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
@@ -273,6 +276,51 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
 
         // Assert
         _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("## Files reverted by Foundry");
+    }
+
+    [Fact]
+    public async Task GenericFindings_AreListedInTheOpenedPullRequestAndKeptOnTheTerminalRun()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        SecretFinding generic = new("src/store.ts", 3, Head, "generic-api-key");
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 3, ["feat: add retry"], [], [generic]));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        _commands.Opened.ShouldHaveSingleItem().Body
+            .ShouldContain("## Possible generic secrets for review\n\nFoundry's diff gate matched these lines with a generic secret pattern");
+        _commands.Opened.Single().Body.ShouldContain("- `src/store.ts` line 3: rule `generic-api-key`");
+        await using FoundryDbContext db = CreateDbContext();
+        WorkerRun run = await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.GenericFindings.ShouldBe([generic]),
+            () => run.ConfirmedFindings.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task GenericFindings_AreListedInTheSummaryCommentOfALaterRun()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(
+            Head,
+            3,
+            ["fix: b"],
+            [],
+            [new SecretFinding("docs/README.md", 12, Head, "generic-api-key")]));
+        StubPostExitProviderQueries provider = new(
+            hasCommits: true,
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
+
+        // Act
+        await RunPublisherAsync(publisher, provider);
+
+        // Assert
+        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("- `docs/README.md` line 12: rule `generic-api-key`");
     }
 
     [Fact]
@@ -374,7 +422,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         // Arrange
         SeedConfirmedPublishingRun(new SecretFinding("src/store.ts", 3, Head, "generic-api-key"));
         FakePublisher publisher = new FakePublisher().WithPublishResults(
-            new PublishResult.Published(Head, 2, ["feat: add retry"], []));
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
@@ -388,7 +436,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedConfirmedPublishingRun(new SecretFinding("src/store.ts", 3, Head, "generic-api-key"));
-        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], []));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], [], []));
         StubPostExitProviderQueries provider = new(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));

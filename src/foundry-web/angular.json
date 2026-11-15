@@ -74,7 +74,23 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "exclude": [
+              "src/**/*.layout.spec.ts"
+            ]
+          }
+        },
+        "test-layout": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "browsers": [
+              "ChromiumHeadless"
+            ],
+            "include": [
+              "src/**/*.layout.spec.ts"
+            ]
+          }
         }
       }
     }

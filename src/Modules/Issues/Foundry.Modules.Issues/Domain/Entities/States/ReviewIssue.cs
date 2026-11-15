@@ -114,6 +114,27 @@ public sealed class ReviewIssue : Issue
         return checksPending;
     }
 
+    /// <summary>
+    /// The pull request's checks read green on the same head after a rerun: the issue goes back to the checks gate,
+    /// which confirms and routes the green verdict (ADR 0108). Returns <see langword="null"/> when the stored verdict
+    /// is already <see cref="ChecksOutcome.Passed"/>, which is never re-read, so the cycle ends.
+    /// </summary>
+    public ChecksPendingIssue? RecheckAfterChecksPassed(DateTimeOffset transitionedAt)
+    {
+        if (ChecksOutcome is ChecksOutcome.Passed)
+        {
+            return null;
+        }
+
+        ChecksPendingIssue checksPending = ChecksPendingIssue.FromReviewAfterChecksRerun(this, transitionedAt);
+        AddDomainEvent(new Events.IssueChecksPending(
+            Id,
+            MonitoredRepositoryId,
+            checksPending.IssueNumber,
+            checksPending.EnteredChecksPendingAt));
+        return checksPending;
+    }
+
     public RevisionQueuedIssue Revise(
         IReadOnlyList<ReviewComment> comments,
         DateTimeOffset transitionedAt,

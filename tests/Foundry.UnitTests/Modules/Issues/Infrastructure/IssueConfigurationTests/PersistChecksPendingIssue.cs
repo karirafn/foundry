@@ -124,4 +124,30 @@ public sealed class PersistChecksPendingIssue : IAsyncDisposable
         // Assert
         result.ShouldBeOfType<ChecksPendingIssue>().Reason.ShouldBe(new ChecksPendingReason.HeadMoved());
     }
+
+    [Fact]
+    public async Task WhenChecksPendingAfterChecksRerun_ReasonIsPersisted()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithIssueNumber(45)
+            .WithTitle("Checks pending after a checks rerun")
+            .WithLabels([])
+            .WithChecksOutcome(new ChecksOutcome.StillFailing([]))
+            .Review()
+            .RecheckAfterChecksPassed(DateTimeOffset.UtcNow)
+            .ShouldNotBeNull();
+
+        _dbContext.Set<Issue>().Add(checksPending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([checksPending.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<ChecksPendingIssue>().Reason.ShouldBe(new ChecksPendingReason.ChecksRerun());
+    }
 }

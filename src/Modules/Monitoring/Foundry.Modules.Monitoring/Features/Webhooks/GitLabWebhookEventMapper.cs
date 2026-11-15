@@ -232,7 +232,7 @@ internal static partial class GitLabWebhookEventMapper
             }
         }
 
-        return MapChecksPendingIssue(repositoryId, tracked, mergeRequestIids, branches, MergeRequestUrlPattern());
+        return MapChecksDelivery(repositoryId, tracked, mergeRequestIids, branches, MergeRequestUrlPattern());
     }
 
     private static bool HadTriggerLabel(JsonElement payload) =>

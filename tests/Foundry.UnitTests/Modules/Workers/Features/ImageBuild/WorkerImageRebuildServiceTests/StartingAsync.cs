@@ -31,6 +31,7 @@ public sealed class StartingAsync
             queue ?? new SpyWorkerImageRebuildQueue(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
+            new FoundryImageSweep(new NullImageOperations(), NullLogger<FoundryImageSweep>.Instance),
             new StubHostEnvironment(string.Empty),
             new WorkerRoleCatalogStore(),
             NullLogger<WorkerImageRebuildService>.Instance);

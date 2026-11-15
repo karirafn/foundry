@@ -58,8 +58,8 @@ public sealed class BackoffBehavior
         StubHostEnvironment env = new(contentRootPath);
 
         return testOnlyRetryPolicy is null
-            ? new WorkerImageRebuildService(queue, factory, images, env, new WorkerRoleCatalogStore(), NullLogger<WorkerImageRebuildService>.Instance)
-            : new WorkerImageRebuildService(queue, factory, images, env, new WorkerRoleCatalogStore(), NullLogger<WorkerImageRebuildService>.Instance, testOnlyRetryPolicy);
+            ? new WorkerImageRebuildService(queue, factory, images, new FoundryImageSweep(images, NullLogger<FoundryImageSweep>.Instance), env, new WorkerRoleCatalogStore(), NullLogger<WorkerImageRebuildService>.Instance)
+            : new WorkerImageRebuildService(queue, factory, images, new FoundryImageSweep(images, NullLogger<FoundryImageSweep>.Instance), env, new WorkerRoleCatalogStore(), NullLogger<WorkerImageRebuildService>.Instance, testOnlyRetryPolicy);
     }
 
     [Fact]

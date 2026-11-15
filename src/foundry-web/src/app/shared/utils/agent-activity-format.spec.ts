@@ -11,7 +11,6 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     currentTask: null,
     completedTaskCount: 0,
     subagents: [],
-    activeSkill: null,
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
@@ -53,7 +52,7 @@ describe('laneStepText', () => {
   it('should fall back to the latest subagent without a current task', () => {
     // Arrange
     const activity = buildActivity({
-      subagents: [{ subagentType: 'developer', description: null, spawnDepth: 1, lastTool: 'Bash' }],
+      subagents: [{ subagentType: 'developer', description: null, lastTool: 'Bash' }],
     });
 
     // Act / Assert

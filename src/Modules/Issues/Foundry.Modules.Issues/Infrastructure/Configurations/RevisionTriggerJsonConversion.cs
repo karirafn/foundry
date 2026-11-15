@@ -37,7 +37,7 @@ internal static class RevisionTriggerJsonConversion
                 null,
                 null,
                 null,
-                [.. fc.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl))]),
+                [.. fc.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
             RevisionTrigger.RebaseConflict => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             RevisionTrigger.InputProvided => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{trigger.Discriminator}'"),
@@ -63,7 +63,7 @@ internal static class RevisionTriggerJsonConversion
                 dto.OmittedCommentCount ?? 0,
                 dto.NewestConsumedCommentAt),
             "failed_checks" => new RevisionTrigger.FailedChecks(
-                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl))]),
+                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
             "rebase_conflict" => new RevisionTrigger.RebaseConflict(),
             "input_provided" => new RevisionTrigger.InputProvided(),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{dto.Discriminator}'"),
@@ -99,5 +99,7 @@ internal static class RevisionTriggerJsonConversion
     private sealed record FailingCheckDto(
         [property: JsonPropertyName("name")] string Name,
         [property: JsonPropertyName("conclusion")] string Conclusion,
-        [property: JsonPropertyName("detailsUrl")] string? DetailsUrl);
+        [property: JsonPropertyName("detailsUrl")] string? DetailsUrl,
+        // Rows written before issue #968 carry no flag and read as fixable checks.
+        [property: JsonPropertyName("infrastructure")] bool IsInfrastructureFailure = false);
 }

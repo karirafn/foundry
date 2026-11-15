@@ -140,6 +140,10 @@ class CalloutSource {
     return (this.summary?.checksOutcome ?? this.details?.checksOutcome) === 'still_failing';
   }
 
+  get checksInfrastructureFailed(): boolean {
+    return (this.summary?.checksOutcome ?? this.details?.checksOutcome) === 'infrastructure_failed';
+  }
+
   get mergeSkipped(): boolean {
     return (this.summary?.mergeOutcome ?? this.details?.mergeOutcome) === 'skipped';
   }
@@ -226,11 +230,11 @@ function item(text: string, extra: Partial<Omit<CalloutListItem, 'text'>> = {}):
 
 function failingChecksList(src: CalloutSource): CalloutList | null {
   const checks = src.details?.failingChecks ?? [];
-  if (!src.checksStillFailing || checks.length === 0) {
+  if (!(src.checksStillFailing || src.checksInfrastructureFailed) || checks.length === 0) {
     return null;
   }
   return {
-    heading: 'Failing checks',
+    heading: src.checksInfrastructureFailed ? "Checks that couldn't run" : 'Failing checks',
     items: checks.map((check) =>
       item(check.name, {
         badge: check.conclusion,
@@ -458,14 +462,24 @@ function publishRetryingCallout(src: CalloutSource): Draft {
 }
 
 function checksPendingCallout(src: CalloutSource): Draft {
-  // Only head_moved changes the copy, so after_run, a missing field and a reason a newer backend adds keep today's.
-  if (src.details?.checksPendingReason !== 'head_moved') {
-    return draft('working', 'Checks running', [`Waiting for CI checks on the ${src.pullRequest}.`]);
+  // head_moved and checks_rerun carry their own copy; after_run, a missing field and a reason a newer backend
+  // adds keep the default.
+  let d: Draft;
+  switch (src.details?.checksPendingReason) {
+    case 'head_moved':
+      d = draft('working', 'Checks re-running', [
+        `The ${src.pullRequest}'s branch changed on ${src.providerName} after its checks finished, so it left your review.`,
+        'Waiting for CI checks on the new commits.',
+      ]);
+      break;
+    case 'checks_rerun':
+      d = draft('working', 'Checks passed on a rerun', [
+        `The ${src.pullRequest}'s checks ran again on the same commits and passed. Foundry is confirming the result.`,
+      ]);
+      break;
+    default:
+      return draft('working', 'Checks running', [`Waiting for CI checks on the ${src.pullRequest}.`]);
   }
-  const d = draft('working', 'Checks re-running', [
-    `The ${src.pullRequest}'s branch changed on ${src.providerName} after its checks finished, so it left your review.`,
-    'Waiting for CI checks on the new commits.',
-  ]);
   const link = src.prLink();
   if (link !== null) {
     d.links.push(link);
@@ -494,6 +508,22 @@ function mergeSkippedLine(src: CalloutSource): string {
   }
 }
 
+// Warning, not error: no job ran the code, so nothing is known to be wrong with it. The review pass picks up a
+// green retry on the same head (ADR 0108), which is the exit the second line promises.
+function infrastructureFailedCallout(src: CalloutSource): Draft {
+  const list = failingChecksList(src);
+  const d = draft('warning', "CI couldn't run", [
+    list === null
+      ? `CI failed before running any code, but no job could be identified. Open the ${src.pullRequest}'s checks on `
+        + `${src.providerName}.`
+      : `The ${src.pullRequest}'s checks failed before running any code, so Foundry didn't start a fix run.`,
+    `Retry the failed jobs on ${src.providerName}. Foundry picks up the result once they pass.`,
+  ]);
+  d.list = list;
+  d.shows.add('failing_checks');
+  return d;
+}
+
 function reviewCallout(src: CalloutSource): Draft {
   const link = src.prLink();
   let d: Draft;
@@ -512,6 +542,8 @@ function reviewCallout(src: CalloutSource): Draft {
       d.list = list;
     }
     d.shows.add('failing_checks');
+  } else if (src.checksInfrastructureFailed) {
+    d = infrastructureFailedCallout(src);
   } else if (src.mergeSkipped) {
     d = draft('warning', 'Merge skipped', [
       mergeSkippedLine(src),
