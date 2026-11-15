@@ -109,7 +109,7 @@ export class PaneActivityComponent {
     return since === null ? null : this._now() - new Date(since).getTime();
   });
 
-  /** Past the silence threshold; null before the first event. */
+  /** At or past the silence threshold since the last event; false before the first event. */
   private readonly _quiet: Signal<boolean> = computed(() => {
     const ms = this._sinceLastEventMs();
     return ms !== null && ms >= AGENT_SILENCE_THRESHOLD_MINUTES * 60_000;
