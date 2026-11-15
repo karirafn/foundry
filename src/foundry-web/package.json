@@ -28,7 +28,7 @@
     "@angular/cli": "^22.2.6",
     "@angular/compiler-cli": "^22.2.6",
     "@types/node": "26.6.6",
-    "@vitest/browser-playwright": "4.1.11",
+    "@vitest/browser-playwright": "4.1.12",
     "jsdom": "^31.0.0",
     "openapi-typescript": "7.13.0",
     "playwright": "1.65.1",
