@@ -28,7 +28,7 @@ internal static class ChecksOutcomeJsonConversion
         {
             ChecksOutcome.StillFailing sf => new ChecksOutcomeDto(
                 outcome.Discriminator,
-                [.. sf.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl))]),
+                [.. sf.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
             _ => new ChecksOutcomeDto(outcome.Discriminator, []),
         };
 
@@ -51,7 +51,7 @@ internal static class ChecksOutcomeJsonConversion
             "none_detected" => new ChecksOutcome.NoneDetected(),
             "unfinished" => new ChecksOutcome.Unfinished(),
             "still_failing" => new ChecksOutcome.StillFailing(
-                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl))]),
+                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
             "unreadable" => new ChecksOutcome.Unreadable(),
             _ => throw new UnreachableException($"Unknown ChecksOutcome discriminator: '{dto.Discriminator}'"),
         };
@@ -74,5 +74,7 @@ internal static class ChecksOutcomeJsonConversion
     private sealed record FailingCheckDto(
         [property: JsonPropertyName("name")] string Name,
         [property: JsonPropertyName("conclusion")] string Conclusion,
-        [property: JsonPropertyName("detailsUrl")] string? DetailsUrl);
+        [property: JsonPropertyName("detailsUrl")] string? DetailsUrl,
+        // Rows written before issue #968 carry no flag and read as fixable checks.
+        [property: JsonPropertyName("infrastructure")] bool IsInfrastructureFailure = false);
 }

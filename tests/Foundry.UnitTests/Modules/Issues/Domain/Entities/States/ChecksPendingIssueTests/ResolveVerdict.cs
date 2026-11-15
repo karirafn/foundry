@@ -165,4 +165,79 @@ public sealed class ResolveVerdict
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.StillFailing>();
     }
+
+    [Fact]
+    public void WhenEveryFailingCheckIsAnInfrastructureFailure_ReturnsReviewCarryingEveryCheck()
+    {
+        // Arrange
+        IReadOnlyList<FailingCheck> infrastructure =
+        [
+            new FailingCheck("build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true),
+            new FailingCheck("test", "runner_system_failure", null, IsInfrastructureFailure: true),
+        ];
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        Issue next = checksPending.ResolveVerdict(
+            new ChecksOutcome.StillFailing(infrastructure), autoMerge: true, Head, DateTimeOffset.UtcNow);
+
+        // Assert
+        next.ShouldBeOfType<ReviewIssue>().ChecksOutcome
+            .ShouldBeOfType<ChecksOutcome.StillFailing>().FailingChecks.ShouldBe(infrastructure);
+    }
+
+    [Fact]
+    public void WhenEveryFailingCheckIsAnInfrastructureFailure_QueuesNoRevision()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        checksPending.ResolveVerdict(
+            new ChecksOutcome.StillFailing([new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]),
+            autoMerge: false,
+            Head,
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        checksPending.DomainEvents.OfType<IssueRevisionQueued>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenFixableAndInfrastructureFailuresMixUnderCap_QueuesARevisionNamingOnlyTheFixableChecks()
+    {
+        // Arrange
+        FailingCheck fixable = new("test", "script_failure", "https://gitlab.com/group/project/-/jobs/2");
+        FailingCheck infrastructure = new("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true);
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        Issue next = checksPending.ResolveVerdict(
+            new ChecksOutcome.StillFailing([infrastructure, fixable]), autoMerge: false, Head, DateTimeOffset.UtcNow);
+
+        // Assert
+        RevisionQueuedIssue revision = next.ShouldBeOfType<RevisionQueuedIssue>();
+        revision.ShouldSatisfyAllConditions(
+            () => revision.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>().FailingChecks.ShouldBe([fixable]),
+            () => revision.ChecksFixAttempts.ShouldBe(checksPending.ChecksFixAttempts + 1));
+    }
+
+    [Fact]
+    public void WhenFixableAndInfrastructureFailuresMixAtCap_ReturnsReviewCarryingEveryCheck()
+    {
+        // Arrange
+        IReadOnlyList<FailingCheck> mixed =
+        [
+            new FailingCheck("test", "script_failure", null),
+            new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true),
+        ];
+        ChecksPendingIssue checksPending = new IssueBuilder().WithFailingChecks(mixed).ChecksPendingAtCap();
+
+        // Act
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(mixed), autoMerge: true, Head, DateTimeOffset.UtcNow);
+
+        // Assert
+        next.ShouldBeOfType<ReviewIssue>().ChecksOutcome
+            .ShouldBeOfType<ChecksOutcome.StillFailing>().FailingChecks.ShouldBe(mixed);
+    }
 }

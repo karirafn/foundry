@@ -3274,6 +3274,10 @@
               "null",
               "string"
             ]
+          },
+          "isInfrastructureFailure": {
+            "type": "boolean",
+            "default": false
           }
         }
       },

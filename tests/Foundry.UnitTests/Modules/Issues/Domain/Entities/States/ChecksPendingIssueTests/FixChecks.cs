@@ -36,6 +36,41 @@ public sealed class FixChecks
     }
 
     [Fact]
+    public void WhenEveryFailingCheckIsAnInfrastructureFailure_ThrowsWithoutRaisingADomainEvent()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .ChecksPending();
+
+        // Act
+        Action act = () => checksPending.FixChecks(
+            [new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)],
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        ArgumentException exception = Should.Throw<ArgumentException>(act);
+        exception.ParamName.ShouldBe("failingChecks");
+        checksPending.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenSomeFailingChecksAreInfrastructureFailures_LeavesThemOutOfTheRevision()
+    {
+        // Arrange
+        FailingCheck fixable = new("test", "script_failure", null);
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .ChecksPending();
+
+        // Act
+        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(
+            [new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true), fixable],
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>().FailingChecks.ShouldBe([fixable]);
+    }
+
+    [Fact]
     public void WhenFixChecksCalledOnFirstAttempt_ReturnsRevisionQueuedIssueWithSameId()
     {
         // Arrange
