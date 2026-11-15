@@ -26,6 +26,7 @@ function activity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     inFlightTool: { name: 'Bash' },
     tokens: { inputTokens: 100, outputTokens: null },
+    backgroundTasks: [],
     ...overrides,
   };
 }

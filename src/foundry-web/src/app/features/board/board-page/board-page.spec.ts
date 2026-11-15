@@ -190,6 +190,7 @@ function activity(issueId: string, overrides: Partial<AgentActivity> = {}): Agen
     subagents: [],
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
+    backgroundTasks: [],
     ...overrides,
   };
 }
@@ -655,6 +656,66 @@ describe('BoardPageComponent', () => {
         expect(event.classList).toContain('worker-card__event--silent');
         expect(event.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
         expect(h.el.querySelector('.worker-card--silent')).not.toBeNull();
+      });
+
+      it('names the background task it waits on instead of turning silent', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(
+          new Map([
+            [
+              'w',
+              activity('w', {
+                lastEventAt: minutesAgo(7.5),
+                inFlightTool: { name: 'Bash' },
+                backgroundTasks: [
+                  { taskType: 'local_bash', description: 'dotnet test' },
+                  { taskType: 'local_bash', description: 'npm test' },
+                  { taskType: 'local_bash', description: '' },
+                ],
+              }),
+            ],
+          ]),
+        );
+        await h.render();
+
+        // Assert
+        const waiting = h.el.querySelector('.worker-card__status .worker-card__waiting')!;
+        expect(waiting.getAttribute('aria-hidden')).toBe('true');
+        expect(text(waiting)).toBe('waiting on dotnet test +2 more · 7m');
+        expect(text(waiting.querySelector('.worker-card__command'))).toBe('dotnet test');
+        expect(waiting.getAttribute('title')).toBe('dotnet test\nnpm test\na background task');
+        expect(text(h.el.querySelector('.worker-card__status .sr-only:last-child'))).toBe(
+          'waiting on 3 background tasks, 7m',
+        );
+        expect(h.el.querySelector('.worker-card__event')).toBeNull();
+        expect(h.el.querySelector('.worker-card__warning')).toBeNull();
+        expect(h.el.querySelector('.worker-card--silent')).toBeNull();
+      });
+
+      it('keeps the last-event line below the threshold while background tasks run', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(
+          new Map([
+            [
+              'w',
+              activity('w', {
+                lastEventAt: minutesAgo(2.5),
+                backgroundTasks: [{ taskType: 'local_bash', description: 'dotnet test' }],
+              }),
+            ],
+          ]),
+        );
+        await h.render();
+
+        // Assert
+        expect(text(h.el.querySelector('.worker-card__event'))).toBe('last event 2m ago');
+        expect(h.el.querySelector('.worker-card__waiting')).toBeNull();
       });
 
       it("takes the role from the run's activity once it arrives", async () => {

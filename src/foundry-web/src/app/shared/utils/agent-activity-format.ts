@@ -1,4 +1,4 @@
-import { AgentActivity } from '../../core/models/agent-activity.model';
+import { AgentActivity, BackgroundTask } from '../../core/models/agent-activity.model';
 
 /** Compact elapsed time: "12s", "6m", "1h 4m". */
 export function formatElapsed(ms: number): string {
@@ -36,4 +36,15 @@ export function laneStepText(activity: AgentActivity): string {
 /** 1-based position of the current task, counting completed tasks before it. */
 export function taskOrdinal(activity: AgentActivity): number {
   return Math.min(activity.completedTaskCount + 1, activity.tasks.length);
+}
+
+/** A background task as shown to the user: its description, or a generic name when it has none. */
+export function backgroundTaskText(task: BackgroundTask): string {
+  const description = task.description.trim();
+  return description.length > 0 ? description : 'a background task';
+}
+
+/** "1 background task", "3 background tasks". */
+export function backgroundTaskCount(count: number): string {
+  return `${count} background task${count === 1 ? '' : 's'}`;
 }

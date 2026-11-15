@@ -1,4 +1,4 @@
-import { AgentActivity, AgentTaskItem } from '../../../../core/models/agent-activity.model';
+import { AgentActivity, AgentTaskItem, BackgroundTask } from '../../../../core/models/agent-activity.model';
 import { activityPanel, lastEventLine, silenceEpisode } from './worker-activity.model';
 
 function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
@@ -13,12 +13,17 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
+    backgroundTasks: [],
     ...overrides,
   };
 }
 
 function task(id: string, status: string, activeForm: string | null = null): AgentTaskItem {
   return { id, subject: `Task ${id}`, activeForm, status };
+}
+
+function bgTask(description: string): BackgroundTask {
+  return { taskType: 'local_bash', description };
 }
 
 const NOW = Date.parse('2026-01-01T12:00:00Z');
@@ -154,7 +159,7 @@ describe('lastEventLine', () => {
     const line = lastEventLine(buildActivity({ lastEventAt: secondsBefore(42) }), NOW);
 
     // Assert
-    expect(line).toEqual({ text: 'last event 42s ago', silent: false });
+    expect(line).toEqual({ kind: 'recent', text: 'last event 42s ago' });
   });
 
   it('turns silent at the threshold, naming the running tool', () => {
@@ -168,7 +173,7 @@ describe('lastEventLine', () => {
     const line = lastEventLine(activity, NOW);
 
     // Assert
-    expect(line).toEqual({ text: 'silent 5m · Bash running', silent: true });
+    expect(line).toEqual({ kind: 'silent', text: 'silent 5m · Bash running' });
   });
 
   it('turns silent without a running tool', () => {
@@ -176,11 +181,96 @@ describe('lastEventLine', () => {
     const line = lastEventLine(buildActivity({ lastEventAt: secondsBefore(7 * 60) }), NOW);
 
     // Assert
-    expect(line).toEqual({ text: 'silent 7m', silent: true });
+    expect(line).toEqual({ kind: 'silent', text: 'silent 7m' });
+  });
+
+  it('names the background task it waits on at the threshold instead of turning silent', () => {
+    // Arrange
+    const activity = buildActivity({
+      lastEventAt: secondsBefore(7 * 60),
+      inFlightTool: { name: 'Bash' },
+      backgroundTasks: [bgTask('dotnet test')],
+    });
+
+    // Act
+    const line = lastEventLine(activity, NOW);
+
+    // Assert
+    expect(line).toEqual({
+      kind: 'waiting',
+      command: 'dotnet test',
+      more: null,
+      elapsed: '7m',
+      title: 'dotnet test',
+      srText: 'waiting on 1 background task, 7m',
+    });
+  });
+
+  it('names the first of several background tasks and counts the rest', () => {
+    // Arrange
+    const activity = buildActivity({
+      lastEventAt: secondsBefore(7 * 60),
+      backgroundTasks: [bgTask('dotnet test'), bgTask('npm test'), bgTask('')],
+    });
+
+    // Act
+    const line = lastEventLine(activity, NOW);
+
+    // Assert
+    expect(line).toEqual({
+      kind: 'waiting',
+      command: 'dotnet test',
+      more: '+2 more',
+      elapsed: '7m',
+      title: 'dotnet test\nnpm test\na background task',
+      srText: 'waiting on 3 background tasks, 7m',
+    });
+  });
+
+  it('reads "a background task" when the task has no description', () => {
+    // Arrange
+    const activity = buildActivity({
+      lastEventAt: secondsBefore(7 * 60),
+      backgroundTasks: [bgTask('  ')],
+    });
+
+    // Act
+    const line = lastEventLine(activity, NOW);
+
+    // Assert
+    expect(line).toMatchObject({ kind: 'waiting', command: 'a background task' });
+  });
+
+  it('says how long ago the last event was below the threshold even with background tasks', () => {
+    // Arrange
+    const activity = buildActivity({
+      lastEventAt: secondsBefore(42),
+      backgroundTasks: [bgTask('dotnet test')],
+    });
+
+    // Act
+    const line = lastEventLine(activity, NOW);
+
+    // Assert
+    expect(line).toEqual({ kind: 'recent', text: 'last event 42s ago' });
   });
 });
 
 describe('silenceEpisode', () => {
+  it('is null while the run waits on background tasks past the threshold', () => {
+    // Arrange
+    const activity = buildActivity({
+      lastEventAt: secondsBefore(7 * 60),
+      backgroundTasks: [bgTask('dotnet test')],
+    });
+
+    // Act
+    const episode = silenceEpisode(activity, NOW);
+
+    // Assert
+    expect(episode).toBeNull();
+  });
+
   it('is null while the run is under the threshold', () => {
     // Act
     const episode = silenceEpisode(buildActivity({ lastEventAt: secondsBefore(299) }), NOW);

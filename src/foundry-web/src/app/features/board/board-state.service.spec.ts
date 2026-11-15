@@ -60,6 +60,7 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
+    backgroundTasks: [],
     ...overrides,
   };
 }
@@ -800,6 +801,31 @@ describe('BoardStateService', () => {
       const h = setup();
       load(h, [buildIssue({ id: 'a', issueNumber: 7 })]);
       silentRun(h, 'a', 'run-a', new Date(START - 60_000).toISOString());
+
+      // Act
+      await vi.advanceTimersByTimeAsync(1000);
+      TestBed.tick();
+
+      // Assert
+      expect(h.service.announcement()).toBe('');
+    });
+
+    it('does not announce a worker waiting on a background task past the threshold', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a', issueNumber: 7 })]);
+      h.activities.update((current) =>
+        new Map(current).set(
+          'a',
+          buildActivity({
+            issueId: 'a',
+            workerRunId: 'run-a',
+            lastEventAt: new Date(START - 299_000).toISOString(),
+            backgroundTasks: [{ taskType: 'local_bash', description: 'dotnet test' }],
+          }),
+        ),
+      );
+      TestBed.tick();
 
       // Act
       await vi.advanceTimersByTimeAsync(1000);
