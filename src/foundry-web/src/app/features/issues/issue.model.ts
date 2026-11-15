@@ -169,8 +169,8 @@ export interface IssueStateDetails {
 /** Why the Publisher pushed a run's work to a side branch: the branch moved during the run, or it is protected from force pushes. */
 export type DivergenceReason = 'branch-moved' | 'force-push-protected';
 
-/** Why an issue is in checks_pending: a run left an open PR/MR, or new commits reached it after its checks resolved. */
-export type ChecksPendingReason = 'after_run' | 'head_moved';
+/** Why an issue is in checks_pending: a run left an open PR/MR, new commits reached it after its checks resolved, or its checks passed on a rerun of the same commits. */
+export type ChecksPendingReason = 'after_run' | 'head_moved' | 'checks_rerun';
 
 export interface IssueDetail extends IssueSummary {
   author: string;

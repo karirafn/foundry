@@ -622,6 +622,43 @@ describe('buildCallout', () => {
       );
     });
 
+    it('explains that the pull request\'s checks passed on a rerun of the same commits, linking it', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'checks_rerun' }),
+        null,
+        summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('working');
+      expect(callout.title).toBe('Checks passed on a rerun');
+      expect(callout.lines).toEqual([
+        'The pull request\'s checks ran again on the same commits and passed. Foundry is confirming the result.',
+      ]);
+      expect(callout.links).toEqual([
+        { label: 'View PR', href: 'https://github.com/acme/api/pull/7', ariaLabel: 'View pull request for issue #42' },
+      ]);
+    });
+
+    it('explains a checks rerun on a merge request without a link when it has none', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'checks_rerun' }),
+        null,
+        summary({ state: 'checks_pending', providerType: 'gitlab' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Checks passed on a rerun');
+      expect(callout.lines).toEqual([
+        'The merge request\'s checks ran again on the same commits and passed. Foundry is confirming the result.',
+      ]);
+      expect(callout.links).toEqual([]);
+    });
+
     for (const [name, reason] of [
       ['after_run', 'after_run'],
       ['null', null],
