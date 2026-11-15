@@ -255,10 +255,12 @@ prepare() {
 #   FOUNDRY_PUBLISH result=diverged branch=<branch> side_branch=<side> head=<sha>[ reason=force-push-protected]
 #   FOUNDRY_PUBLISH result=failed kind=permanent|transient|unreachable reason=<one line; the last field, may hold spaces>
 # preceded, for published and diverged, by one line per pushed Run commit, oldest first (Foundry's own
-# merge and revert commits excluded), then one line per file the Diff gate reverted:
+# merge and revert commits excluded), then one line per file the Diff gate reverted, then one line per generic
+# finding (a match of a rule tagged foundry-generic, which is pushed for review; #956), sorted:
 #   FOUNDRY_RUN_COMMIT <sha> <subject>
 #   FOUNDRY_REVERTED_FILE reason=binary|oversized size=<bytes> path=<path>
-# and, for secret_detected, by one line per finding, with nothing pushed:
+#   FOUNDRY_GENERIC_FINDING commit=<sha> line=<n> rule=<rule id> path=<path>
+# and, for secret_detected, by one line per provider finding, with nothing pushed:
 #   FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path>
 # <n> counts the commits on the pushed branch beyond the default branch. Diagnostics go to stderr.
 # Exit status: 0 for published, nothing_to_publish, diverged and secret_detected; 1 for failed.
@@ -302,6 +304,7 @@ publish_published() {
     commits="$(scratch_git rev-list --count "$1" --not refs/foundry/default)"
     cat "$run_commit_lines"
     cat "$reverted_lines"
+    cat "$generic_lines"
     printf 'FOUNDRY_PUBLISH result=published head=%s commits=%s\n' "$1" "$commits"
     exit 0
 }
@@ -314,6 +317,7 @@ publish_diverged() {
     fi
     cat "$run_commit_lines"
     cat "$reverted_lines"
+    cat "$generic_lines"
     if [ -n "${2:-}" ]; then
         printf 'FOUNDRY_PUBLISH result=diverged branch=%s side_branch=%s head=%s reason=%s\n' "$run_branch" "$side_branch" "$1" "$2"
     else
@@ -504,7 +508,8 @@ map_sha() {
 # Diff gate (#788, ADR 0100)
 #
 # Runs on the rewritten Run commits before anything is pushed:
-#   - a secret anywhere in the content they add blocks the push (scan_secrets);
+#   - a provider-pattern secret anywhere in the content they add blocks the push, and a generic-pattern one is
+#     pushed and reported for review (scan_secrets);
 #   - a file they added or changed that is binary by git's detection, or larger than
 #     DIFF_GATE_MAX_FILE_BYTES, is restored by one code-authored commit (revert_blocked_files).
 # CI/CD files are not treated specially: human review of the pull request is their gate.
@@ -518,15 +523,23 @@ DIFF_GATE_REVERT_SUBJECT="chore: revert files blocked by the Foundry diff gate"
 # The exit status the scanner is told to use for findings, so a finding is never confused with an error (1).
 SCANNER_FINDINGS_EXIT=3
 
+# The tag that marks a rule in Foundry's scanner configuration as a generic pattern (#956, ADR 0107).
+GENERIC_PATTERN_TAG=foundry-generic
+
 # scan_secrets — scans the content added by the Run commits (new_tip --not <base> <D>) with Foundry's own
-# scanner configuration, suppressing exactly the CONFIRMED_FINDINGS fingerprints. Findings end the publish with nothing
-# pushed:
-#   FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path; the last field, may hold spaces>
-#   FOUNDRY_PUBLISH result=secret_detected findings=<n>
+# scanner configuration, suppressing exactly the CONFIRMED_FINDINGS fingerprints, and splits the findings by tag:
+#   - any finding of a provider pattern (a rule not tagged foundry-generic) ends the publish with nothing pushed,
+#     listing the provider findings only:
+#       FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path; the last field, may hold spaces>
+#       FOUNDRY_PUBLISH result=secret_detected findings=<n>
+#   - a finding of a generic pattern never blocks: it goes to $generic_lines, which every pushing result prints:
+#       FOUNDRY_GENERIC_FINDING commit=<sha> line=<n> rule=<rule id> path=<path; the last field, may hold spaces>
 # The matched value is never printed: the report template has no field for it, and the scanner redacts its logs.
 scan_secrets() {
+    : > "$generic_lines"
+    # The tag list starts with a comma and ends each tag with one, so ",<tag>," matches one whole tag.
     printf '%s\n' \
-        '{{ range . }}FOUNDRY_SECRET_FINDING commit={{ .Commit }} line={{ .StartLine }} rule={{ .RuleID }} path={{ .File }}' \
+        '{{ range . }}FOUNDRY_SECRET_FINDING commit={{ .Commit }} line={{ .StartLine }} rule={{ .RuleID }} tags=,{{ range .Tags }}{{ . }},{{ end }} path={{ .File }}' \
         '{{ end }}' > "$scan_template"
 
     # Only Foundry chooses what is ignored: the fingerprints an operator confirmed, never the repository's own file.
@@ -554,16 +567,32 @@ scan_secrets() {
         return 0
     fi
 
-    grep '^FOUNDRY_SECRET_FINDING commit=[0-9a-f]* line=[0-9]* rule=[A-Za-z0-9._-]* path=.' "$scan_report" \
-        2> /dev/null | sort -u > "$scan_findings" || true
+    finding_line='^FOUNDRY_SECRET_FINDING commit=[0-9a-f]* line=[0-9]* rule=[A-Za-z0-9._-]* tags=,[^ ]* path=.'
+    grep "$finding_line" "$scan_report" 2> /dev/null > "$scan_findings" || true
     if [ "$status" -ne "$SCANNER_FINDINGS_EXIT" ] || [ ! -s "$scan_findings" ]; then
         publish_failed transient "the secret scan failed: $(grep -v '^[[:space:]]*$' "$scan_err" | tail -n 1)"
     fi
+    # Fails closed: a finding line the scan wrote but that does not parse (a tag holding a space) could be a
+    # provider finding, so it can never be published past.
+    if [ "$(grep -c '^FOUNDRY_SECRET_FINDING ' "$scan_report")" -ne "$(grep -c . "$scan_findings")" ]; then
+        publish_failed transient "the secret scan wrote a finding that cannot be read"
+    fi
 
-    echo "The secret scan found $(grep -c . "$scan_findings") possible secret(s); nothing is pushed" >&2
-    cat "$scan_findings"
-    printf 'FOUNDRY_PUBLISH result=secret_detected findings=%s\n' "$(grep -c . "$scan_findings")"
-    exit 0
+    # The tags field only classifies a finding; it is dropped from every line printed. Anchored to the fields before the
+    # path, none of which holds a space, so a path that spells out a tags field cannot make a finding generic.
+    generic_tag="^FOUNDRY_SECRET_FINDING commit=[0-9a-f]* line=[0-9]* rule=[A-Za-z0-9._-]* tags=[^ ]*,$GENERIC_PATTERN_TAG,[^ ]* path="
+    grep -v "$generic_tag" "$scan_findings" | sed 's/ tags=,[^ ]* path=/ path=/' | sort -u > "$scan_provider" || true
+    if [ -s "$scan_provider" ]; then
+        echo "The secret scan found $(grep -c . "$scan_provider") possible secret(s); nothing is pushed" >&2
+        cat "$scan_provider"
+        printf 'FOUNDRY_PUBLISH result=secret_detected findings=%s\n' "$(grep -c . "$scan_provider")"
+        exit 0
+    fi
+
+    grep "$generic_tag" "$scan_findings" \
+        | sed 's/ tags=,[^ ]* path=/ path=/; s/^FOUNDRY_SECRET_FINDING /FOUNDRY_GENERIC_FINDING /' \
+        | sort -u > "$generic_lines"
+    echo "The secret scan found $(grep -c . "$generic_lines") possible generic secret(s); they are published for review" >&2
 }
 
 # list_run_paths — writes to $gate_paths, one per line, every path the Run commits added, changed or deleted
@@ -721,6 +750,7 @@ publish() {
     run_commit_list="$(mktemp)"
     run_commit_lines="$(mktemp)"
     reverted_lines="$(mktemp)"
+    generic_lines="$(mktemp)"
     gate_dir="$(mktemp -d)"
     gate_paths_raw="$gate_dir/paths.raw"
     gate_paths="$gate_dir/paths"
@@ -730,9 +760,10 @@ publish() {
     scan_template="$gate_dir/scan.tmpl"
     scan_report="$gate_dir/scan.report"
     scan_findings="$gate_dir/scan.findings"
+    scan_provider="$gate_dir/scan.provider"
     scan_err="$gate_dir/scan.err"
     scan_ignore="$gate_dir/scan.ignore"
-    trap 'rm -rf "$ASKPASS_FILE" "$git_err" "$commit_map" "$commit_object" "$rewritten_object" "$run_commit_list" "$run_commit_lines" "$reverted_lines" "$gate_dir"' EXIT
+    trap 'rm -rf "$ASKPASS_FILE" "$git_err" "$commit_map" "$commit_object" "$rewritten_object" "$run_commit_list" "$run_commit_lines" "$reverted_lines" "$generic_lines" "$gate_dir"' EXIT
     printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
     chmod 700 "$ASKPASS_FILE"
 

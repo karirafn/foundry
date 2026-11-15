@@ -100,6 +100,12 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     public IReadOnlyList<RevertedFile> RevertedFiles { get; private set; } = [];
 
     /// <summary>
+    /// The Diff gate's generic findings (#956, ADR 0107): matches of a generic pattern that the Publisher pushed with the
+    /// run for review in its pull request; empty when it found none. They never block and are never confirmed.
+    /// </summary>
+    public IReadOnlyList<SecretFinding> GenericFindings { get; private set; } = [];
+
+    /// <summary>
     /// The secret findings an operator confirmed as false positives (#899), so the Publisher suppresses exactly these;
     /// empty when the run was never confirmed. Each confirmation adds to the set, so a re-block never un-suppresses an
     /// earlier finding.
@@ -130,15 +136,18 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         CommitSha? pushedHead,
         int? branchCommitCount,
         BranchDivergence? divergence,
-        IReadOnlyList<RevertedFile> revertedFiles)
+        IReadOnlyList<RevertedFile> revertedFiles,
+        IReadOnlyList<SecretFinding> genericFindings)
     {
         ArgumentNullException.ThrowIfNull(revertedFiles);
+        ArgumentNullException.ThrowIfNull(genericFindings);
 
         PublishedHead = pushedHead;
         PublishedBranchCommitCount = branchCommitCount;
         DivergedSideBranch = divergence?.SideBranch;
         DivergenceReason = divergence?.Reason;
         RevertedFiles = revertedFiles;
+        GenericFindings = genericFindings;
     }
 
     /// <summary>Adds <paramref name="findings"/> to the confirmed set, keeping each finding once.</summary>

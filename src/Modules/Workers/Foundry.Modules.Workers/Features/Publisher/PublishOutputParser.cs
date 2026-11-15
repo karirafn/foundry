@@ -11,7 +11,8 @@ namespace Foundry.Modules.Workers.Features.Publisher;
 /// <summary>
 /// Reads a Publish run's exit: its single structured <c>FOUNDRY_PUBLISH</c> result line, and the
 /// <c>FOUNDRY_RUN_COMMIT</c> lines naming the commits it pushed, and the Diff gate's <c>FOUNDRY_REVERTED_FILE</c> and
-/// <c>FOUNDRY_SECRET_FINDING</c> lines. Anything else the Publisher printed is diagnostics.
+/// <c>FOUNDRY_SECRET_FINDING</c> and <c>FOUNDRY_GENERIC_FINDING</c> lines. Anything else the Publisher printed is
+/// diagnostics.
 /// </summary>
 internal static partial class PublishOutputParser
 {
@@ -60,7 +61,7 @@ internal static partial class PublishOutputParser
         }
 
         List<string> subjects = [.. CommitLinePattern().Matches(log).Select(match => match.Groups["subject"].Value.Trim())];
-        return new PublishResult.Published(head, commits, subjects, ReadRevertedFiles(log));
+        return new PublishResult.Published(head, commits, subjects, ReadRevertedFiles(log), ReadGenericFindings(log));
     }
 
     private static PublishResult.Diverged? ReadDiverged(Dictionary<string, string> values, string log)
@@ -73,7 +74,7 @@ internal static partial class PublishOutputParser
             return null;
         }
 
-        return new PublishResult.Diverged(branch, sideBranch, head, reason, ReadRevertedFiles(log));
+        return new PublishResult.Diverged(branch, sideBranch, head, reason, ReadRevertedFiles(log), ReadGenericFindings(log));
     }
 
     // No reason is a branch that moved during the run; the Publisher names only a refused force push (ADR 0101).
@@ -127,6 +128,24 @@ internal static partial class PublishOutputParser
         }
 
         return files;
+    }
+
+    // The findings are already pushed, so an unreadable line is skipped rather than failing the publish, and there is
+    // no count to check: a mismatch could not fail closed (#956).
+    private static List<SecretFinding> ReadGenericFindings(string log)
+    {
+        List<SecretFinding> findings = [];
+        foreach (Match match in GenericFindingLinePattern().Matches(log))
+        {
+            if (CommitSha.TryFrom(match.Groups["commit"].Value, out CommitSha commit)
+                && int.TryParse(match.Groups["line"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int line)
+                && line >= 1)
+            {
+                findings.Add(new SecretFinding(match.Groups["path"].Value, line, commit, match.Groups["rule"].Value));
+            }
+        }
+
+        return findings;
     }
 
     private static PublishResult.Failed? ReadFailed(Dictionary<string, string> values)
@@ -216,6 +235,12 @@ internal static partial class PublishOutputParser
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex SecretFindingLinePattern();
+
+    [GeneratedRegex(
+        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?FOUNDRY_GENERIC_FINDING commit=(?<commit>[0-9a-f]{40,64}) line=(?<line>[0-9]{1,9}) rule=(?<rule>[A-Za-z0-9._-]{1,200}) path=(?<path>[^\r\n]+?)\r?$",
+        RegexOptions.ExplicitCapture | RegexOptions.Multiline,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex GenericFindingLinePattern();
 
     [GeneratedRegex(
         @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?FOUNDRY_REVERTED_FILE reason=(?<reason>[a-z]+) size=(?<size>[0-9]{1,18}) path=(?<path>[^\r\n]+?)\r?$",

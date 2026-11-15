@@ -14,11 +14,15 @@ public abstract record PublishResult
     /// <param name="BranchCommitCount">The commits the branch holds beyond the default branch.</param>
     /// <param name="CommitSubjects">The subjects of the run's commits as pushed, oldest first.</param>
     /// <param name="RevertedFiles">The files the Diff gate reverted before the push (#788).</param>
+    /// <param name="GenericFindings">
+    /// The Diff gate's generic findings, pushed with the run for review in its pull request (#956, ADR 0107).
+    /// </param>
     public sealed record Published(
         CommitSha Head,
         int BranchCommitCount,
         IReadOnlyList<string> CommitSubjects,
-        IReadOnlyList<RevertedFile> RevertedFiles) : PublishResult;
+        IReadOnlyList<RevertedFile> RevertedFiles,
+        IReadOnlyList<SecretFinding> GenericFindings) : PublishResult;
 
     /// <summary>The run produced no commits: no Run bundle, or an empty one.</summary>
     public sealed record NothingToPublish : PublishResult;
@@ -29,16 +33,20 @@ public abstract record PublishResult
     /// provider refused the lease push of a rebased tip (ADR 0101).
     /// </summary>
     /// <param name="RevertedFiles">The files the Diff gate reverted before the push (#788).</param>
+    /// <param name="GenericFindings">
+    /// The Diff gate's generic findings, pushed with the run for review in its pull request (#956, ADR 0107).
+    /// </param>
     public sealed record Diverged(
         BranchName Branch,
         BranchName SideBranch,
         CommitSha Head,
         BranchDivergenceReason Reason,
-        IReadOnlyList<RevertedFile> RevertedFiles) : PublishResult;
+        IReadOnlyList<RevertedFile> RevertedFiles,
+        IReadOnlyList<SecretFinding> GenericFindings) : PublishResult;
 
     /// <summary>
-    /// The Diff gate found possible secrets in the Run commits, so nothing was pushed (#788). The run keeps its Hand-off
-    /// volume until it is discarded; there is no way to publish it anyway.
+    /// The Diff gate found possible secrets of a provider pattern in the Run commits, so nothing was pushed (#788,
+    /// #956). The run keeps its Hand-off volume until it is discarded; there is no way to publish it anyway.
     /// </summary>
     public sealed record SecretDetected(IReadOnlyList<SecretFinding> Findings) : PublishResult;
 

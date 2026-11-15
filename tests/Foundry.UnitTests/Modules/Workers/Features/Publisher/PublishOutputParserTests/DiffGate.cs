@@ -135,4 +135,90 @@ public sealed class DiffGate
         // Assert
         result.ShouldBeOfType<PublishResult.Published>().RevertedFiles.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void APublishedResult_YieldsEveryGenericFinding()
+    {
+        // Arrange
+        string log = $"""
+            FOUNDRY_RUN_COMMIT {Sha} feat: add store
+            FOUNDRY_GENERIC_FINDING commit={FindingSha} line=7 rule=generic-api-key path=src/store.ts
+            2026-11-14T12:00:00.123Z FOUNDRY_GENERIC_FINDING commit={FindingSha} line=2 rule=generic-api-key path=docs/read me.md
+            FOUNDRY_PUBLISH result=published head={Sha} commits=1
+            """;
+
+        // Act
+        PublishResult result = PublishOutputParser.Parse(0, log);
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Published>().GenericFindings.ShouldBe(
+        [
+            new SecretFinding("src/store.ts", 7, CommitSha.From(FindingSha), "generic-api-key"),
+            new SecretFinding("docs/read me.md", 2, CommitSha.From(FindingSha), "generic-api-key"),
+        ]);
+    }
+
+    [Fact]
+    public void APublishedResult_WithoutGenericFindings_HasNone()
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(0, $"FOUNDRY_PUBLISH result=published head={Sha} commits=1\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Published>().GenericFindings.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ADivergedResult_YieldsEveryGenericFinding()
+    {
+        // Arrange
+        string log = $"""
+            FOUNDRY_GENERIC_FINDING commit={FindingSha} line=1 rule=generic-api-key path=shared.txt
+            FOUNDRY_PUBLISH result=diverged branch=feat/42-x side_branch=feat/42-x-run-abc head={Sha}
+            """;
+
+        // Act
+        PublishResult result = PublishOutputParser.Parse(0, log);
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Diverged>().GenericFindings.ShouldBe(
+            [new SecretFinding("shared.txt", 1, CommitSha.From(FindingSha), "generic-api-key")]);
+    }
+
+    [Fact]
+    public void AnUnreadableGenericFindingLine_IsSkippedWithoutFailingThePushedResult()
+    {
+        // Arrange
+        string log = $"""
+            FOUNDRY_GENERIC_FINDING commit={FindingSha} line=0 rule=generic-api-key path=a.ts
+            FOUNDRY_GENERIC_FINDING commit=xyz line=3 rule=generic-api-key path=b.ts
+            FOUNDRY_GENERIC_FINDING commit={FindingSha} line=4 rule=generic-api-key path=c.ts
+            FOUNDRY_PUBLISH result=published head={Sha} commits=1
+            """;
+
+        // Act
+        PublishResult result = PublishOutputParser.Parse(0, log);
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Published>().GenericFindings.ShouldBe(
+            [new SecretFinding("c.ts", 4, CommitSha.From(FindingSha), "generic-api-key")]);
+    }
+
+    [Fact]
+    public void ASecretDetectedResult_IgnoresGenericFindingLines()
+    {
+        // Arrange
+        string log = $"""
+            FOUNDRY_GENERIC_FINDING commit={FindingSha} line=2 rule=generic-api-key path=b.ts
+            FOUNDRY_SECRET_FINDING commit={FindingSha} line=14 rule=github-pat path=a.env
+            FOUNDRY_PUBLISH result=secret_detected findings=1
+            """;
+
+        // Act
+        PublishResult result = PublishOutputParser.Parse(0, log);
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.SecretDetected>().Findings.ShouldBe(
+            [new SecretFinding("a.env", 14, CommitSha.From(FindingSha), "github-pat")]);
+    }
 }

@@ -701,6 +701,14 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("false_positives_confirmed_at");
 
+                    b.Property<string>("GenericFindings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("generic_findings");
+
                     b.Property<string>("Image")
                         .HasMaxLength(500)
                         .IsUnicode(false)
