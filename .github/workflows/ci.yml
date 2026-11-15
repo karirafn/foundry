@@ -349,8 +349,9 @@ jobs:
 
               echo "=== Extracting and calling start_rootless_dockerd ===" >&2
 
-              # Source the real start_rootless_dockerd from the shipped entrypoint.
-              # sed extracts the function body: from the definition line to the first
+              # Source the real start_rootless_dockerd, and the clear_docker_environment
+              # it calls, from the shipped entrypoint.
+              # sed extracts each function body: from the definition line to the first
               # line that is } at column 1 (the function closing brace; the shipped file
               # keeps all nested block braces indented). sed is used over awk so the
               # extraction stays deterministic regardless of the awk variant the image
@@ -361,12 +362,14 @@ jobs:
                 echo "FAIL: /entrypoint.sh is missing or unreadable inside the worker image" >&2
                 exit 1
               fi
-              func_src="$(sed -n '"'"'/^start_rootless_dockerd()/,/^}/p'"'"' /entrypoint.sh)"
-              if [ -z "$func_src" ]; then
-                echo "FAIL: could not extract start_rootless_dockerd from /entrypoint.sh" >&2
-                exit 1
-              fi
-              eval "$func_src"
+              for func_name in clear_docker_environment start_rootless_dockerd; do
+                func_src="$(sed -n "/^${func_name}()/,/^}/p" /entrypoint.sh)"
+                if [ -z "$func_src" ]; then
+                  echo "FAIL: could not extract ${func_name} from /entrypoint.sh" >&2
+                  exit 1
+                fi
+                eval "$func_src"
+              done
               start_rootless_dockerd
 
               echo "=== Asserting DOCKER_HOST is set ===" >&2
