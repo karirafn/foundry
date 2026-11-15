@@ -1,17 +1,35 @@
 <div class="worker-activity" [class.worker-activity--starting]="panel().starting">
   <p class="worker-activity__task" [id]="taskLineId()">{{ panel().taskLine }}</p>
-  @if (panel().segments.length > 0) {
+  @if (panel().taskBar; as bar) {
     <div class="worker-activity__steps">
-      <span class="worker-activity__bar" aria-hidden="true">
-        @for (segment of panel().segments; track $index) {
-          <span
-            class="worker-activity__segment"
-            [class.worker-activity__segment--done]="segment === 'done'"
-            [class.worker-activity__segment--current]="segment === 'current'"
-          ></span>
+      @switch (bar.shape.kind) {
+        @case ('segments') {
+          <span class="worker-activity__bar" aria-hidden="true">
+            @for (segment of bar.shape.segments; track $index) {
+              <span
+                class="worker-activity__segment"
+                [class.worker-activity__segment--done]="segment === 'done'"
+                [class.worker-activity__segment--current]="segment === 'current'"
+              ></span>
+            }
+          </span>
         }
-      </span>
-      <span class="worker-activity__progress">{{ panel().progress }}</span>
+        @case ('meter') {
+          <span class="worker-activity__meter" aria-hidden="true">
+            <span
+              class="worker-activity__meter-done"
+              [style.width.%]="bar.shape.donePercent"
+            ></span>
+            @if (bar.shape.currentPercent > 0) {
+              <span
+                class="worker-activity__meter-current"
+                [style.width.%]="bar.shape.currentPercent"
+              ></span>
+            }
+          </span>
+        }
+      }
+      <span class="worker-activity__progress">{{ bar.progress }}</span>
     </div>
   }
 </div>

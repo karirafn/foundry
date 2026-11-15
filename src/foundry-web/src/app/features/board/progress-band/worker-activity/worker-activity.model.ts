@@ -13,15 +13,25 @@ import {
 /** A task-bar segment: a finished task, the one being worked on, or one not started. */
 export type TaskSegment = 'done' | 'current' | 'empty';
 
+/**
+ * Above this many tasks the bar is one continuous meter: at 20 the segments already fill a minimum-width
+ * card, so more would push the bar past its label.
+ */
+export const TASK_SEGMENT_LIMIT = 20;
+
+/** The task bar's shape: one segment per task, or a meter once there are too many tasks for segments. */
+export type TaskBar =
+  | { readonly kind: 'segments'; readonly segments: readonly TaskSegment[] }
+  /** Percentages of the bar's width: the completed tasks, then the one in progress. */
+  | { readonly kind: 'meter'; readonly donePercent: number; readonly currentPercent: number };
+
 /** What a worker card's activity panel reads. */
 export interface ActivityPanel {
   /** No activity event has arrived yet. */
   readonly starting: boolean;
   readonly taskLine: string;
-  /** One per task; empty when the run has no task list. */
-  readonly segments: readonly TaskSegment[];
-  /** "task 3 of 7"; null when the run has no task list. */
-  readonly progress: string | null;
+  /** The bar with its "task 3 of 7" label; null when the run has no task list. */
+  readonly taskBar: { readonly shape: TaskBar; readonly progress: string } | null;
 }
 
 /** The card footer's line on the last event; `kind` picks its tone. */
@@ -51,8 +61,7 @@ export interface WaitingLine {
 const STARTING_PANEL: ActivityPanel = {
   starting: true,
   taskLine: "Waiting for the agent's first event",
-  segments: [],
-  progress: null,
+  taskBar: null,
 };
 
 const SILENCE_THRESHOLD_MS = AGENT_SILENCE_THRESHOLD_MINUTES * 60_000;
@@ -68,10 +77,30 @@ export function activityPanel(activity: AgentActivity | null): ActivityPanel {
     starting: false,
     // laneStepText appends the position, which the bar shows beside it instead.
     taskLine: task !== null ? (task.activeForm ?? task.subject) : laneStepText(activity),
-    segments: activity.tasks.map((t) =>
-      t.status === 'completed' ? 'done' : t.id === task?.id ? 'current' : 'empty',
-    ),
-    progress: total > 0 ? `task ${taskOrdinal(activity)} of ${total}` : null,
+    taskBar:
+      total > 0
+        ? { shape: taskBar(activity), progress: `task ${taskOrdinal(activity)} of ${total}` }
+        : null,
+  };
+}
+
+function taskBar(activity: AgentActivity): TaskBar {
+  const tasks = activity.tasks;
+  const current = activity.currentTask;
+  if (tasks.length <= TASK_SEGMENT_LIMIT) {
+    return {
+      kind: 'segments',
+      segments: tasks.map((t) =>
+        t.status === 'completed' ? 'done' : t.id === current?.id ? 'current' : 'empty',
+      ),
+    };
+  }
+  const donePercent = (tasks.filter((t) => t.status === 'completed').length / tasks.length) * 100;
+  const working = current !== null && current.status !== 'completed';
+  return {
+    kind: 'meter',
+    donePercent,
+    currentPercent: working ? Math.min(100 / tasks.length, 100 - donePercent) : 0,
   };
 }
 
