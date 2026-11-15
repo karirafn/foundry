@@ -369,8 +369,7 @@ public sealed class RepositoryRoles
             new DispatchContext.Fresh("feat/42-title"),
             new IssueContent("Add retry", "Retry webhook delivery.", []),
             timeoutMinutes: 120,
-            installsDocker: false,
-            installsDotnet: false);
+            toolchain: ToolchainFixtures.With(docker: false, csharpLs: false));
 
         // Assert
         string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
@@ -466,7 +465,7 @@ public sealed class RepositoryRoles
             42,
             triage.SystemPromptTemplate,
             new IssueContent("Add retry", "Retry webhook delivery.", []),
-            installsDotnet: false);
+            toolchain: ToolchainFixtures.With(csharpLs: false));
 
         // Assert
         string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;

@@ -8,6 +8,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -30,7 +31,8 @@ public sealed class ProcessRebuildAsync
         bool imageBuildEnabled = true,
         string imageTag = "foundry-worker:local",
         IWorkerImageRebuildQueue? queue = null,
-        IWorkerRoleCatalogStore? roleCatalogStore = null)
+        IWorkerRoleCatalogStore? roleCatalogStore = null,
+        IWorkerImageToolchainRecorder? toolchainRecorder = null)
     {
         ServiceCollection services = new();
         services.AddEmptyDbContext();
@@ -53,6 +55,7 @@ public sealed class ProcessRebuildAsync
             new FoundryImageSweep(imageOperations, NullLogger<FoundryImageSweep>.Instance),
             hostEnv,
             roleCatalogStore ?? new WorkerRoleCatalogStore(),
+            toolchainRecorder ?? new SpyWorkerImageToolchainRecorder(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
@@ -1073,6 +1076,99 @@ public sealed class ProcessRebuildAsync
         {
             Directory.Delete(tempRoot, true);
         }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_TellsTheToolchainRecorderTheImageChanged()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            SpyWorkerImageToolchainRecorder recorder = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                contentRootPath: contentRoot,
+                toolchainRecorder: recorder);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            recorder.ImageChangedCount.ShouldBe(1);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageExists_TellsTheToolchainRecorderTheImageChanged()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            SpyWorkerImageToolchainRecorder recorder = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                contentRootPath: contentRoot,
+                imageBuildEnabled: false,
+                toolchainRecorder: recorder);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            recorder.ImageChangedCount.ShouldBe(1);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildFails_DoesNotTellTheToolchainRecorder()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            SpyWorkerImageToolchainRecorder recorder = new();
+            WorkerImageRebuildService sut = BuildService(
+                new ErrorReportingImageOperations("layer error"),
+                contentRootPath: contentRoot,
+                toolchainRecorder: recorder);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            recorder.ImageChangedCount.ShouldBe(0);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageMissing_DoesNotTellTheToolchainRecorder()
+    {
+        // Arrange
+        SpyWorkerImageToolchainRecorder recorder = new();
+        WorkerImageRebuildService sut = BuildService(
+            new NotFoundImageOperations(),
+            imageBuildEnabled: false,
+            toolchainRecorder: recorder);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        recorder.ImageChangedCount.ShouldBe(0);
     }
 
     [Fact]

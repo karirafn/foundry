@@ -91,6 +91,13 @@ A non-`Idle` state drives the dashboard image-build banner and disables the work
 The worker image settings stored on Global Settings: the **image tag** (default `foundry-worker:local`; empty or `:latest` rejected) and the **build toggle** (default enabled), alongside the set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) that drive Docker build args.
 Any change publishes `WorkerImageSettingsChanged`; with build enabled this requests an immediate rebuild, with build disabled it triggers an inspect (see Worker Image Build).
 
+### Worker Image Toolchain
+
+What a worker image actually carries, read from the image rather than from the preinstall flags ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)): a list of `{name, version}` entries (`node`, `claude-code`, `dotnet-sdk`, `csharp-ls`, `angular-cli`, `chromium`, `docker`, `playwright-core`, `gh`, `glab`, `git`; an absent tool is omitted) printed by `/opt/foundry/toolchain.sh` as one `FOUNDRY_TOOLCHAIN <json>` line.
+After every successful build, and every successful inspect when building is disabled, Foundry runs the script in a hardened, short-lived container of that image ID and stores the list in `worker_image_toolchains`, keyed by image ID; earlier images keep their rows.
+While the current image (the role catalog's image ID) has no stored list, the probe is retried with backoff (1 minute, doubling, capped at 30 minutes); a new build restarts it.
+The toolchain-dependent prompt sections follow the current image's list: the C# code-navigation section when it has `csharp-ls`, the pre-PR section when it has `docker`; an image with no recorded list gets neither.
+
 ### Docker-Enabled Worker Run Spec
 
 When `InstallDocker` is true, a `Full` run's worker runs its own nested rootless `dockerd` so Testcontainers-based integration tests work inside the container.

@@ -54,6 +54,15 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
     }
 
+    private const string ToolchainImageId = "sha256:current-worker-image";
+
+    private async Task StoreToolchainAsync(string imageId, Toolchain toolchain)
+    {
+        _dbContext.Set<WorkerImageToolchain>().Add(WorkerImageToolchain.Create(imageId, toolchain, DateTimeOffset.UnixEpoch));
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+    }
+
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
         await _dbContext.DisposeAsync();
@@ -1317,13 +1326,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerInstalled_SystemPromptEnvVarContainsPrePrSection()
+    public async Task WhenTheImagesRecordedToolchainHasDocker_SystemPromptEnvVarContainsPrePrSection()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-docker");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1339,13 +1349,15 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerNotInstalled_SystemPromptEnvVarOmitsPrePrSection()
+    public async Task WhenTheImagesRecordedToolchainLacksDocker_SystemPromptEnvVarOmitsPrePrSectionEvenWithTheDockerSettingOn()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: false, csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-no-docker");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: false));
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true),
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1358,13 +1370,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDotnetInstalled_SystemPromptEnvVarContainsCSharpLspSection()
+    public async Task WhenTheImagesRecordedToolchainHasCSharpLs_SystemPromptEnvVarContainsCSharpLspSection()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-dotnet");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: true));
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1377,13 +1390,30 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDotnetNotInstalled_SystemPromptEnvVarOmitsCSharpLspSection()
+    public async Task WhenTheImagesRecordedToolchainHasCSharpLs_TheRestrictedSystemPromptContainsCSharpLspSection()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(csharpLs: true));
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, imageId: ToolchainImageId);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"]
+            .ShouldContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenTheImagesRecordedToolchainLacksCSharpLs_SystemPromptEnvVarOmitsCSharpLspSection()
+    {
+        // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: true, csharpLs: false));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-no-dotnet");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: false));
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1393,6 +1423,47 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenOnlyAnotherImageHasARecordedToolchain_SystemPromptEnvVarOmitsBothSections()
+    {
+        // Arrange
+        await StoreToolchainAsync("sha256:an-older-image", ToolchainFixtures.With(docker: true, csharpLs: true));
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true),
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker));
+    }
+
+    [Fact]
+    public async Task WhenTheImageIdIsUnknown_SystemPromptEnvVarOmitsBothSections()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true),
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: null));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker));
     }
 
     [Fact]
@@ -1472,13 +1543,15 @@ public sealed class HandleAsync : IAsyncDisposable
         StubPostExitProviderQueries? postExitProviderQueries = null,
         IIssueContentQueries? issueContentQueries = null,
         IGlobalSettingsQueries? settingsQueries = null,
-        ITrackerContextQueries? trackerContextQueries = null) =>
+        ITrackerContextQueries? trackerContextQueries = null,
+        string? imageId = null) =>
         BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: settingsQueries,
             postExitProviderQueries: postExitProviderQueries,
             roleCatalog: StubWorkerRoleCatalogStore.With(
                 systemPrompt: "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+                imageId: imageId,
                 capability: WorkerCapability.Restricted),
             issueContentQueries: issueContentQueries,
             trackerContextQueries: trackerContextQueries);
@@ -2158,7 +2231,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private sealed class StubGlobalSettingsQueries(
         bool installsDocker = false,
-        bool installsDotnet = false,
         string imageTag = "stub-image:v1",
         WorkerResourceLimitsSnapshot? limits = null) : IGlobalSettingsQueries
     {
@@ -2190,7 +2262,7 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.FromResult(installsDocker);
 
         public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
-            => Task.FromResult(installsDotnet);
+            => throw new InvalidOperationException("The prompt follows the image's recorded toolchain, not the .NET setting.");
 
         public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
             => Task.FromResult(imageTag);

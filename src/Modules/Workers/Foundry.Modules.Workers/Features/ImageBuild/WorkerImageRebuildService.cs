@@ -24,6 +24,7 @@ internal sealed class WorkerImageRebuildService(
     FoundryImageSweep imageSweep,
     IHostEnvironment hostEnvironment,
     IWorkerRoleCatalogStore roleCatalogStore,
+    IWorkerImageToolchainRecorder toolchainRecorder,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
@@ -61,9 +62,10 @@ internal sealed class WorkerImageRebuildService(
         FoundryImageSweep imageSweep,
         IHostEnvironment hostEnvironment,
         IWorkerRoleCatalogStore roleCatalogStore,
+        IWorkerImageToolchainRecorder toolchainRecorder,
         ILogger<WorkerImageRebuildService> logger,
         ImageBuildRetryPolicy retryPolicy)
-        : this(rebuildQueue, scopeFactory, imageOperations, imageSweep, hostEnvironment, roleCatalogStore, logger)
+        : this(rebuildQueue, scopeFactory, imageOperations, imageSweep, hostEnvironment, roleCatalogStore, toolchainRecorder, logger)
     {
         _retryPolicy = retryPolicy;
     }
@@ -251,6 +253,9 @@ internal sealed class WorkerImageRebuildService(
             roleCatalogStore.Publish(new WorkerRoleCatalog(
                 catalogContent,
                 new WorkerImageProvenance(imageTag, imageId, DateTimeOffset.UtcNow, FoundryCommit.Value, Verified: true)));
+
+            // The prompt's toolchain-dependent sections follow what this image reports, not the install settings.
+            toolchainRecorder.ImageChanged();
         }
 
         if (errorTail is null)
@@ -507,6 +512,8 @@ internal sealed class WorkerImageRebuildService(
                     image.Created == default ? DateTimeOffset.UtcNow : image.Created,
                     FoundryCommit.Value,
                     Verified: false)));
+
+            toolchainRecorder.ImageChanged();
 
             CancellationTokenSource? oldCts;
             lock (_stateLock)

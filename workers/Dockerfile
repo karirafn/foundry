@@ -33,6 +33,12 @@ COPY claude-plugins/csharp-lsp /opt/claude-plugins/csharp-lsp
 COPY roles /opt/foundry/roles
 RUN chmod -R a-w,a+rX /opt/foundry/roles
 
+# Toolchain report (ADR 0109): Foundry runs it as the entrypoint of a probe container against each new
+# image and gates toolchain-dependent prompt sections on what it prints. Read-only to node, like the
+# roles, so a run cannot change what a later probe reports.
+COPY toolchain.sh /opt/foundry/toolchain.sh
+RUN chmod 555 /opt/foundry/toolchain.sh
+
 # Conditional Angular CLI install
 ARG INSTALL_ANGULAR=false
 RUN if [ "$INSTALL_ANGULAR" = "true" ]; then \

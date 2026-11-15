@@ -651,6 +651,29 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("dispatch_reservations", (string)null);
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerImageToolchain", b =>
+                {
+                    b.Property<string>("ImageId")
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("image_id");
+
+                    b.Property<string>("RecordedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("Toolchain")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entries");
+
+                    b.HasKey("ImageId");
+
+                    b.ToTable("worker_image_toolchains", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRoleSettings", b =>
                 {
                     b.Property<string>("Role")
