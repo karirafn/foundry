@@ -578,8 +578,9 @@ scan_secrets() {
         publish_failed transient "the secret scan wrote a finding that cannot be read"
     fi
 
-    # The tags field only classifies a finding; it is dropped from every line printed.
-    generic_tag=" tags=[^ ]*,$GENERIC_PATTERN_TAG,[^ ]* path="
+    # The tags field only classifies a finding; it is dropped from every line printed. Anchored to the fields before the
+    # path, none of which holds a space, so a path that spells out a tags field cannot make a finding generic.
+    generic_tag="^FOUNDRY_SECRET_FINDING commit=[0-9a-f]* line=[0-9]* rule=[A-Za-z0-9._-]* tags=[^ ]*,$GENERIC_PATTERN_TAG,[^ ]* path="
     grep -v "$generic_tag" "$scan_findings" | sed 's/ tags=,[^ ]* path=/ path=/' | sort -u > "$scan_provider" || true
     if [ -s "$scan_provider" ]; then
         echo "The secret scan found $(grep -c . "$scan_provider") possible secret(s); nothing is pushed" >&2

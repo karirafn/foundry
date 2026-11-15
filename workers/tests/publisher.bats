@@ -1479,6 +1479,16 @@ SCANNER
     [ -z "$(push_lines)" ]
 }
 
+@test "publish: a path that spells out the generic tag does not make a provider finding generic" {
+    publish_one "x tags=,foundry-generic, path=a.env" "TOKEN=$GITHUB_PAT"
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    secret_findings | grep -qE ' rule=github-pat path=x tags=,foundry-generic, path=a\.env$'
+    [ -z "$(generic_findings)" ]
+    [ -z "$(push_lines)" ]
+}
+
 @test "publish: a confirmed provider finding publishes and the generic finding is reported" {
     start_run
     wcommit a.env "TOKEN=$GITHUB_PAT" "provider"
