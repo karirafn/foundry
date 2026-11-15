@@ -2007,6 +2007,33 @@ describe('IssueCardComponent', () => {
     expect(badge?.textContent?.trim()).toBe('Checks: failing');
   });
 
+  it("should render a warning outcome badge \"Checks: CI couldn't run\" for infrastructure_failed checksOutcome", () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'infrastructure_failed' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge?.textContent?.trim()).toBe("Checks: CI couldn't run");
+    expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
+  });
+
+  it("should include \"Checks: CI couldn't run\" in the card aria-label for infrastructure_failed checksOutcome", () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'infrastructure_failed' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
+    expect(card?.getAttribute('aria-label') ?? '').toContain("Checks: CI couldn't run");
+  });
+
   it('should render outcome badge with "Checks: unreadable" label for unreadable checksOutcome', () => {
     // Arrange
     const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'unreadable' };

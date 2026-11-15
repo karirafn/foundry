@@ -17,7 +17,15 @@ internal abstract record Checks
     internal sealed record Green : Checks;
 
     /// <summary>One or more checks failed.</summary>
-    internal sealed record Red(IReadOnlyList<FailingCheck> FailingChecks) : Checks;
+    internal sealed record Red(IReadOnlyList<FailingCheck> FailingChecks) : Checks
+    {
+        /// <summary>
+        /// Whether CI failed before running any code: at least one failing check is named and none of them ran its
+        /// script (issue #969). A red verdict naming no check is not one: nothing is known about why it failed.
+        /// </summary>
+        internal bool IsInfrastructureFailure =>
+            FailingChecks.Count > 0 && FailingChecks.All(check => check.IsInfrastructureFailure);
+    }
 
     /// <summary>Checks are in progress or scheduled — no verdict yet.</summary>
     internal sealed record Pending : Checks;

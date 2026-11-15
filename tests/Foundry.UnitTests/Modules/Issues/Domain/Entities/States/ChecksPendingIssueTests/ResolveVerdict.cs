@@ -204,6 +204,41 @@ public sealed class ResolveVerdict
     }
 
     [Fact]
+    public void WhenInfrastructureFailed_ReturnsReviewCarryingTheOutcome()
+    {
+        // Arrange
+        ChecksOutcome.InfrastructureFailed outcome = new(
+            [new FailingCheck("build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true)]);
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        Issue next = checksPending.ResolveVerdict(outcome, autoMerge: true, Head, DateTimeOffset.UtcNow);
+
+        // Assert
+        next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBe(outcome);
+    }
+
+    [Fact]
+    public void WhenInfrastructureFailed_QueuesNoRevisionAndSpendsNoFixAttempt()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+        int attemptsBefore = checksPending.ChecksFixAttempts;
+
+        // Act
+        checksPending.ResolveVerdict(
+            new ChecksOutcome.InfrastructureFailed([new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]),
+            autoMerge: false,
+            Head,
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        checksPending.ShouldSatisfyAllConditions(
+            () => checksPending.DomainEvents.OfType<IssueRevisionQueued>().ShouldBeEmpty(),
+            () => checksPending.ChecksFixAttempts.ShouldBe(attemptsBefore));
+    }
+
+    [Fact]
     public void WhenFixableAndInfrastructureFailuresMixUnderCap_QueuesARevisionNamingOnlyTheFixableChecks()
     {
         // Arrange

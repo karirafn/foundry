@@ -219,4 +219,27 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         // Assert
         result.ShouldHaveSingleItem().ChecksPassed.ShouldBeFalse();
     }
+
+    // An InfrastructureFailed verdict is not Passed, so the review pass re-reads its checks on an unchanged head and
+    // a green retry returns it to the checks gate (issue #969, ADR 0108).
+    [Fact]
+    public async Task WhenReviewIssueChecksInfrastructureFailed_ReportsChecksNotPassed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        await CreateAndPersistReviewIssueAsync(
+            repositoryId,
+            issueNumber: 10,
+            "https://gitlab.com/group/project/-/merge_requests/42",
+            new ChecksOutcome.InfrastructureFailed(
+                [new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]));
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldHaveSingleItem().ChecksPassed.ShouldBeFalse();
+    }
 }

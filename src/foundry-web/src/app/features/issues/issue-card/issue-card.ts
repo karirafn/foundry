@@ -54,6 +54,7 @@ interface ChecksOutcomeDisplay {
 
 const CHECKS_OUTCOME_DISPLAY: Record<string, ChecksOutcomeDisplay> = {
   still_failing: { label: 'Checks: failing', cssClass: 'issue-card__checks-badge--error' },
+  infrastructure_failed: { label: "Checks: CI couldn't run", cssClass: 'issue-card__checks-badge--warning' },
   unreadable: { label: 'Checks: unreadable', cssClass: 'issue-card__checks-badge--warning' },
   none_detected: { label: 'No CI detected', cssClass: 'issue-card__checks-badge--muted' },
   unfinished: { label: 'Checks: unfinished', cssClass: 'issue-card__checks-badge--warning' },

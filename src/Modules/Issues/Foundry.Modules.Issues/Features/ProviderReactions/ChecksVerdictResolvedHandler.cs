@@ -41,6 +41,7 @@ internal sealed class ChecksVerdictResolvedHandler(
             "none_detected" => new ChecksOutcome.NoneDetected(),
             "unfinished" => new ChecksOutcome.Unfinished(),
             "still_failing" => new ChecksOutcome.StillFailing(@event.FailingChecks),
+            "infrastructure_failed" => new ChecksOutcome.InfrastructureFailed(@event.FailingChecks),
             "unreadable" => new ChecksOutcome.Unreadable(),
             _ => throw new UnreachableException(
                 $"Unknown ChecksOutcome discriminator '{@event.Outcome}' on ChecksVerdictResolved for repository {@event.RepositoryId} issue {@event.IssueNumber}."),

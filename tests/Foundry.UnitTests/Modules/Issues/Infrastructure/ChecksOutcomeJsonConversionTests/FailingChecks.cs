@@ -34,6 +34,39 @@ public sealed class FailingChecks
     }
 
     [Fact]
+    public void AnInfrastructureFailedOutcome_RoundTripsWithItsChecks()
+    {
+        // Arrange
+        IReadOnlyList<FailingCheck> checks =
+        [
+            new FailingCheck("build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true),
+            new FailingCheck("test", "runner_system_failure", null, IsInfrastructureFailure: true),
+        ];
+
+        // Act
+        ChecksOutcome read = Deserialize(Serialize(new ChecksOutcome.InfrastructureFailed(checks)));
+
+        // Assert
+        read.ShouldBeOfType<ChecksOutcome.InfrastructureFailed>().FailingChecks.ShouldBe(checks);
+    }
+
+    [Fact]
+    public void InfrastructureFailedOutcomesWithDifferentChecks_AreNotEqualToTheComparer()
+    {
+        // Arrange
+        ChecksOutcome a = new ChecksOutcome.InfrastructureFailed(
+            [new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]);
+        ChecksOutcome b = new ChecksOutcome.InfrastructureFailed(
+            [new FailingCheck("test", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]);
+
+        // Act
+        bool equal = ChecksOutcomeJsonConversion.Comparer.Equals(a, b);
+
+        // Assert
+        equal.ShouldBeFalse();
+    }
+
+    [Fact]
     public void AnInfrastructureFailure_IsWrittenAsTheInfrastructureProperty()
     {
         // Arrange
