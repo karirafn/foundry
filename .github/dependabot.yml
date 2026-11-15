@@ -26,6 +26,12 @@ updates:
       angular:
         patterns:
           - "@angular/*"
+      # @vitest/browser-playwright pins its vitest peer exactly, so the runner and
+      # its browser provider move as one PR.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
     ignore:
       # Angular 22 pins `typescript@">=6.0 <6.1"` on @angular/build and
       # @angular/compiler-cli, so a TypeScript major cannot resolve. Drop this
@@ -39,6 +45,10 @@ updates:
       # `npm view @angular/build peerDependencies.vitest` admits ^5.0.0 on a
       # stable release (widened in 22.2.0, prerelease at the time of writing).
       - dependency-name: vitest
+        update-types:
+          - version-update:semver-major
+      # Moves with vitest (exact peer), so it waits on the same major.
+      - dependency-name: "@vitest/browser-playwright"
         update-types:
           - version-update:semver-major
 
