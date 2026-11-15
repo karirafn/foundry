@@ -16,10 +16,14 @@ public sealed class Map
     private static readonly DateTimeOffset At = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
 
     // Issue 10 is tracked and blocked by untracked issue 77; 20 is in review on MR 21;
-    // 30 is checks-pending on MR 31; 40 awaits input on its own thread; 50 awaits input on MR 51.
+    // 30 is checks-pending on MR 31; 40 awaits input on its own thread; 50 awaits input on MR 51;
+    // 60 is in review with checks that are not passed on MR 61.
     private static readonly WebhookTrackingContext Tracked = new(
-        new HashSet<int> { 10, 20, 30, 40, 50 },
-        [new ReviewIssueInfo(20, "https://gitlab.com/group/sub/project/-/merge_requests/21", At, null, ChecksPassed: true)],
+        new HashSet<int> { 10, 20, 30, 40, 50, 60 },
+        [
+            new ReviewIssueInfo(20, "https://gitlab.com/group/sub/project/-/merge_requests/21", At, null, ChecksPassed: true),
+            new ReviewIssueInfo(60, "https://gitlab.com/group/sub/project/-/merge_requests/61", At, null, ChecksPassed: false),
+        ],
         [new ChecksPendingIssueInfo(30, "https://gitlab.com/group/sub/project/-/merge_requests/31", At, At)],
         new HashSet<int> { 77 },
         [
@@ -194,11 +198,41 @@ public sealed class Map
     }
 
     [Fact]
-    public void WhenPipelineForReviewIssue_IsDropped()
+    public void WhenFinishedPipelineForReviewIssueWithChecksPassed_IsDropped()
     {
-        // Pipelines only drive the checks pass; a review issue's pipeline is not a checks-pending owner.
+        // A passed verdict is never re-read, so nudging its review pass would only waste reads.
         MapEvent("""{"object_kind":"pipeline","object_attributes":{"ref":"feat/20-thing","status":"success"},"merge_request":{"iid":21}}""")
             .ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("success")]
+    [InlineData("failed")]
+    public void WhenFinishedPipelineForReviewMergeRequestWithChecksNotPassed_NudgesReviewPass(string status)
+    {
+        MapEvent($$$"""{"object_kind":"pipeline","object_attributes":{"ref":"main","status":"{{{status}}}"},"merge_request":{"iid":61}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 60));
+    }
+
+    [Fact]
+    public void WhenFinishedPipelineOnReviewBranchWithChecksNotPassed_NudgesReviewPass()
+    {
+        MapEvent("""{"object_kind":"pipeline","object_attributes":{"ref":"feat/60-x","status":"success"},"merge_request":null}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 60));
+    }
+
+    [Fact]
+    public void WhenRunningPipelineForReviewIssueWithChecksNotPassed_IsDropped()
+    {
+        MapEvent("""{"object_kind":"pipeline","object_attributes":{"ref":"feat/60-x","status":"running"},"merge_request":{"iid":61}}""")
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenFinishedPipelineMatchesChecksPendingAndReviewIssue_NudgesChecksPass()
+    {
+        MapEvent("""{"object_kind":"pipeline","object_attributes":{"ref":"feat/30-x","status":"success"},"merge_request":{"iid":61}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
     }
 
     [Theory]
