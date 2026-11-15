@@ -1,5 +1,6 @@
 ARG BASE_IMAGE=foundry-claude-base:local
 FROM ${BASE_IMAGE}
+LABEL dev.foundry.image=worker
 
 # Conditional .NET SDK install — uses apt GPG signing key for authenticity verification.
 # csharp-ls (the C# language server registered by the baked csharp-lsp plugin) is pinned in
