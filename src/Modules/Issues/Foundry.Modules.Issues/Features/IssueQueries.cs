@@ -700,7 +700,12 @@ internal sealed class IssueQueries(
                 BlockedBy: null,
                 TransientRetry: null,
                 ChecksOutcome: review.ChecksOutcome.Discriminator,
-                FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null,
+                FailingChecks: review.ChecksOutcome switch
+                {
+                    ChecksOutcome.StillFailing sf => sf.FailingChecks,
+                    ChecksOutcome.InfrastructureFailed inf => inf.FailingChecks,
+                    _ => null,
+                },
                 RebaseOutcome: review.RebaseOutcome?.Discriminator,
                 RebaseSkippedReason: (review.RebaseOutcome as RebaseOutcome.Skipped)?.Reason,
                 MergeOutcome: review.MergeOutcome?.Discriminator,

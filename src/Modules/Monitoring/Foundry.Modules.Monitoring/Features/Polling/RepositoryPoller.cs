@@ -747,6 +747,7 @@ internal sealed class RepositoryPoller(
         verdict switch
         {
             Checks.Green => "passed",
+            Checks.Red { IsInfrastructureFailure: true } => "infrastructure_failed",
             Checks.Red => "still_failing",
             Checks.Unfinished => "unfinished",
             Checks.Unreadable => "unreadable",

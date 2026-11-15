@@ -794,6 +794,45 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewIssueWithInfrastructureFailedOutcome_ReturnsOutcomeAndFailingChecksInStateDetails()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
+            "feat/issue-1",
+            "https://gitlab.com/group/project/-/merge_requests/42",
+            DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        FailingCheck failingCheck = new(
+            "build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true);
+        ReviewIssue review = checksPending.ToReview(
+            new ChecksOutcome.InfrastructureFailed([failingCheck]), "0a1b2c3d", DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            review.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueStateDetails stateDetails = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value
+            .StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.ChecksOutcome.ShouldBe("infrastructure_failed"),
+            () => stateDetails.FailingChecks.ShouldNotBeNull().ShouldBe([failingCheck]));
+    }
+
+    [Fact]
     public async Task WhenChecksPendingIssueExists_ReturnsStateDetailsWithChecksPendingFields()
     {
         // Arrange
