@@ -23,6 +23,7 @@ internal static class IssueDependencyApplierFactory
                 new NullRepositoryEligibilityQuery(),
                 new NullWorkerRunQueries(),
                 new InFlightWorkerCountQuery(db, new NullWorkerRunQueries()),
-                new NullGlobalSettingsQueries()),
+                new NullGlobalSettingsQueries(),
+                new NullMergeQueueQueries()),
             dispatcher, TimeProvider.System);
 }

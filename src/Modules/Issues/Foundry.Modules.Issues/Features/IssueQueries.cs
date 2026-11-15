@@ -23,7 +23,8 @@ internal sealed class IssueQueries(
     IRepositoryEligibilityQuery eligibilityQuery,
     IWorkerRunQueries workerRunQueries,
     InFlightWorkerCountQuery inFlightWorkerCountQuery,
-    IGlobalSettingsQueries globalSettingsQueries) : IIssueQueries
+    IGlobalSettingsQueries globalSettingsQueries,
+    IMergeQueueQueries mergeQueueQueries) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -534,7 +535,10 @@ internal sealed class IssueQueries(
         string state = GetStateDiscriminator(issue);
 
         TransientRetryDetails? transientRetry = await BuildTransientRetryDetailsAsync(issue, cancellationToken);
-        IssueStateDetails? stateDetails = BuildStateDetails(issue, transientRetry);
+        IssueStateDetails? stateDetails = await WithCatchUpAsync(
+            issue,
+            BuildStateDetails(issue, transientRetry),
+            cancellationToken);
 
         return new IssueDetail(
             Id: issue.Id.Value,
@@ -549,6 +553,48 @@ internal sealed class IssueQueries(
             StateDetails: stateDetails,
             Kind: BuildKindDetails(issue),
             Triage: BuildTriageDetails(issue));
+    }
+
+    /// <summary>
+    /// Adds the catch-up fields (ADR 0111) from the issue's catch-up queue entry: the round while a catch-up has
+    /// started (rebasing or checking for one, or back in merge-pending), and the queue position while a merge-pending
+    /// issue waits for its catch-up. Only those states read the queue.
+    /// </summary>
+    private async Task<IssueStateDetails?> WithCatchUpAsync(
+        Issue issue,
+        IssueStateDetails? stateDetails,
+        CancellationToken cancellationToken)
+    {
+        bool catchingUp = issue switch
+        {
+            RebasePendingIssue rebasePending => rebasePending.Reason is RebasePendingReason.CatchUp,
+            ChecksPendingIssue checksPending => checksPending.Reason is ChecksPendingReason.CatchUp,
+            MergePendingIssue => true,
+            _ => false,
+        };
+        if (stateDetails is null || !catchingUp)
+        {
+            return stateDetails;
+        }
+
+        MergeQueueEntry? entry = await mergeQueueQueries.GetQueueEntryAsync(
+            issue.MonitoredRepositoryId,
+            issue.IssueNumber,
+            cancellationToken);
+        if (entry is null)
+        {
+            return stateDetails;
+        }
+
+        bool roundStarted = entry.CatchUpRounds > 0;
+        return stateDetails with
+        {
+            CatchUpRound = roundStarted ? entry.CatchUpRounds : null,
+            CatchUpRoundLimit = roundStarted ? entry.CatchUpRoundLimit : null,
+            MergeWait = issue is MergePendingIssue && entry.Wait is { } wait
+                ? new MergeWaitDetails(wait.Position, wait.WaitingForIssueNumber)
+                : null,
+        };
     }
 
     private static string GetStateDiscriminator(Issue issue) =>
@@ -855,7 +901,8 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RebasePendingReason: rebasePending.Reason.Discriminator),
 
             MergePendingIssue mergePending => new IssueStateDetails(
                 WorkerRunId: mergePending.WorkerRunId.Value,

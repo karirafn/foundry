@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring;
 using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -132,6 +133,26 @@ public sealed class MonitoringModuleTests
         using IServiceScope scope = provider.CreateScope();
         scope.ServiceProvider.GetRequiredService<IIssueBlockerQueries>()
             .ShouldBeOfType<PostExitProviderQueries>();
+    }
+
+    [Fact]
+    public void AddMonitoringModule_RegistersIMergeQueueQueriesWithoutResolvingIssueQueriesUpFront()
+    {
+        // Arrange
+        ServiceCollection services = new();
+        services.AddHttpClient();
+        services.AddDbContext<DbContext, FoundryDbContext>(opts =>
+            opts.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ":memory:" }.ToString()));
+
+        // Act
+        services.AddMonitoringModule();
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert: IIssueQueries is not registered here; the Issues module's queries read this query, so it must be
+        // resolved on use, not at construction.
+        using IServiceScope scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IMergeQueueQueries>()
+            .ShouldBeOfType<MergeQueueQueries>();
     }
 
     [Fact]

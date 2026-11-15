@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
@@ -36,6 +37,7 @@ using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Http.Ingress;
 
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -101,6 +103,9 @@ public static class MonitoringModule
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
         services.AddScoped<MergeStep>();
+        services.AddScoped<IMergeQueueQueries>(sp => new MergeQueueQueries(
+            sp.GetRequiredService<DbContext>(),
+            () => sp.GetRequiredService<IIssueQueries>()));
         services.AddScoped<AwaitingInputStep>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();

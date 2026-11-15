@@ -3785,6 +3785,40 @@
               "null",
               "string"
             ]
+          },
+          "rebasePendingReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "catchUpRound": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "catchUpRoundLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "mergeWait": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MergeWaitDetails"
+              }
+            ]
           }
         }
       },
@@ -3939,6 +3973,32 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "MergeWaitDetails": {
+        "required": [
+          "position",
+          "waitingForIssueNumber"
+        ],
+        "type": "object",
+        "properties": {
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "waitingForIssueNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

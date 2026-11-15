@@ -64,6 +64,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
         services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
         services.AddIntegrationEventHandler<MergeResolved, MergeResolvedHandler>();
+        services.AddIntegrationEventHandler<MergeQueueChanged, MergeQueueChangedHandler>();
         services.AddIntegrationEventHandler<AwaitingInputArrived, AwaitingInputArrivedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();

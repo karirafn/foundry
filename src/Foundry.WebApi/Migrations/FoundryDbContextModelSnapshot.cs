@@ -477,6 +477,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("transient_failures");
 
+                    b.Property<int?>("WaitingForIssueNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("waiting_for_issue_number");
+
                     b.HasKey("MonitoredRepositoryId", "IssueNumber");
 
                     b.ToTable("pending_merges", (string)null);

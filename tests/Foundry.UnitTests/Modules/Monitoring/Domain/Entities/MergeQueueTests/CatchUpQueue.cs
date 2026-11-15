@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 
 using Shouldly;
@@ -237,5 +238,103 @@ public sealed class CatchUpQueue
         // Assert
         row.IsQueued.ShouldBeFalse();
         row.CatchUpRounds.ShouldBe(0);
+    }
+
+    [Fact]
+    public void EntryOf_WithoutARow_IsNull()
+    {
+        // Arrange
+        MergeQueue queue = MergeQueue.From(RepositoryId, []);
+
+        // Act
+        MergeQueueEntry? entry = queue.EntryOf(1, MergeQueue.HeldIssueNumbers([Issue(1)], []));
+
+        // Assert
+        entry.ShouldBeNull();
+    }
+
+    [Fact]
+    public void EntryOf_AWaitingRow_CountsItsPlaceAmongHeldQueuedRowsInHeadOrder()
+    {
+        // Arrange
+        PendingMerge catchingUp = CatchingUp(1, Episode);
+        PendingMerge tiedLower = Waiting(3, Now);
+        PendingMerge stale = Waiting(4, Episode);
+        PendingMerge tiedHigher = Waiting(5, Now);
+        PendingMerge notQueued = PendingMerge.Start(RepositoryId, 2, Episode);
+        MergeQueue queue = MergeQueue.From(RepositoryId, [catchingUp, tiedLower, stale, tiedHigher, notQueued]);
+        IReadOnlySet<int> held = MergeQueue.HeldIssueNumbers([Issue(2), Issue(3), Issue(5)], [QueueIssue(1, isCatchingUp: true)]);
+
+        // Act
+        MergeQueueEntry? entry = queue.EntryOf(5, held);
+
+        // Assert
+        entry.ShouldBe(new MergeQueueEntry(0, MergeQueue.MaxCatchUpRounds, new MergeQueueWait(3, null)));
+    }
+
+    [Fact]
+    public void EntryOf_ACatchingUpRow_CarriesItsRoundsAndNoWait()
+    {
+        // Arrange
+        MergeQueue queue = MergeQueue.From(RepositoryId, [CatchingUp(1, Episode)]);
+
+        // Act
+        MergeQueueEntry? entry = queue.EntryOf(1, MergeQueue.HeldIssueNumbers([], [QueueIssue(1, isCatchingUp: true)]));
+
+        // Assert
+        entry.ShouldBe(new MergeQueueEntry(1, MergeQueue.MaxCatchUpRounds, null));
+    }
+
+    [Fact]
+    public void EntryOf_AHeadWaitingForAnUpToDateIssue_NamesThatIssue()
+    {
+        // Arrange
+        PendingMerge head = Waiting(1, Episode);
+        head.WaitFor(7);
+        MergeQueue queue = MergeQueue.From(RepositoryId, [head]);
+
+        // Act
+        MergeQueueEntry? entry = queue.EntryOf(1, MergeQueue.HeldIssueNumbers([Issue(1)], []));
+
+        // Assert
+        entry.ShouldNotBeNull().Wait.ShouldBe(new MergeQueueWait(1, 7));
+    }
+
+    [Fact]
+    public void StartCatchUp_ClearsTheAwaitedIssue()
+    {
+        // Arrange
+        PendingMerge head = Waiting(1, Episode);
+        head.WaitFor(7);
+
+        // Act
+        head.StartCatchUp(Now);
+
+        // Assert
+        head.WaitingForIssueNumber.ShouldBeNull();
+    }
+
+    [Fact]
+    public void MarkResolved_ClearsTheAwaitedIssue()
+    {
+        // Arrange
+        PendingMerge head = Waiting(1, Episode);
+        head.WaitFor(7);
+
+        // Act
+        head.MarkResolved(Now);
+
+        // Assert
+        head.WaitingForIssueNumber.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WaitFor_WhenNotWaitingForACatchUp_Throws()
+    {
+        // Arrange
+        PendingMerge row = PendingMerge.Start(RepositoryId, 1, Episode);
+
+        // Act & Assert
+        Should.Throw<InvalidOperationException>(() => row.WaitFor(7));
     }
 }
