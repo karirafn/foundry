@@ -17,7 +17,15 @@ internal abstract record Checks
     internal sealed record Green : Checks;
 
     /// <summary>One or more checks failed.</summary>
-    internal sealed record Red(IReadOnlyList<FailingCheck> FailingChecks) : Checks;
+    internal sealed record Red(IReadOnlyList<FailingCheck> FailingChecks) : Checks
+    {
+        /// <summary>
+        /// Whether CI failed before running any code: at least one failing check is named and none of them ran its
+        /// script (issue #969). A red verdict naming no check is not one: nothing is known about why it failed.
+        /// </summary>
+        internal bool IsInfrastructureFailure =>
+            FailingChecks.Count > 0 && FailingChecks.All(check => check.IsInfrastructureFailure);
+    }
 
     /// <summary>Checks are in progress or scheduled — no verdict yet.</summary>
     internal sealed record Pending : Checks;
@@ -68,6 +76,46 @@ internal abstract record Checks
             "FAILURE" or "ERROR" => true,
             _ => false,
         };
+
+    /// <summary>
+    /// Whether a failed GitHub check run's <c>conclusion</c> means it failed before its script ran, so a fix run has
+    /// nothing to fix. <c>FAILURE</c> and <c>TIMED_OUT</c> ran the script; billing-locked jobs also report
+    /// <c>FAILURE</c> (the reason is only in an annotation), so they stay fixable.
+    /// </summary>
+    internal static bool IsGitHubCheckRunInfrastructureFailure(string? conclusion) =>
+        conclusion?.ToUpperInvariant() switch
+        {
+            "STARTUP_FAILURE" or "CANCELLED" or "ACTION_REQUIRED" => true,
+            _ => false,
+        };
+
+    /// <summary>
+    /// Whether a failed GitHub status context's <c>state</c> means the external CI errored rather than reported a
+    /// failure, so a fix run has nothing to fix.
+    /// </summary>
+    internal static bool IsGitHubStatusContextInfrastructureFailure(string? state) =>
+        string.Equals(state, "ERROR", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a failed GitLab job's <c>failure_reason</c> means it failed before or outside its script, so a fix run
+    /// has nothing to fix. The fixable reasons are an allowlist: GitLab keeps adding reasons, and an unknown one
+    /// costs a person a look in review, while a wrong fixable verdict spends worker runs. A job with no reason in the
+    /// response stays fixable.
+    /// </summary>
+    internal static bool IsGitLabInfrastructureFailure(string? failureReason)
+    {
+        if (string.IsNullOrWhiteSpace(failureReason))
+        {
+            return false;
+        }
+
+        return failureReason switch
+        {
+            "script_failure" or "job_execution_timeout" or "job_execution_server_timeout"
+                or "server_timeout_running" => false,
+            _ => true,
+        };
+    }
 
     /// <summary>
     /// Maps a GitLab <c>head_pipeline.status</c> value to a <see cref="Checks"/> verdict.

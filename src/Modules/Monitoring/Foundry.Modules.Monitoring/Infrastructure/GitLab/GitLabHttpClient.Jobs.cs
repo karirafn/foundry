@@ -17,7 +17,7 @@ internal sealed partial class GitLabHttpClient
     private const string FailedPipelineStatus = "failed";
     private const int FailedJobsPerPage = 100;
 
-    // GitLab bounds a job name at 255 characters, and the job status uses the same cap. The caps protect the stored
+    // GitLab bounds a job name at 255 characters, and the job status and failure reason use the same cap. The caps protect the stored
     // failing-check payloads (outbox message, revision trigger) from a misbehaving server. An over-long URL is
     // dropped rather than cut, since a cut URL would resolve to a different page.
     private const int MaxFieldLength = 255;
@@ -179,7 +179,15 @@ internal sealed partial class GitLabHttpClient
             return null;
         }
 
-        return new FailingCheck(name, status, ValidWebUrl(job.WebUrl));
+        // The reason tells a person why the job failed (e.g. ci_quota_exceeded), which the bare status does not.
+        string failureReason = Sanitize(job.FailureReason, MaxFieldLength);
+        string conclusion = failureReason.Length > 0 ? failureReason : status;
+
+        return new FailingCheck(
+            name,
+            conclusion,
+            ValidWebUrl(job.WebUrl),
+            Checks.IsGitLabInfrastructureFailure(job.FailureReason));
     }
 
     // The URL reaches the dispatched prompt, so only an absolute https URL on a single line is kept. The host is not
@@ -250,5 +258,5 @@ internal sealed partial class GitLabHttpClient
             or HttpStatusCode.Forbidden
             or HttpStatusCode.TooManyRequests);
 
-    private sealed record GitLabJobDto(string Name, string Status, bool AllowFailure, string? WebUrl);
+    private sealed record GitLabJobDto(string Name, string Status, bool AllowFailure, string? WebUrl, string? FailureReason);
 }

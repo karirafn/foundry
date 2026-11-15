@@ -23,6 +23,13 @@ dotnet test --project tests/Foundry.UnitTests --filter-class "*ExampleTests"
 cd src/foundry-web
 npm install
 npx ng serve
+
+# Frontend layout specs (*.layout.spec.ts) run in headless Chromium, not jsdom.
+# Locally run `npx playwright install chromium` once first; inside a worker the
+# image's Chromium is used through CHROME_BIN. A layout spec not named
+# *.layout.spec.ts runs in jsdom, where every box measures 0.
+cd src/foundry-web
+npx ng run foundry-web:test-layout --watch=false
 ```
 
 ## Architecture

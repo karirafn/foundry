@@ -622,6 +622,43 @@ describe('buildCallout', () => {
       );
     });
 
+    it('explains that the pull request\'s checks passed on a rerun of the same commits, linking it', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'checks_rerun' }),
+        null,
+        summary({ state: 'checks_pending', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('working');
+      expect(callout.title).toBe('Checks passed on a rerun');
+      expect(callout.lines).toEqual([
+        'The pull request\'s checks ran again on the same commits and passed. Foundry is confirming the result.',
+      ]);
+      expect(callout.links).toEqual([
+        { label: 'View PR', href: 'https://github.com/acme/api/pull/7', ariaLabel: 'View pull request for issue #42' },
+      ]);
+    });
+
+    it('explains a checks rerun on a merge request without a link when it has none', () => {
+      // Act
+      const callout = buildCallout(
+        detail('checks_pending', { checksPendingReason: 'checks_rerun' }),
+        null,
+        summary({ state: 'checks_pending', providerType: 'gitlab' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Checks passed on a rerun');
+      expect(callout.lines).toEqual([
+        'The merge request\'s checks ran again on the same commits and passed. Foundry is confirming the result.',
+      ]);
+      expect(callout.links).toEqual([]);
+    });
+
     for (const [name, reason] of [
       ['after_run', 'after_run'],
       ['null', null],
@@ -692,6 +729,79 @@ describe('buildCallout', () => {
       expect(callout.list?.heading).toBe('Failing checks');
       expect(callout.list?.items.map((i) => i.text)).toEqual(['lint']);
       expect(callout.links.map((l) => l.label)).toEqual(['View PR']);
+    });
+
+    it("shows a review whose checks failed before running any code as CI couldn't run, listing the checks", () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', {
+          checksOutcome: 'infrastructure_failed',
+          failingChecks: [
+            {
+              name: 'build',
+              conclusion: 'ci_quota_exceeded',
+              detailsUrl: 'https://gitlab.com/acme/api/-/jobs/1',
+            },
+          ],
+        }),
+        null,
+        summary({
+          state: 'review',
+          checksOutcome: 'infrastructure_failed',
+          providerType: 'gitlab',
+          pullRequestUrl: 'https://gitlab.com/acme/api/-/merge_requests/7',
+        }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('warning');
+      expect(callout.title).toBe("CI couldn't run");
+      expect(callout.lines).toEqual([
+        "The merge request's checks failed before running any code, so Foundry didn't start a fix run.",
+        'Retry the failed jobs on GitLab. Foundry picks up the result once they pass.',
+      ]);
+      expect(callout.list?.heading).toBe("Checks that couldn't run");
+      expect(callout.list?.items.map((i) => [i.text, i.badge, i.link?.href, i.link?.ariaLabel])).toEqual([
+        ['build', 'ci_quota_exceeded', 'https://gitlab.com/acme/api/-/jobs/1', 'View details for failing check build'],
+      ]);
+      expect(callout.links.map((l) => l.label)).toEqual(['View MR']);
+    });
+
+    it("keeps the CI couldn't run title when no check that couldn't run was identified", () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { checksOutcome: 'infrastructure_failed', failingChecks: [] }),
+        null,
+        summary({ state: 'review', checksOutcome: 'infrastructure_failed', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('warning');
+      expect(callout.title).toBe("CI couldn't run");
+      expect(callout.lines).toEqual([
+        "CI failed before running any code, but no job could be identified. Open the pull request's checks on GitHub.",
+        'Retry the failed jobs on GitHub. Foundry picks up the result once they pass.',
+      ]);
+      expect(callout.list).toBeNull();
+      expect(callout.links.map((l) => l.label)).toEqual(['View PR']);
+    });
+
+    it("shows CI couldn't run rather than a skipped merge", () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', {
+          checksOutcome: 'infrastructure_failed',
+          failingChecks: [{ name: 'build', conclusion: 'ci_quota_exceeded' }],
+        }),
+        null,
+        summary({ state: 'review', checksOutcome: 'infrastructure_failed', mergeOutcome: 'skipped' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe("CI couldn't run");
     });
 
     it('shows Foundry merging a pull request whose checks passed', () => {

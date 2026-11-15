@@ -105,12 +105,25 @@ public sealed class ChecksPendingIssue : Issue
     }
 
     /// <summary>
+    /// A review issue's checks read green on the same commits after a rerun: the gate confirms the green verdict
+    /// and routes it. Nobody pushed, so the fix budget starts exhausted: a red second read (a flaky job between the
+    /// two reads) goes to review instead of spending fix runs on unchanged code (ADR 0108).
+    /// </summary>
+    internal static ChecksPendingIssue FromReviewAfterChecksRerun(ReviewIssue source, DateTimeOffset transitionedAt)
+    {
+        ChecksPendingIssue checksPending = FromReview(source, transitionedAt);
+        checksPending.ChecksFixAttempts = ChecksMaxFixPushes;
+        checksPending.Reason = new ChecksPendingReason.ChecksRerun();
+        return checksPending;
+    }
+
+    /// <summary>
     /// Routes the checks verdict to the next state:
     /// <list type="bullet">
     /// <item><b>Merge:</b> <see cref="ChecksOutcome.Passed"/> with <paramref name="autoMerge"/> on and a known
     /// <paramref name="headSha"/> → <see cref="MergePendingIssue"/>, pinned to that head (ADR 0105).</item>
-    /// <item><b>Fix:</b> <see cref="ChecksOutcome.StillFailing"/> naming failing checks, under the fix cap → a
-    /// <see cref="RevisionTrigger.FailedChecks"/> revision.</item>
+    /// <item><b>Fix:</b> <see cref="ChecksOutcome.StillFailing"/> naming a failing check whose script ran, under the
+    /// fix cap → a <see cref="RevisionTrigger.FailedChecks"/> revision naming only such checks (issue #968).</item>
     /// <item><b>Review:</b> everything else → <see cref="ReviewIssue"/> carrying the outcome.</item>
     /// </list>
     /// A passed verdict with no head routes to review: a merge must be pinned to a commit. So does one on an issue
@@ -177,21 +190,35 @@ public sealed class ChecksPendingIssue : Issue
         return revisionQueued;
     }
 
+    /// <summary>
+    /// Whether a fix run can address <paramref name="failingChecks"/>: at least one ran its script and failed, and the
+    /// fix budget is not spent. Infrastructure failures (a job that never ran its script) give a fix run nothing to
+    /// fix, so they neither start one nor spend an attempt.
+    /// </summary>
     internal bool CanFixChecks(IReadOnlyList<FailingCheck> failingChecks) =>
-        failingChecks.Count > 0
+        failingChecks.Any(IsFixable)
         && ChecksFixAttempts < ChecksMaxFixPushes;
 
+    /// <summary>
+    /// Queues a fix revision for the fixable checks among <paramref name="failingChecks"/>; infrastructure failures
+    /// are left out of the revision.
+    /// </summary>
     public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks, DateTimeOffset transitionedAt)
     {
-        if (failingChecks.Count == 0)
+        List<FailingCheck> fixable = [.. failingChecks.Where(IsFixable)];
+        if (fixable.Count == 0)
         {
-            throw new ArgumentException("A checks fix must name at least one failing check.", nameof(failingChecks));
+            throw new ArgumentException(
+                "A checks fix must name at least one failing check whose script ran.",
+                nameof(failingChecks));
         }
 
-        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks, transitionedAt);
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, fixable, transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }
+
+    private static bool IsFixable(FailingCheck check) => !check.IsInfrastructureFailure;
 
     public CompletedIssue Complete(DateTimeOffset completedAt)
     {

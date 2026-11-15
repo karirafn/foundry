@@ -474,7 +474,7 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewIssueInfo reviewIssue = new(
             IssueNumber: 42,
             PullRequestUrl: "https://github.com/owner/repo/pull/99",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -507,7 +507,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -544,7 +544,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -580,8 +580,8 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewIssueInfo failingIssue = new(
             IssueNumber: 10,
             PullRequestUrl: "https://github.com/owner/repo/pull/100",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null);
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -616,7 +616,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -649,7 +649,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -716,7 +716,7 @@ public sealed class PollAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
         DateTimeOffset cutoff = Now.AddHours(-1);
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -772,7 +772,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: null,
-            reviewIssues: [new ReviewIssueInfo(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null)]);
+            reviewIssues: [new ReviewIssueInfo(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true)]);
         StubIssueProvider provider = new(
             [],
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
@@ -797,7 +797,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -838,8 +838,8 @@ public sealed class PollAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         string prUrl1 = "https://github.com/owner/repo/pull/10";
         string prUrl2 = "https://github.com/owner/repo/pull/20";
-        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -891,7 +891,7 @@ public sealed class PollAsync : IAsyncDisposable
         string prUrl = "https://github.com/owner/repo/pull/99";
         DateTimeOffset cutoff = Now.AddHours(-1);
         DateTimeOffset newestCommentAt = Now.AddMinutes(-5);
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -946,7 +946,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -1776,15 +1776,181 @@ public sealed class PollAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.OfType<ProviderPullRequestHeadMoved>().ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenNonPassedVerdictReadsGreenOnUnchangedHead_RaisesProviderPullRequestChecksPassed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            NoFeedback,
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: VerifiedHead,
+            checksPassed: false,
+            checksResult: Result<Checks>.Ok(new Checks.Green()));
+
+        // Act
+        bool changed = await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => _dispatcher.DispatchedEvents.ShouldHaveSingleItem()
+                .ShouldBe(new ProviderPullRequestChecksPassed(repository.Id, 42)),
+            () => changed.ShouldBeTrue());
+    }
+
+    private static Checks NonGreenRead(string kind) => kind switch
+    {
+        "red" => new Checks.Red([new FailingCheck("build", "failed", null)]),
+        "pending" => new Checks.Pending(),
+        "unfinished" => new Checks.Unfinished(),
+        "none_detected" => new Checks.NoneDetected(),
+        "unreadable" => new Checks.Unreadable(),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    [Theory]
+    [InlineData("red")]
+    [InlineData("pending")]
+    [InlineData("unfinished")]
+    [InlineData("none_detected")]
+    [InlineData("unreadable")]
+    public async Task WhenNonPassedVerdictReadsNonGreenOnUnchangedHead_RaisesNoEvent(string kind)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            NoFeedback,
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: VerifiedHead,
+            checksPassed: false,
+            checksResult: Result<Checks>.Ok(NonGreenRead(kind)));
+
+        // Act
+        bool changed = await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => provider.GetChecksCalls.ShouldHaveSingleItem(),
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty(),
+            () => changed.ShouldBeFalse());
+    }
+
+    [Fact]
+    public async Task WhenNonPassedVerdictChecksReadFails_RaisesNoEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            NoFeedback,
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: VerifiedHead,
+            checksPassed: false,
+            checksResult: Result<Checks>.Fail(new Error("Provider.Unavailable", "Checks read failed")));
+
+        // Act
+        bool changed = await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty(),
+            () => changed.ShouldBeFalse());
+    }
+
+    [Fact]
+    public async Task WhenPassedVerdictOnUnchangedHead_DoesNotReadChecks()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            NoFeedback,
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: VerifiedHead,
+            checksPassed: true,
+            checksResult: Result<Checks>.Ok(new Checks.Green()));
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => provider.GetChecksCalls.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenNonPassedVerdictHasNewFeedback_RaisesOnlyPullRequestChangesRequestedWithoutReadingChecks()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            new ReviewFeedback([new ReviewComment("Please fix")], OmittedCommentCount: 0, NewestCommentAt: Now.AddMinutes(-5)),
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: VerifiedHead,
+            checksPassed: false,
+            checksResult: Result<Checks>.Ok(new Checks.Green()));
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => provider.GetChecksCalls.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.ShouldHaveSingleItem().ShouldBeOfType<PullRequestChangesRequested>());
+    }
+
+    [Fact]
+    public async Task WhenNonPassedVerdictHasMovedHead_RaisesOnlyHeadMovedWithoutReadingChecks()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            NoFeedback,
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: MovedHead,
+            checksPassed: false,
+            checksResult: Result<Checks>.Ok(new Checks.Green()));
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => provider.GetChecksCalls.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.ShouldHaveSingleItem().ShouldBeOfType<ProviderPullRequestHeadMoved>());
+    }
+
+    [Fact]
+    public async Task WhenNonPassedVerdictHasHeldBackFeedback_DoesNotReadChecks()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null, HeldBackUntil: Now.AddMinutes(2)),
+            verifiedHeadSha: VerifiedHead,
+            currentHeadSha: VerifiedHead,
+            checksPassed: false,
+            checksResult: Result<Checks>.Ok(new Checks.Green()));
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => provider.GetChecksCalls.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty());
+    }
+
     private (RepositoryPoller Sut, StubIssueProvider Provider) BuildReviewSut(
         ReviewFeedback feedback,
         string? verifiedHeadSha = null,
         string? currentHeadSha = null,
         bool isClosed = false,
-        bool isMerged = false)
+        bool isMerged = false,
+        bool checksPassed = true,
+        Result<Checks>? checksResult = null)
     {
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1), VerifiedHeadSha: verifiedHeadSha);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1), VerifiedHeadSha: verifiedHeadSha, ChecksPassed: checksPassed);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -1800,7 +1966,8 @@ public sealed class PollAsync : IAsyncDisposable
             reviewFeedbackResults: new Dictionary<string, Result<ReviewFeedback>>
             {
                 [prUrl] = Result<ReviewFeedback>.Ok(feedback),
-            });
+            },
+            checksResult: checksResult);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
         return (sut, provider);
     }
@@ -1839,7 +2006,8 @@ public sealed class PollAsync : IAsyncDisposable
         IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
         IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null,
         Result<BranchProtection>? branchProtectionResult = null,
-        bool isComplete = true) : IIssueProvider
+        bool isComplete = true,
+        Result<Checks>? checksResult = null) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
@@ -1848,6 +2016,8 @@ public sealed class PollAsync : IAsyncDisposable
         public PostedCommentIds? LastPostedComments { get; private set; }
 
         public List<int> IsIssueClosedCalls { get; } = [];
+
+        public List<string> GetChecksCalls { get; } = [];
 
         public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
@@ -1970,7 +2140,10 @@ public sealed class PollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
+        {
+            GetChecksCalls.Add(pullRequestUrl);
+            return Task.FromResult(checksResult ?? Result<Checks>.Ok(new Checks.NoneDetected()));
+        }
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider

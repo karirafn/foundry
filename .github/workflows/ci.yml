@@ -99,6 +99,16 @@ jobs:
         run: npx ng test --watch=false
         working-directory: src/foundry-web
 
+      - name: Install Chromium for layout specs
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
+        run: npx playwright install --with-deps chromium
+        working-directory: src/foundry-web
+
+      - name: Layout test
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
+        run: npx ng run foundry-web:test-layout --watch=false
+        working-directory: src/foundry-web
+
   workers:
     runs-on: ubuntu-latest
     steps:

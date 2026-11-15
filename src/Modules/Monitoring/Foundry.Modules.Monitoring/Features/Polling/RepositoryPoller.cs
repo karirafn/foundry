@@ -590,6 +590,16 @@ internal sealed class RepositoryPoller(
                     new ProviderPullRequestHeadMoved(repository.Id, reviewIssue.IssueNumber));
                 changed = true;
             }
+            else if (feedbackSuccess.Value.HeldBackUntil is null
+                && !reviewIssue.ChecksPassed
+                && await HaveChecksPassedOnRerunAsync(provider, repository.Slug, reviewIssue.PullRequestUrl, cancellationToken))
+            {
+                // A rerun of the same commits can turn a non-passed verdict green (ADR 0108). Only green counts:
+                // the gate confirms and routes it, and a red rerun on unchanged code starts no fix run.
+                repository.RecordIntegrationEvent(
+                    new ProviderPullRequestChecksPassed(repository.Id, reviewIssue.IssueNumber));
+                changed = true;
+            }
         }
 
         return changed;
@@ -713,6 +723,19 @@ internal sealed class RepositoryPoller(
         currentHeadSha is not null
         && !string.Equals(currentHeadSha, verifiedHeadSha, StringComparison.Ordinal);
 
+    /// <summary>
+    /// Reads a review issue's checks on its unchanged head. A failed read counts as not green: the next pass asks again.
+    /// </summary>
+    private static async Task<bool> HaveChecksPassedOnRerunAsync(
+        IIssueProvider provider,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        Result<Checks> checksResult = await provider.GetChecksAsync(slug, pullRequestUrl, cancellationToken);
+        return checksResult is Result<Checks>.Success { Value: Checks.Green };
+    }
+
     private static bool IsProviderDrivenVerdict(Checks verdict) =>
         verdict is Checks.Green or Checks.Red or Checks.Unfinished;
 
@@ -724,6 +747,7 @@ internal sealed class RepositoryPoller(
         verdict switch
         {
             Checks.Green => "passed",
+            Checks.Red { IsInfrastructureFailure: true } => "infrastructure_failed",
             Checks.Red => "still_failing",
             Checks.Unfinished => "unfinished",
             Checks.Unreadable => "unreadable",

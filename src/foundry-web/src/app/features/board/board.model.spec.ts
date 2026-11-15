@@ -478,6 +478,14 @@ describe('needs explanations', () => {
 
   it.each([
     [{ state: 'review', checksOutcome: 'still_failing' }, 'Checks failed'],
+    [
+      { state: 'review', checksOutcome: 'infrastructure_failed', providerType: 'gitlab' },
+      'CI failed before running any code; retry it on GitLab',
+    ],
+    [
+      { state: 'review', checksOutcome: 'infrastructure_failed', providerType: null },
+      'CI failed before running any code; retry it on the provider',
+    ],
     [{ state: 'publish_failed' }, "Foundry couldn't push the run's commits"],
     [{ state: 'publish_blocked' }, 'A secret was found, so nothing was pushed'],
     [{ state: 'awaiting_input' }, 'Questions are waiting for your answers'],
@@ -517,6 +525,27 @@ describe('needsReason', () => {
         buildIssue({ state: 'review', needsAction: true, checksOutcome: 'still_failing' }),
       ),
     ).toEqual({ label: 'Checks red', tone: 'error' });
+  });
+
+  it("reads CI couldn't run as a warning for a review whose checks failed before any job ran", () => {
+    expect(
+      needsReason(
+        buildIssue({ state: 'review', needsAction: true, checksOutcome: 'infrastructure_failed' }),
+      ),
+    ).toEqual({ label: "CI couldn't run", tone: 'warning' });
+  });
+
+  it("reads CI couldn't run before a skipped merge", () => {
+    expect(
+      needsReason(
+        buildIssue({
+          state: 'review',
+          needsAction: true,
+          checksOutcome: 'infrastructure_failed',
+          mergeOutcome: 'skipped',
+        }),
+      )?.label,
+    ).toBe("CI couldn't run");
   });
 
   it('reads a ready pull request for a GitHub review', () => {

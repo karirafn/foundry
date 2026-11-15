@@ -3310,6 +3310,78 @@ FAKE
 }
 
 # ---------------------------------------------------------------------------
+# Signal marker (#963): when claude dies from a signal, and the idle stop did not
+# end it, the entrypoint writes one FOUNDRY_CLAUDE_SIGNALED line to stderr with
+# the container's cgroup pid and memory counters.  The CI runner's cgroup is not
+# under the test's control, so the tests check the format, not the values.
+# ---------------------------------------------------------------------------
+
+# A counter value: a number, the literal max (no limit), or ? (unreadable).
+SIGNAL_MARKER_VALUE='([0-9]+|max|\?)'
+
+# run_entrypoint_split — runs the entrypoint with stdout and stderr in separate
+# files, setting ENTRYPOINT_STATUS.
+run_entrypoint_split() {
+    ENTRYPOINT_STATUS=0
+    bash "$ENTRYPOINT" > "$BATS_TEST_TMPDIR/stdout" 2> "$BATS_TEST_TMPDIR/stderr" 3>&- || ENTRYPOINT_STATUS=$?
+}
+
+@test "signal marker: claude aborted by SIGABRT writes one marker with every counter to stderr and keeps status 134" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'kill -ABRT $$'
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 134 ]
+    [ "$(grep -c '^FOUNDRY_CLAUDE_SIGNALED ' "$BATS_TEST_TMPDIR/stderr")" -eq 1 ]
+    local v="$SIGNAL_MARKER_VALUE"
+    grep -Eq "^FOUNDRY_CLAUDE_SIGNALED signal=6 status=134 pids_current=$v pids_peak=$v pids_max=$v pids_refused=$v mem_current=$v mem_peak=$v mem_max=$v oom_kill=$v\$" \
+        "$BATS_TEST_TMPDIR/stderr"
+    ! grep -q FOUNDRY_CLAUDE_SIGNALED "$BATS_TEST_TMPDIR/stdout"
+}
+
+@test "signal marker: claude exiting 1 with its own error writes no marker" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_error; exit 1'
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 1 ]
+    ! grep -q FOUNDRY_CLAUDE_SIGNALED "$BATS_TEST_TMPDIR/stderr"
+}
+
+@test "signal marker: claude ended by the idle stop writes no marker" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_ok; sleep 60'
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 0 ]
+    grep -q "claude idle" "$BATS_TEST_TMPDIR/stderr"
+    ! grep -q FOUNDRY_CLAUDE_SIGNALED "$BATS_TEST_TMPDIR/stderr"
+}
+
+@test "signal marker: the transient-error resume writes its own marker" {
+    prepare_idle_stop_test
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+echo call >> "$BATS_TEST_TMPDIR/claude_calls"
+if [ "\$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    exit 1
+fi
+kill -ABRT \$\$
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 134 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")" -eq 2 ]
+    [ "$(grep -c '^FOUNDRY_CLAUDE_SIGNALED signal=6 status=134 ' "$BATS_TEST_TMPDIR/stderr")" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
 # shadow_from_path
 # ---------------------------------------------------------------------------
 

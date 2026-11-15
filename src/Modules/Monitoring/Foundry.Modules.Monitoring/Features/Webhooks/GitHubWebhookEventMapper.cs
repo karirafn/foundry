@@ -185,7 +185,7 @@ internal static partial class GitHubWebhookEventMapper
 
         List<string> branches = GetString(suite, "head_branch") is { } branch ? [branch] : [];
 
-        return WebhookRelevance.MapChecksPendingIssue(repositoryId, tracked, pullNumbers, branches, PullRequestUrlPattern());
+        return WebhookRelevance.MapChecksDelivery(repositoryId, tracked, pullNumbers, branches, PullRequestUrlPattern());
     }
 
     private static NudgeKey? MapStatus(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
@@ -202,7 +202,7 @@ internal static partial class GitHubWebhookEventMapper
             }
         }
 
-        return WebhookRelevance.MapChecksPendingIssue(repositoryId, tracked, [], branches, PullRequestUrlPattern());
+        return WebhookRelevance.MapChecksDelivery(repositoryId, tracked, [], branches, PullRequestUrlPattern());
     }
 
     private static bool HasLabel(JsonElement issue, string labelName)

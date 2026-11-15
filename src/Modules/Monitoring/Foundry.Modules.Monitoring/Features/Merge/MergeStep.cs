@@ -46,15 +46,14 @@ internal sealed class MergeStep(
             repository.Id,
             cancellationToken);
 
-        Dictionary<int, PendingMerge> progress = await dbContext.Set<PendingMerge>()
+        List<PendingMerge> rows = await dbContext.Set<PendingMerge>()
             .Where(m => m.MonitoredRepositoryId == repository.Id)
-            .ToDictionaryAsync(m => m.IssueNumber, cancellationToken);
+            .ToListAsync(cancellationToken);
+        MergeQueue queue = MergeQueue.From(repository.Id, rows);
 
         if (issueNumber is null)
         {
-            // Forget progress for issues that left merge-pending (resolved, closed or untracked).
-            HashSet<int> pendingNumbers = pendingIssues.Select(i => i.IssueNumber).ToHashSet();
-            dbContext.Set<PendingMerge>().RemoveRange(progress.Values.Where(m => !pendingNumbers.Contains(m.IssueNumber)));
+            dbContext.Set<PendingMerge>().RemoveRange(queue.Forget(pendingIssues));
         }
 
         List<IIntegrationEvent> events = [];
@@ -67,7 +66,13 @@ internal sealed class MergeStep(
                 continue;
             }
 
-            PendingMerge merge = TrackEpisode(repository, pending, progress);
+            TrackedMerge tracked = queue.Track(pending);
+            if (tracked is TrackedMerge.Started started)
+            {
+                dbContext.Set<PendingMerge>().Add(started.Merge);
+            }
+
+            PendingMerge merge = tracked.Merge;
 
             if (merge.IsResolved)
             {
@@ -88,27 +93,6 @@ internal sealed class MergeStep(
 
         await integrationEventDispatcher.DispatchAsync(events, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    private PendingMerge TrackEpisode(
-        MonitoredRepository repository,
-        MergePendingIssueInfo pending,
-        Dictionary<int, PendingMerge> progress)
-    {
-        if (!progress.TryGetValue(pending.IssueNumber, out PendingMerge? merge))
-        {
-            merge = PendingMerge.Start(repository.Id, pending.IssueNumber, pending.EnteredMergePendingAt);
-            dbContext.Set<PendingMerge>().Add(merge);
-            progress[pending.IssueNumber] = merge;
-            return merge;
-        }
-
-        if (!merge.IsForEpisode(pending.EnteredMergePendingAt))
-        {
-            merge.Restart(pending.EnteredMergePendingAt);
-        }
-
-        return merge;
     }
 
     private void Apply(

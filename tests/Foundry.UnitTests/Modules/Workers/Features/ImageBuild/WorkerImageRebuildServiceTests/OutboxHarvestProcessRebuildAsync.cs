@@ -203,6 +203,7 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
             new NullWorkerImageRebuildQueue(),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
+            new FoundryImageSweep(imageOperations, NullLogger<FoundryImageSweep>.Instance),
             new StubHostEnvironment(_contentRoot),
             new WorkerRoleCatalogStore(),
             NullLogger<WorkerImageRebuildService>.Instance);
