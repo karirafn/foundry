@@ -702,12 +702,20 @@ internal sealed partial class GitHubHttpClient(
             if (string.Equals(node.Typename, "CheckRun", StringComparison.Ordinal)
                 && Checks.IsGitHubCheckRunFailure(node.Conclusion))
             {
-                failing.Add(new FailingCheck(node.Name ?? string.Empty, node.Conclusion ?? string.Empty, node.DetailsUrl));
+                failing.Add(new FailingCheck(
+                    node.Name ?? string.Empty,
+                    node.Conclusion ?? string.Empty,
+                    node.DetailsUrl,
+                    Checks.IsGitHubCheckRunInfrastructureFailure(node.Conclusion)));
             }
             else if (string.Equals(node.Typename, "StatusContext", StringComparison.Ordinal)
                 && Checks.IsGitHubStatusContextFailure(node.State))
             {
-                failing.Add(new FailingCheck(node.Context ?? string.Empty, node.State ?? string.Empty, node.TargetUrl));
+                failing.Add(new FailingCheck(
+                    node.Context ?? string.Empty,
+                    node.State ?? string.Empty,
+                    node.TargetUrl,
+                    Checks.IsGitHubStatusContextInfrastructureFailure(node.State)));
             }
         }
 

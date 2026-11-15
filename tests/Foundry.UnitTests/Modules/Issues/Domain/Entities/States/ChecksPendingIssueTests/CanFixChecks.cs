@@ -70,4 +70,37 @@ public sealed class CanFixChecks
         // Assert
         canFix.ShouldBeFalse();
     }
+
+    [Fact]
+    public void WhenEveryFailingCheckIsAnInfrastructureFailure_ReturnsFalse()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .ChecksPending();
+
+        // Act
+        bool canFix = checksPending.CanFixChecks(
+            [new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]);
+
+        // Assert
+        canFix.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenOneFailingCheckIsFixableBesideInfrastructureFailures_ReturnsTrue()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .ChecksPending();
+
+        // Act
+        bool canFix = checksPending.CanFixChecks(
+            [
+                new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true),
+                new FailingCheck("test", "script_failure", null),
+            ]);
+
+        // Assert
+        canFix.ShouldBeTrue();
+    }
 }

@@ -1039,6 +1039,8 @@ export interface components {
             name: string;
             conclusion: string;
             detailsUrl: null | string;
+            /** @default false */
+            isInfrastructureFailure: boolean;
         };
         GlobalSettingsSummary: {
             /** Format: int32 */

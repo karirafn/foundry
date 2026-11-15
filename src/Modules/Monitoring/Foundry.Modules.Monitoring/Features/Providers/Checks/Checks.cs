@@ -70,6 +70,46 @@ internal abstract record Checks
         };
 
     /// <summary>
+    /// Whether a failed GitHub check run's <c>conclusion</c> means it failed before its script ran, so a fix run has
+    /// nothing to fix. <c>FAILURE</c> and <c>TIMED_OUT</c> ran the script; billing-locked jobs also report
+    /// <c>FAILURE</c> (the reason is only in an annotation), so they stay fixable.
+    /// </summary>
+    internal static bool IsGitHubCheckRunInfrastructureFailure(string? conclusion) =>
+        conclusion?.ToUpperInvariant() switch
+        {
+            "STARTUP_FAILURE" or "CANCELLED" or "ACTION_REQUIRED" => true,
+            _ => false,
+        };
+
+    /// <summary>
+    /// Whether a failed GitHub status context's <c>state</c> means the external CI errored rather than reported a
+    /// failure, so a fix run has nothing to fix.
+    /// </summary>
+    internal static bool IsGitHubStatusContextInfrastructureFailure(string? state) =>
+        string.Equals(state, "ERROR", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a failed GitLab job's <c>failure_reason</c> means it failed before or outside its script, so a fix run
+    /// has nothing to fix. The fixable reasons are an allowlist: GitLab keeps adding reasons, and an unknown one
+    /// costs a person a look in review, while a wrong fixable verdict spends worker runs. A job with no reason in the
+    /// response stays fixable.
+    /// </summary>
+    internal static bool IsGitLabInfrastructureFailure(string? failureReason)
+    {
+        if (string.IsNullOrWhiteSpace(failureReason))
+        {
+            return false;
+        }
+
+        return failureReason switch
+        {
+            "script_failure" or "job_execution_timeout" or "job_execution_server_timeout"
+                or "server_timeout_running" => false,
+            _ => true,
+        };
+    }
+
+    /// <summary>
     /// Maps a GitLab <c>head_pipeline.status</c> value to a <see cref="Checks"/> verdict.
     /// An unrecognized status maps to <see cref="Pending"/> so the gate waits rather than falsely resolving.
     /// </summary>

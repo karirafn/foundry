@@ -87,7 +87,7 @@ public sealed class GetChecksAsync
         // Assert
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
-        red.FailingChecks.ShouldBe([new FailingCheck("rspec:other", "failed", "https://example.com/foo/bar/-/jobs/6")]);
+        red.FailingChecks.ShouldBe([new FailingCheck("rspec:other", "stuck_or_timeout_failure", "https://example.com/foo/bar/-/jobs/6", IsInfrastructureFailure: true)]);
     }
 
     [Fact]
@@ -110,8 +110,8 @@ public sealed class GetChecksAsync
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
         red.FailingChecks.ShouldBe(
             [
-                new FailingCheck("rspec:other", "failed", "https://example.com/foo/bar/-/jobs/6"),
-                new FailingCheck("teaspoon", "failed", "https://example.com/foo/bar/-/jobs/7"),
+                new FailingCheck("rspec:other", "stuck_or_timeout_failure", "https://example.com/foo/bar/-/jobs/6", IsInfrastructureFailure: true),
+                new FailingCheck("teaspoon", "script_failure", "https://example.com/foo/bar/-/jobs/7"),
             ]);
     }
 
@@ -155,7 +155,7 @@ public sealed class GetChecksAsync
         // Assert
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
-        red.FailingChecks.ShouldBe([new FailingCheck("rspec:other", "failed", "https://example.com/foo/bar/-/jobs/6")]);
+        red.FailingChecks.ShouldBe([new FailingCheck("rspec:other", "stuck_or_timeout_failure", "https://example.com/foo/bar/-/jobs/6", IsInfrastructureFailure: true)]);
     }
 
     [Fact]
@@ -224,6 +224,99 @@ public sealed class GetChecksAsync
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
         red.FailingChecks.ShouldBe([new FailingCheck("lint", "failed", "https://example.com/jobs/2")]);
+    }
+
+    // ci_quota_exceeded is the failure_reason every job carried on the pipeline observed in issue #968.
+    [Fact]
+    public async Task WhenAFailedJobNeverRanItsScript_NamesItsReasonAndMarksItAnInfrastructureFailure()
+    {
+        // Arrange
+        string jobs = """
+            [{ "name": "build", "status": "failed", "failure_reason": "ci_quota_exceeded", "allow_failure": false }]
+            """;
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]);
+    }
+
+    [Fact]
+    public async Task WhenAFailedJobsScriptFailed_NamesItsReasonAndKeepsItFixable()
+    {
+        // Arrange
+        string jobs = """
+            [{ "name": "test", "status": "failed", "failure_reason": "script_failure", "allow_failure": false }]
+            """;
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("test", "script_failure", null)]);
+    }
+
+    [Theory]
+    [InlineData("""{ "name": "test", "status": "failed", "allow_failure": false }""")]
+    [InlineData("""{ "name": "test", "status": "failed", "failure_reason": null, "allow_failure": false }""")]
+    [InlineData("""{ "name": "test", "status": "failed", "failure_reason": " ", "allow_failure": false }""")]
+    public async Task WhenAFailedJobCarriesNoReason_NamesItsStatusAndKeepsItFixable(string job)
+    {
+        // Arrange
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler($"[{job}]"));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("test", "failed", null)]);
+    }
+
+    [Fact]
+    public async Task WhenAFailedJobReasonHoldsControlCharacters_ReplacesEachWithASpaceLikeTheName()
+    {
+        // Arrange
+        string jobs = """
+            [{ "name": "test", "status": "failed", "failure_reason": "\nci_quota\r\nexceeded ", "allow_failure": false }]
+            """;
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("test", "ci_quota  exceeded", null, IsInfrastructureFailure: true)]);
     }
 
     [Fact]

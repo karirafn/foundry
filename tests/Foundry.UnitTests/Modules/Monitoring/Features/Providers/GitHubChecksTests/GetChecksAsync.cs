@@ -136,7 +136,8 @@ public sealed class GetChecksAsync
         red.FailingChecks[0].ShouldSatisfyAllConditions(
             () => red.FailingChecks[0].Name.ShouldBe("ci / build"),
             () => red.FailingChecks[0].Conclusion.ShouldBe("FAILURE"),
-            () => red.FailingChecks[0].DetailsUrl.ShouldBe("https://github.com/owner/repo/actions/runs/1"));
+            () => red.FailingChecks[0].DetailsUrl.ShouldBe("https://github.com/owner/repo/actions/runs/1"),
+            () => red.FailingChecks[0].IsInfrastructureFailure.ShouldBeFalse());
     }
 
     [Fact]
@@ -393,6 +394,71 @@ public sealed class GetChecksAsync
         red.FailingChecks[0].ShouldSatisfyAllConditions(
             () => red.FailingChecks[0].Name.ShouldBe("ci/jenkins"),
             () => red.FailingChecks[0].Conclusion.ShouldBe("ERROR"),
-            () => red.FailingChecks[0].DetailsUrl.ShouldBe("https://jenkins.example.com/job/1"));
+            () => red.FailingChecks[0].DetailsUrl.ShouldBe("https://jenkins.example.com/job/1"),
+            () => red.FailingChecks[0].IsInfrastructureFailure.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task WhenACheckRunFailedToStartBesideAFailedStatusContext_MarksOnlyTheCheckRunAnInfrastructureFailure()
+    {
+        // Arrange
+        // STARTUP_FAILURE is a CheckConclusionState value: https://docs.github.com/en/graphql/reference/checks;
+        // FAILURE is a StatusState value: https://docs.github.com/en/graphql/reference/commits (StatusState).
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "commits": {
+                      "nodes": [
+                        {
+                          "commit": {
+                            "statusCheckRollup": {
+                              "state": "FAILURE",
+                              "contexts": {
+                                "nodes": [
+                                  {
+                                    "__typename": "CheckRun",
+                                    "name": "ci / build",
+                                    "conclusion": "STARTUP_FAILURE",
+                                    "detailsUrl": "https://github.com/owner/repo/actions/runs/1"
+                                  },
+                                  {
+                                    "__typename": "StatusContext",
+                                    "context": "ci/jenkins",
+                                    "state": "FAILURE",
+                                    "targetUrl": "https://jenkins.example.com/job/1"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, json));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidPullRequestUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe(
+            [
+                new FailingCheck("ci / build", "STARTUP_FAILURE", "https://github.com/owner/repo/actions/runs/1", IsInfrastructureFailure: true),
+                new FailingCheck("ci/jenkins", "FAILURE", "https://jenkins.example.com/job/1"),
+            ]);
     }
 }
