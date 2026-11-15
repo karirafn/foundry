@@ -21,6 +21,14 @@ export interface InFlightTool {
   readonly name: string;
 }
 
+/** A background task the agent started and is still running, e.g. a backgrounded shell command. */
+export interface BackgroundTask {
+  /** The CLI's task type, e.g. "local_bash"; never shown. */
+  readonly taskType: string;
+  /** The redacted, collapsed description, usually the shell command; may be empty. */
+  readonly description: string;
+}
+
 /** Billable token totals; the server computes them, the client never sums token buckets. */
 export interface AgentTokenTotals {
   /** Billable input (uncached + cache read + cache write) so far. */
@@ -42,6 +50,8 @@ export interface AgentActivity {
   readonly subagents: readonly ActiveSubagent[];
   readonly inFlightTool: InFlightTool | null;
   readonly tokens: AgentTokenTotals;
+  /** The full live set of background tasks; kept after the agent's turn ends. */
+  readonly backgroundTasks: readonly BackgroundTask[];
 }
 
 /** Sent when a run leaves ActiveRun and its projection is disposed. */

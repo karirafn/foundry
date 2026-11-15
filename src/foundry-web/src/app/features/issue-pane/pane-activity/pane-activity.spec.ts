@@ -26,6 +26,7 @@ function activity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     inFlightTool: { name: 'Bash' },
     tokens: { inputTokens: 100, outputTokens: null },
+    backgroundTasks: [],
     ...overrides,
   };
 }
@@ -146,6 +147,54 @@ describe('PaneActivityComponent', () => {
     const elapsed = el.querySelector('.pane-activity__elapsed');
     expect(text(elapsed)).toBe('silent 6m · Bash running');
     expect(elapsed?.classList.contains('pane-activity__elapsed--silent')).toBe(true);
+    expect(el.querySelector('.pane-activity__bg-list')).toBeNull();
+  });
+
+  it('reads "waiting" past the threshold while background tasks run, and lists each in full', () => {
+    // Act
+    const { el } = setup(
+      activity({
+        lastEventAt: new Date(NOW - 7 * 60_000).toISOString(),
+        backgroundTasks: [
+          { taskType: 'local_bash', description: 'timeout 3000 dotnet test 2>&1 | tail -40' },
+          { taskType: 'local_bash', description: ' ' },
+        ],
+      }),
+    );
+
+    // Assert
+    const elapsed = el.querySelector('.pane-activity__elapsed');
+    expect(text(elapsed)).toBe('waiting 7m');
+    expect(elapsed?.classList.contains('pane-activity__elapsed--silent')).toBe(false);
+    expect(text(el.querySelector('.pane-activity__bg-label'))).toBe('Waiting on 2 background tasks');
+    const items = [...el.querySelectorAll('.pane-activity__bg-list li')].map((li) => text(li));
+    expect(items).toEqual(['timeout 3000 dotnet test 2>&1 | tail -40', 'a background task']);
+    expect(el.querySelector('.pane-activity__bg-list li:first-child code')).not.toBeNull();
+    expect(el.querySelector('.pane-activity__bg-list li:last-child code')).toBeNull();
+  });
+
+  it('names a single background task in the singular', () => {
+    // Act
+    const { el } = setup(
+      activity({
+        lastEventAt: new Date(NOW - 7 * 60_000).toISOString(),
+        backgroundTasks: [{ taskType: 'local_bash', description: 'dotnet test' }],
+      }),
+    );
+
+    // Assert
+    expect(text(el.querySelector('.pane-activity__bg-label'))).toBe('Waiting on 1 background task');
+  });
+
+  it('keeps the last-event text and no task list below the threshold while background tasks run', () => {
+    // Act
+    const { el } = setup(
+      activity({ backgroundTasks: [{ taskType: 'local_bash', description: 'dotnet test' }] }),
+    );
+
+    // Assert
+    expect(text(el.querySelector('.pane-activity__elapsed'))).toBe('last event 12s ago');
+    expect(el.querySelector('.pane-activity__bg-list')).toBeNull();
   });
 
   it('says the connection is lost and freezes the elapsed text while disconnected', () => {

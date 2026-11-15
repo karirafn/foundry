@@ -13,8 +13,8 @@ namespace Foundry.Modules.Workers.Features.Activity;
 
 /// <summary>
 /// Folds a worker's <c>claude --output-format stream-json</c> log into the Agent Activity
-/// projection: the agent's task list, active subagents, the in-flight tool, token
-/// totals and <c>LastEventAt</c>. Workflow-agnostic — it reads the agent's own signals.
+/// projection: the agent's task list, active subagents, the in-flight tool, background
+/// tasks, token totals and <c>LastEventAt</c>. Workflow-agnostic — it reads the agent's own signals.
 /// </summary>
 /// <remarks>
 /// Stateful: tool calls, task ids and subagents are correlated across lines, so a single
@@ -34,6 +34,8 @@ internal sealed partial class AgentActivityProjection
     private readonly Dictionary<string, SubagentEntry> _subagents = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _subagentKeyByTaskId = new(StringComparer.Ordinal);
     private readonly HashSet<string> _countedMessageIds = new(StringComparer.Ordinal);
+
+    private IReadOnlyList<BackgroundTask> _backgroundTasks = [];
 
     private long _sequence;
     private long _inputTokens;
@@ -136,7 +138,8 @@ internal sealed partial class AgentActivityProjection
             Tokens: new AgentTokenTotals(
                 new TokenUsage(_inputTokens, _cacheReadInputTokens, _cacheCreationInputTokens, null)
                     .BillableInputTokens ?? 0,
-                _finalOutputTokens));
+                _finalOutputTokens),
+            BackgroundTasks: _backgroundTasks);
     }
 
     private void ApplyAssistant(JsonObject evt)
@@ -273,9 +276,31 @@ internal sealed partial class AgentActivityProjection
 
                 break;
 
+            case "background_tasks_changed":
+                ApplyBackgroundTasksChanged(evt);
+                break;
+
             // init (also repeated by the claude -c retry), thinking_tokens, hooks and unknown
             // subtypes only advance LastEventAt.
         }
+    }
+
+    private void ApplyBackgroundTasksChanged(JsonObject evt)
+    {
+        // The event carries the full live set, so it replaces the cached one rather than merging.
+        // It is kept across a result event: background tasks outlive the turn that started them.
+        if (evt["tasks"] is not JsonArray tasks)
+        {
+            return;
+        }
+
+        _backgroundTasks = tasks
+            .OfType<JsonObject>()
+            .Take(MaxTasks)
+            .Select(task => new BackgroundTask(
+                ReadString(task["task_type"]) ?? string.Empty,
+                Redact(ReadString(task["description"])) ?? string.Empty))
+            .ToList();
     }
 
     private void ApplySubagentStarted(JsonObject evt, string taskId)

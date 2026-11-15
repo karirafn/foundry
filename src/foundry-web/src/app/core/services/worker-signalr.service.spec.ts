@@ -38,6 +38,7 @@ function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivi
     subagents: [],
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
+    backgroundTasks: [],
     ...overrides,
   };
 }
