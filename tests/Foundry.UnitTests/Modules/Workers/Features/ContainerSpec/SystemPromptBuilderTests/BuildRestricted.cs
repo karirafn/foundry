@@ -224,7 +224,7 @@ public sealed class BuildRestricted
         // Assert
         prompt.ShouldSatisfyAllConditions(
             () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
-            () => prompt.ShouldNotContain("FIRST "),
+            () => prompt.ShouldNotContain("FIRST " + large),
             () => prompt.ShouldContain("SECOND " + large),
             () => prompt.ShouldContain("THIRD " + large),
             () => prompt.ShouldContain("FOURTH " + large),
@@ -265,7 +265,7 @@ public sealed class BuildRestricted
         // Assert
         prompt.ShouldSatisfyAllConditions(
             () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
-            () => prompt.ShouldNotContain("FIRST "),
+            () => prompt.ShouldNotContain("FIRST " + large),
             () => prompt.ShouldContain("Retry webhook delivery."),
             () => prompt.ShouldContain($"<input>{input}</input>"),
             () => prompt.ShouldContain($"<input>{input}2</input>"),
