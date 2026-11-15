@@ -80,6 +80,30 @@ public sealed class ReviewIssue : Issue
         return review;
     }
 
+    /// <summary>
+    /// A catch-up rebase could not bring the branch up to date (ADR 0111). The checks had passed on the head the
+    /// refused merge was pinned to, so the issue keeps that verdict and head, the rebase's own outcome, and records
+    /// the merge as <c>skipped(catch_up_failed)</c>.
+    /// </summary>
+    internal static ReviewIssue FromFailedCatchUp(
+        RebasePendingIssue source,
+        RebaseOutcome rebaseOutcome,
+        DateTimeOffset transitionedAt)
+    {
+        ReviewIssue review = new(source.Id, transitionedAt);
+        review.CopySharedPropertiesFrom(source);
+        review.WorkerRunId = source.WorkerRunId;
+        review.BranchName = source.BranchName;
+        review.PullRequestUrl = source.PullRequestUrl;
+        review.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        review.ChecksOutcome = new ChecksOutcome.Passed();
+        review.RebaseOutcome = rebaseOutcome;
+        review.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        review.VerifiedHeadSha = source.CatchUpHeadSha;
+        review.MergeOutcome = new MergeOutcome.Skipped(MergeSkipReasons.CatchUpFailed);
+        return review;
+    }
+
     internal static ReviewIssue FromMergePending(
         MergePendingIssue source,
         MergeOutcome mergeOutcome,

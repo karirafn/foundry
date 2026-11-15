@@ -13,7 +13,8 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 /// <summary>
 /// Applies Monitoring's merge step outcome to a merge-pending issue (ADR 0105): <c>merged</c> completes it, and
 /// <c>disabled</c> or <c>skipped</c> sends it to review with the outcome recorded, and <c>feedback</c> revises it with
-/// the person's comments (issue #917). Any other state — including an
+/// the person's comments (issue #917), and <c>catch_up</c> rebases it as the head of the catch-up queue (ADR 0111).
+/// Any other state — including an
 /// issue that already left merge-pending on an earlier delivery — is ignored, so redelivery is a no-op beyond
 /// inbox dedup.
 /// </summary>
@@ -51,6 +52,14 @@ internal sealed class MergeResolvedHandler(
                 @event.OmittedCommentCount,
                 @event.NewestCommentAt);
             await db.TransitionAsync(mergePendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
+        // The merge was refused because the pull request fell behind, and it heads the catch-up queue (ADR 0111).
+        if (@event.Outcome == MergeResolved.CatchUpOutcome)
+        {
+            RebasePendingIssue rebasePending = mergePendingIssue.CatchUp(now);
+            await db.TransitionAsync(mergePendingIssue, rebasePending, domainEventDispatcher, cancellationToken);
             return;
         }
 

@@ -146,7 +146,11 @@ public sealed class RevisionInProgressIssue : Issue
     public RebasePendingIssue MarkRebasePending(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
     {
         DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(
+            this,
+            new RebasePendingReason.AfterRun(),
+            feedbackCutoffAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
@@ -158,7 +162,11 @@ public sealed class RevisionInProgressIssue : Issue
     public RebasePendingIssue MarkUnchangedRebasePending(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
     {
         DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(
+            this,
+            new RebasePendingReason.AfterRun(),
+            feedbackCutoffAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
