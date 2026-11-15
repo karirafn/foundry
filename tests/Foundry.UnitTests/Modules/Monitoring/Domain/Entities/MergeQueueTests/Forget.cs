@@ -14,7 +14,7 @@ public sealed class Forget
     private static readonly DateTimeOffset Episode = new(2026, 11, 1, 10, 0, 0, TimeSpan.Zero);
 
     private static MergePendingIssueInfo Issue(int number) =>
-        new(number, $"https://github.com/octocat/hello-world/pull/{number}", "abc123", Episode, Episode);
+        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", Episode, Episode);
 
     [Fact]
     public void ReturnsOnlyRowsWhoseIssueIsNoLongerMergePending()
@@ -26,7 +26,7 @@ public sealed class Forget
         MergeQueue queue = MergeQueue.From(RepositoryId, [kept, left, alsoLeft]);
 
         // Act
-        IReadOnlyList<PendingMerge> forgotten = queue.Forget([Issue(1), Issue(4)]);
+        IReadOnlyList<PendingMerge> forgotten = queue.Forget(MergeQueue.HeldIssueNumbers([Issue(1), Issue(4)], []));
 
         // Assert
         forgotten.ShouldBe([left, alsoLeft], ignoreOrder: true);
@@ -40,7 +40,7 @@ public sealed class Forget
         MergeQueue queue = MergeQueue.From(RepositoryId, [row]);
 
         // Act
-        IReadOnlyList<PendingMerge> forgotten = queue.Forget([Issue(1)]);
+        IReadOnlyList<PendingMerge> forgotten = queue.Forget(MergeQueue.HeldIssueNumbers([Issue(1)], []));
 
         // Assert
         forgotten.ShouldBeEmpty();
@@ -52,7 +52,7 @@ public sealed class Forget
         // Arrange
         PendingMerge row = PendingMerge.Start(RepositoryId, 1, Episode);
         MergeQueue queue = MergeQueue.From(RepositoryId, [row]);
-        queue.Forget([]);
+        queue.Forget(MergeQueue.HeldIssueNumbers([], []));
 
         // Act
         TrackedMerge tracked = queue.Track(Issue(1));

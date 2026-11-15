@@ -38,5 +38,17 @@ public sealed class RebasePendingIssueConfiguration : IEntityTypeConfiguration<R
         builder.Property(i => i.RebaseConflictAttempts)
             .HasDefaultValue(0)
             .HasColumnName("rebase_conflict_attempts");
+
+        builder.Property(i => i.Reason)
+            .HasConversion(RebasePendingReasonJsonConversion.Converter, RebasePendingReasonJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("rebase_pending_reason");
+
+        // Shares the merge-pending head column: a catch-up carries the head its refused merge was pinned to.
+        builder.Property(i => i.CatchUpHeadSha)
+            .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("merge_head_sha");
     }
 }

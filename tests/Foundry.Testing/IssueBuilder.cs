@@ -241,6 +241,12 @@ public sealed class IssueBuilder
             _verifiedHeadSha,
             _transitionedAt);
 
+    /// <summary>
+    /// Builds a <see cref="RebasePendingIssue"/> catching up (ADR 0111): the merge-pending issue's merge was refused
+    /// because it fell behind, and it heads the catch-up queue.
+    /// </summary>
+    public RebasePendingIssue RebasePendingForCatchUp() => MergePending().CatchUp(_transitionedAt);
+
     public ChecksPendingIssue ChecksPendingFromRevision() => RebasePendingFromRevision().MarkChecksPending(_rebaseOutcome, _transitionedAt);
 
     /// <summary>

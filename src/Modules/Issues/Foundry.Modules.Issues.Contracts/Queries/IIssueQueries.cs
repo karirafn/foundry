@@ -34,6 +34,14 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The repository's issues the catch-up queue reads (ADR 0111): every checks-pending and merge-pending issue, and
+    /// every rebase-pending issue rebasing for a catch-up.
+    /// </summary>
+    Task<IReadOnlyList<MergeQueueIssueInfo>> GetMergeQueueIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);

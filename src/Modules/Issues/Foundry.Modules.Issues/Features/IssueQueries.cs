@@ -183,10 +183,44 @@ internal sealed class IssueQueries(
             .Select(i => new MergePendingIssueInfo(
                 i.IssueNumber,
                 i.PullRequestUrl,
+                i.BranchName,
                 i.HeadSha,
                 i.FeedbackCutoffAt,
                 i.EnteredMergePendingAt))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MergeQueueIssueInfo>> GetMergeQueueIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        // The reasons are JSON columns, so the catch-up test runs in memory over the repository's few gate issues.
+        List<ChecksPendingIssue> checksPending = await db.Set<ChecksPendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .ToListAsync(cancellationToken);
+        List<RebasePendingIssue> rebasePending = await db.Set<RebasePendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .ToListAsync(cancellationToken);
+        List<MergeQueueIssueInfo> mergePending = await db.Set<MergePendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new MergeQueueIssueInfo(i.IssueNumber, i.BranchName, false, i.HasPersonFeedback))
+            .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. checksPending.Select(i => new MergeQueueIssueInfo(
+                i.IssueNumber,
+                i.BranchName,
+                i.Reason is ChecksPendingReason.CatchUp,
+                i.HasPersonFeedback)),
+            .. rebasePending
+                .Where(i => i.Reason is RebasePendingReason.CatchUp)
+                .Select(i => new MergeQueueIssueInfo(i.IssueNumber, i.BranchName, true, i.HasPersonFeedback)),
+            .. mergePending,
+        ];
     }
 
     public async Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(

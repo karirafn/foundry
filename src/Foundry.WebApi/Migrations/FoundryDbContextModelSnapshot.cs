@@ -445,6 +445,18 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("issue_number");
 
+                    b.Property<bool>("AwaitsCatchUp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("awaits_catch_up");
+
+                    b.Property<int>("CatchUpRounds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("catch_up_rounds");
+
                     b.Property<DateTimeOffset>("EnteredMergePendingAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("entered_merge_pending_at");
@@ -452,6 +464,10 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("NextAttemptAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("next_attempt_at");
+
+                    b.Property<DateTimeOffset?>("QueuedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("queued_at");
 
                     b.Property<DateTimeOffset?>("ResolvedAt")
                         .HasColumnType("TEXT")
@@ -1600,6 +1616,7 @@ namespace Foundry.WebApi.Migrations
 
                     b.Property<string>("HeadSha")
                         .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(64)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
@@ -1889,6 +1906,13 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
+                    b.Property<string>("CatchUpHeadSha")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("merge_head_sha");
+
                     b.Property<int>("ChecksFixAttempts")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
@@ -1911,6 +1935,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("rebase_pending_reason");
 
                     b.Property<int>("RebaseConflictAttempts")
                         .ValueGeneratedOnAdd()
