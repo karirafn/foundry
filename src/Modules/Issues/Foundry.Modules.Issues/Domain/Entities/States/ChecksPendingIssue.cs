@@ -105,6 +105,19 @@ public sealed class ChecksPendingIssue : Issue
     }
 
     /// <summary>
+    /// A review issue's checks read green on the same commits after a rerun: the gate confirms the green verdict
+    /// and routes it. Nobody pushed, so the fix budget starts exhausted: a red second read (a flaky job between the
+    /// two reads) goes to review instead of spending fix runs on unchanged code (ADR 0108).
+    /// </summary>
+    internal static ChecksPendingIssue FromReviewAfterChecksRerun(ReviewIssue source, DateTimeOffset transitionedAt)
+    {
+        ChecksPendingIssue checksPending = FromReview(source, transitionedAt);
+        checksPending.ChecksFixAttempts = ChecksMaxFixPushes;
+        checksPending.Reason = new ChecksPendingReason.ChecksRerun();
+        return checksPending;
+    }
+
+    /// <summary>
     /// Routes the checks verdict to the next state:
     /// <list type="bullet">
     /// <item><b>Merge:</b> <see cref="ChecksOutcome.Passed"/> with <paramref name="autoMerge"/> on and a known

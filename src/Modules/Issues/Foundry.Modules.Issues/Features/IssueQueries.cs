@@ -131,10 +131,16 @@ internal sealed class IssueQueries(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
+        // ChecksOutcome is a JSON value conversion, so EF evaluates the Passed test client-side in this final projection.
         return await db.Set<ReviewIssue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
-            .Select(i => new ReviewIssueInfo(i.IssueNumber, i.PullRequestUrl, i.FeedbackCutoffAt, i.VerifiedHeadSha))
+            .Select(i => new ReviewIssueInfo(
+                i.IssueNumber,
+                i.PullRequestUrl,
+                i.FeedbackCutoffAt,
+                i.VerifiedHeadSha,
+                i.ChecksOutcome is ChecksOutcome.Passed))
             .ToListAsync(cancellationToken);
     }
 

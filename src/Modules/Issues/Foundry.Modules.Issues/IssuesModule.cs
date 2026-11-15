@@ -60,6 +60,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestHeadMoved, ProviderPullRequestHeadMovedHandler>();
+        services.AddIntegrationEventHandler<ProviderPullRequestChecksPassed, ProviderPullRequestChecksPassedHandler>();
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
         services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
         services.AddIntegrationEventHandler<MergeResolved, MergeResolvedHandler>();
