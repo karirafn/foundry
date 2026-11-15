@@ -144,7 +144,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
         ReviewIssueInfo reviewIssue = new(
             IssueNumber: 42,
             PullRequestUrl: "https://github.com/owner/repo/pull/99",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
 
         RepositoryPoller sut = new(
             new PassThroughIssueQueries(reviewIssues: [reviewIssue]),

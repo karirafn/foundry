@@ -6,6 +6,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -54,7 +55,8 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
     private async Task<ReviewIssue> CreateAndPersistReviewIssueAsync(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
-        string pullRequestUrl)
+        string pullRequestUrl,
+        ChecksOutcome? checksOutcome = null)
     {
         DetectedIssue detected = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
@@ -77,7 +79,7 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(rebasePending, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(checksOutcome ?? new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         return review;
@@ -180,5 +182,41 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueChecksPassed_ReportsChecksPassed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        await CreateAndPersistReviewIssueAsync(repositoryId, issueNumber: 10, "https://github.com/owner/repo/pull/42", new ChecksOutcome.Passed());
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldHaveSingleItem().ChecksPassed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueChecksStillFailing_ReportsChecksNotPassed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        await CreateAndPersistReviewIssueAsync(
+            repositoryId,
+            issueNumber: 10,
+            "https://github.com/owner/repo/pull/42",
+            new ChecksOutcome.StillFailing([new FailingCheck("build", "failed", null)]));
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldHaveSingleItem().ChecksPassed.ShouldBeFalse();
     }
 }

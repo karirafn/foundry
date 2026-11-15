@@ -19,11 +19,13 @@ public abstract record ChecksPendingReason
     {
         AfterRun => AfterRunDiscriminator,
         HeadMoved => HeadMovedDiscriminator,
+        ChecksRerun => ChecksRerunDiscriminator,
         _ => throw new UnreachableException($"Unknown {nameof(ChecksPendingReason)} variant: {GetType().Name}"),
     };
 
     public const string AfterRunDiscriminator = "after_run";
     public const string HeadMovedDiscriminator = "head_moved";
+    public const string ChecksRerunDiscriminator = "checks_rerun";
 
     /// <summary>
     /// Rebuilds a reason from its <paramref name="discriminator"/>. Returns <see langword="null"/> for an unknown
@@ -34,6 +36,7 @@ public abstract record ChecksPendingReason
         {
             AfterRunDiscriminator => new AfterRun(),
             HeadMovedDiscriminator => new HeadMoved(),
+            ChecksRerunDiscriminator => new ChecksRerun(),
             _ => null,
         };
 
@@ -42,4 +45,7 @@ public abstract record ChecksPendingReason
 
     /// <summary>New commits reached a review issue's pull request after its checks verdict.</summary>
     public sealed record HeadMoved : ChecksPendingReason;
+
+    /// <summary>A review issue whose checks verdict was not passed read green on the same commits after a rerun.</summary>
+    public sealed record ChecksRerun : ChecksPendingReason;
 }
