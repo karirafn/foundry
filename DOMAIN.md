@@ -1168,13 +1168,13 @@ Until the first Agent Activity payload arrives (e.g. during the SignalR handshak
 ## Agent Activity
 
 A live, in-memory projection of a running worker's stream-json events, one per `ActiveRun` — the agent's own view of its progress, read without a Foundry-defined stage vocabulary.
-It holds the agent's task list (`TaskCreate` / `TaskUpdate`: subject, `activeForm`, status, with task ids correlated from the `TaskCreate` tool results), the current in-progress task and "N of M" completed, the active subagents (`subagent_type`, description, `spawn_depth`, last tool — parallel subagents tracked separately, each removed when its `task_notification` reports completion), the active skill, the in-flight tool (the latest `tool_use` with no matching `tool_result`, with the Agent Transcript input summary), token totals (input, output, cache read, cache creation — summed once per `message.id`, since a message is emitted once per content block with identical `usage`), and `LastEventAt`.
+It holds the agent's task list (`TaskCreate` / `TaskUpdate`: subject, `activeForm`, status, with task ids correlated from the `TaskCreate` tool results), the current in-progress task and "N of M" completed, the active subagents (`subagent_type`, description, last tool — parallel subagents tracked separately, each removed when its `task_notification` reports completion), the in-flight tool (the name of the latest `tool_use` with no matching `tool_result`), the background tasks (each `task_type` and redacted, collapsed `description`, usually a backgrounded shell command — replaced as a whole by every `system/background_tasks_changed` event, which carries the full live set), token totals (input, output, cache read, cache creation — summed once per `message.id`, since a message is emitted once per content block with identical `usage`), and `LastEventAt`.
 Cost is not estimated live; it arrives with the final `result` event.
 
 **Follower.**
 `AgentActivityFollowerService` (not `WorkerDispatchService`) reconciles a log follower per `ActiveRun` every 10 s and flushes changed projections every 2 s.
 Each follower reads the container log from the start, so a Foundry restart rebuilds the projection by re-attaching (cost proportional to run length — accepted).
-A repeated `system/init` or the `claude -c` transient retry continues the projection rather than resetting it; a `result` event clears the in-flight tool and subagents but keeps tasks and token totals.
+A repeated `system/init` or the `claude -c` transient retry continues the projection rather than resetting it; a `result` event clears the in-flight tool and subagents but keeps tasks, token totals and background tasks, because background tasks outlive the turn that started them.
 When the run leaves `ActiveRun` its follower is cancelled, its projection disposed, and an `AgentActivityEnded` payload is broadcast; a follower whose log stream faults is re-attached with a fresh projection on the next reconcile.
 
 **Broadcast and replay.**
@@ -1183,6 +1183,7 @@ The projection is presentation-only: it is never persisted, and text fields are 
 
 **Dashboard display.**
 The in-progress issue card shows one line such as `developer · Running tests (3/7)`: the latest active subagent type (or `main agent`), the current task `activeForm`, and task progress; a run with no task list shows the active subagent and the in-flight tool instead.
+Past the 5-minute silence threshold, a run with background tasks is *waiting*, not silent: the worker card footer reads `waiting on <first description> +N more · 7m` in neutral styling (an empty description reads `a background task`; screen readers hear only the count), the issue pane heading reads `waiting 7m` above a list of every task's full description, and no silence episode starts, so the Board does not announce `worker silent`. Once the tasks finish and the run stays quiet, a normal silence episode follows.
 The worker system prompt carries one workflow-neutral line asking the agent to track its plan with its task list and keep it current.
 
 ## Active-Agents Chip

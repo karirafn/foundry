@@ -29,6 +29,22 @@
     <p class="pane-activity__waiting">Waiting for the first agent event.</p>
   }
 
+  <!-- Not a live region: the announcer above speaks step changes only. -->
+  @if (waitingOn().length > 0) {
+    <p class="pane-activity__bg-label">{{ waitingLabel() }}</p>
+    <ul class="pane-activity__bg-list">
+      @for (task of waitingOn(); track $index) {
+        <li>
+          @if (task.isCommand) {
+            <code>{{ task.text }}</code>
+          } @else {
+            {{ task.text }}
+          }
+        </li>
+      }
+    </ul>
+  }
+
   <!-- Mounted for the whole run, so lines stream in before the log is opened. -->
   @for (id of runId() ? [runId()] : []; track id) {
     <fd-log-view
