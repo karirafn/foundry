@@ -7,6 +7,7 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.Testing;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,7 @@ public sealed class ExecuteAsync
             new FoundryImageSweep(new NullImageOperations(), NullLogger<FoundryImageSweep>.Instance),
             new StubHostEnvironment(string.Empty),
             new WorkerRoleCatalogStore(),
+            new SpyWorkerImageToolchainRecorder(),
             new CapturingLoggerAdapter<WorkerImageRebuildService>(logger));
     }
 

@@ -6,6 +6,12 @@ internal sealed record WorkerContainerSpec(
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyList<string> Command)
 {
+    /// <summary>Replaces the image's entrypoint when set; <see langword="null"/> keeps it.</summary>
+    public IReadOnlyList<string>? Entrypoint { get; init; }
+
+    /// <summary>The user the container starts as when set; <see langword="null"/> keeps the image's.</summary>
+    public string? User { get; init; }
+
     public required int MemoryLimitMb { get; init; }
 
     public required double CpuLimit { get; init; }
