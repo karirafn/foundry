@@ -1,5 +1,14 @@
-import { AgentActivity, AgentTaskItem, BackgroundTask } from '../../../../core/models/agent-activity.model';
-import { activityPanel, lastEventLine, silenceEpisode } from './worker-activity.model';
+import {
+  AgentActivity,
+  AgentTaskItem,
+  BackgroundTask,
+} from '../../../../core/models/agent-activity.model';
+import {
+  TASK_SEGMENT_LIMIT,
+  activityPanel,
+  lastEventLine,
+  silenceEpisode,
+} from './worker-activity.model';
 
 function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
   return {
@@ -22,6 +31,18 @@ function task(id: string, status: string, activeForm: string | null = null): Age
   return { id, subject: `Task ${id}`, activeForm, status };
 }
 
+/** `total` tasks with the first `done` completed and, when `working`, the next one in progress. */
+function activityWithTasks(total: number, done: number, working: boolean): AgentActivity {
+  const tasks = Array.from({ length: total }, (_, i) =>
+    task(`${i + 1}`, i < done ? 'completed' : working && i === done ? 'in_progress' : 'pending'),
+  );
+  return buildActivity({
+    tasks,
+    currentTask: working ? tasks[done] : null,
+    completedTaskCount: done,
+  });
+}
+
 function bgTask(description: string): BackgroundTask {
   return { taskType: 'local_bash', description };
 }
@@ -41,8 +62,7 @@ describe('activityPanel', () => {
     expect(panel).toEqual({
       starting: true,
       taskLine: "Waiting for the agent's first event",
-      segments: [],
-      progress: null,
+      taskBar: null,
     });
   });
 
@@ -123,17 +143,113 @@ describe('activityPanel', () => {
     const panel = activityPanel(activity);
 
     // Assert
-    expect(panel.segments).toEqual(['done', 'done', 'current', 'empty']);
-    expect(panel.progress).toBe('task 3 of 4');
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'segments', segments: ['done', 'done', 'current', 'empty'] },
+      progress: 'task 3 of 4',
+    });
   });
 
-  it('has no bar and no position with an empty task list', () => {
+  it('shows a single task as one segment', () => {
+    // Arrange
+    const activity = activityWithTasks(1, 0, true);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'segments', segments: ['current'] },
+      progress: 'task 1 of 1',
+    });
+  });
+
+  it(`keeps segments at the limit of ${TASK_SEGMENT_LIMIT} tasks`, () => {
+    // Arrange
+    const activity = activityWithTasks(20, 5, true);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: {
+        kind: 'segments',
+        segments: [...Array<string>(5).fill('done'), 'current', ...Array<string>(14).fill('empty')],
+      },
+      progress: 'task 6 of 20',
+    });
+  });
+
+  it('turns into a meter at 21 tasks', () => {
+    // Arrange
+    const activity = activityWithTasks(21, 0, false);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'meter', donePercent: 0, currentPercent: 0 },
+      progress: 'task 1 of 21',
+    });
+  });
+
+  it('fills the meter with the completed share and a current slice of one task', () => {
+    // Arrange
+    const activity = activityWithTasks(25, 5, true);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'meter', donePercent: 20, currentPercent: 4 },
+      progress: 'task 6 of 25',
+    });
+  });
+
+  it('has no current slice between tasks', () => {
+    // Arrange
+    const activity = activityWithTasks(25, 5, false);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar?.shape).toEqual({ kind: 'meter', donePercent: 20, currentPercent: 0 });
+  });
+
+  it('fills the meter with no current slice once every task is completed', () => {
+    // Arrange
+    const activity = activityWithTasks(25, 25, false);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'meter', donePercent: 100, currentPercent: 0 },
+      progress: 'task 25 of 25',
+    });
+  });
+
+  it('gives no current slice to a current task that is already completed', () => {
+    // Arrange
+    const activity = activityWithTasks(25, 25, false);
+
+    // Act
+    const panel = activityPanel({ ...activity, currentTask: activity.tasks[24] });
+
+    // Assert
+    expect(panel.taskBar?.shape).toEqual({ kind: 'meter', donePercent: 100, currentPercent: 0 });
+  });
+
+  it('has no task bar with an empty task list', () => {
     // Act
     const panel = activityPanel(buildActivity());
 
     // Assert
-    expect(panel.segments).toEqual([]);
-    expect(panel.progress).toBeNull();
+    expect(panel.taskBar).toBeNull();
   });
 });
 
