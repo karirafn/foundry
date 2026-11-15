@@ -40,9 +40,10 @@ internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestU
 /// <summary>
 /// Provider-neutral relevance rules shared by the webhook event mappers (ADR 0085): a pull/merge
 /// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
-/// issue is checks-pending; a comment on an awaiting-input issue's question thread nudges its
-/// awaiting-input pass; an issue close of a blocker nudges the listing plus the dependency pass;
-/// anything else maps to <see langword="null"/>.
+/// issue is checks-pending; a finished checks delivery nudges the checks pass of its checks-pending
+/// owner, or else the review pass of its review owner whose checks verdict is not passed; a comment on an
+/// awaiting-input issue's question thread nudges its awaiting-input pass; an issue close of a blocker
+/// nudges the listing plus the dependency pass; anything else maps to <see langword="null"/>.
 /// </summary>
 internal static partial class WebhookRelevance
 {
@@ -69,19 +70,17 @@ internal static partial class WebhookRelevance
     {
         HashSet<int> candidates = CandidateIssueNumbers(branches);
 
-        foreach (ReviewIssueInfo review in tracked.ReviewIssues)
-        {
-            if (candidates.Contains(review.IssueNumber) || MatchesPull(review.PullRequestUrl, pullNumbers, pullRequestUrlPattern))
-            {
-                return new NudgeKey(repositoryId, NudgePass.Review, review.IssueNumber);
-            }
-        }
-
-        return MapChecksPendingIssue(repositoryId, tracked, pullNumbers, branches, pullRequestUrlPattern);
+        return FindReviewOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern, includeChecksPassed: true)
+            ?? FindChecksPendingOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern);
     }
 
-    /// <summary>Maps a checks delivery to the checks pass of the checks-pending issue that owns it.</summary>
-    internal static NudgeKey? MapChecksPendingIssue(
+    /// <summary>
+    /// Maps a checks delivery (a finished pipeline, check suite or status) to the checks pass of the
+    /// checks-pending issue that owns it, falling back to the review pass of the owning review issue whose
+    /// checks verdict is not passed, so its same-head checks re-read runs at once (ADR 0108). A passed
+    /// verdict is never re-read, so nudging its review pass would only spend reads.
+    /// </summary>
+    internal static NudgeKey? MapChecksDelivery(
         MonitoredRepositoryId repositoryId,
         WebhookTrackingContext tracked,
         IReadOnlyList<int> pullNumbers,
@@ -90,6 +89,37 @@ internal static partial class WebhookRelevance
     {
         HashSet<int> candidates = CandidateIssueNumbers(branches);
 
+        return FindChecksPendingOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern)
+            ?? FindReviewOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern, includeChecksPassed: false);
+    }
+
+    private static NudgeKey? FindReviewOwner(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        HashSet<int> candidates,
+        IReadOnlyList<int> pullNumbers,
+        Regex pullRequestUrlPattern,
+        bool includeChecksPassed)
+    {
+        foreach (ReviewIssueInfo review in tracked.ReviewIssues)
+        {
+            if ((includeChecksPassed || !review.ChecksPassed)
+                && (candidates.Contains(review.IssueNumber) || MatchesPull(review.PullRequestUrl, pullNumbers, pullRequestUrlPattern)))
+            {
+                return new NudgeKey(repositoryId, NudgePass.Review, review.IssueNumber);
+            }
+        }
+
+        return null;
+    }
+
+    private static NudgeKey? FindChecksPendingOwner(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        HashSet<int> candidates,
+        IReadOnlyList<int> pullNumbers,
+        Regex pullRequestUrlPattern)
+    {
         foreach (ChecksPendingIssueInfo checksPending in tracked.ChecksPendingIssues)
         {
             if (candidates.Contains(checksPending.IssueNumber)
