@@ -189,12 +189,16 @@ prepare_role_verdict_schema() {
 #
 # Resolves the run's capability profile (ADR 0098) — never its role name — into
 # the CAPABILITY_CLAUDE_ARGS array both claude invocations (the initial -p run
-# and the transient-error -c resume) expand verbatim:
-#   full       — --dangerously-skip-permissions.
+# and the transient-error -c resume) expand verbatim, and CAPABILITY_USES_DOCKER,
+# which gates the start_rootless_dockerd call:
+#   full       — --dangerously-skip-permissions, and the nested rootless Docker
+#                daemon (CAPABILITY_USES_DOCKER=true) when the image has one.
 #   restricted — --restricted --strict-mcp-config, never the permission skip.
 #                The branch is unset so no branch reaches the run (and no Run
-#                bundle is written) even if one was set.  Provider tokens are
-#                unset for every capability before this runs (ADR 0100).
+#                bundle is written) even if one was set, and no Docker daemon
+#                starts (CAPABILITY_USES_DOCKER=false): with no command tools the
+#                run could never use one.  Provider tokens are unset for every
+#                capability before this runs (ADR 0100).
 #
 # Fails closed: any other value emits the bootstrap-failure sentinel
 # (stage=role) and returns non-zero.
@@ -202,10 +206,12 @@ prepare_role_verdict_schema() {
 prepare_capability_profile() {
     local capability="$1"
     CAPABILITY_CLAUDE_ARGS=()
+    CAPABILITY_USES_DOCKER=false
 
     case "$capability" in
         full)
             CAPABILITY_CLAUDE_ARGS=(--dangerously-skip-permissions)
+            CAPABILITY_USES_DOCKER=true
             ;;
         restricted)
             CAPABILITY_CLAUDE_ARGS=(--restricted --strict-mcp-config)
@@ -222,6 +228,22 @@ prepare_capability_profile() {
 }
 
 # ---------------------------------------------------------------------------
+# clear_docker_environment
+#
+# Unsets DOCKER_HOST and every TESTCONTAINERS_* variable, swept by prefix so newly
+# introduced Testcontainers settings are covered too: no inherited ambient value
+# reaches claude. The grep's no-match status is absorbed with `|| true` so the
+# sweep is safe under set -e / pipefail.
+# ---------------------------------------------------------------------------
+clear_docker_environment() {
+    unset DOCKER_HOST
+    local _tc_name
+    while IFS= read -r _tc_name; do
+        unset "$_tc_name"
+    done < <(compgen -e | grep '^TESTCONTAINERS_' || true)
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -234,17 +256,10 @@ prepare_capability_profile() {
 #   DOCKER_RETRY_SLEEP — seconds between attempts           (default: 1)
 # ---------------------------------------------------------------------------
 start_rootless_dockerd() {
-    # Unconditionally own DOCKER_HOST and every TESTCONTAINERS_* variable, swept by prefix
-    # so newly introduced Testcontainers settings are covered too, and no inherited
-    # ambient value survives any exit path (success, no-dockerd, or daemon
-    # failure/degraded mode). On success the function re-exports what it needs below; on
-    # all other paths they stay unset. The grep's no-match status is absorbed with
-    # `|| true` so the sweep is safe under set -e / pipefail.
-    unset DOCKER_HOST
-    local _tc_name
-    while IFS= read -r _tc_name; do
-        unset "$_tc_name"
-    done < <(compgen -e | grep '^TESTCONTAINERS_' || true)
+    # Swept first so no inherited value survives any exit path (success, no-dockerd, or
+    # daemon failure/degraded mode). On success the function re-exports what it needs
+    # below; on all other paths they stay unset.
+    clear_docker_environment
 
     if ! command -v dockerd-rootless.sh > /dev/null 2>&1; then
         return 0
@@ -572,9 +587,11 @@ export GIT_EDITOR=true
 # startup, claude invocation) are out of scope for bootstrap classification.
 trap - ERR
 
-if start_rootless_dockerd; then
-    :
-else
+# Only a profile that can run commands gets the daemon (ADR 0098); a restricted run
+# skips it silently, with the inherited Docker environment still swept.
+if [[ "$CAPABILITY_USES_DOCKER" != true ]]; then
+    clear_docker_environment
+elif ! start_rootless_dockerd; then
     echo "WARNING: rootless dockerd unavailable; continuing in degraded mode (unit tests only, no Docker daemon). DOCKER_HOST left unset; integration tests will execute where a daemon exists (CI / native-Linux host)." >&2
     echo "FOUNDRY_DOCKER_UNAVAILABLE detail=rootless dockerd failed to start" >&2
 fi

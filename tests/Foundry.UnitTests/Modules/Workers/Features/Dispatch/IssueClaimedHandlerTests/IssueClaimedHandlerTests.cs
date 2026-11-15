@@ -1193,6 +1193,32 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDockerEnabledAndTheRoleIsRestricted_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
+    {
+        // Arrange
+        WorkerRunId runId = WorkerRunId.New();
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-restricted-no-dind");
+        IssueClaimedHandler sut = BuildRestrictedHandler(
+            orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+        IssueClaimed @event = BuildEvent(workerRunId: runId);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.Capabilities.ShouldBe(["SETUID", "SETGID"], ignoreOrder: true),
+            () => spec.SecurityOptions.ShouldBe(["no-new-privileges:true"]),
+            () => spec.Devices.ShouldBeEmpty(),
+            () => spec.UnmaskSystemPaths.ShouldBeFalse(),
+            () => spec.VolumeMounts.ShouldNotContain(m =>
+                m.VolumeName.StartsWith(WorkerVolumeNames.DataRootVolumeNamePrefix, StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task WhenDispatched_ContainerSpecCarriesTheImplementRoleForTheEntrypoint()
     {
         // Arrange

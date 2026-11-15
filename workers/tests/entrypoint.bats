@@ -181,11 +181,14 @@ make_role_fixture() {
     done
 }
 
-# Loads start_rootless_dockerd from entrypoint.sh into the current shell.
+# Loads start_rootless_dockerd, and the clear_docker_environment it calls, from
+# entrypoint.sh into the current shell.
 load_function() {
-    local func_body
-    func_body="$(awk '/^start_rootless_dockerd\(\)/,/^\}/' "$ENTRYPOINT")"
-    eval "$func_body"
+    local func_name func_body
+    for func_name in clear_docker_environment start_rootless_dockerd; do
+        func_body="$(awk "/^${func_name}\\(\\)/,/^\\}/" "$ENTRYPOINT")"
+        eval "$func_body"
+    done
 }
 
 teardown() {
@@ -2551,6 +2554,75 @@ FAKE
     ! grep -q '^switch ' "$BATS_TEST_TMPDIR/git_args"
 }
 
+
+# Write a fake dockerd-rootless.sh that records it was started, then fails fast.
+make_fake_dockerd_record_start() {
+    local started_file="$BATS_TEST_TMPDIR/dockerd_started"
+    cat > "$FAKE_BIN_DIR/dockerd-rootless.sh" <<FAKE
+#!/bin/bash
+echo "dockerd-started" > "${started_file}"
+exit 1
+FAKE
+    chmod +x "$FAKE_BIN_DIR/dockerd-rootless.sh"
+}
+
+# Write a fake claude that records the DOCKER_HOST and Testcontainers host it was started with.
+make_fake_claude_record_docker_env() {
+    local env_file="$BATS_TEST_TMPDIR/claude_docker_env"
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+printf 'DOCKER_HOST=%s TESTCONTAINERS_HOST_OVERRIDE=%s\n' "\${DOCKER_HOST-unset}" "\${TESTCONTAINERS_HOST_OVERRIDE-unset}" > "${env_file}"
+exit 0
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "capability: a restricted run starts no dockerd even when dockerd-rootless.sh is on PATH" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+    [[ "$output" != *"Starting rootless dockerd"* ]]
+    [[ "$output" != *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
+
+@test "capability: a restricted run reaches claude with DOCKER_HOST and the Testcontainers host unset" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    export DOCKER_HOST="unix:///leaked.sock"
+    export TESTCONTAINERS_HOST_OVERRIDE="leaked"
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_docker_env")" = "DOCKER_HOST=unset TESTCONTAINERS_HOST_OVERRIDE=unset" ]
+}
+
+@test "capability: a full run starts dockerd when dockerd-rootless.sh is on PATH" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+    [[ "$output" == *"Starting rootless dockerd"* ]]
+    [[ "$output" == *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
 @test "capability: a full run keeps --dangerously-skip-permissions and no restricted flags on both invocations" {
     set_required_env
     make_fake_git
