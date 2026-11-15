@@ -16,6 +16,7 @@ using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.DataProtection;
+using Foundry.Shared.Infrastructure.Http.Ingress;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi;
 using Foundry.WebApi.Hubs;
@@ -39,7 +40,7 @@ bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == DocGenerat
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-WebhookKestrelBinding.AddWebhookEndpoint(builder);
+IngressKestrelBinding.AddIngressEndpoints(builder, WebhookIngressOptions.PortKey);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -161,9 +162,9 @@ WebApplication app = builder.Build();
 
 GlobalExceptionLogging.Install(app.Services.GetRequiredService<ILoggerFactory>());
 
-// Two-way port guard (ADR 0085): first in the pipeline so the public webhook port exposes nothing
-// but /webhooks/*, and the main port never serves /webhooks/*.
-app.UseWebhookPortGuard();
+// Ingress port guard (ADR 0085): first in the pipeline so each ingress port (the public webhook port) exposes
+// nothing but its own path prefix, and no other port serves that prefix.
+app.UseIngressPortGuard();
 
 if (!isDocGeneration)
 {
@@ -184,8 +185,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// The webhook port is plain HTTP behind the operator's tunnel or reverse proxy; never redirect it.
-app.UseWhen(context => !WebhookPortGuard.IsWebhookPortRequest(context), branch => branch.UseHttpsRedirection());
+// Ingress ports are plain HTTP (the webhook port sits behind the operator's tunnel or reverse proxy); never redirect them.
+app.UseWhen(context => !IngressPortGuard.IsIngressPortRequest(context), branch => branch.UseHttpsRedirection());
 app.UseStatusCodePages();
 
 app.MapDefaultEndpoints();

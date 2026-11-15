@@ -33,11 +33,13 @@ using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Http.Ingress;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Monitoring;
 
@@ -122,6 +124,8 @@ public static class MonitoringModule
         // Webhook ingress (ADR 0085): host configuration, the single-consumer nudge channel, the
         // receiving endpoint and the manual-registration endpoints.
         services.AddOptions<WebhookIngressOptions>().BindConfiguration(WebhookIngressOptions.SectionName);
+        services.AddIngressEntry(static sp =>
+            new IngressEntry(sp.GetRequiredService<IOptions<WebhookIngressOptions>>().Value.Port, WebhookIngressOptions.PathPrefix));
         services.TryAddSingleton<WebhookNudgeQueue>();
         services.AddScoped<WebhookIngress>();
         services.AddScoped<ReceiveGitHubWebhook.Handler>();
