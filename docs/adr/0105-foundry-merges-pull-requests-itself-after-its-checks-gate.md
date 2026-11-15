@@ -2,6 +2,8 @@
 
 > **2026-11-13 — Amended:** the head source in the "Pinned head" clause is replaced by [ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md): the commit comes from the PR status read for every outcome, not from the checks read. It can precede the commit the verdict describes, so a race refuses the merge as `head_moved` rather than merging unchecked work.
 
+> **2026-11-14 — Amended:** the Consequences clause that a pull request falling behind the default branch goes to `review` as `Skipped` is replaced by [ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md): a merge refused because the pull request is behind joins a serialized catch-up queue.
+
 ## Context
 
 A repository can opt in to having the pull requests Foundry opens merged without a person.
