@@ -1,5 +1,7 @@
 # The Worker Image Installs Every Toolchain and Reports What It Has
 
+> **2026-11-14 — Amended:** the Decision's clause "`Full` runs get the 0079 allowances and the entrypoint starts `dockerd`" is replaced by [ADR 0110](0110-nested-docker-privileges-stay-an-operator-switch.md): a `Full` run gets them only while the operator's nested-Docker switch is on.
+
 ## Context
 
 [ADR 0019](0019-worker-image-flags-in-settings.md) made the optional toolchains (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) operator flags on `GlobalSettings`.
