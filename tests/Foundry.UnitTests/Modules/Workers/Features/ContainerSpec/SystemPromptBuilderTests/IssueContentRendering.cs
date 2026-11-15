@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
 
@@ -28,8 +29,7 @@ public sealed class IssueContentRendering
                 context ?? new DispatchContext.Fresh("feat/42-add-retry"),
                 issue,
                 timeoutMinutes: 120,
-                installsDocker: false,
-                installsDotnet: false)
+                toolchain: ToolchainFixtures.With(docker: false, csharpLs: false))
             .ShouldBeOfType<Result<string>.Success>().Value;
 
     public static TheoryData<DispatchContext> EveryDispatchContext =>

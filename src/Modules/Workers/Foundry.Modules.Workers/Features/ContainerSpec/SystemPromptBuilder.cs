@@ -34,9 +34,14 @@ internal static partial class SystemPromptBuilder
     // Unique heading that opens the section telling the agent that Foundry publishes its commits (ADR 0100).
     internal const string PublishingSectionMarker = "Foundry publishes your work:";
 
-    // Unique heading that opens the C# code-navigation section (emitted only for images that
-    // install the .NET SDK, which also bake csharp-ls and the csharp-lsp plugin).
+    // Unique heading that opens the C# code-navigation section (emitted only for images whose recorded
+    // toolchain has csharp-ls, the server the baked csharp-lsp plugin registers).
     internal const string CSharpLspSectionMarker = "C# code navigation:";
+
+    // The toolchain names (workers/toolchain.sh) that gate sections: a section is promised only when the image the run
+    // uses reported the tool it needs (ADR 0109).
+    internal const string CSharpLsTool = "csharp-ls";
+    internal const string DockerTool = "docker";
 
     // Unique heading that opens the RebaseConflict revision section. Tests anchor on this constant
     // so any wording change surfaces as a compile error rather than a silent assertion miss.
@@ -91,8 +96,7 @@ internal static partial class SystemPromptBuilder
         DispatchContext context,
         IssueContent issue,
         int timeoutMinutes,
-        bool installsDocker,
-        bool installsDotnet,
+        Toolchain toolchain,
         IReadOnlyList<FailingJobLog>? failingJobLogs = null,
         IReadOnlyList<Clarification>? clarifications = null,
         TrackerContext? trackerContext = null)
@@ -101,8 +105,8 @@ internal static partial class SystemPromptBuilder
         ArgumentNullException.ThrowIfNull(issue);
 
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
-        string prePrSection = installsDocker ? "\n\n" + BuildPrePrSection() : string.Empty;
-        string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
+        string prePrSection = toolchain.Has(DockerTool) ? "\n\n" + BuildPrePrSection() : string.Empty;
+        string csharpLspSection = CSharpLspSection(toolchain);
         IReadOnlyList<Clarification> log = clarifications ?? [];
 
         // Line endings are normalised to \n so bytes measured == bytes delivered, regardless of whether AppendLine
@@ -226,7 +230,7 @@ internal static partial class SystemPromptBuilder
         int issueNumber,
         string systemPromptTemplate,
         IssueContent issue,
-        bool installsDotnet,
+        Toolchain toolchain,
         IReadOnlyList<Clarification>? clarifications = null,
         TrackerContext? trackerContext = null)
     {
@@ -234,7 +238,7 @@ internal static partial class SystemPromptBuilder
         ArgumentNullException.ThrowIfNull(issue);
 
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
-        string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
+        string csharpLspSection = CSharpLspSection(toolchain);
 
         // A re-triage after answered questions (ADR 0097) reads the clarification log, as an implement run does.
         IReadOnlyList<Clarification> log = clarifications ?? [];
@@ -633,6 +637,9 @@ internal static partial class SystemPromptBuilder
     // The worker entrypoint loads the csharp-lsp plugin only after the repository restores
     // cleanly, so the LSP tool may be absent even on a .NET image — hence the grep fallback.
     // Claude Code exposes LSP as a deferred tool, so the agent must load it via ToolSearch.
+    private static string CSharpLspSection(Toolchain toolchain) =>
+        toolchain.Has(CSharpLsTool) ? "\n\n" + BuildCSharpLspSection() : string.Empty;
+
     private static string BuildCSharpLspSection()
     {
         return $"""

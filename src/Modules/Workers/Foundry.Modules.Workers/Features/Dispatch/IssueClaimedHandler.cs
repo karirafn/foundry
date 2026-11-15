@@ -12,6 +12,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.HostPauses;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Roles;
@@ -347,8 +348,9 @@ internal sealed class IssueClaimedHandler(
         }
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+        // Read only for the container spec's Docker allowances; the prompt follows the image's recorded toolchain.
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
-        bool installsDotnet = await settingsQueries.GetWorkerImageInstallsDotnetAsync(cancellationToken);
+        Toolchain toolchain = await dbContext.GetRecordedToolchainAsync(catalog.Image.ImageId, cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
         string model = await GetRoleModelAsync(role.Role, cancellationToken);
@@ -363,7 +365,7 @@ internal sealed class IssueClaimedHandler(
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
                 issueContent,
-                installsDotnet,
+                toolchain,
                 claimed.Clarifications ?? [],
                 trackerContext: trackerContext)
             : SystemPromptBuilder.Build(
@@ -373,8 +375,7 @@ internal sealed class IssueClaimedHandler(
                 claimed.Context,
                 issueContent,
                 timeoutMinutes,
-                installsDocker,
-                installsDotnet,
+                toolchain,
                 failingJobLogs,
                 claimed.Clarifications ?? [],
                 trackerContext: trackerContext);

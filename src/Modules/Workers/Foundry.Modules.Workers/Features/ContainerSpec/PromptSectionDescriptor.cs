@@ -6,10 +6,10 @@ internal enum PromptSectionCondition
     /// <summary>Every run.</summary>
     Always,
 
-    /// <summary>The worker image installs the .NET SDK.</summary>
+    /// <summary>The worker image's recorded toolchain has <c>csharp-ls</c>; an image with no recorded toolchain has none.</summary>
     DotnetImage,
 
-    /// <summary>The worker image installs Docker.</summary>
+    /// <summary>The worker image's recorded toolchain has <c>docker</c>; an image with no recorded toolchain has none.</summary>
     DockerImage,
 
     /// <summary>A fresh run on a new branch.</summary>

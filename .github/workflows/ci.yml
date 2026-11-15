@@ -177,6 +177,21 @@ jobs:
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: WORKER_IMAGE=foundry-worker:ci bats workers/tests/task_tools.bats
 
+      - name: Image contract check — the toolchain script reports the image's toolchain
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        # Run the way Foundry's probe runs it: entrypoint replaced, as node, read-only root with scratch home and /tmp
+        run: |
+          output=$(docker run --rm --user node --read-only --cap-drop ALL -v /home/node -v /tmp --entrypoint /opt/foundry/toolchain.sh foundry-worker:ci)
+          [ "$(printf '%s\n' "$output" | wc -l)" -eq 1 ] \
+            || { echo "FAIL: expected exactly one line, got: $output"; exit 1; }
+          json=${output#FOUNDRY_TOOLCHAIN }
+          [ "$json" != "$output" ] || { echo "FAIL: no FOUNDRY_TOOLCHAIN prefix: $output"; exit 1; }
+          for tool in node claude-code dotnet-sdk csharp-ls docker git; do
+            jq -e --arg tool "$tool" 'any(.[]; .name == $tool and (.version | length > 0))' <<<"$json" >/dev/null \
+              || { echo "FAIL: $tool missing from $json"; exit 1; }
+          done
+          echo "PASS: $output"
+
       - name: Image contract check — csharp-ls matches workers/.config/dotnet-tools.json, plugin baked, rq-cli absent
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |

@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
 
@@ -41,8 +42,7 @@ public sealed class ClarificationLog
             context,
             Issue,
             timeoutMinutes: 120,
-            installsDocker: false,
-            installsDotnet: false,
+            toolchain: ToolchainFixtures.With(docker: false, csharpLs: false),
             clarifications: clarifications).ShouldBeOfType<Result<string>.Success>().Value;
 
     [Theory]
@@ -73,8 +73,7 @@ public sealed class ClarificationLog
             context,
             Issue,
             timeoutMinutes: 120,
-            installsDocker: false,
-            installsDotnet: false).ShouldBeOfType<Result<string>.Success>().Value;
+            toolchain: ToolchainFixtures.With(docker: false, csharpLs: false)).ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert
         withEmptyLog.ShouldBe(withoutLog);
