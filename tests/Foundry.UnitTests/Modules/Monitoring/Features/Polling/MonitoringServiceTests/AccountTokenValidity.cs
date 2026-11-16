@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -384,6 +385,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         services.AddScoped<IIssueProviderFactory>(_ => new FixedProviderFactory(provider));
         services.AddScoped<IGitHubWriteProber, GrantedWriteProber>();
         services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();
+        services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IAccountTokenValidator>(_ => validator);
         services.AddScoped<AccountTokenVerdicts>();

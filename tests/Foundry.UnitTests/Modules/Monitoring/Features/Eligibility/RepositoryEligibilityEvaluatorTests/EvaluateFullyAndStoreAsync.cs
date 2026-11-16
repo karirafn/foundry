@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -37,6 +38,7 @@ public sealed class EvaluateFullyAndStoreAsync
             resolver ?? new NullCredentialResolver(),
             providerFactory ?? new NullProviderFactory(),
             writeProber ?? new GrantedWriteProber(),
+            new StubPackageSourceVerdicts(),
             NullLogger<RepositoryEligibilityEvaluator>.Instance);
     }
 
