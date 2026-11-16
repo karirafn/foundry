@@ -26,6 +26,7 @@ const CONDITION_TAGS: Readonly<Record<PromptSectionCondition, ConditionTag>> = {
   Always: { label: 'Always', kind: 'always' },
   DotnetImage: { label: '.NET image', kind: 'image' },
   DockerImage: { label: 'Docker image', kind: 'image' },
+  BrowserRenderingImage: { label: 'Chromium + Playwright image', kind: 'image' },
   Fresh: { label: 'Fresh run', kind: 'run' },
   Continuation: { label: 'Continuation run', kind: 'run' },
   Revision: { label: 'Revision run', kind: 'run' },

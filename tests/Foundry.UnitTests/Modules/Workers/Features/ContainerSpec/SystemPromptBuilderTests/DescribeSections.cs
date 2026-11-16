@@ -23,6 +23,7 @@ public sealed class DescribeSections
             ("issue-content", PromptSectionCondition.Always),
             ("task-list", PromptSectionCondition.Always),
             ("csharp-lsp", PromptSectionCondition.DotnetImage),
+            ("rendering-ui-changes", PromptSectionCondition.BrowserRenderingImage),
             ("pre-pr", PromptSectionCondition.DockerImage),
             ("publishing", PromptSectionCondition.Always),
             ("fresh", PromptSectionCondition.Fresh),

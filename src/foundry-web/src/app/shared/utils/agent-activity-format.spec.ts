@@ -1,5 +1,5 @@
 import { AgentActivity } from '../../core/models/agent-activity.model';
-import { formatElapsed, laneStepText } from './agent-activity-format';
+import { backgroundTaskCount, backgroundTaskText, formatElapsed, laneStepText } from './agent-activity-format';
 
 function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
   return {
@@ -13,6 +13,7 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
+    backgroundTasks: [],
     ...overrides,
   };
 }
@@ -66,5 +67,29 @@ describe('laneStepText', () => {
 
     // Act / Assert
     expect(laneStepText(after)).toBe(laneStepText(before));
+  });
+});
+
+describe('backgroundTaskText', () => {
+  it('is the task description', () => {
+    // Act / Assert
+    expect(backgroundTaskText({ taskType: 'local_bash', description: 'dotnet test' })).toBe('dotnet test');
+  });
+
+  it.each(['', '   '])('reads "a background task" for the blank description %j', (description) => {
+    // Act / Assert
+    expect(backgroundTaskText({ taskType: 'local_bash', description })).toBe('a background task');
+  });
+});
+
+describe('backgroundTaskCount', () => {
+  it('is singular for one task', () => {
+    // Act / Assert
+    expect(backgroundTaskCount(1)).toBe('1 background task');
+  });
+
+  it('is plural for several tasks', () => {
+    // Act / Assert
+    expect(backgroundTaskCount(3)).toBe('3 background tasks');
   });
 });

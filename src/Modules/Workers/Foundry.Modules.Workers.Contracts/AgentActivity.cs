@@ -4,7 +4,8 @@ namespace Foundry.Modules.Workers.Contracts;
 /// Live, in-memory projection of a running worker's stream-json events, broadcast to the
 /// dashboard as the run progresses. Presentation-only: never persisted, rebuilt from the
 /// container log after a restart. Text fields are summaries, never tool result bodies.
-/// <c>Role</c> is the Worker Role the run was dispatched with.
+/// <c>Role</c> is the Worker Role the run was dispatched with. <c>BackgroundTasks</c> is the
+/// CLI's full live set of background tasks; it outlives the turn that started them.
 /// </summary>
 public sealed record AgentActivity(
     WorkerRunId WorkerRunId,
@@ -16,7 +17,8 @@ public sealed record AgentActivity(
     int CompletedTaskCount,
     IReadOnlyList<ActiveSubagent> Subagents,
     InFlightTool? InFlightTool,
-    AgentTokenTotals Tokens);
+    AgentTokenTotals Tokens,
+    IReadOnlyList<BackgroundTask> BackgroundTasks);
 
 /// <summary>An entry in the agent's own task list (<c>TaskCreate</c> / <c>TaskUpdate</c>).</summary>
 public sealed record AgentTaskItem(
@@ -52,3 +54,12 @@ public sealed record AgentTokenTotals(
 public sealed record AgentActivityEnded(
     WorkerRunId WorkerRunId,
     Guid IssueId);
+
+/// <summary>
+/// A background task the agent started and is still running, e.g. a backgrounded shell command.
+/// </summary>
+/// <param name="TaskType">The CLI's task type, e.g. <c>local_bash</c>; empty when absent.</param>
+/// <param name="Description">The redacted, collapsed task description; empty when absent.</param>
+public sealed record BackgroundTask(
+    string TaskType,
+    string Description);

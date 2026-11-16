@@ -101,7 +101,7 @@ public sealed class LegacyCiphertextReEncryptionTests : IDisposable
         await dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
 
         GitHubCredential credential = GitHubCredential.Create(
-            "legacy-account",
+            AccountName.Create("legacy-account").ValueOrThrow(),
             Token,
             BaseUrl.Create(GitHubUrl).ValueOrThrow(),
             BranchRulesToken);

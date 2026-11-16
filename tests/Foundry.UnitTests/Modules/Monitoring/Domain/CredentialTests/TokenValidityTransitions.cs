@@ -22,7 +22,7 @@ public sealed class TokenValidityTransitions
     public void WhenAccountIsCreated_TokenIsValid()
     {
         // Act
-        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
 
         // Assert
         credential.TokenValidity.ShouldBeOfType<TokenValidity.Valid>();
@@ -32,7 +32,7 @@ public sealed class TokenValidityTransitions
     public void WhenValidTokenIsMarkedInvalid_DetectedAtAndLastCheckedAtAreNow()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
 
         // Act
         credential.MarkTokenInvalid(Detected);
@@ -45,7 +45,7 @@ public sealed class TokenValidityTransitions
     public void WhenInvalidTokenIsMarkedInvalidAgain_KeepsDetectedAtAndStampsLastCheckedAt()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
         credential.MarkTokenInvalid(Detected);
         DateTimeOffset later = Detected.AddMinutes(20);
 
@@ -60,7 +60,7 @@ public sealed class TokenValidityTransitions
     public void WhenInvalidTokenIsMarkedValid_TokenIsValid()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
         credential.MarkTokenInvalid(Detected);
 
         // Act
@@ -74,11 +74,11 @@ public sealed class TokenValidityTransitions
     public void WhenGitHubAccountGetsNewToken_InvalidTokenBecomesValid()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
         credential.MarkTokenInvalid(Detected);
 
         // Act
-        credential.Update("my-org", Token("b"), GitHubBaseUrl());
+        credential.Update(AccountName.Create("my-org").ValueOrThrow(), Token("b"), GitHubBaseUrl());
 
         // Assert
         credential.TokenValidity.ShouldBeOfType<TokenValidity.Valid>();
@@ -88,11 +88,11 @@ public sealed class TokenValidityTransitions
     public void WhenGitLabAccountGetsNewToken_InvalidTokenBecomesValid()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("my-group", Token("a"), GitLabBaseUrl());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), Token("a"), GitLabBaseUrl());
         credential.MarkTokenInvalid(Detected);
 
         // Act
-        credential.Update("my-group", Token("b"), GitLabBaseUrl());
+        credential.Update(AccountName.Create("my-group").ValueOrThrow(), Token("b"), GitLabBaseUrl());
 
         // Assert
         credential.TokenValidity.ShouldBeOfType<TokenValidity.Valid>();
@@ -102,11 +102,11 @@ public sealed class TokenValidityTransitions
     public void WhenAccountIsUpdatedWithoutToken_InvalidTokenStaysInvalid()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
         credential.MarkTokenInvalid(Detected);
 
         // Act
-        credential.Update("renamed", token: null, GitHubBaseUrl());
+        credential.Update(AccountName.Create("renamed").ValueOrThrow(), token: null, GitHubBaseUrl());
 
         // Assert
         credential.TokenValidity.ShouldBe(new TokenValidity.Invalid(Detected, Detected));

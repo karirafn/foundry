@@ -53,7 +53,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // Use slug-derived name to avoid (base_url, name) unique constraint violations when
         // seeding multiple accounts with the same base URL.
         GitHubCredential credential = GitHubCredential.Create(
-            slug.Replace("/", "-", StringComparison.Ordinal),
+            AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
@@ -76,7 +76,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // Use slug-derived name to avoid (base_url, name) unique constraint violations when
         // seeding multiple accounts with the same base URL.
         GitHubCredential credential = GitHubCredential.Create(
-            slug.Replace("/", "-", StringComparison.Ordinal),
+            AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);

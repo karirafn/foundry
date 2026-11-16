@@ -12,7 +12,7 @@ namespace Foundry.UnitTests.Modules.Issues.Contracts.IIssueQueriesTests;
 public sealed class HasExpectedMembers
 {
     [Fact]
-    public void WhenInspected_HasSeventeenQueryMethods()
+    public void WhenInspected_HasEighteenQueryMethods()
     {
         // Arrange
         Type type = typeof(IIssueQueries);
@@ -21,7 +21,7 @@ public sealed class HasExpectedMembers
         MethodInfo[] methods = type.GetMethods();
 
         // Assert
-        methods.Length.ShouldBe(17);
+        methods.Length.ShouldBe(18);
     }
 
     [Fact]
@@ -58,6 +58,19 @@ public sealed class HasExpectedMembers
 
         // Act
         MethodInfo? method = type.GetMethod("GetDependencyGraphAsync");
+
+        // Assert
+        method.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenInspected_HasGetMergeQueueIssuesAsync()
+    {
+        // Arrange
+        Type type = typeof(IIssueQueries);
+
+        // Act
+        MethodInfo? method = type.GetMethod("GetMergeQueueIssuesAsync");
 
         // Assert
         method.ShouldNotBeNull();

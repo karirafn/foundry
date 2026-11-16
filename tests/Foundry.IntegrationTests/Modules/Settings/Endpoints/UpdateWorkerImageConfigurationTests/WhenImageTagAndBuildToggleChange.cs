@@ -50,10 +50,6 @@ public sealed class WhenImageTagAndBuildToggleChange : IAsyncDisposable
         {
             imageTag = "my-registry/foundry-worker:v2",
             buildEnabled = false,
-            installDotnet = false,
-            installAngular = false,
-            installChromium = false,
-            installDocker = false,
         };
 
         // Act

@@ -13,7 +13,7 @@ public sealed class ResolveCoveringNamespace
     private static GitHubCredential CreateCredential(params string[] namespaceValues)
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             "ghp_token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 

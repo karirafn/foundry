@@ -1,0 +1,32 @@
+:host {
+  display: block;
+}
+
+.toolchain-list {
+  column-gap: var(--fd-spacing-xl);
+  column-width: 15rem;
+  font-size: 0.8125rem;
+  margin: 0;
+
+  &__item {
+    break-inside: avoid;
+    display: grid;
+    gap: var(--fd-spacing-sm);
+    grid-template-columns: minmax(6rem, 40%) 1fr;
+    padding-block: 2px;
+  }
+
+  dt {
+    color: var(--fd-text-secondary);
+  }
+
+  dd {
+    color: var(--fd-text-primary);
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  code {
+    font-family: var(--fd-font-mono);
+  }
+}

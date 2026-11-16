@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Merge;
@@ -32,6 +33,7 @@ public sealed class RunAsync : IAsyncDisposable
     private const string PrUrl = "https://github.com/owner/repo/pull/99";
     private const string VerifiedHead = "1111111111111111111111111111111111111111";
     private const int IssueNumber = 42;
+    private const string Branch = "feat/42-thing";
 
     private static readonly DateTimeOffset EnteredAt = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset FeedbackCutoff = EnteredAt.AddMinutes(-30);
@@ -40,6 +42,7 @@ public sealed class RunAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher = new();
+    private readonly CapturingIntegrationEventProcessor _processor = new();
     private readonly WebhookNudgeQueue _nudgeQueue = new(NullLogger<WebhookNudgeQueue>.Instance);
     private readonly ScriptedProvider _provider = new();
 
@@ -62,12 +65,13 @@ public sealed class RunAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private MonitoredRepository SeedRepository(bool mergeWhenChecksPass = true)
+    private MonitoredRepository SeedRepository(bool mergeWhenChecksPass = true, bool rebaseAfterRun = true)
     {
         MonitoredRepository repository = MonitoredRepository.Create(
             RepositorySlug.Create("owner/repo").ValueOrThrow(),
             "github.com",
             null,
+            rebaseAfterRun: rebaseAfterRun,
             mergeWhenChecksPass: mergeWhenChecksPass).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();
@@ -75,11 +79,21 @@ public sealed class RunAsync : IAsyncDisposable
     }
 
     private MergeStep BuildSut(params MergePendingIssueInfo[] pending) =>
+        BuildQueueSut([], pending.Length == 0 ? [Pending()] : pending);
+
+    /// <summary>
+    /// A merge step reading <paramref name="pending"/> as the merge-pending issues and <paramref name="queueIssues"/>
+    /// plus every merge-pending issue as the catch-up queue's issues.
+    /// </summary>
+    private MergeStep BuildQueueSut(IReadOnlyList<MergeQueueIssueInfo> queueIssues, params MergePendingIssueInfo[] pending) =>
         new(
-            new StubIssueQueries(pending.Length == 0 ? [new MergePendingIssueInfo(IssueNumber, PrUrl, VerifiedHead, FeedbackCutoff, EnteredAt)] : pending),
+            new StubIssueQueries(
+                pending,
+                [.. queueIssues, .. pending.Select(p => new MergeQueueIssueInfo(p.IssueNumber, p.BranchName, false, false))]),
             _dbContext,
             new PostedCommentRegistry(_dbContext),
             _dispatcher,
+            _processor,
             _nudgeQueue,
             NullLogger<MergeStep>.Instance);
 
@@ -438,7 +452,7 @@ public sealed class RunAsync : IAsyncDisposable
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
 
         // Act
-        await BuildSut(new MergePendingIssueInfo(IssueNumber, PrUrl, VerifiedHead, FeedbackCutoff, EnteredAt.AddHours(1)))
+        await BuildSut(new MergePendingIssueInfo(IssueNumber, PrUrl, Branch, VerifiedHead, FeedbackCutoff, EnteredAt.AddHours(1)))
             .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -468,7 +482,7 @@ public sealed class RunAsync : IAsyncDisposable
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
 
         // Act
-        await new MergeStep(new StubIssueQueries([]), _dbContext, new PostedCommentRegistry(_dbContext), _dispatcher, _nudgeQueue, NullLogger<MergeStep>.Instance)
+        await new MergeStep(new StubIssueQueries([], []), _dbContext, new PostedCommentRegistry(_dbContext), _dispatcher, _processor, _nudgeQueue, NullLogger<MergeStep>.Instance)
             .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -476,9 +490,590 @@ public sealed class RunAsync : IAsyncDisposable
         _dbContext.Set<PendingMerge>().ShouldBeEmpty();
     }
 
-    private sealed class StubIssueQueries(
-        IReadOnlyList<MergePendingIssueInfo> mergePendingIssues) : IIssueQueries
+    private static MergePendingIssueInfo Pending(
+        int issueNumber = IssueNumber,
+        string branch = Branch,
+        DateTimeOffset? enteredAt = null) =>
+        new(issueNumber, PrUrl, branch, VerifiedHead, FeedbackCutoff, enteredAt ?? EnteredAt);
+
+    private void RefuseBehind(string branch = Branch)
     {
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.NotMergeable("behind")));
+        _provider.Ancestry[branch] = Result<bool>.Ok(false);
+    }
+
+    private PendingMerge LoadProgress(int issueNumber)
+    {
+        _dbContext.ChangeTracker.Clear();
+        return _dbContext.Set<PendingMerge>().Single(m => m.IssueNumber == issueNumber);
+    }
+
+    /// <summary>Seeds a row that has already used <paramref name="rounds"/> catch-ups and is back in merge-pending.</summary>
+    private void SeedCaughtUpRow(MonitoredRepository repository, int rounds, DateTimeOffset enteredAt)
+    {
+        PendingMerge row = PendingMerge.Start(repository.Id, IssueNumber, EnteredAt.AddDays(-1));
+        for (int round = 0; round < rounds; round++)
+        {
+            row.AwaitCatchUp(EnteredAt.AddDays(-1));
+            row.StartCatchUp(EnteredAt.AddDays(-1));
+            row.Restart(EnteredAt.AddDays(-1).AddHours(round + 1));
+        }
+
+        row.Restart(enteredAt);
+        _dbContext.Set<PendingMerge>().Add(row);
+        _dbContext.SaveChanges();
+    }
+
+    [Fact]
+    public async Task WhenRefusedAndBehind_QueuesTheRowAndStaysMergePending()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.AncestryReads.ShouldHaveSingleItem().ShouldBe(("HEAD", Branch));
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.QueuedAt.ShouldBe(Now),
+            () => progress.AwaitsCatchUp.ShouldBeTrue(),
+            () => progress.CatchUpRounds.ShouldBe(0),
+            () => progress.IsResolved.ShouldBeFalse(),
+            () => progress.TransientFailures.ShouldBe(0));
+    }
+
+    [Fact]
+    public async Task WhenRefusedAndBehind_NudgesTheNewQueueHead()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        Nudge nudge = DrainNudges().ShouldHaveSingleItem();
+        nudge.ShouldSatisfyAllConditions(
+            () => nudge.Key.Pass.ShouldBe(NudgePass.Merge),
+            () => nudge.Key.IssueNumber.ShouldBe(IssueNumber),
+            () => nudge.NotBefore.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenRefusedAndUpToDate_ResolvesSkippedNotMergeable()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.NotMergeable("approvals")));
+        _provider.Ancestry[Branch] = Result<bool>.Ok(true);
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.Outcome.ShouldBe("skipped");
+        resolved.Reason.ShouldBe("not_mergeable");
+        LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenRefusedWithRebaseAfterRunOff_ResolvesNotMergeableWithoutAnAncestryRead()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository(rebaseAfterRun: false);
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.Reason.ShouldBe("not_mergeable");
+        _provider.AncestryReads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAncestryReadFailsTransiently_CountsAgainstTheMergeBudget()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.NotMergeable("behind")));
+        _provider.Ancestry[Branch] = Result<bool>.Fail(RunPublishingErrors.Transient("502 Bad Gateway"));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.TransientFailures.ShouldBe(1),
+            () => progress.IsQueued.ShouldBeFalse());
+    }
+
+    [Fact]
+    public async Task WhenAncestryReadFailsPermanently_ResolvesNotMergeable()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.NotMergeable("behind")));
+        _provider.Ancestry[Branch] = Result<bool>.Fail(RunPublishingErrors.Permanent("404"));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Reason.ShouldBe("not_mergeable");
+    }
+
+    [Fact]
+    public async Task WhenQueueHeadHasNothingToWaitFor_StartsACatchUpWithoutMerging()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe("catch_up"),
+            () => resolved.Reason.ShouldBeNull(),
+            () => resolved.IssueNumber.ShouldBe(IssueNumber));
+        _provider.MergeCalls.ShouldHaveSingleItem();
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.CatchUpRounds.ShouldBe(1),
+            () => progress.QueuedAt.ShouldBe(Now),
+            () => progress.AwaitsCatchUp.ShouldBeFalse(),
+            () => progress.IsResolved.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task WhenQueueHeadMovedSinceItsChecks_ResolvesSkippedHeadMoved()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: new string('2', 40));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.Outcome.ShouldBe("skipped");
+        resolved.Reason.ShouldBe("head_moved");
+        LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenQueuedBehindAnEarlierEntry_WaitsWithoutMergingButReadsFeedback()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo first = Pending(41, "feat/41-first");
+        MergePendingIssueInfo second = Pending(42, "feat/42-second");
+        RefuseBehind(first.BranchName);
+        await BuildQueueSut([], first).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        RefuseBehind(second.BranchName);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, 42, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        DrainNudges();
+        int merges = _provider.MergeCalls.Count;
+        int feedbackReads = _provider.FeedbackReads.Count;
+
+        // Act: the earlier entry is catching up; the later one waits.
+        await BuildQueueSut([new MergeQueueIssueInfo(41, first.BranchName, true, false)], second)
+            .RunAsync(repository, _provider, null, Now.AddMinutes(2), TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.MergeCalls.Count.ShouldBe(merges);
+        _provider.FeedbackReads.Count.ShouldBe(feedbackReads + 1);
+        LoadProgress(42).AwaitsCatchUp.ShouldBeTrue();
+        LoadProgress(41).IsQueued.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenTwoEntriesQueueInOnePass_TheLowerIssueNumberHeadsTheQueue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo first = Pending(41, "feat/41-first");
+        MergePendingIssueInfo second = Pending(42, "feat/42-second");
+        RefuseBehind(first.BranchName);
+        RefuseBehind(second.BranchName);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Act
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.IssueNumber.ShouldBe(41);
+        resolved.Outcome.ShouldBe("catch_up");
+    }
+
+    [Fact]
+    public async Task WhenAnotherAutoMergeIssueIsUpToDate_TheHeadWaits()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+
+        // Act
+        await BuildQueueSut([new MergeQueueIssueInfo(50, "feat/50-fresh", false, false)], Pending())
+            .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.AncestryReads.ShouldContain(("HEAD", "feat/50-fresh"));
+        LoadProgress().AwaitsCatchUp.ShouldBeTrue();
+    }
+
+    public static TheoryData<string, bool, Result<bool>> NonHoldingIssues => new()
+    {
+        { "behind", false, Result<bool>.Ok(false) },
+        { "read fails", false, Result<bool>.Fail(RunPublishingErrors.Transient("502")) },
+        { "person feedback", true, Result<bool>.Ok(true) },
+    };
+
+    [Theory]
+    [MemberData(nameof(NonHoldingIssues))]
+    public async Task WhenNoOtherIssueIsConfirmedUpToDate_TheHeadStartsItsCatchUp(
+        string scenario,
+        bool hasPersonFeedback,
+        Result<bool> ancestry)
+    {
+        // Arrange
+        _ = scenario;
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-other"] = ancestry;
+
+        // Act
+        await BuildQueueSut([new MergeQueueIssueInfo(50, "feat/50-other", false, hasPersonFeedback)], Pending())
+            .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("catch_up");
+    }
+
+    [Fact]
+    public async Task WhenBackFromACatchUp_AttemptsTheMergeAgainKeepingItsPlace()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+
+        // Act
+        await BuildSut(Pending(enteredAt: EnteredAt.AddHours(1)))
+            .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.MergeCalls.Count.ShouldBe(2);
+        _dispatcher.DispatchedEvents.OfType<MergeResolved>().Select(e => e.Outcome).ShouldBe(["catch_up", "merged"]);
+        LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenBackFromACatchUpAndBehindAgain_WaitsForAnotherRound()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        SeedCaughtUpRow(repository, rounds: 1, EnteredAt);
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.AwaitsCatchUp.ShouldBeTrue(),
+            () => progress.CatchUpRounds.ShouldBe(1),
+            () => progress.QueuedAt.ShouldBe(EnteredAt.AddDays(-1)));
+    }
+
+    [Fact]
+    public async Task WhenEveryCatchUpRoundIsUsedAndBehindAgain_ResolvesSkippedFellBehind()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        SeedCaughtUpRow(repository, MergeQueue.MaxCatchUpRounds, EnteredAt);
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.Outcome.ShouldBe("skipped");
+        resolved.Reason.ShouldBe("fell_behind");
+        LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenAMergeLands_NudgesTheQueueHead()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo queued = Pending(41, "feat/41-queued");
+        MergePendingIssueInfo merging = Pending(42, "feat/42-merging");
+        RefuseBehind(queued.BranchName);
+        await BuildQueueSut([], queued).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry[merging.BranchName] = Result<bool>.Ok(true);
+        await BuildQueueSut([], queued, merging).RunAsync(repository, _provider, 41, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        DrainNudges();
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+
+        // Act
+        await BuildQueueSut([], queued, merging).RunAsync(repository, _provider, 42, Now.AddMinutes(2), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("merged");
+        Nudge nudge = DrainNudges().ShouldHaveSingleItem();
+        nudge.ShouldSatisfyAllConditions(
+            () => nudge.Key.IssueNumber.ShouldBe(41),
+            () => nudge.NotBefore.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueIsCatchingUp_KeepsItsRow()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Act: the issue left merge-pending for its catch-up rebase.
+        await BuildQueueSut([new MergeQueueIssueInfo(IssueNumber, Branch, true, false)])
+            .RunAsync(repository, _provider, null, Now.AddMinutes(2), TestContext.Current.CancellationToken);
+
+        // Assert
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.QueuedAt.ShouldBe(Now),
+            () => progress.CatchUpRounds.ShouldBe(1));
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueLeavesTheMergePath_ForgetsItsRowAndARejoinStartsAtTheBack()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        await BuildQueueSut([]).RunAsync(repository, _provider, null, Now.AddMinutes(2), TestContext.Current.CancellationToken);
+        RefuseBehind();
+
+        // Act
+        await BuildSut(Pending(enteredAt: EnteredAt.AddHours(1)))
+            .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        PendingMerge progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.QueuedAt.ShouldBe(Now.AddHours(1)),
+            () => progress.CatchUpRounds.ShouldBe(0));
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueGetsFeedback_ResolvesFeedbackAndLeavesTheQueue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Feedback = Result<ReviewFeedback>.Ok(new ReviewFeedback([new ReviewComment("Rename this.")], 0, Now));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("feedback");
+        LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenSettingTurnedOffWhileQueued_ResolvesDisabledAndLeavesTheQueue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        repository.SetMergeWhenChecksPass(false);
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("disabled");
+        LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenTheHeadWaitsForAnUpToDateIssue_RecordsThatIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+
+        // Act
+        await BuildQueueSut([new MergeQueueIssueInfo(50, "feat/50-fresh", false, false)], Pending())
+            .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        LoadProgress().WaitingForIssueNumber.ShouldBe(50);
+    }
+
+    [Fact]
+    public async Task WhenTheAwaitedIssueIsNoLongerUpToDate_ClearsTheAwaitedIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+        await BuildQueueSut([new MergeQueueIssueInfo(50, "feat/50-fresh", false, false)], Pending())
+            .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+
+        // Act: the awaited issue left the checks gate, and an earlier entry now heads the queue.
+        PendingMerge earlier = PendingMerge.Start(repository.Id, 7, EnteredAt);
+        MergeQueue.RefuseBehind(earlier, Now.AddDays(-1));
+        _dbContext.Set<PendingMerge>().Add(earlier);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await BuildQueueSut([], Pending(), Pending(7, "feat/7-earlier"))
+            .RunAsync(repository, _provider, IssueNumber, Now.AddMinutes(2), TestContext.Current.CancellationToken);
+
+        // Assert
+        LoadProgress(IssueNumber).WaitingForIssueNumber.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAnEntryJoinsTheQueue_BroadcastsItsQueueChangeDirectly()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeQueueChanged changed = _processor.Events.OfType<MergeQueueChanged>().ShouldHaveSingleItem();
+        changed.ShouldSatisfyAllConditions(
+            () => changed.RepositoryId.ShouldBe(repository.Id),
+            () => changed.IssueNumbers.ShouldBe([IssueNumber]));
+        _dispatcher.DispatchedEvents.OfType<MergeQueueChanged>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAnEntryAheadMerges_BroadcastsTheNewPositionOfTheWaitingEntryOnly()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo first = Pending(41, "feat/41-first");
+        MergePendingIssueInfo second = Pending(42, "feat/42-second");
+        RefuseBehind(first.BranchName);
+        RefuseBehind(second.BranchName);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+        _processor.Events.Clear();
+
+        // Act: the first entry is back from its catch-up and merges.
+        await BuildQueueSut([], Pending(41, first.BranchName, EnteredAt.AddHours(1)), second)
+            .RunAsync(repository, _provider, 41, Now.AddHours(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<MergeResolved>().Last().Outcome.ShouldBe("merged");
+        _processor.Events.OfType<MergeQueueChanged>().ShouldHaveSingleItem().IssueNumbers.ShouldBe([42]);
+    }
+
+    [Fact]
+    public async Task WhenNothingInTheQueueChanges_BroadcastsNothing()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo first = Pending(41, "feat/41-first");
+        MergePendingIssueInfo second = Pending(42, "feat/42-second");
+        RefuseBehind(first.BranchName);
+        RefuseBehind(second.BranchName);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _processor.Events.Clear();
+
+        // Act: the later entry is nudged and keeps waiting behind the head.
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, 42, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _processor.Events.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheDirectBroadcastFails_StillPersistsTheQueue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        _processor.Throws = true;
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        LoadProgress().AwaitsCatchUp.ShouldBeTrue();
+    }
+
+    private sealed class CapturingIntegrationEventProcessor : IIntegrationEventProcessor
+    {
+        public List<IIntegrationEvent> Events { get; } = [];
+
+        public bool Throws { get; set; }
+
+        public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
+        {
+            if (Throws)
+            {
+                throw new InvalidOperationException("Handler failed.");
+            }
+
+            Events.Add(@event);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubIssueQueries(
+        IReadOnlyList<MergePendingIssueInfo> mergePendingIssues,
+        IReadOnlyList<MergeQueueIssueInfo> mergeQueueIssues) : IIssueQueries
+    {
+        public Task<IReadOnlyList<MergeQueueIssueInfo>> GetMergeQueueIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(mergeQueueIssues);
+
         public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<AwaitingInputIssueInfo>>([]);
 
@@ -583,6 +1178,26 @@ public sealed class RunAsync : IAsyncDisposable
         public Result<ReviewFeedback> Feedback { get; set; } = Result<ReviewFeedback>.Ok(new ReviewFeedback([], 0, null));
 
         public List<(string PullRequestUrl, DateTimeOffset Since)> FeedbackReads { get; } = [];
+
+        /// <summary>
+        /// The ancestry answer per branch: whether the default-branch head is an ancestor of it. A branch without one
+        /// fails permanently, as a provider without an ancestry read does.
+        /// </summary>
+        public Dictionary<string, Result<bool>> Ancestry { get; } = [];
+
+        public List<(string AncestorRef, string BranchName)> AncestryReads { get; } = [];
+
+        public Task<Result<bool>> IsAncestorAsync(
+            RepositorySlug slug,
+            string ancestorRef,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            AncestryReads.Add((ancestorRef, branchName));
+            return Task.FromResult(Ancestry.TryGetValue(branchName, out Result<bool>? answer)
+                ? answer
+                : Result<bool>.Fail(new Error(RunPublishingErrors.PermanentCode, "no ancestry read")));
+        }
 
         public Task<Result<MergeRequestOutcome>> MergePullRequestAsync(
             RepositorySlug slug,

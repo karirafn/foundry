@@ -9,6 +9,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
 
@@ -203,8 +204,10 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
             new NullWorkerImageRebuildQueue(),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
+            new FoundryImageSweep(imageOperations, NullLogger<FoundryImageSweep>.Instance),
             new StubHostEnvironment(_contentRoot),
             new WorkerRoleCatalogStore(),
+            new SpyWorkerImageToolchainRecorder(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 

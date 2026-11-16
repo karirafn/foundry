@@ -130,7 +130,7 @@ internal static partial class UpdateAccount
             }
 
             bool isGitLab = credential is GitLabCredential;
-            string accountName = credential.Name;
+            AccountName accountName = credential.Name;
 
             // Applied before either save path below (rotation or plain save) so it commits with them.
             // Leaving both fields unset preserves the stored branch-rules token, including across rotation.
@@ -163,7 +163,7 @@ internal static partial class UpdateAccount
                         $"Unhandled TokenResolution: {resolution.GetType().Name}");
                 }
 
-                accountName = resolved.AccountName;
+                accountName = resolved.Identity.Name;
 
                 UpdateCredential(credential, accountName, command.Token, baseUrl);
                 CredentialConfiguration.WriteTokenValidity(dbContext.Entry(credential));
@@ -232,7 +232,7 @@ internal static partial class UpdateAccount
             }
         }
 
-        private static void UpdateCredential(Credential credential, string accountName, string? token, BaseUrlVo baseUrl)
+        private static void UpdateCredential(Credential credential, AccountName accountName, string? token, BaseUrlVo baseUrl)
         {
             switch (credential)
             {

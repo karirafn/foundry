@@ -29,11 +29,11 @@ public sealed class Update
     public void WhenBaseUrlCarriesQueryString_ThrowsArgumentException()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("name", "token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("name").ValueOrThrow(), "token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BaseUrl baseUrl = BuildTamperedBaseUrl("https://gitlab.example.com/?x=1");
 
         // Act
-        Action act = () => credential.Update("name", "token", baseUrl);
+        Action act = () => credential.Update(AccountName.Create("name").ValueOrThrow(), "token", baseUrl);
 
         // Assert
         Should.Throw<ArgumentException>(act);
@@ -43,11 +43,11 @@ public sealed class Update
     public void WhenBaseUrlCarriesFragment_ThrowsArgumentException()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("name", "token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("name").ValueOrThrow(), "token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BaseUrl baseUrl = BuildTamperedBaseUrl("https://gitlab.example.com/#section");
 
         // Act
-        Action act = () => credential.Update("name", "token", baseUrl);
+        Action act = () => credential.Update(AccountName.Create("name").ValueOrThrow(), "token", baseUrl);
 
         // Assert
         Should.Throw<ArgumentException>(act);
@@ -58,15 +58,15 @@ public sealed class Update
     public void WhenTokenIsProvided_UpdatesAllProperties()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("original-name", "original-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("original-name").ValueOrThrow(), "original-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BaseUrl newBaseUrl = BaseUrl.Create("https://gitlab.example.com").ValueOrThrow();
 
         // Act
-        credential.Update("new-name", "new-token", newBaseUrl);
+        credential.Update(AccountName.Create("new-name").ValueOrThrow(), "new-token", newBaseUrl);
 
         // Assert
         credential.ShouldSatisfyAllConditions(
-            () => credential.Name.ShouldBe("new-name"),
+            () => credential.Name.Value.ShouldBe("new-name"),
             () => credential.Token.ShouldBe(new ProviderToken.Present("new-token")),
             () => credential.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.example.com")),
             () => credential.Host.ShouldBe("gitlab.example.com"));
@@ -76,11 +76,11 @@ public sealed class Update
     public void WhenTokenIsNull_KeepsExistingToken()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("original-name", "original-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("original-name").ValueOrThrow(), "original-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BaseUrl newBaseUrl = BaseUrl.Create("https://gitlab.example.com").ValueOrThrow();
 
         // Act
-        credential.Update("new-name", null, newBaseUrl);
+        credential.Update(AccountName.Create("new-name").ValueOrThrow(), null, newBaseUrl);
 
         // Assert
         credential.Token.ShouldBe(new ProviderToken.Present("original-token"));

@@ -12,10 +12,10 @@ internal abstract class TokenResolution
 {
     private TokenResolution() { }
 
-    /// <summary>Token validated; account name and derived namespaces are ready to apply.</summary>
-    internal sealed class Resolved(string accountName, IReadOnlyCollection<Namespace> namespaces) : TokenResolution
+    /// <summary>Token validated; the identity it authenticates as and derived namespaces are ready to apply.</summary>
+    internal sealed class Resolved(ResolvedTokenIdentity identity, IReadOnlyCollection<Namespace> namespaces) : TokenResolution
     {
-        public string AccountName { get; } = accountName;
+        public ResolvedTokenIdentity Identity { get; } = identity;
         public IReadOnlyCollection<Namespace> Namespaces { get; } = namespaces;
     }
 

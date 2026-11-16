@@ -50,7 +50,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new NullRepositoryEligibilityQuery(),
                 new NullWorkerRunQueries(),
                 new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-                new NullGlobalSettingsQueries()),
+                new NullGlobalSettingsQueries(),
+                new NullMergeQueueQueries()),
             _dispatcher,
             TimeProvider.System,
             NullLogger<TriageRunCompletedHandler>.Instance);

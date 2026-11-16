@@ -63,6 +63,20 @@ public sealed class Discriminator
     }
 
     [Fact]
+    public void WhenInfrastructureFailed_DiscriminatorIsInfrastructureFailed()
+    {
+        // Arrange
+        FailingCheck check = new(Name: "build", Conclusion: "ci_quota_exceeded", DetailsUrl: null, IsInfrastructureFailure: true);
+        ChecksOutcome outcome = new ChecksOutcome.InfrastructureFailed(FailingChecks: [check]);
+
+        // Act
+        string discriminator = outcome.Discriminator;
+
+        // Assert
+        discriminator.ShouldBe("infrastructure_failed");
+    }
+
+    [Fact]
     public void WhenUnreadable_DiscriminatorIsUnreadable()
     {
         // Arrange

@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, InputSignal, input } from '@angular
 import { ActivityPanel } from './worker-activity.model';
 
 /**
- * A worker card's live readout: the current task and a segmented task bar with its position. It has
- * no live region; the board announces silence once, never task ticks.
+ * A worker card's live readout: the current task and a task bar (segments, or a meter above 20 tasks)
+ * with its position. It has no live region; the board announces silence once, never task ticks.
  */
 @Component({
   selector: 'fd-worker-activity',

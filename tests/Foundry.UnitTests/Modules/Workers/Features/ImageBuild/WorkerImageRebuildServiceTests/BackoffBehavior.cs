@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -58,8 +59,8 @@ public sealed class BackoffBehavior
         StubHostEnvironment env = new(contentRootPath);
 
         return testOnlyRetryPolicy is null
-            ? new WorkerImageRebuildService(queue, factory, images, env, new WorkerRoleCatalogStore(), NullLogger<WorkerImageRebuildService>.Instance)
-            : new WorkerImageRebuildService(queue, factory, images, env, new WorkerRoleCatalogStore(), NullLogger<WorkerImageRebuildService>.Instance, testOnlyRetryPolicy);
+            ? new WorkerImageRebuildService(queue, factory, images, new FoundryImageSweep(images, NullLogger<FoundryImageSweep>.Instance), env, new WorkerRoleCatalogStore(), new SpyWorkerImageToolchainRecorder(), NullLogger<WorkerImageRebuildService>.Instance)
+            : new WorkerImageRebuildService(queue, factory, images, new FoundryImageSweep(images, NullLogger<FoundryImageSweep>.Instance), env, new WorkerRoleCatalogStore(), new SpyWorkerImageToolchainRecorder(), NullLogger<WorkerImageRebuildService>.Instance, testOnlyRetryPolicy);
     }
 
     [Fact]

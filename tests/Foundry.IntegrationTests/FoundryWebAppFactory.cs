@@ -56,6 +56,16 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         // file that every DbContext opens its own connection to, as production does.
         _connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databaseFile.FullName }.ToString());
         _connection.Open();
+        // In the default rollback journal a reader's shared lock makes a concurrent UPDATE ... RETURNING fail with
+        // "database is locked" when it commits, and Microsoft.Data.Sqlite does not retry that commit. With every hosted
+        // service polling, any read can race a write, so the test failed by chance. WAL lets readers and the one writer
+        // run concurrently; the mode is stored in the file, so every connection the host opens uses it.
+        using (SqliteCommand journalMode = _connection.CreateCommand())
+        {
+            journalMode.CommandText = "PRAGMA journal_mode=WAL;";
+            journalMode.ExecuteNonQuery();
+        }
+
         _serviceOverrides = serviceOverrides;
         _databaseFile = databaseFile;
     }

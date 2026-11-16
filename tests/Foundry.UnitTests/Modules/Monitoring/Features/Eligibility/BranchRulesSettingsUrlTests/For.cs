@@ -19,7 +19,7 @@ public sealed class For
     public void ForGitHub_PointsAtTheRulesetsPage(string baseUrl, string expected)
     {
         // Arrange
-        GitHubCredential account = GitHubCredential.Create("acct", "token", BaseUrl.Create(baseUrl).ValueOrThrow());
+        GitHubCredential account = GitHubCredential.Create(AccountName.Create("acct").ValueOrThrow(), "token", BaseUrl.Create(baseUrl).ValueOrThrow());
 
         // Act
         string url = BranchRulesSettingsUrl.For(account, Slug);
@@ -33,7 +33,7 @@ public sealed class For
     {
         // Arrange
         GitLabCredential account = GitLabCredential.Create(
-            "acct",
+            AccountName.Create("acct").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://gitlab.example.com").ValueOrThrow());
 

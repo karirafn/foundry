@@ -54,7 +54,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string[]? namespaces = null)
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "My GitHub",
+            AccountName.Create("My GitHub").ValueOrThrow(),
             token,
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
@@ -73,7 +73,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string[]? namespaces = null)
     {
         GitLabCredential credential = GitLabCredential.Create(
-            "My GitLab",
+            AccountName.Create("My GitLab").ValueOrThrow(),
             token,
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 

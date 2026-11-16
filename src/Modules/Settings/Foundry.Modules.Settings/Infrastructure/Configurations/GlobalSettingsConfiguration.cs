@@ -55,6 +55,9 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         builder.Property(s => s.AutoResumeOnUsageReset)
             .HasColumnName("auto_resume_on_usage_reset");
 
+        builder.Property(s => s.NestedDockerEnabled)
+            .HasColumnName("nested_docker_enabled");
+
         ValueConverter<IReadOnlyList<HostPause>, string> hostPausesConverter = new(
             pauses => SerializeHostPauses(pauses),
             json => DeserializeHostPauses(json));
@@ -172,21 +175,11 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             return WorkerImageConfiguration.Default;
         }
 
-        // Rows written before the ImageTag/BuildEnabled fields were added have a null/empty ImageTag.
-        // Patch in the Default values for those two fields while preserving the existing install flags,
-        // so existing rows load correctly until the AddWorkerImageTagAndBuildToggle backfill migration runs.
+        // Rows written before the ImageTag/BuildEnabled fields were added have a null/empty ImageTag;
+        // they load as the Default until the AddWorkerImageTagAndBuildToggle backfill migration runs.
         if (string.IsNullOrWhiteSpace(config.ImageTag))
         {
-            return WorkerImageConfiguration.Create(
-                    imageTag: WorkerImageConfiguration.Default.ImageTag,
-                    buildEnabled: WorkerImageConfiguration.Default.BuildEnabled,
-                    installDotnet: config.InstallDotnet,
-                    installAngular: config.InstallAngular,
-                    installChromium: config.InstallChromium,
-                    installDocker: config.InstallDocker)
-                .Match(
-                    onSuccess: v => v,
-                    onFailure: e => WorkerImageConfiguration.Default);
+            return WorkerImageConfiguration.Default;
         }
 
         return config;

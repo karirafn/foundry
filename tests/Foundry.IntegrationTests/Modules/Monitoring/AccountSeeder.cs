@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ internal static class AccountSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(name, token, parsedBaseUrl, branchRulesToken);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token, parsedBaseUrl, branchRulesToken);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
@@ -41,7 +42,7 @@ internal static class AccountSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create(name, token, parsedBaseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token, parsedBaseUrl);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 

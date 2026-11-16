@@ -15,8 +15,10 @@ internal sealed partial class GitLabHttpClient
 {
     /// <summary>
     /// Opens a merge request from <paramref name="sourceBranch"/> into <paramref name="targetBranch"/>
-    /// (<c>POST /projects/:id/merge_requests</c>), keeping the source branch on merge so the issue branch stays
-    /// Foundry's to manage. GitLab's 409 (an open merge request already exists for the source branch) answers
+    /// (<c>POST /projects/:id/merge_requests</c>). The body leaves out <c>remove_source_branch</c> and
+    /// <c>squash</c>, so GitLab's create service fills in branch removal from the project's
+    /// <c>remove_source_branch_after_merge</c> and squash from its <c>squash_option</c>, exactly as its own web form
+    /// does. GitLab's 409 (an open merge request already exists for the source branch) answers
     /// <see cref="PullRequestCreation.AlreadyOpen"/>; every other failure is a <see cref="RunPublishingErrors"/>
     /// transient or permanent error.
     /// </summary>
@@ -44,7 +46,7 @@ internal sealed partial class GitLabHttpClient
         AddCommonHeaders(request, token);
         request.Content = new StringContent(
             JsonSerializer.Serialize(
-                new GitLabMergeRequestWriteDto(sourceBranch, targetBranch, title, description, RemoveSourceBranch: false),
+                new GitLabMergeRequestWriteDto(sourceBranch, targetBranch, title, description),
                 JsonOptions),
             Encoding.UTF8,
             "application/json");
@@ -315,8 +317,7 @@ internal sealed partial class GitLabHttpClient
         string SourceBranch,
         string TargetBranch,
         string Title,
-        string Description,
-        bool RemoveSourceBranch);
+        string Description);
 
     private sealed record GitLabCreatedMergeRequestDto(string? WebUrl);
 

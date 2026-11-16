@@ -82,6 +82,12 @@ internal static class RepositoryMappings
             return EligibilityViolationInfo.NoCredentialDescription(namespaceName);
         }
 
+        if (rule.StartsWith(EligibilityViolationInfo.PackageSourceUnreachableRulePrefix + ":", StringComparison.Ordinal))
+        {
+            string url = rule[(EligibilityViolationInfo.PackageSourceUnreachableRulePrefix.Length + 1)..];
+            return EligibilityViolationInfo.PackageSourceUnreachableDescription(url);
+        }
+
         return rule switch
         {
             var r when r == EligibilityViolationInfo.AllowDirectPushesRule
@@ -94,6 +100,8 @@ internal static class RepositoryMappings
                 => EligibilityViolationInfo.CredentialUnreadableDescription,
             EligibilityViolationInfo.CredentialInvalidRule
                 => EligibilityViolationInfo.CredentialInvalidDescription,
+            EligibilityViolationInfo.NuGetConfigInvalidRule
+                => EligibilityViolationInfo.NuGetConfigInvalidDescription,
             _ => "This repository is ineligible for an unknown reason.",
         };
     }

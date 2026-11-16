@@ -6,6 +6,8 @@ describe('formatMergeSkippedReason', () => {
     ['unauthorized', 'no merge permission'],
     ['head_moved', 'branch moved after checks'],
     ['provider_error', 'provider error'],
+    ['fell_behind', 'fell behind'],
+    ['catch_up_failed', 'catch-up failed'],
   ])('labels %s as %s', (reason, label) => {
     expect(formatMergeSkippedReason(reason)).toBe(label);
   });

@@ -477,8 +477,8 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false,
-        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        nestedDockerEnabled: false,
+        imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
@@ -508,8 +508,8 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false,
-        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        nestedDockerEnabled: false,
+        imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
@@ -540,8 +540,8 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false,
-        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        nestedDockerEnabled: false,
+        imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
@@ -570,8 +570,8 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false,
-        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        nestedDockerEnabled: false,
+        imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
@@ -600,8 +600,8 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false,
-        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        nestedDockerEnabled: false,
+        imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
@@ -632,8 +632,8 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false,
-        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        nestedDockerEnabled: false,
+        imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_RESPONSE);

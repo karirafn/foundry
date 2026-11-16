@@ -26,9 +26,8 @@ internal static class ChecksOutcomeJsonConversion
     {
         ChecksOutcomeDto dto = outcome switch
         {
-            ChecksOutcome.StillFailing sf => new ChecksOutcomeDto(
-                outcome.Discriminator,
-                [.. sf.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
+            ChecksOutcome.StillFailing sf => new ChecksOutcomeDto(outcome.Discriminator, ToDtos(sf.FailingChecks)),
+            ChecksOutcome.InfrastructureFailed inf => new ChecksOutcomeDto(outcome.Discriminator, ToDtos(inf.FailingChecks)),
             _ => new ChecksOutcomeDto(outcome.Discriminator, []),
         };
 
@@ -50,8 +49,8 @@ internal static class ChecksOutcomeJsonConversion
             "passed" => new ChecksOutcome.Passed(),
             "none_detected" => new ChecksOutcome.NoneDetected(),
             "unfinished" => new ChecksOutcome.Unfinished(),
-            "still_failing" => new ChecksOutcome.StillFailing(
-                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
+            "still_failing" => new ChecksOutcome.StillFailing(FromDtos(dto.FailingChecks)),
+            "infrastructure_failed" => new ChecksOutcome.InfrastructureFailed(FromDtos(dto.FailingChecks)),
             "unreadable" => new ChecksOutcome.Unreadable(),
             _ => throw new UnreachableException($"Unknown ChecksOutcome discriminator: '{dto.Discriminator}'"),
         };
@@ -64,8 +63,19 @@ internal static class ChecksOutcomeJsonConversion
             return sfA.FailingChecks.SequenceEqual(sfB.FailingChecks);
         }
 
+        if (a is ChecksOutcome.InfrastructureFailed infA && b is ChecksOutcome.InfrastructureFailed infB)
+        {
+            return infA.FailingChecks.SequenceEqual(infB.FailingChecks);
+        }
+
         return a.Discriminator == b.Discriminator;
     }
+
+    private static FailingCheckDto[] ToDtos(IReadOnlyList<FailingCheck> checks) =>
+        [.. checks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))];
+
+    private static FailingCheck[] FromDtos(IReadOnlyList<FailingCheckDto>? dtos) =>
+        [.. (dtos ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))];
 
     private sealed record ChecksOutcomeDto(
         [property: JsonPropertyName("discriminator")] string Discriminator,

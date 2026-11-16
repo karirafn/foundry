@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
 
@@ -64,8 +65,7 @@ public sealed class TrackerContextShedding
             context ?? new DispatchContext.Fresh("feat/42-fix-the-bug"),
             issue,
             timeoutMinutes: 120,
-            installsDocker: false,
-            installsDotnet: false,
+            toolchain: ToolchainFixtures.With(docker: false, csharpLs: false),
             failingJobLogs: failingJobLogs,
             clarifications: clarifications,
             trackerContext: trackerContext)
@@ -80,7 +80,7 @@ public sealed class TrackerContextShedding
             42,
             Template,
             issue,
-            installsDotnet: false,
+            toolchain: ToolchainFixtures.With(csharpLs: false),
             clarifications: clarifications,
             trackerContext: trackerContext)
             .ShouldBeOfType<Result<string>.Success>().Value;

@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -29,12 +30,14 @@ internal sealed class RepositoryPoller(
 {
     /// <summary>
     /// The fixed per-cycle provider call budget that does NOT scale with issue count:
-    /// one eligibility branch-rules GET plus one <see cref="IIssueProvider.GetIssuesAsync"/> listing call.
+    /// one eligibility branch-rules GET, one <see cref="IIssueProvider.ListRootDirectoryAsync"/> root listing (its
+    /// root <c>nuget.config</c> is read only when its blob SHA changed, so that read is not part of the fixed cost)
+    /// and one <see cref="IIssueProvider.GetIssuesAsync"/> listing call.
     /// This applies when the repository's write-probe verdict is Granted (the cheap eligibility path),
     /// there are zero review issues, zero dependency candidates, and zero checks-pending issues.
     /// Referenced by ADR 0066 and DOMAIN.md; asserted by the poll-call invariance test.
     /// </summary>
-    internal const int MaxFixedPollCallsPerCycle = 2;
+    internal const int MaxFixedPollCallsPerCycle = 3;
 
     /// <summary>
     /// Grace window for <c>NoneDetected</c> verdicts: the poller waits this long before treating
@@ -73,6 +76,10 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // Root nuget.config first: the declared package sources, saved with the listing pass below. Read before
+        // eligibility, so a newly declared source (Unchecked until the next probe) blocks dispatch in this poll.
+        await RootNuGetConfigRefresh.RefreshAsync(repository, provider, logger, cancellationToken);
+
         // Pass 0: evaluate repository-level eligibility every poll cycle.
         RepositoryEligibility? eligibilityBefore = repository.Eligibility;
         await EvaluateEligibilityAsync(repository, now, cancellationToken);
@@ -747,6 +754,7 @@ internal sealed class RepositoryPoller(
         verdict switch
         {
             Checks.Green => "passed",
+            Checks.Red { IsInfrastructureFailure: true } => "infrastructure_failed",
             Checks.Red => "still_failing",
             Checks.Unfinished => "unfinished",
             Checks.Unreadable => "unreadable",

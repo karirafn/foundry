@@ -141,6 +141,7 @@ function buildAgentActivity(workerRunId: string, issueId: string): AgentActivity
     subagents: [],
     inFlightTool: null,
     tokens: { inputTokens: 0, outputTokens: 0 },
+    backgroundTasks: [],
   };
 }
 

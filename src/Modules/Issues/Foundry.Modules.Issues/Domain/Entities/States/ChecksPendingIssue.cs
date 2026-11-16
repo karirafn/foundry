@@ -80,7 +80,9 @@ public sealed class ChecksPendingIssue : Issue
             ? 0
             : source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = rebaseOutcome;
-        checksPending.Reason = new ChecksPendingReason.AfterRun();
+        checksPending.Reason = source.Reason is RebasePendingReason.CatchUp
+            ? new ChecksPendingReason.CatchUp()
+            : new ChecksPendingReason.AfterRun();
         return checksPending;
     }
 

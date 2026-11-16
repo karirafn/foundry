@@ -184,6 +184,65 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             () => resolved.FailingChecks[0].ShouldBe(failingCheck));
     }
 
+    // --- Red verdict whose failing checks never ran their script → "infrastructure_failed" (issue #969) ---
+
+    [Fact]
+    public async Task WhenEveryRedCheckIsAnInfrastructureFailure_RecordsChecksVerdictResolvedWithOutcomeInfrastructureFailed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        FailingCheck failingCheck = new(
+            "build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true);
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Red([failingCheck])),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        ChecksVerdictResolved resolved = _dispatcher.DispatchedEvents
+            .OfType<ChecksVerdictResolved>()
+            .ShouldHaveSingleItem();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe("infrastructure_failed"),
+            () => resolved.FailingChecks.ShouldHaveSingleItem().ShouldBe(failingCheck));
+    }
+
+    [Fact]
+    public async Task WhenARedVerdictMixesInfrastructureAndScriptFailures_RecordsOutcomeStillFailing()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Red(
+                [
+                    new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true),
+                    new FailingCheck("test", "script_failure", null),
+                ])),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<ChecksVerdictResolved>()
+            .ShouldHaveSingleItem()
+            .Outcome.ShouldBe("still_failing");
+    }
+
     // --- Unfinished verdict → "unfinished" ---
 
     [Fact]
@@ -248,6 +307,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
     {
         { "green", "passed" },
         { "red", "still_failing" },
+        { "infrastructure_red", "infrastructure_failed" },
         { "none_detected", "none_detected" },
         { "unfinished", "unfinished" },
         { "unreadable", "unreadable" },
@@ -266,6 +326,8 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         {
             "green" => new Checks.Green(),
             "red" => new Checks.Red([new FailingCheck("CI / build", "failure", "https://github.com/owner/repo/actions/runs/1")]),
+            "infrastructure_red" => new Checks.Red(
+                [new FailingCheck("build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true)]),
             "none_detected" => new Checks.NoneDetected(),
             "unfinished" => new Checks.Unfinished(),
             _ => new Checks.Unreadable(),
@@ -678,6 +740,11 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<MergePendingIssueInfo>>([]);
+
+        public Task<IReadOnlyList<MergeQueueIssueInfo>> GetMergeQueueIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<MergeQueueIssueInfo>>([]);
 
         public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
             MonitoredRepositoryId repositoryId,

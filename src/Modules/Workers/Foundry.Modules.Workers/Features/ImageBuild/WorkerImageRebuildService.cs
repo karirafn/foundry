@@ -21,8 +21,10 @@ internal sealed class WorkerImageRebuildService(
     IWorkerImageRebuildQueue rebuildQueue,
     IServiceScopeFactory scopeFactory,
     IImageOperations imageOperations,
+    FoundryImageSweep imageSweep,
     IHostEnvironment hostEnvironment,
     IWorkerRoleCatalogStore roleCatalogStore,
+    IWorkerImageToolchainRecorder toolchainRecorder,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
@@ -57,11 +59,13 @@ internal sealed class WorkerImageRebuildService(
         IWorkerImageRebuildQueue rebuildQueue,
         IServiceScopeFactory scopeFactory,
         IImageOperations imageOperations,
+        FoundryImageSweep imageSweep,
         IHostEnvironment hostEnvironment,
         IWorkerRoleCatalogStore roleCatalogStore,
+        IWorkerImageToolchainRecorder toolchainRecorder,
         ILogger<WorkerImageRebuildService> logger,
         ImageBuildRetryPolicy retryPolicy)
-        : this(rebuildQueue, scopeFactory, imageOperations, hostEnvironment, roleCatalogStore, logger)
+        : this(rebuildQueue, scopeFactory, imageOperations, imageSweep, hostEnvironment, roleCatalogStore, toolchainRecorder, logger)
     {
         _retryPolicy = retryPolicy;
     }
@@ -193,9 +197,6 @@ internal sealed class WorkerImageRebuildService(
             return;
         }
 
-        IReadOnlyDictionary<string, string> buildArgs =
-            await settingsQueries.GetWorkerImageBuildArgsAsync(cancellationToken);
-
         string contextPath = ResolveContextPath(ContextPath);
 
         logger.LogInformation(
@@ -222,7 +223,7 @@ internal sealed class WorkerImageRebuildService(
             {
                 catalogContent = catalogSuccess.Value;
                 tarStream.Seek(0, SeekOrigin.Begin);
-                errorTail = await BuildImagesAsync(tarStream, imageTag, buildArgs, cancellationToken);
+                errorTail = await BuildImagesAsync(tarStream, imageTag, cancellationToken);
             }
             else
             {
@@ -249,6 +250,9 @@ internal sealed class WorkerImageRebuildService(
             roleCatalogStore.Publish(new WorkerRoleCatalog(
                 catalogContent,
                 new WorkerImageProvenance(imageTag, imageId, DateTimeOffset.UtcNow, FoundryCommit.Value, Verified: true)));
+
+            // The prompt's toolchain-dependent sections follow what this image reports, not the install settings.
+            toolchainRecorder.ImageChanged();
         }
 
         if (errorTail is null)
@@ -265,6 +269,9 @@ internal sealed class WorkerImageRebuildService(
             await publisher.PublishAsync(new ImageBuildSucceeded(), cancellationToken);
 
             logger.LogInformation("Worker image '{Image}' built successfully.", imageTag);
+
+            // Every tag has moved to the new images by now, so the images they pointed to before are dangling.
+            await imageSweep.SweepAsync(cancellationToken);
         }
         else
         {
@@ -311,7 +318,6 @@ internal sealed class WorkerImageRebuildService(
     private async Task<string?> BuildImagesAsync(
         Stream tarStream,
         string imageTag,
-        IReadOnlyDictionary<string, string> buildArgs,
         CancellationToken cancellationToken)
     {
         string? errorTail = null;
@@ -344,7 +350,8 @@ internal sealed class WorkerImageRebuildService(
             // Base image succeeded — rewind tar stream and build the worker image.
             tarStream.Seek(0, SeekOrigin.Begin);
 
-            Dictionary<string, string> workerBuildArgs = new(buildArgs)
+            // Every toolchain is installed unconditionally (ADR 0109); the base image is the only build argument.
+            Dictionary<string, string> workerBuildArgs = new()
             {
                 ["BASE_IMAGE"] = BaseImageTag,
             };
@@ -502,6 +509,8 @@ internal sealed class WorkerImageRebuildService(
                     image.Created == default ? DateTimeOffset.UtcNow : image.Created,
                     FoundryCommit.Value,
                     Verified: false)));
+
+            toolchainRecorder.ImageChanged();
 
             CancellationTokenSource? oldCts;
             lock (_stateLock)

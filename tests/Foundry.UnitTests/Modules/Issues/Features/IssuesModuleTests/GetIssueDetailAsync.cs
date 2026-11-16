@@ -50,7 +50,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -370,7 +371,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -416,7 +418,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -460,7 +463,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -502,7 +506,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -548,7 +553,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(consecutiveTransientRuns: 0),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -589,7 +595,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -619,7 +626,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(consecutiveTransientRuns),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
 
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(issue.Id, TestContext.Current.CancellationToken);
 
@@ -791,6 +799,45 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => returnedChecks[0].Name.ShouldBe("CI / build"),
             () => returnedChecks[0].Conclusion.ShouldBe("failure"),
             () => returnedChecks[0].DetailsUrl.ShouldBe("https://github.com/owner/repo/actions/runs/1"));
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueWithInfrastructureFailedOutcome_ReturnsOutcomeAndFailingChecksInStateDetails()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
+            "feat/issue-1",
+            "https://gitlab.com/group/project/-/merge_requests/42",
+            DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        FailingCheck failingCheck = new(
+            "build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true);
+        ReviewIssue review = checksPending.ToReview(
+            new ChecksOutcome.InfrastructureFailed([failingCheck]), "0a1b2c3d", DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            review.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueStateDetails stateDetails = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value
+            .StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.ChecksOutcome.ShouldBe("infrastructure_failed"),
+            () => stateDetails.FailingChecks.ShouldNotBeNull().ShouldBe([failingCheck]));
     }
 
     [Fact]

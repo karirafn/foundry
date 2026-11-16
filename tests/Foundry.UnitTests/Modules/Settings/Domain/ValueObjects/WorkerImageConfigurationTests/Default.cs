@@ -10,20 +10,6 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.ValueObjects.WorkerImageConf
 public sealed class Default
 {
     [Fact]
-    public void WhenDefault_AllInstallFlagsAreFalse()
-    {
-        // Arrange & Act
-        WorkerImageConfiguration config = WorkerImageConfiguration.Default;
-
-        // Assert
-        config.ShouldSatisfyAllConditions(
-            () => config.InstallDotnet.ShouldBeFalse(),
-            () => config.InstallAngular.ShouldBeFalse(),
-            () => config.InstallChromium.ShouldBeFalse(),
-            () => config.InstallDocker.ShouldBeFalse());
-    }
-
-    [Fact]
     public void WhenDefault_ImageTagIsFoundryWorkerLocal()
     {
         // Arrange & Act
@@ -52,11 +38,7 @@ public sealed class Default
         // Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             defaults.ImageTag,
-            defaults.BuildEnabled,
-            defaults.InstallDotnet,
-            defaults.InstallAngular,
-            defaults.InstallChromium,
-            defaults.InstallDocker);
+            defaults.BuildEnabled);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
