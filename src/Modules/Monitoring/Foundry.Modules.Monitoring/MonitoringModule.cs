@@ -15,6 +15,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.IssueReactions;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
+using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Merge;
@@ -138,6 +139,11 @@ public static class MonitoringModule
         services.AddOptions<WebhookIngressOptions>().BindConfiguration(WebhookIngressOptions.SectionName);
         services.AddIngressEntry(static sp =>
             new IngressEntry(sp.GetRequiredService<IOptions<WebhookIngressOptions>>().Value.Port, WebhookIngressOptions.PathPrefix));
+        // Package Source Proxy (ADR 0112): always on, on its own port, which serves only /package-sources.
+        services.AddOptions<PackageSourceProxyOptions>().BindConfiguration(PackageSourceProxyOptions.SectionName);
+        services.AddIngressEntry(static sp =>
+            new IngressEntry(sp.GetRequiredService<IOptions<PackageSourceProxyOptions>>().Value.ProxyPort, PackageSourceProxyOptions.PathPrefix));
+        services.AddScoped<ProxyPackageSourceRequest.Handler>();
         services.TryAddSingleton<WebhookNudgeQueue>();
         services.AddScoped<WebhookIngress>();
         services.AddScoped<ReceiveGitHubWebhook.Handler>();
@@ -171,6 +177,7 @@ public static class MonitoringModule
         app.MapRepositoryEndpoints();
         ReceiveGitHubWebhook.Endpoint.Map(app);
         ReceiveGitLabWebhook.Endpoint.Map(app);
+        ProxyPackageSourceRequest.Endpoint.Map(app);
         return app;
     }
 }

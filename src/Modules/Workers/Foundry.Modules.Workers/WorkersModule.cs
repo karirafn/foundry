@@ -40,6 +40,7 @@ public static class WorkersModule
     {
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IRunningBranchQueries, RunningBranchQueries>();
+        services.AddScoped<IRunSourceTokenQueries, RunSourceTokenQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
         services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddCommandHandler<RequestPublishRetry.Command, RequestPublishRetry.Response, RequestPublishRetry.Handler>();

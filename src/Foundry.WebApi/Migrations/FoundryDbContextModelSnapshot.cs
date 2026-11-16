@@ -888,6 +888,12 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue("implement")
                         .HasColumnName("role");
 
+                    b.Property<string>("SourceTokenHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_token_hash");
+
                     b.Property<string>("SuppliedOpenIssueNumbers")
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
@@ -914,6 +920,9 @@ namespace Foundry.WebApi.Migrations
 
                     b.HasIndex("IssueId")
                         .HasDatabaseName("ix_worker_runs_issue_id");
+
+                    b.HasIndex("SourceTokenHash")
+                        .HasDatabaseName("ix_worker_runs_source_token_hash");
 
                     b.ToTable("worker_runs", null, t =>
                         {
