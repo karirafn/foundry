@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Contracts;
@@ -13,7 +14,7 @@ public sealed record Clarification
     [JsonConstructor]
     public Clarification(
         IReadOnlyList<InputQuestion> questions,
-        string? input,
+        ClarificationInput? input,
         DateTimeOffset askedAt,
         DateTimeOffset? answeredAt)
     {
@@ -38,7 +39,7 @@ public sealed record Clarification
     public IReadOnlyList<InputQuestion> Questions { get; }
 
     /// <summary>What answered the questions; <see langword="null"/> while the round is open.</summary>
-    public string? Input { get; }
+    public ClarificationInput? Input { get; }
 
     public DateTimeOffset AskedAt { get; }
 
@@ -50,7 +51,7 @@ public sealed record Clarification
     public static Clarification Ask(IReadOnlyList<InputQuestion> questions, DateTimeOffset askedAt) =>
         new(questions, input: null, askedAt, answeredAt: null);
 
-    public Clarification Answer(string input, DateTimeOffset answeredAt)
+    public Clarification Answer(ClarificationInput input, DateTimeOffset answeredAt)
     {
         ArgumentNullException.ThrowIfNull(input);
 

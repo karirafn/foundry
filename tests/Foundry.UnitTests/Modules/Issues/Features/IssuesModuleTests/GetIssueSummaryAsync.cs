@@ -697,7 +697,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             "rebase_conflict" => builder.RebasePending().ResolveConflict(DateTimeOffset.UtcNow),
             "input_provided" => (RevisionQueuedIssue)builder
                 .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
-                .ProvideInput("Use SQLite.", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             _ => throw new ArgumentOutOfRangeException(nameof(triggerKind), triggerKind, null),
         };
 

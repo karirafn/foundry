@@ -179,6 +179,6 @@ public sealed class HasPersonFeedback
             Now,
             Now);
         awaiting.RecordQuestionPosted(1, Now, null);
-        return awaiting.ProvideInput("Use the first.", Now, Now);
+        return awaiting.ProvideInput(ClarificationInput.FromComments("Use the first."), Now.AddMinutes(1), Now.AddMinutes(1));
     }
 }

@@ -227,7 +227,8 @@ internal sealed class AwaitingInputStep(
             return null;
         }
 
-        string input = string.Join("\n\n", feedback.Comments.Select(comment => comment.Body.Trim()));
+        ClarificationInput input = ClarificationInput.FromComments(
+            string.Join("\n\n", feedback.Comments.Select(comment => comment.Body.Trim())));
         return new AwaitingInputArrived(repository.Id, info.IssueNumber, input, arrivedAt);
     }
 }

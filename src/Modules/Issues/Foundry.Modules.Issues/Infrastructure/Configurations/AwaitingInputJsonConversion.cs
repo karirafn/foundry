@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -24,6 +25,7 @@ internal static class AwaitingInputJsonConversion
     private const string PendingKind = "pending";
     private const string PostedKind = "posted";
     private const string FailedKind = "failed";
+    private const string CommentsKind = "comments";
 
     public static ValueConverter<ResumeTarget, string> ResumeTargetConverter { get; } = new(
         target => SerializeResumeTarget(target),
@@ -126,7 +128,7 @@ internal static class AwaitingInputJsonConversion
         JsonSerializer.Serialize(
             log.Select(round => new ClarificationDto(
                 [.. round.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
-                round.Input,
+                round.Input is { } input ? SerializeInput(input) : null,
                 round.AskedAt,
                 round.AnsweredAt)).ToList(),
             (JsonSerializerOptions?)null);
@@ -135,10 +137,34 @@ internal static class AwaitingInputJsonConversion
         (JsonSerializer.Deserialize<List<ClarificationDto>>(json, (JsonSerializerOptions?)null) ?? [])
             .Select(dto => new Clarification(
                 [.. dto.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
-                dto.Input,
+                DeserializeInput(dto.Input),
                 dto.AskedAt,
                 dto.AnsweredAt))
             .ToList();
+
+    private static JsonElement SerializeInput(ClarificationInput input) =>
+        JsonSerializer.SerializeToElement(
+            input.Parts.Select(part => part switch
+            {
+                InputPart.Comments comments => new InputPartDto(CommentsKind, comments.Text),
+                _ => throw new UnreachableException($"Unknown InputPart variant: {part.GetType().Name}"),
+            }).ToList(),
+            (JsonSerializerOptions?)null);
+
+    // A round answered before input became typed parts stored its comment text as a plain string.
+    private static ClarificationInput? DeserializeInput(JsonElement? stored) => stored switch
+    {
+        null or { ValueKind: JsonValueKind.Null } => null,
+        { ValueKind: JsonValueKind.String } legacy => ClarificationInput.FromComments(legacy.GetString()!),
+        { } parts => new ClarificationInput(
+            [.. (parts.Deserialize<List<InputPartDto>>((JsonSerializerOptions?)null) ?? []).Select(DeserializeInputPart)]),
+    };
+
+    private static InputPart DeserializeInputPart(InputPartDto dto) => dto.Kind switch
+    {
+        CommentsKind => new InputPart.Comments(Required(dto.Text)),
+        _ => throw new UnreachableException($"Unknown InputPart kind: '{dto.Kind}'"),
+    };
 
     private static T Required<T>(T? value)
         where T : class =>
@@ -164,7 +190,7 @@ internal static class AwaitingInputJsonConversion
 
     private sealed record ClarificationDto(
         [property: JsonPropertyName("questions")] IReadOnlyList<QuestionDto> Questions,
-        [property: JsonPropertyName("input")] string? Input,
+        [property: JsonPropertyName("input")] JsonElement? Input,
         [property: JsonPropertyName("askedAt")] DateTimeOffset AskedAt,
         [property: JsonPropertyName("answeredAt")] DateTimeOffset? AnsweredAt);
 
@@ -172,4 +198,8 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("question")] string Question,
         [property: JsonPropertyName("context")] string Context,
         [property: JsonPropertyName("recommendation")] string? Recommendation);
+
+    private sealed record InputPartDto(
+        [property: JsonPropertyName("kind")] string Kind,
+        [property: JsonPropertyName("text")] string? Text);
 }

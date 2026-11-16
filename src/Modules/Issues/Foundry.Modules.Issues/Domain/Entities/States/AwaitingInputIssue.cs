@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
@@ -127,14 +128,21 @@ public sealed class AwaitingInputIssue : Issue
     }
 
     /// <summary>
-    /// Closes the open clarification round with <paramref name="input"/> and resumes along the
-    /// <see cref="ResumeTarget"/>. Input is only read once the question is posted.
+    /// Whether input that arrived at <paramref name="arrivedAt"/> answers the open round: only once the question is
+    /// posted, and only input after its post time, since anything earlier belongs to an earlier round.
     /// </summary>
-    public QueuedIssue ProvideInput(string input, DateTimeOffset answeredAt, DateTimeOffset transitionedAt)
+    public bool AcceptsInputArrivedAt(DateTimeOffset arrivedAt) =>
+        QuestionPost is QuestionPost.Posted posted && arrivedAt > posted.PostedAt;
+
+    /// <summary>
+    /// Closes the open clarification round with <paramref name="input"/> and resumes along the
+    /// <see cref="ResumeTarget"/>. The input must be one <see cref="AcceptsInputArrivedAt"/> accepts.
+    /// </summary>
+    public QueuedIssue ProvideInput(ClarificationInput input, DateTimeOffset answeredAt, DateTimeOffset transitionedAt)
     {
-        if (QuestionPost is not QuestionPost.Posted)
+        if (!AcceptsInputArrivedAt(answeredAt))
         {
-            throw new InvalidOperationException("Input is only read once the question is posted.");
+            throw new InvalidOperationException("Input is only read once the question is posted, and only after its post time.");
         }
 
         switch (ResumeTarget)
