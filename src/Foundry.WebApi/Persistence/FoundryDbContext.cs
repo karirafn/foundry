@@ -57,7 +57,7 @@ public sealed class FoundryDbContext(
         modelBuilder.ApplyConfiguration(new PendingRebaseConfiguration());
         modelBuilder.ApplyConfiguration(new PendingMergeConfiguration());
         modelBuilder.ApplyConfiguration(new PostedCommentConfiguration());
-        modelBuilder.ApplyConfiguration(new PackageSourceConfiguration());
+        modelBuilder.ApplyConfiguration(new PackageSourceConfiguration(_dataProtectionProvider));
         modelBuilder.ApplyConfiguration(new PackageSourceProbeConfiguration());
 
         modelBuilder.ApplyConfiguration(new GlobalSettingsConfiguration());

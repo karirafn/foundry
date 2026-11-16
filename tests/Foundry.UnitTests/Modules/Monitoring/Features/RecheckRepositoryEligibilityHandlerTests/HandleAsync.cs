@@ -169,6 +169,8 @@ public sealed class HandleAsync : IAsyncDisposable
             _dbContext,
             new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
             prober,
+            new PackageSourceProbeGate(),
+            new CapturingSystemNotificationBroadcaster(),
             NullLogger<PackageSourceProbing>.Instance);
         await probing.ProbeDueAsync([repository], DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
         ProbeCountingEvaluator evaluator = new(prober);

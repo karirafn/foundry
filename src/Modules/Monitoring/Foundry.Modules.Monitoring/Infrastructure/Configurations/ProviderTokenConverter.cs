@@ -10,18 +10,27 @@ namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 internal sealed class ProviderTokenConverter : ValueConverter<ProviderToken?, string?>, IDataProtectedConverter
 {
-    private const string Purpose = "Foundry.Monitoring.Encryption";
+    private const string AccountTokenPurpose = "Foundry.Monitoring.Encryption";
+
+    /// <summary>The purpose a Package Source Credential's token is encrypted under, apart from account tokens.</summary>
+    internal const string PackageSourceCredentialPurpose = "Foundry.Monitoring.PackageSourceCredential";
 
     internal ProviderTokenConverter(IDataProtectionProvider provider)
-        : base(
-            token => token == null ? null : Protect(provider.CreateProtector(Purpose), token),
-            storedValue => storedValue == null ? null : Unprotect(
-                provider.CreateProtector(Purpose),
-                storedValue))
+        : this(provider, AccountTokenPurpose)
     {
     }
 
-    public string ProtectorPurpose => Purpose;
+    internal ProviderTokenConverter(IDataProtectionProvider provider, string purpose)
+        : base(
+            token => token == null ? null : Protect(provider.CreateProtector(purpose), token),
+            storedValue => storedValue == null ? null : Unprotect(
+                provider.CreateProtector(purpose),
+                storedValue))
+    {
+        ProtectorPurpose = purpose;
+    }
+
+    public string ProtectorPurpose { get; }
 
     private static string Protect(IDataProtector protector, ProviderToken token)
     {

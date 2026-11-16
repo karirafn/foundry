@@ -1663,6 +1663,118 @@
         }
       }
     },
+    "/api/package-sources": {
+      "get": {
+        "tags": [
+          "PackageSources"
+        ],
+        "summary": "Lists the package sources monitored repositories declare",
+        "operationId": "GetPackageSources",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PackageSourceSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/package-sources/{id}/credential": {
+      "put": {
+        "tags": [
+          "PackageSources"
+        ],
+        "summary": "Registers the credential Foundry reads a package source with",
+        "operationId": "SetPackageSourceCredential",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageSourceCredentialCommandsRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "PackageSources"
+        ],
+        "summary": "Removes a package source's credential, so its repositories fall back to their own",
+        "operationId": "RemovePackageSourceCredential",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workers/runs/{workerRunId}": {
       "get": {
         "tags": [
@@ -3519,6 +3631,53 @@
           }
         }
       },
+      "HttpValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "ImageBuildStatus": {
         "enum": [
           "Idle",
@@ -4095,6 +4254,214 @@
           },
           "holderName": {
             "type": "string"
+          }
+        }
+      },
+      "PackageSourceCredentialCommandsRequestBody": {
+        "required": [
+          "username",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "PackageSourceCredentialSummary": {
+        "required": [
+          "username",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PackageSourceRepository": {
+        "required": [
+          "id",
+          "slug"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "PackageSourceStatus": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PackageSourceStatusPackageSourceStatusReachableViaCredential"
+          },
+          {
+            "$ref": "#/components/schemas/PackageSourceStatusPackageSourceStatusReachableViaAccount"
+          },
+          {
+            "$ref": "#/components/schemas/PackageSourceStatusPackageSourceStatusReachableAnonymously"
+          },
+          {
+            "$ref": "#/components/schemas/PackageSourceStatusPackageSourceStatusUnreachable"
+          },
+          {
+            "$ref": "#/components/schemas/PackageSourceStatusPackageSourceStatusUnchecked"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "reachableViaCredential": "#/components/schemas/PackageSourceStatusPackageSourceStatusReachableViaCredential",
+            "reachableViaAccount": "#/components/schemas/PackageSourceStatusPackageSourceStatusReachableViaAccount",
+            "reachableAnonymously": "#/components/schemas/PackageSourceStatusPackageSourceStatusReachableAnonymously",
+            "unreachable": "#/components/schemas/PackageSourceStatusPackageSourceStatusUnreachable",
+            "unchecked": "#/components/schemas/PackageSourceStatusPackageSourceStatusUnchecked"
+          }
+        }
+      },
+      "PackageSourceStatusPackageSourceStatusReachableAnonymously": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "reachableAnonymously"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "PackageSourceStatusPackageSourceStatusReachableViaAccount": {
+        "required": [
+          "accountName",
+          "host"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "reachableViaAccount"
+            ],
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          }
+        }
+      },
+      "PackageSourceStatusPackageSourceStatusReachableViaCredential": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "reachableViaCredential"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "PackageSourceStatusPackageSourceStatusUnchecked": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "unchecked"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "PackageSourceStatusPackageSourceStatusUnreachable": {
+        "required": [
+          "httpStatus",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "unreachable"
+            ],
+            "type": "string"
+          },
+          "httpStatus": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "PackageSourceSummary": {
+        "required": [
+          "id",
+          "url",
+          "repositories",
+          "status",
+          "lastCheckedAt",
+          "credential"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageSourceRepository"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/PackageSourceStatus"
+          },
+          "lastCheckedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "credential": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PackageSourceCredentialSummary"
+              }
+            ]
           }
         }
       },
@@ -6145,6 +6512,9 @@
     },
     {
       "name": "Repositories"
+    },
+    {
+      "name": "PackageSources"
     },
     {
       "name": "Workers"

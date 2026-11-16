@@ -1,15 +1,19 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
-internal sealed class PackageSourceConfiguration : IEntityTypeConfiguration<PackageSource>
+internal sealed class PackageSourceConfiguration(IDataProtectionProvider dataProtectionProvider)
+    : IEntityTypeConfiguration<PackageSource>
 {
     private const int UrlMaxLength = 2000;
+    private const int TokenMaxLength = 8000;
 
     public void Configure(EntityTypeBuilder<PackageSource> builder)
     {
@@ -32,6 +36,29 @@ internal sealed class PackageSourceConfiguration : IEntityTypeConfiguration<Pack
             .IsUnique()
             .HasDatabaseName("ix_package_sources_url");
 
+        // The Package Source Credential: all three columns are null when none is registered. The token is encrypted
+        // under its own Data Protection purpose.
+        builder.Property<string?>("_credentialUsername")
+            .HasMaxLength(PackageSourceCredential.MaxUsernameLength)
+            .HasColumnName("credential_username");
+
+        builder.Property<ProviderToken?>("_credentialToken")
+            .HasConversion(new ProviderTokenConverter(
+                dataProtectionProvider,
+                ProviderTokenConverter.PackageSourceCredentialPurpose))
+            .HasMaxLength(TokenMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("credential_token");
+
+        builder.Property<DateTimeOffset?>("_credentialUpdatedAt")
+            .HasColumnName("credential_updated_at");
+
+        builder.Property(s => s.CredentialVersion)
+            .HasDefaultValue(0)
+            .HasColumnName("credential_version");
+
+        builder.Ignore(s => s.Credential);
+
         builder.HasMany(s => s.Probes)
             .WithOne()
             .HasForeignKey(p => p.PackageSourceId)
@@ -41,7 +68,6 @@ internal sealed class PackageSourceConfiguration : IEntityTypeConfiguration<Pack
             .HasField("_probes")
             .UsePropertyAccessMode(PropertyAccessMode.Field)
             .AutoInclude();
-
     }
 }
 
