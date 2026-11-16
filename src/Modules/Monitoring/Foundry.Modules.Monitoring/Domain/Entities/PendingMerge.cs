@@ -64,6 +64,12 @@ public sealed class PendingMerge
     /// </summary>
     public bool AwaitsCatchUp { get; private set; }
 
+    /// <summary>
+    /// The issue a waiting queue head waits for: its pull request is already up to date with the default branch, so
+    /// its merge goes first. Unset while the entry is not waiting, or waits for nothing in particular.
+    /// </summary>
+    public int? WaitingForIssueNumber { get; private set; }
+
     public bool IsQueued => QueuedAt is not null;
 
     public static PendingMerge Start(
@@ -140,6 +146,22 @@ public sealed class PendingMerge
     }
 
     /// <summary>
+    /// Records the issue the waiting entry waits for, or <see langword="null"/> when it waits for nothing in
+    /// particular (it is not the queue head, or nothing up to date is ahead of its catch-up).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The entry is not waiting for a catch-up.</exception>
+    internal void WaitFor(int? issueNumber)
+    {
+        if (!AwaitsCatchUp)
+        {
+            throw new InvalidOperationException(
+                $"Pending merge of issue #{IssueNumber} is not waiting for a catch-up.");
+        }
+
+        WaitingForIssueNumber = issueNumber;
+    }
+
+    /// <summary>
     /// The waiting entry heads the queue and starts a catch-up round: the episode resolves, and the entry keeps its
     /// place while the issue rebases and its checks run again.
     /// </summary>
@@ -154,6 +176,7 @@ public sealed class PendingMerge
 
         CatchUpRounds++;
         AwaitsCatchUp = false;
+        WaitingForIssueNumber = null;
         ResolvedAt = now;
         NextAttemptAt = null;
     }
@@ -163,5 +186,6 @@ public sealed class PendingMerge
         QueuedAt = null;
         CatchUpRounds = 0;
         AwaitsCatchUp = false;
+        WaitingForIssueNumber = null;
     }
 }

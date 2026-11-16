@@ -11,6 +11,7 @@ import {
 } from '../../shared/utils/issue-state';
 import { getFailureCategoryDisplay } from '../../shared/utils/failure-category';
 import { providerDisplayName, providerTerminology } from '../../shared/utils/provider.util';
+import { formatRebaseSkippedReason } from '../issues/rebase-outcome.format';
 
 export type CalloutTone = 'neutral' | 'working' | 'warning' | 'error' | 'success';
 
@@ -150,6 +151,10 @@ class CalloutSource {
 
   get mergeSkippedReason(): string | null {
     return this.summary?.mergeSkippedReason ?? this.details?.mergeSkippedReason ?? null;
+  }
+
+  get rebaseSkippedReason(): string | null {
+    return this.summary?.rebaseSkippedReason ?? this.details?.rebaseSkippedReason ?? null;
   }
 
   prLink(): CalloutLink | null {
@@ -461,9 +466,73 @@ function publishRetryingCallout(src: CalloutSource): Draft {
   return d;
 }
 
+/** "round N of M", "round N" when the limit is missing, or null when no catch-up round is set. */
+function catchUpRoundText(src: CalloutSource): string | null {
+  const round = src.details?.catchUpRound ?? null;
+  if (round === null) {
+    return null;
+  }
+  const limit = src.details?.catchUpRoundLimit ?? null;
+  return limit === null ? `round ${round}` : `round ${round} of ${limit}`;
+}
+
+function catchUpTitle(src: CalloutSource): string {
+  const text = catchUpRoundText(src);
+  return text === null ? 'Catching up' : `Catching up (${text})`;
+}
+
+function withPrLink(src: CalloutSource, d: Draft): Draft {
+  const link = src.prLink();
+  if (link !== null) {
+    d.links.push(link);
+  }
+  return d;
+}
+
+function rebasePendingCallout(src: CalloutSource): Draft {
+  // Only catch_up carries its own copy; after_run, a missing field and a reason a newer backend adds keep the
+  // default, which has no link.
+  if (src.details?.rebasePendingReason !== 'catch_up') {
+    return draft('working', 'Rebasing', ['Foundry is rebasing the branch onto the default branch.']);
+  }
+  return withPrLink(src, draft('working', catchUpTitle(src), [
+    `The ${src.pullRequest} fell behind the default branch, so ${src.providerName} refused the merge.`,
+    'Foundry is rebasing it onto the default branch; checks run again before it merges.',
+  ]));
+}
+
+function mergePendingCallout(src: CalloutSource): Draft {
+  const pr = src.pullRequest;
+  const wait = src.details?.mergeWait ?? null;
+  if (wait !== null) {
+    const awaited = wait.waitingForIssueNumber;
+    const d = draft('neutral', 'Waiting to catch up', [
+      `Checks passed, but the ${pr} fell behind the default branch, so ${src.providerName} refused the merge.`,
+      wait.position === 1 ? 'Next to catch up.' : `#${wait.position} in the catch-up queue.`,
+      ...(awaited === null
+        ? []
+        : [`It waits for #${awaited}, whose ${pr} is already up to date, to finish its checks and merge first.`]),
+      `Foundry rebases one ${pr} at a time in this repository and reruns its checks before merging.`,
+    ]);
+    const round = src.details?.catchUpRound ?? null;
+    const limit = src.details?.catchUpRoundLimit ?? null;
+    if (round !== null && limit !== null) {
+      d.rows.push(row('Catch-up rounds', `${round} of ${limit}`));
+    }
+    return withPrLink(src, d);
+  }
+  const roundText = catchUpRoundText(src);
+  if (roundText !== null) {
+    return withPrLink(src, draft('working', 'Merging', [
+      `Checks passed after catch-up ${roundText}. Foundry is merging the ${pr} on ${src.providerName}.`,
+    ]));
+  }
+  return draft('working', 'Merging', [`Checks passed. Foundry is merging the ${pr} on ${src.providerName}.`]);
+}
+
 function checksPendingCallout(src: CalloutSource): Draft {
-  // head_moved and checks_rerun carry their own copy; after_run, a missing field and a reason a newer backend
-  // adds keep the default.
+  // head_moved, checks_rerun and catch_up carry their own copy; after_run, a missing field and a reason a newer
+  // backend adds keep the default.
   let d: Draft;
   switch (src.details?.checksPendingReason) {
     case 'head_moved':
@@ -475,6 +544,12 @@ function checksPendingCallout(src: CalloutSource): Draft {
     case 'checks_rerun':
       d = draft('working', 'Checks passed on a rerun', [
         `The ${src.pullRequest}'s checks ran again on the same commits and passed. Foundry is confirming the result.`,
+      ]);
+      break;
+    case 'catch_up':
+      d = draft('working', catchUpTitle(src), [
+        `Foundry rebased the ${src.pullRequest} onto the default branch after it fell behind.`,
+        'Waiting for CI checks on the rebased commits before merging.',
       ]);
       break;
     default:
@@ -503,6 +578,15 @@ function mergeSkippedLine(src: CalloutSource): string {
     case 'provider_error':
       return `Checks passed, but ${provider} kept failing when Foundry tried to merge. `
         + `Merge the ${pr} yourself on ${provider}.`;
+    case 'fell_behind':
+      return `Checks passed, but the ${pr} kept falling behind the default branch as other merges landed, so `
+        + `Foundry stopped catching it up. Update the branch on ${provider} and merge the ${pr} yourself.`;
+    case 'catch_up_failed': {
+      const rebaseReason = formatRebaseSkippedReason(src.rebaseSkippedReason);
+      const reason = rebaseReason === null ? '' : ` (${rebaseReason})`;
+      return `Checks passed, but the ${pr} fell behind the default branch and Foundry couldn't rebase it${reason}. `
+        + `Update the branch on ${provider} and merge the ${pr} yourself.`;
+    }
     default:
       return `Checks passed, but Foundry didn't merge the ${pr}. Review it on ${provider}.`;
   }
@@ -630,13 +714,11 @@ function winningCallout(src: CalloutSource): Draft {
     case 'triage_in_progress':
       return draft('working', 'Triaging', ['A triage worker is reading the issue and the repository.']);
     case 'rebase_pending':
-      return draft('working', 'Rebasing', ['Foundry is rebasing the branch onto the default branch.']);
+      return rebasePendingCallout(src);
     case 'checks_pending':
       return checksPendingCallout(src);
     case 'merge_pending':
-      return draft('working', 'Merging', [
-        `Checks passed. Foundry is merging the ${src.pullRequest} on ${src.providerName}.`,
-      ]);
+      return mergePendingCallout(src);
     case 'review':
       return reviewCallout(src);
     case 'detected':

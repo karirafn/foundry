@@ -42,6 +42,7 @@ public sealed class RunAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher = new();
+    private readonly CapturingIntegrationEventProcessor _processor = new();
     private readonly WebhookNudgeQueue _nudgeQueue = new(NullLogger<WebhookNudgeQueue>.Instance);
     private readonly ScriptedProvider _provider = new();
 
@@ -92,6 +93,7 @@ public sealed class RunAsync : IAsyncDisposable
             _dbContext,
             new PostedCommentRegistry(_dbContext),
             _dispatcher,
+            _processor,
             _nudgeQueue,
             NullLogger<MergeStep>.Instance);
 
@@ -480,7 +482,7 @@ public sealed class RunAsync : IAsyncDisposable
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
 
         // Act
-        await new MergeStep(new StubIssueQueries([], []), _dbContext, new PostedCommentRegistry(_dbContext), _dispatcher, _nudgeQueue, NullLogger<MergeStep>.Instance)
+        await new MergeStep(new StubIssueQueries([], []), _dbContext, new PostedCommentRegistry(_dbContext), _dispatcher, _processor, _nudgeQueue, NullLogger<MergeStep>.Instance)
             .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -927,6 +929,140 @@ public sealed class RunAsync : IAsyncDisposable
         // Assert
         SingleResolved().Outcome.ShouldBe("disabled");
         LoadProgress().IsQueued.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenTheHeadWaitsForAnUpToDateIssue_RecordsThatIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+
+        // Act
+        await BuildQueueSut([new MergeQueueIssueInfo(50, "feat/50-fresh", false, false)], Pending())
+            .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        LoadProgress().WaitingForIssueNumber.ShouldBe(50);
+    }
+
+    [Fact]
+    public async Task WhenTheAwaitedIssueIsNoLongerUpToDate_ClearsTheAwaitedIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+        await BuildQueueSut([new MergeQueueIssueInfo(50, "feat/50-fresh", false, false)], Pending())
+            .RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        _provider.Ancestry["feat/50-fresh"] = Result<bool>.Ok(true);
+
+        // Act: the awaited issue left the checks gate, and an earlier entry now heads the queue.
+        PendingMerge earlier = PendingMerge.Start(repository.Id, 7, EnteredAt);
+        MergeQueue.RefuseBehind(earlier, Now.AddDays(-1));
+        _dbContext.Set<PendingMerge>().Add(earlier);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await BuildQueueSut([], Pending(), Pending(7, "feat/7-earlier"))
+            .RunAsync(repository, _provider, IssueNumber, Now.AddMinutes(2), TestContext.Current.CancellationToken);
+
+        // Assert
+        LoadProgress(IssueNumber).WaitingForIssueNumber.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAnEntryJoinsTheQueue_BroadcastsItsQueueChangeDirectly()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeQueueChanged changed = _processor.Events.OfType<MergeQueueChanged>().ShouldHaveSingleItem();
+        changed.ShouldSatisfyAllConditions(
+            () => changed.RepositoryId.ShouldBe(repository.Id),
+            () => changed.IssueNumbers.ShouldBe([IssueNumber]));
+        _dispatcher.DispatchedEvents.OfType<MergeQueueChanged>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAnEntryAheadMerges_BroadcastsTheNewPositionOfTheWaitingEntryOnly()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo first = Pending(41, "feat/41-first");
+        MergePendingIssueInfo second = Pending(42, "feat/42-second");
+        RefuseBehind(first.BranchName);
+        RefuseBehind(second.BranchName);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+        _processor.Events.Clear();
+
+        // Act: the first entry is back from its catch-up and merges.
+        await BuildQueueSut([], Pending(41, first.BranchName, EnteredAt.AddHours(1)), second)
+            .RunAsync(repository, _provider, 41, Now.AddHours(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<MergeResolved>().Last().Outcome.ShouldBe("merged");
+        _processor.Events.OfType<MergeQueueChanged>().ShouldHaveSingleItem().IssueNumbers.ShouldBe([42]);
+    }
+
+    [Fact]
+    public async Task WhenNothingInTheQueueChanges_BroadcastsNothing()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        MergePendingIssueInfo first = Pending(41, "feat/41-first");
+        MergePendingIssueInfo second = Pending(42, "feat/42-second");
+        RefuseBehind(first.BranchName);
+        RefuseBehind(second.BranchName);
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        _processor.Events.Clear();
+
+        // Act: the later entry is nudged and keeps waiting behind the head.
+        await BuildQueueSut([], first, second).RunAsync(repository, _provider, 42, Now.AddMinutes(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _processor.Events.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheDirectBroadcastFails_StillPersistsTheQueue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RefuseBehind();
+        _processor.Throws = true;
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        LoadProgress().AwaitsCatchUp.ShouldBeTrue();
+    }
+
+    private sealed class CapturingIntegrationEventProcessor : IIntegrationEventProcessor
+    {
+        public List<IIntegrationEvent> Events { get; } = [];
+
+        public bool Throws { get; set; }
+
+        public Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
+        {
+            if (Throws)
+            {
+                throw new InvalidOperationException("Handler failed.");
+            }
+
+            Events.Add(@event);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubIssueQueries(
