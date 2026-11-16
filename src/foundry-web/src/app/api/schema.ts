@@ -1257,7 +1257,7 @@ export interface components {
             instance?: null | string;
         };
         /** @enum {unknown} */
-        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict" | "Clarifications";
+        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "BrowserRenderingImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict" | "Clarifications";
         PromptSectionDescriptor: {
             key: string;
             title: string;

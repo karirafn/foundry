@@ -4192,6 +4192,7 @@
           "Always",
           "DotnetImage",
           "DockerImage",
+          "BrowserRenderingImage",
           "Fresh",
           "Continuation",
           "Revision",

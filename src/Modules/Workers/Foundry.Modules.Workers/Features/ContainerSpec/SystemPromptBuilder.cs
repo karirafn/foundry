@@ -38,10 +38,16 @@ internal static partial class SystemPromptBuilder
     // toolchain has csharp-ls, the server the baked csharp-lsp plugin registers).
     internal const string CSharpLspSectionMarker = "C# code navigation:";
 
+    // Unique heading that opens the section telling the agent to render and measure its UI changes (emitted only for
+    // images whose recorded toolchain has both chromium and playwright-core).
+    internal const string RenderingUiChangesSectionMarker = "Rendering UI changes:";
+
     // The toolchain names (workers/toolchain.sh) that gate sections: a section is promised only when the image the run
     // uses reported the tool it needs (ADR 0109).
     internal const string CSharpLsTool = "csharp-ls";
     internal const string DockerTool = "docker";
+    internal const string ChromiumTool = "chromium";
+    internal const string PlaywrightCoreTool = "playwright-core";
 
     // Unique heading that opens the RebaseConflict revision section. Tests anchor on this constant
     // so any wording change surfaces as a compile error rather than a silent assertion miss.
@@ -108,6 +114,9 @@ internal static partial class SystemPromptBuilder
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string prePrSection = toolchain.Has(DockerTool) ? "\n\n" + BuildPrePrSection() : string.Empty;
         string csharpLspSection = CSharpLspSection(toolchain);
+        string renderingUiChangesSection = toolchain.Has(ChromiumTool) && toolchain.Has(PlaywrightCoreTool)
+            ? "\n\n" + BuildRenderingUiChangesSection()
+            : string.Empty;
         IReadOnlyList<Clarification> log = clarifications ?? [];
 
         // Line endings are normalised to \n so bytes measured == bytes delivered, regardless of whether AppendLine
@@ -131,7 +140,8 @@ internal static partial class SystemPromptBuilder
                     StringComparison.Ordinal);
 
             string prompt = SafetyPreamble + "\n\n" + PrinciplesBlock(principles) + basePrompt + "\n\n" + TaskListInstruction
-                + csharpLspSection + prePrSection + "\n\n" + BuildPublishingSection(timeoutMinutes) + clarificationSection;
+                + csharpLspSection + renderingUiChangesSection + prePrSection + "\n\n" + BuildPublishingSection(timeoutMinutes)
+                + clarificationSection;
 
             // A revision section budgets its own feedback against the prompt it extends, so it returns the full prompt.
             string fullPrompt = dispatchContext switch
@@ -558,6 +568,11 @@ internal static partial class SystemPromptBuilder
                 + "\n\n" + DescribeTrackerContext()),
             new("task-list", "Task list", PromptSectionCondition.Always, TaskListInstruction),
             new("csharp-lsp", "C# code navigation", PromptSectionCondition.DotnetImage, BuildCSharpLspSection()),
+            new(
+                "rendering-ui-changes",
+                "Rendering UI changes",
+                PromptSectionCondition.BrowserRenderingImage,
+                BuildRenderingUiChangesSection()),
             new("pre-pr", "Before you exit", PromptSectionCondition.DockerImage, BuildPrePrSection()),
             new(
                 "publishing",
@@ -649,6 +664,20 @@ internal static partial class SystemPromptBuilder
 
             - For C# symbol lookups (references, callers, implementations, definitions), load the `LSP` tool via ToolSearch and prefer it over grep.
             - If the `LSP` tool is unavailable, fall back to grep.
+            """;
+    }
+
+    // jsdom measures nothing, so a layout bug only shows in a real browser. The image's Chromium serves Playwright (it
+    // downloads no browser); ES module resolution ignores NODE_PATH, hence the absolute import path.
+    private static string BuildRenderingUiChangesSection()
+    {
+        return $$"""
+            {{RenderingUiChangesSectionMarker}}
+
+            - After changing a stylesheet, template or component layout, render the affected component or page in headless Chromium and measure what changed (`getBoundingClientRect`, computed styles). Measure at the narrowest and widest widths the layout supports, with empty, typical and extreme content (for example very long text or very many items).
+            - When the repository has its own browser layout tests, run and extend those instead.
+            - Load Playwright with `require('/opt/claude-code/node_modules/playwright-core')`, or in an ES module with `import { chromium } from '/opt/claude-code/node_modules/playwright-core/index.mjs'` (an absolute path, because ES module resolution ignores `NODE_PATH`). Launch Chromium with `chromium.launch({ executablePath: process.env.CHROME_BIN })`.
+            - Render only local content, and keep scratch scripts and screenshots under `/tmp`, outside the repository.
             """;
     }
 

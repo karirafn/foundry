@@ -89,7 +89,7 @@ A non-`Idle` state drives the dashboard image-build banner and disables the work
 ## Worker Image Configuration
 
 The worker image settings stored on Global Settings: the **image tag** (default `foundry-worker:local`; empty or `:latest` rejected) and the **build toggle** (default enabled).
-Every image installs the full toolchain (the .NET SDK with `dotnet-ef` and `csharp-ls`, the Angular CLI, headless Chromium, the Docker engine) unconditionally, so the configuration holds no install flags and the build passes no toolchain build args ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)); stored rows that still carry the removed `Install*` members deserialize with them skipped.
+Every image installs the full toolchain (the .NET SDK with `dotnet-ef` and `csharp-ls`, the Angular CLI, headless Chromium, the Docker engine, and `playwright-core` beside the Claude Code CLI to drive that Chromium) unconditionally, so the configuration holds no install flags and the build passes no toolchain build args ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)); stored rows that still carry the removed `Install*` members deserialize with them skipped.
 Any change publishes `WorkerImageSettingsChanged`; with build enabled this requests an immediate rebuild, with build disabled it triggers an inspect (see Worker Image Build).
 
 Beside it, but outside the configuration, Global Settings holds the **nested-Docker switch** (`NestedDockerEnabled`, column `nested_docker_enabled`, default off; shown in Settings as "Nested Docker for implement runs"): whether implement runs get the nested rootless Docker daemon and its relaxed allowances ([ADR 0110](docs/adr/0110-nested-docker-privileges-stay-an-operator-switch.md)).
@@ -101,7 +101,7 @@ The migration that added it took its value from the stored `InstallDocker` membe
 What a worker image actually carries, read from the image rather than assumed from its Dockerfile ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)): a list of `{name, version}` entries (`node`, `claude-code`, `dotnet-sdk`, `csharp-ls`, `angular-cli`, `chromium`, `docker`, `playwright-core`, `gh`, `glab`, `git`; an absent tool is omitted) printed by `/opt/foundry/toolchain.sh` as one `FOUNDRY_TOOLCHAIN <json>` line.
 After every successful build, and every successful inspect when building is disabled, Foundry runs the script in a hardened, short-lived container of that image ID and stores the list in `worker_image_toolchains`, keyed by image ID; earlier images keep their rows.
 While the current image (the role catalog's image ID) has no stored list, the probe is retried with backoff (1 minute, doubling, capped at 30 minutes); a new build restarts it.
-The toolchain-dependent prompt sections follow the current image's list: the C# code-navigation section when it has `csharp-ls`, the pre-PR section when it has `docker`; an image with no recorded list gets neither.
+The toolchain-dependent prompt sections follow the current image's list: the C# code-navigation section when it has `csharp-ls`, the pre-PR section when it has `docker`, the "Rendering UI changes" section (full runs only) when it has both `chromium` and `playwright-core`; an image with no recorded list gets none of them.
 
 ### Docker-Enabled Worker Run Spec
 
