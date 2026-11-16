@@ -70,6 +70,7 @@ function runDetail(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     publishBlockedAt: null,
     falsePositivesConfirmedAt: null,
     confirmedFindings: [],
+    toolchain: null,
     ...overrides,
   };
 }
@@ -246,6 +247,73 @@ describe('PaneFactsComponent', () => {
     const time = value(el, 'Completed')?.querySelector('time');
     expect(time?.getAttribute('datetime')).toBe('2026-02-01T12:00:00Z');
     expect(text(time)).toMatch(/Feb 1, 2026/);
+  });
+
+  describe('toolchain', () => {
+    const tools = [
+      { name: 'node', version: '22.22.3' },
+      { name: 'chromium', version: '156.0.8078.79' },
+    ];
+
+    function disclosure(el: HTMLElement): HTMLDetailsElement | null {
+      return value(el, 'Toolchain')?.querySelector('details') ?? null;
+    }
+
+    it('shows the run toolchain collapsed behind its count', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), runDetail({ toolchain: tools }));
+
+      // Assert
+      const details = disclosure(el)!;
+      expect(details.classList.contains('pane-facts__toolchain')).toBe(true);
+      expect(details.open).toBe(false);
+      expect(text(details.querySelector('summary'))).toBe('2 tools');
+      expect(Array.from(details.querySelectorAll('fd-toolchain-list dt')).map(text)).toEqual(['node', 'chromium']);
+      expect(Array.from(details.querySelectorAll('fd-toolchain-list dd')).map(text)).toEqual(['22.22.3', '156.0.8078.79']);
+    });
+
+    it('omits the row for a run without a toolchain', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), runDetail({ toolchain: null }));
+
+      // Assert
+      expect(value(el, 'Toolchain')).toBeNull();
+      expect(el.querySelector('fd-toolchain-list')).toBeNull();
+    });
+
+    it('starts collapsed again when the pane switches to another run', () => {
+      // Arrange
+      const { fixture, el } = setup(issue('in_progress'), runDetail({ workerRunId: 'run-a', toolchain: tools }));
+      const details = disclosure(el)!;
+      details.open = true;
+      details.dispatchEvent(new Event('toggle'));
+      fixture.detectChanges();
+      expect(disclosure(el)?.open).toBe(true);
+
+      // Act
+      fixture.componentRef.setInput('run', runDetail({ workerRunId: 'run-b', toolchain: tools }));
+      fixture.detectChanges();
+
+      // Assert
+      expect(disclosure(el)).toBe(details);
+      expect(disclosure(el)?.open).toBe(false);
+    });
+
+    it('stays open when the same run reloads', () => {
+      // Arrange
+      const { fixture, el } = setup(issue('in_progress'), runDetail({ workerRunId: 'run-a', toolchain: tools }));
+      const details = disclosure(el)!;
+      details.open = true;
+      details.dispatchEvent(new Event('toggle'));
+      fixture.detectChanges();
+
+      // Act
+      fixture.componentRef.setInput('run', runDetail({ workerRunId: 'run-a', toolchain: tools }));
+      fixture.detectChanges();
+
+      // Assert
+      expect(disclosure(el)?.open).toBe(true);
+    });
   });
 
   describe('run result', () => {

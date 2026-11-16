@@ -88,6 +88,15 @@
               </span>
             </dd>
           }
+          @case ('toolchain') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              <details class="pane-facts__toolchain" [open]="toolchainExpanded()" (toggle)="syncToolchain($event)">
+                <summary>{{ f.summary }}</summary>
+                <fd-toolchain-list [tools]="f.tools" />
+              </details>
+            </dd>
+          }
           @case ('blockers') {
             <dt [id]="blockersKeyId">{{ f.key }}</dt>
             <dd>

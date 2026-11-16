@@ -19,6 +19,7 @@ import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { RevertedFilesComponent } from '../../issues/reverted-files/reverted-files';
+import { ToolchainListComponent } from '../../../shared/components/toolchain-list/toolchain-list';
 import { PaneFact, buildFacts } from './pane-facts.model';
 
 let nextId = 0;
@@ -27,7 +28,7 @@ let nextId = 0;
 @Component({
   selector: 'fd-pane-facts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, LogViewComponent, RoleTagComponent, RevertedFilesComponent, SafeHrefPipe],
+  imports: [DatePipe, LogViewComponent, RoleTagComponent, RevertedFilesComponent, SafeHrefPipe, ToolchainListComponent],
   templateUrl: './pane-facts.html',
   styleUrl: './pane-facts.scss',
 })
@@ -63,6 +64,9 @@ export class PaneFactsComponent {
   private readonly _resultExpanded: WritableSignal<boolean> = signal(false);
   protected readonly resultExpanded: Signal<boolean> = this._resultExpanded.asReadonly();
 
+  private readonly _toolchainExpanded: WritableSignal<boolean> = signal(false);
+  protected readonly toolchainExpanded: Signal<boolean> = this._toolchainExpanded.asReadonly();
+
   constructor() {
     // The stored log is fetched once per run; a reload of the same run keeps what is shown.
     effect(() => {
@@ -76,14 +80,22 @@ export class PaneFactsComponent {
       });
     });
 
-    // A long result starts clamped again for every run.
+    // A long result starts clamped, and the toolchain collapsed, again for every run: the `@for` keeps both
+    // elements across runs (`track f.key`).
     effect(() => {
       this._runId();
-      untracked(() => this._resultExpanded.set(false));
+      untracked(() => {
+        this._resultExpanded.set(false);
+        this._toolchainExpanded.set(false);
+      });
     });
   }
 
   protected toggleResult(): void {
     this._resultExpanded.update((v) => !v);
+  }
+
+  protected syncToolchain(event: Event): void {
+    this._toolchainExpanded.set((event.target as HTMLDetailsElement).open);
   }
 }
