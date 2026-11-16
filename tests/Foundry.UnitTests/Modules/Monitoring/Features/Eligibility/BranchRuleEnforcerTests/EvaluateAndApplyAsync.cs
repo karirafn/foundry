@@ -280,6 +280,68 @@ public sealed class EvaluateAndApplyAsync
         evaluator.BranchRuleEvaluations.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task WhenBranchViolationsComeWithPackageSourceViolations_StillAppliesTheBranchRules()
+    {
+        // Arrange
+        RepositoryEligibility mixed = new RepositoryEligibility.Ineligible(
+        [
+            EligibilityViolation.AllowDirectPushes(),
+            EligibilityViolation.PackageSourceUnreachable(new Uri("https://feed.example/v3/index.json")),
+            EligibilityViolation.NuGetConfigInvalid(),
+        ]);
+        RepositoryEligibility packageSourceOnly = new RepositoryEligibility.Ineligible(
+            [EligibilityViolation.PackageSourceUnreachable(new Uri("https://feed.example/v3/index.json"))]);
+        ScriptedEvaluator evaluator = new(mixed, reReadEligibility: packageSourceOnly);
+        RecordingProviderFactory factory = new(Result.Ok());
+        BranchRuleEnforcer sut = CreateSut(evaluator, factory);
+
+        // Act
+        BranchRulesOutcome outcome = await sut.EvaluateAndApplyAsync(
+            CreateRepository(), CreateAccount(), applyBranchRules: true, Now, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new BranchRulesOutcome(BranchRulesOutcome.AppliedKind));
+        factory.Provider.ApplyCalls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenOnlyPackageSourceViolationsAfterAGrantedProbe_ReportsTheRulesAlreadyPresent()
+    {
+        // Arrange
+        ScriptedEvaluator evaluator = new(new RepositoryEligibility.Ineligible(
+            [EligibilityViolation.PackageSourceUnreachable(new Uri("https://feed.example/v3/index.json"))]));
+        RecordingProviderFactory factory = new(Result.Ok());
+        BranchRuleEnforcer sut = CreateSut(evaluator, factory);
+        MonitoredRepository repository = CreateRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+
+        // Act
+        BranchRulesOutcome outcome = await sut.EvaluateAndApplyAsync(
+            repository, CreateAccount(), applyBranchRules: true, Now, CancellationToken.None);
+
+        // Assert
+        outcome.Kind.ShouldBe(BranchRulesOutcome.AlreadyPresentKind);
+        factory.Provider.ApplyCalls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenOnlyPackageSourceViolationsWithoutAGrantedProbe_SkipsAsUnverifiable()
+    {
+        // Arrange
+        ScriptedEvaluator evaluator = new(new RepositoryEligibility.Ineligible([EligibilityViolation.NuGetConfigInvalid()]));
+        RecordingProviderFactory factory = new(Result.Ok());
+        BranchRuleEnforcer sut = CreateSut(evaluator, factory);
+
+        // Act
+        BranchRulesOutcome outcome = await sut.EvaluateAndApplyAsync(
+            CreateRepository(), CreateAccount(), applyBranchRules: true, Now, CancellationToken.None);
+
+        // Assert
+        outcome.Reason.ShouldBe(BranchRulesOutcome.UnverifiableReason);
+        factory.Provider.ApplyCalls.ShouldBe(0);
+    }
+
     private sealed class ScriptedEvaluator(
         RepositoryEligibility fullEligibility,
         RepositoryEligibility? reReadEligibility = null) : IRepositoryEligibilityEvaluator

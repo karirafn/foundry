@@ -613,6 +613,57 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     // Returns null — simulates no credential covering the repository
+    private const string SourceUrl = "https://github.com/api/packages/index.json";
+
+    private static MonitoredRepository CreateRepoDeclaringUncheckedSource()
+    {
+        MonitoredRepository repo = CreateRepo();
+        repo.RecordRootListing(
+            new RootNuGetConfig.Declared("sha", "<configuration />", [DeclaredPackageSource.Create("feed", SourceUrl).ValueOrThrow()]),
+            listingETag: null);
+        return repo;
+    }
+
+    private static GitHubCredential UsableCredential() =>
+        GitHubCredential.Create("test", "token", BaseUrl.Create("https://github.com").ValueOrThrow());
+
+    [Fact]
+    public async Task WhenPushIsDeniedAndASourceIsUnreadable_ListsBothViolations()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaringUncheckedSource();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(UsableCredential()),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new MissingWriteProber(WritePermission.Contents));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.Select(v => v.Rule).ShouldBe(["cannot-push:owner/repo", "package-source-unreachable:" + SourceUrl]);
+    }
+
+    [Fact]
+    public async Task WhenTheWriteProbeThrowsAndASourceIsUnreadable_SetsIneligibleRatherThanUnreachable()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaringUncheckedSource();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(UsableCredential()),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new ThrowingWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem().Rule.ShouldBe("package-source-unreachable:" + SourceUrl);
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+    }
+
     private sealed class NullCredentialResolver : ICredentialResolver
     {
         public Task<Credential?> ResolveAsync(

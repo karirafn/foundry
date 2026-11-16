@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -41,13 +42,14 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     private static RepositoryEligibilityEvaluator CreateSut(
         ICredentialResolver? resolver = null,
         IIssueProviderFactory? providerFactory = null,
-        IGitHubWriteProber? writeProber = null)
+        IGitHubWriteProber? writeProber = null,
+        IPackageSourceVerdicts? packageSourceVerdicts = null)
     {
         return new RepositoryEligibilityEvaluator(
             resolver ?? new NullCredentialResolver(),
             providerFactory ?? new NullProviderFactory(),
             writeProber ?? new NeverCalledWriteProber(),
-            new StubPackageSourceVerdicts(),
+            packageSourceVerdicts ?? new StubPackageSourceVerdicts(),
             NullLogger<RepositoryEligibilityEvaluator>.Instance);
     }
 
@@ -384,6 +386,198 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     }
 
     // Returns null — simulates no credential covering the repository
+    private const string HostSourceUrl = "https://github.com/api/packages/index.json";
+    private const string OtherHostSourceUrl = "https://nuget.pkg.github.com/owner/index.json";
+
+    private static GitHubCredential CreateUsableCredential() =>
+        GitHubCredential.Create("test", "token", BaseUrl.Create("https://github.com").ValueOrThrow());
+
+    private static MonitoredRepository CreateRepoDeclaring(params string[] sourceUrls)
+    {
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        DeclaredPackageSource[] sources = sourceUrls
+            .Select((url, index) => DeclaredPackageSource.Create($"source{index}", url).ValueOrThrow())
+            .ToArray();
+        repo.RecordRootListing(new RootNuGetConfig.Declared("sha", "<configuration />", sources), listingETag: null);
+        return repo;
+    }
+
+    private static StubProviderFactory PassingBranchRules() =>
+        new(Result<BranchProtection>.Ok(
+            new BranchProtection("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true)));
+
+    [Fact]
+    public async Task WhenEveryDeclaredSourceIsReadable_SetsEligibilityToEligible()
+    {
+        // Arrange
+        GitHubCredential credential = CreateUsableCredential();
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        StubPackageSourceVerdicts verdicts = new StubPackageSourceVerdicts()
+            .With(HostSourceUrl, new ProbeCredential.Account(credential.Id), new PackageSourceVerdict.Readable());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: PassingBranchRules(),
+            packageSourceVerdicts: verdicts);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+    }
+
+    [Fact]
+    public async Task WhenADeclaredSourceIsUnreadable_SetsIneligibleWithAPackageSourceUnreachableViolation()
+    {
+        // Arrange
+        GitHubCredential credential = CreateUsableCredential();
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        StubPackageSourceVerdicts verdicts = new StubPackageSourceVerdicts().With(
+            HostSourceUrl,
+            new ProbeCredential.Account(credential.Id),
+            new PackageSourceVerdict.Unreadable(401, "service index returned 401"));
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: PassingBranchRules(),
+            packageSourceVerdicts: verdicts);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem().Rule.ShouldBe("package-source-unreachable:" + HostSourceUrl);
+    }
+
+    [Fact]
+    public async Task WhenADeclaredSourceIsUnchecked_SetsIneligibleWithAPackageSourceUnreachableViolation()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateUsableCredential()),
+            providerFactory: PassingBranchRules(),
+            packageSourceVerdicts: new StubPackageSourceVerdicts());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem().Rule.ShouldBe("package-source-unreachable:" + HostSourceUrl);
+    }
+
+    [Fact]
+    public async Task WhenTheSourceIsReadableOnlyWithAnotherCredential_SetsIneligible()
+    {
+        // Arrange
+        GitHubCredential credential = CreateUsableCredential();
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        StubPackageSourceVerdicts verdicts = new StubPackageSourceVerdicts()
+            .With(HostSourceUrl, new ProbeCredential.Account(CredentialId.New()), new PackageSourceVerdict.Readable());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: PassingBranchRules(),
+            packageSourceVerdicts: verdicts);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+    }
+
+    [Fact]
+    public async Task WhenTheSourceIsOnAnotherHost_JudgesItByItsAnonymousVerdict()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaring(OtherHostSourceUrl);
+        StubPackageSourceVerdicts verdicts = new StubPackageSourceVerdicts()
+            .With(OtherHostSourceUrl, new ProbeCredential.Anonymous(), new PackageSourceVerdict.Readable());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateUsableCredential()),
+            providerFactory: PassingBranchRules(),
+            packageSourceVerdicts: verdicts);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+        verdicts.Reads.ShouldHaveSingleItem().Credential.ShouldBeOfType<ProbeCredential.Anonymous>();
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesAlsoFail_JoinsBothInOneIneligibleList()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateUsableCredential()),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)),
+            packageSourceVerdicts: new StubPackageSourceVerdicts());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.Select(v => v.Rule).ShouldBe(
+            [EligibilityViolation.AllowDirectPushesRule, "package-source-unreachable:" + HostSourceUrl]);
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesAreUnavailable_AnUnreadableSourceMakesItIneligible()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateUsableCredential()),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Fail(new Error("Provider.Error", "Unreachable"))),
+            packageSourceVerdicts: new StubPackageSourceVerdicts());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem().Rule.ShouldBe("package-source-unreachable:" + HostSourceUrl);
+    }
+
+    [Fact]
+    public async Task WhenTheRootConfigIsInvalid_SetsIneligibleWithANuGetConfigInvalidViolation()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        repo.RecordRootListing(new RootNuGetConfig.Invalid("sha", "<configuration", "unexpected end of file"), listingETag: null);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateUsableCredential()),
+            providerFactory: PassingBranchRules());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem().Rule.ShouldBe("nuget-config-invalid");
+    }
+
+    [Fact]
+    public async Task WhenNoCredentialCoversRepo_ReportsOnlyNoCredential()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepoDeclaring(HostSourceUrl);
+        RepositoryEligibilityEvaluator sut = CreateSut(packageSourceVerdicts: new StubPackageSourceVerdicts());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem().Rule.ShouldStartWith(EligibilityViolationInfo.NoCredentialRulePrefix);
+    }
+
     private sealed class NullCredentialResolver : ICredentialResolver
     {
         public Task<Credential?> ResolveAsync(
