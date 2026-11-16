@@ -44,7 +44,16 @@ public sealed record WorkerRunDetail(
 
     /// <summary>Every finding an operator confirmed as a false positive on this run (#899); empty when none.</summary>
     public IReadOnlyList<WorkerRunConfirmedFinding> ConfirmedFindings { get; init; } = [];
+
+    /// <summary>
+    /// The toolchain the run's container reported when it started (ADR 0109), in its order; <see langword="null"/> when
+    /// the container reported none, or for a run recorded before runs kept it.
+    /// </summary>
+    public IReadOnlyList<WorkerRunTool>? Toolchain { get; init; }
 }
+
+/// <summary>One tool a run's container reported, such as <c>csharp-ls</c> <c>0.28.0</c>.</summary>
+public sealed record WorkerRunTool(string Name, string Version);
 
 /// <summary>Where the Diff gate found a possible secret. There is deliberately no member for the matched value.</summary>
 public sealed record WorkerRunSecretFinding(string Path, int Line, string CommitSha, string RuleId);

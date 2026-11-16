@@ -1665,6 +1665,7 @@ export interface components {
             /** Format: date-time */
             falsePositivesConfirmedAt?: null | string;
             confirmedFindings?: components["schemas"]["WorkerRunConfirmedFinding"][];
+            toolchain?: null | components["schemas"]["WorkerRunTool"][];
         };
         WorkerRunPublishDetail: {
             headSha: string;
@@ -1694,6 +1695,10 @@ export interface components {
             line: number | string;
             commitSha: string;
             ruleId: string;
+        };
+        WorkerRunTool: {
+            name: string;
+            version: string;
         };
     };
     responses: never;
