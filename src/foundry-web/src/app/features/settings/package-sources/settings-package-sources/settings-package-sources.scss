@@ -1,0 +1,37 @@
+.package-sources-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__section {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-md);
+    padding: var(--fd-spacing-xl);
+  }
+
+  &__section-title {
+    color: var(--fd-text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 var(--fd-spacing-xs) 0;
+  }
+
+  &__section-description {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0 0 var(--fd-spacing-md) 0;
+  }
+
+  &__target-missing {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0 0 var(--fd-spacing-md) 0;
+  }
+
+  &__remove-error {
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+    margin-block-start: var(--fd-spacing-sm);
+  }
+}

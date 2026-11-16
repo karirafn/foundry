@@ -518,6 +518,41 @@ export interface paths {
         patch: operations["MoveRepository"];
         trace?: never;
     };
+    "/api/package-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists the package sources monitored repositories declare */
+        get: operations["GetPackageSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/package-sources/{id}/credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Registers the credential Foundry reads a package source with */
+        put: operations["SetPackageSourceCredential"];
+        post?: never;
+        /** Removes a package source's credential, so its repositories fall back to their own */
+        delete: operations["RemovePackageSourceCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workers/runs/{workerRunId}": {
         parameters: {
             query?: never;
@@ -1115,6 +1150,17 @@ export interface components {
              */
             backstopIntervalMinutes: number | string;
         };
+        HttpValidationProblemDetails: {
+            type?: null | string;
+            title?: null | string;
+            /** Format: int32 */
+            status?: null | number | string;
+            detail?: null | string;
+            instance?: null | string;
+            errors?: {
+                [key: string]: string[];
+            };
+        };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
         InputQuestion: {
@@ -1234,6 +1280,56 @@ export interface components {
             /** Format: uuid */
             holderCredentialId: string;
             holderName: string;
+        };
+        PackageSourceCredentialCommandsRequestBody: {
+            username: null | string;
+            token: null | string;
+        };
+        PackageSourceCredentialSummary: {
+            username: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PackageSourceRepository: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+        };
+        PackageSourceStatus: components["schemas"]["PackageSourceStatusPackageSourceStatusReachableViaCredential"] | components["schemas"]["PackageSourceStatusPackageSourceStatusReachableViaAccount"] | components["schemas"]["PackageSourceStatusPackageSourceStatusReachableAnonymously"] | components["schemas"]["PackageSourceStatusPackageSourceStatusUnreachable"] | components["schemas"]["PackageSourceStatusPackageSourceStatusUnchecked"];
+        PackageSourceStatusPackageSourceStatusReachableAnonymously: {
+            /** @enum {string} */
+            kind?: "reachableAnonymously";
+        };
+        PackageSourceStatusPackageSourceStatusReachableViaAccount: {
+            /** @enum {string} */
+            kind?: "reachableViaAccount";
+            accountName: string;
+            host: string;
+        };
+        PackageSourceStatusPackageSourceStatusReachableViaCredential: {
+            /** @enum {string} */
+            kind?: "reachableViaCredential";
+        };
+        PackageSourceStatusPackageSourceStatusUnchecked: {
+            /** @enum {string} */
+            kind?: "unchecked";
+        };
+        PackageSourceStatusPackageSourceStatusUnreachable: {
+            /** @enum {string} */
+            kind?: "unreachable";
+            /** Format: int32 */
+            httpStatus: null | number | string;
+            reason: string;
+        };
+        PackageSourceSummary: {
+            /** Format: uuid */
+            id: string;
+            url: string;
+            repositories: components["schemas"]["PackageSourceRepository"][];
+            status: components["schemas"]["PackageSourceStatus"];
+            /** Format: date-time */
+            lastCheckedAt: null | string;
+            credential: null | components["schemas"]["PackageSourceCredentialSummary"];
         };
         PagedIssues: {
             items: components["schemas"]["IssueSummary"][];
@@ -2951,6 +3047,97 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPackageSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageSourceSummary"][];
+                };
+            };
+        };
+    };
+    SetPackageSourceCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackageSourceCredentialCommandsRequestBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RemovePackageSourceCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not Found */
             404: {

@@ -6,6 +6,7 @@ import {
   DISPATCH_NOTIFICATION_CATEGORY,
   DOCKER_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
+  PACKAGE_SOURCE_NOTIFICATION_CATEGORY,
   SystemNotification,
 } from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
@@ -16,6 +17,7 @@ import { HubConnections, SharedHubConnection } from './hub-connection';
 const RELOAD_TRIGGER_CATEGORIES: ReadonlySet<string> = new Set([
   DISPATCH_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
+  PACKAGE_SOURCE_NOTIFICATION_CATEGORY,
 ]);
 
 @Injectable({ providedIn: 'root' })

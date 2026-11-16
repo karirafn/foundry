@@ -75,6 +75,14 @@ export const SETTINGS_ROUTES: Routes = [
           import('./accounts/settings-accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
       },
       {
+        path: 'package-sources',
+        title: 'Package sources',
+        loadComponent: () =>
+          import('./package-sources/settings-package-sources/settings-package-sources').then(
+            (m) => m.SettingsPackageSourcesComponent,
+          ),
+      },
+      {
         path: 'repositories',
         title: 'Repositories',
         loadComponent: () =>

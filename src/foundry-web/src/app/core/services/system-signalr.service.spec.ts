@@ -8,6 +8,7 @@ import {
   DISPATCH_NOTIFICATION_CATEGORY,
   DOCKER_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
+  PACKAGE_SOURCE_NOTIFICATION_CATEGORY,
   SystemNotification,
 } from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
@@ -191,6 +192,24 @@ describe('SystemSignalRService', () => {
     svc.reloadTrigger.subscribe(() => emitCount++);
     const notification: SystemNotification = {
       category: IMAGE_BUILD_NOTIFICATION_CATEGORY,
+      isActive: false,
+      message: '',
+    };
+
+    // Act
+    hub.emit('SystemNotificationReceived', notification);
+
+    // Assert
+    expect(emitCount).toBe(1);
+  });
+
+  it('should emit on reloadTrigger when a package-source notification arrives', () => {
+    // Arrange
+    const { svc, hub } = setup();
+    let emitCount = 0;
+    svc.reloadTrigger.subscribe(() => emitCount++);
+    const notification: SystemNotification = {
+      category: PACKAGE_SOURCE_NOTIFICATION_CATEGORY,
       isActive: false,
       message: '',
     };

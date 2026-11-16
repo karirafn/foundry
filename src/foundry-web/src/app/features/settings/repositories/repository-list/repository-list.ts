@@ -12,6 +12,7 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
 import { TooltipDirective } from '../../../../shared/directives/tooltip/tooltip.directive';
 import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibility-unreachable.util';
 import { providerTerminology } from '../../../../shared/utils/provider.util';
+import { unreachablePackageSourceUrl } from '../../package-sources/package-source.model';
 
 @Component({
   selector: 'fd-repository-list',
@@ -288,6 +289,14 @@ import { providerTerminology } from '../../../../shared/utils/provider.util';
                         <line x1="12" y1="17" x2="12.01" y2="17" />
                       </svg>
                       {{ violation.description }}
+                      @if (_packageSourceUrl(violation.rule); as sourceUrl) {
+                        <a
+                          class="repository-list__package-source-link"
+                          routerLink="/settings/package-sources"
+                          [queryParams]="{ source: sourceUrl }"
+                          [attr.aria-label]="'View package source ' + sourceUrl + ' in Package sources settings'"
+                        >View package source</a>
+                      }
                     </div>
                   }
                 }
@@ -370,6 +379,8 @@ export class RepositoryListComponent {
   readonly add: OutputEmitterRef<void> = output<void>();
   readonly delete: OutputEmitterRef<RepositorySummary> = output<RepositorySummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
+
+  protected readonly _packageSourceUrl = unreachablePackageSourceUrl;
 
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);

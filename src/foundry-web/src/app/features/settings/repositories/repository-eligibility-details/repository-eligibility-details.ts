@@ -1,10 +1,13 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { EligibilityReason, EligibilityStatus, EligibilityViolation } from '../repository.model';
+import { RouterLink } from '@angular/router';
 import { providerDisplayName } from '../../../../shared/utils/provider.util';
+import { unreachablePackageSourceUrl } from '../../package-sources/package-source.model';
 
 @Component({
   selector: 'fd-repository-eligibility-details',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   template: `
     <div class="repository-eligibility-details" [id]="panelId()">
       <div class="repository-eligibility-details__header">
@@ -23,7 +26,17 @@ import { providerDisplayName } from '../../../../shared/utils/provider.util';
       @if (status() === 'ineligible') {
         <ul class="repository-eligibility-details__violations" aria-label="Eligibility violations">
           @for (violation of violations(); track violation.rule) {
-            <li class="repository-eligibility-details__violation">{{ violation.description }}</li>
+            <li class="repository-eligibility-details__violation">
+              {{ violation.description }}
+              @if (_packageSourceUrl(violation.rule); as sourceUrl) {
+                <a
+                  class="repository-eligibility-details__package-source-link"
+                  routerLink="/settings/package-sources"
+                  [queryParams]="{ source: sourceUrl }"
+                  [attr.aria-label]="'View package source ' + sourceUrl + ' in Package sources settings'"
+                >View package source</a>
+              }
+            </li>
           }
         </ul>
       }
@@ -52,6 +65,8 @@ export class RepositoryEligibilityDetailsComponent {
   readonly providerType: InputSignal<string> = input<string>('github');
 
   readonly recheck: OutputEmitterRef<void> = output<void>();
+
+  protected readonly _packageSourceUrl = unreachablePackageSourceUrl;
 
   _heading(): string {
     if (this.status() !== 'unreachable') {
