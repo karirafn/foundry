@@ -12,6 +12,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Merge;
 using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
+using Foundry.Modules.Monitoring.Features.Providers.RootDirectory;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
@@ -230,6 +231,22 @@ internal sealed partial class GitHubIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.IsAncestorAsync(apiBaseUrl, slug, ancestorRef, branchName, token, cancellationToken);
+    }
+
+    public Task<Result<RootDirectoryListing>> ListRootDirectoryAsync(
+        RepositorySlug slug,
+        string? ifNoneMatch,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.ListRootDirectoryAsync(apiBaseUrl, slug, ifNoneMatch, token, cancellationToken);
+    }
+
+    public Task<Result<string>> ReadBlobAsync(
+        RepositorySlug slug,
+        string blobSha,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.ReadBlobAsync(apiBaseUrl, slug, blobSha, token, cancellationToken);
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

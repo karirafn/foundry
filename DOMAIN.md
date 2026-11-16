@@ -325,6 +325,12 @@ The poll interval for repositories whose webhook is `Active` (Global Settings, d
 
 A change found by a **scheduled** poll (other than the startup catch-up, see [Monitor](#monitor)), in a category the provider has a webhook event for, that no delivery announced. The categories are issue detection, detail change or untrack; a closed issue or pull request or new review feedback; a provider-driven checks verdict; and — on GitHub only — a branch-rule change (the `Eligible`/`Ineligible` outcome of the default branch's rules; transitions through `Unreachable`, a denied write probe or a missing credential do not count). It moves `Active` to `Silent`, so the next poll uses the normal interval. Changes without a mapped event on that provider — time-based checks exits, dependency refreshes, blockers in another repository, and GitLab protected-branch changes — never count; while `Active` they are picked up within the Backstop Interval.
 
+## Package Source
+
+A remote NuGet source declared under `<packageSources>` in a repository's root `nuget.config`, other than nuget.org, identified by its service-index URL ([ADR 0112](docs/adr/0112-workers-restore-private-nuget-package-sources-through-a-foundry-proxy.md)).
+Read by the parser (`NuGetConfigParser`) from every `<add key value>` whose `value` is an absolute `http`/`https` URL on a host other than `api.nuget.org`, minus every key listed with `value="true"` under `<disabledPackageSources>`; a local folder (`./packages`) or an environment-variable value (`%FEED_URL%`) is not one. A `<clear />` drops the sources declared before it.
+Each poll lists the repository's root directory on its default branch once (GitHub `git/trees/HEAD` with the previous listing's ETag, so an unchanged root is a 304 that does not count against the primary limit; GitLab `repository/tree`, paged by 100). The root config is the one file entry named `nuget.config` ignoring case — a directory, symlink or submodule of that name is absent — and is read only when its blob SHA differs from the stored one. The [Monitored Repository](#monitored-repository) records the result in one call (`RecordRootListing`): its declared Package Sources, the config's raw text and blob SHA, the listing ETag, or — when the file is not well-formed XML, or two root files differ only in case (`more than one root nuget.config`) — the root config as **invalid** with a message instead of a source list. No root config records an empty list. A failed listing or file read leaves the stored state as it was and is logged; it never clears the declared sources. A nested `nuget.config` is not read.
+
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
@@ -484,6 +490,7 @@ Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — see [Repository Worker Limit](#repository-worker-limit).
 Carries `RebaseAfterRun` (non-nullable `bool`, default `true`) — see [Rebase After Run](#rebase-after-run).
 Carries `MergeWhenChecksPass` (non-nullable `bool`, default `false`) — see [Merge When Checks Pass](#merge-when-checks-pass).
+Carries the [Package Sources](#package-source) its root `nuget.config` declares, as last read by the poll.
 
 ### Apply Branch Rules
 

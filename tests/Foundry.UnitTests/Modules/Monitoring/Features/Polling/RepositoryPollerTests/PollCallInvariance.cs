@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
+using Foundry.Modules.Monitoring.Features.Providers.RootDirectory;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -33,7 +34,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.RepositoryPoller
 /// always returns the same <see cref="CountingIssueProvider"/> instance. This ensures the
 /// eligibility branch-rules GET (<c>GetBranchProtectionAsync</c>) is counted in
 /// <c>TotalCalls</c>, so the cap has zero slack: adding one unconditional provider call
-/// to <c>PollAsync</c> pushes <c>TotalCalls</c> from 2 to 3 and breaks AC2.
+/// to <c>PollAsync</c> pushes <c>TotalCalls</c> from 3 to 4 and breaks AC2.
 /// </summary>
 public sealed class PollCallInvariance : IAsyncDisposable
 {
@@ -126,9 +127,10 @@ public sealed class PollCallInvariance : IAsyncDisposable
     }
 
     // AC1: poll-call count does not scale with total issue count.
-    // Both 5-issue and 200-issue polls issue exactly MaxFixedPollCallsPerCycle (2) provider calls:
+    // Both 5-issue and 200-issue polls issue exactly MaxFixedPollCallsPerCycle (3) provider calls:
     //   1. GetBranchProtectionAsync (eligibility branch-rules GET via real evaluator)
-    //   2. GetIssuesAsync (listing)
+    //   2. ListRootDirectoryAsync (root nuget.config; no file read while its SHA is unchanged)
+    //   3. GetIssuesAsync (listing)
     [Fact]
     public async Task WhenIssueCounts5And200_TotalProviderCallsAreEqual()
     {
@@ -152,10 +154,11 @@ public sealed class PollCallInvariance : IAsyncDisposable
     }
 
     // AC2: fixed-cost scenario equals the declared cap — zero slack.
-    // TotalCalls must be exactly MaxFixedPollCallsPerCycle (2):
+    // TotalCalls must be exactly MaxFixedPollCallsPerCycle (3):
     //   1. GetBranchProtectionAsync (real evaluator → FixedCountingProviderFactory)
-    //   2. GetIssuesAsync (listing)
-    // Adding any one unconditional provider call to PollAsync pushes TotalCalls to 3, failing this test.
+    //   2. ListRootDirectoryAsync (root listing; the empty root has no nuget.config to read)
+    //   3. GetIssuesAsync (listing)
+    // Adding any one unconditional provider call to PollAsync pushes TotalCalls to 4, failing this test.
     [Fact]
     public async Task WhenGrantedVerdictAndNoWorkItems_TotalProviderCallsEqualMaxFixedPollCallsPerCycle()
     {
@@ -188,6 +191,63 @@ public sealed class PollCallInvariance : IAsyncDisposable
 
         // Assert
         provider.TotalCalls.ShouldBe(RepositoryPoller.MaxFixedPollCallsPerCycle);
+    }
+
+    // The root nuget.config read is not part of the fixed cost: a poll that finds its SHA unchanged reads no file.
+    [Fact]
+    public async Task WhenRootNuGetConfigIsUnchanged_TotalProviderCallsEqualMaxFixedPollCallsPerCycle()
+    {
+        // Arrange
+        const string configSha = "44b4fc6d56897b048c772eb4087f854f46256132";
+        MonitoredRepository repository = SeedRepositoryWithGrantedVerdict();
+        CountingIssueProvider provider = new()
+        {
+            RootListing = Result<RootDirectoryListing>.Ok(new RootDirectoryListing.Listed(
+                [new RootEntry("nuget.config", RootEntryKind.File, configSha)],
+                ETag: null)),
+        };
+        provider.Blobs[configSha] = Result<string>.Ok("<configuration />");
+        RepositoryPoller poller = BuildPoller(provider, new EmptyIssueQueries());
+        await poller.PollAsync(repository, provider, Now, CancellationToken.None);
+        int callsBefore = provider.TotalCalls;
+
+        // Act
+        await poller.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        (provider.TotalCalls - callsBefore).ShouldBe(RepositoryPoller.MaxFixedPollCallsPerCycle);
+    }
+
+    [Fact]
+    public async Task WhenRootDeclaresAPackageSource_PersistsItWithThePoll()
+    {
+        // Arrange
+        const string configSha = "44b4fc6d56897b048c772eb4087f854f46256132";
+        MonitoredRepository repository = SeedRepositoryWithGrantedVerdict();
+        CountingIssueProvider provider = new()
+        {
+            RootListing = Result<RootDirectoryListing>.Ok(new RootDirectoryListing.Listed(
+                [new RootEntry("NuGet.Config", RootEntryKind.File, configSha)],
+                ETag: null)),
+        };
+        provider.Blobs[configSha] = Result<string>.Ok("""
+            <configuration>
+              <packageSources>
+                <add key="feed" value="https://pkgs.example.com/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        RepositoryPoller poller = BuildPoller(provider, new EmptyIssueQueries());
+
+        // Act
+        await poller.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        MonitoredRepository reloaded = (await _dbContext.Set<MonitoredRepository>()
+            .FindAsync([repository.Id], TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        reloaded.DeclaredPackageSources.ShouldHaveSingleItem().ServiceIndexUrl
+            .ShouldBe(new Uri("https://pkgs.example.com/v3/index.json"));
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -29,12 +30,14 @@ internal sealed class RepositoryPoller(
 {
     /// <summary>
     /// The fixed per-cycle provider call budget that does NOT scale with issue count:
-    /// one eligibility branch-rules GET plus one <see cref="IIssueProvider.GetIssuesAsync"/> listing call.
+    /// one eligibility branch-rules GET, one <see cref="IIssueProvider.ListRootDirectoryAsync"/> root listing (its
+    /// root <c>nuget.config</c> is read only when its blob SHA changed, so that read is not part of the fixed cost)
+    /// and one <see cref="IIssueProvider.GetIssuesAsync"/> listing call.
     /// This applies when the repository's write-probe verdict is Granted (the cheap eligibility path),
     /// there are zero review issues, zero dependency candidates, and zero checks-pending issues.
     /// Referenced by ADR 0066 and DOMAIN.md; asserted by the poll-call invariance test.
     /// </summary>
-    internal const int MaxFixedPollCallsPerCycle = 2;
+    internal const int MaxFixedPollCallsPerCycle = 3;
 
     /// <summary>
     /// Grace window for <c>NoneDetected</c> verdicts: the poller waits this long before treating
@@ -77,6 +80,9 @@ internal sealed class RepositoryPoller(
         RepositoryEligibility? eligibilityBefore = repository.Eligibility;
         await EvaluateEligibilityAsync(repository, now, cancellationToken);
         bool branchRulesChanged = BranchRuleOutcomeChanged(eligibilityBefore, repository.Eligibility);
+
+        // Root nuget.config: the declared package sources, saved with the listing pass below.
+        await RootNuGetConfigRefresh.RefreshAsync(repository, provider, logger, cancellationToken);
 
         // Passes 1-2: listing (detect, detail change, complete-listing untrack), stamping the poll time.
         Result<bool> listingResult = await RunListingCoreAsync(
