@@ -28,7 +28,9 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
       <section class="general-settings__section">
         <h2 class="general-settings__section-title">Worker Image</h2>
         <p class="general-settings__section-description">
-          Choose which toolchains are preinstalled in the worker container image. Saving rebuilds the image in the background; dispatch pauses until the build finishes.
+          Every worker image comes with the full toolchain: the .NET SDK, the Angular CLI, headless Chromium and the Docker
+          engine. Saving the image tag or the build toggle rebuilds the image in the background; dispatch pauses until the
+          build finishes.
         </p>
 
         <div class="general-settings__image-form">
@@ -66,7 +68,7 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
               Build the worker image on change
             </label>
             <span id="buildEnabled-hint" class="general-settings__field-hint general-settings__toggle-hint">
-              Turning this off stops Foundry building the image and locks the toolchain settings below.
+              Turning this off stops Foundry building the image; Foundry runs the tag above as it is.
             </span>
             <p
               id="buildEnabled-off-note"
@@ -82,81 +84,6 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
               </span>
             </p>
           </div>
-
-          <fieldset class="general-settings__image-fieldset">
-            <legend class="sr-only">Preinstalled toolchains</legend>
-
-            <div class="general-settings__image-flags">
-              <div class="general-settings__toggle">
-                <label class="general-settings__toggle-row" for="installDotnet">
-                  <input
-                    type="checkbox"
-                    id="installDotnet"
-                    [ngModel]="_installDotnetValue()"
-                    (ngModelChange)="_installDotnetValue.set($event)"
-                    [attr.disabled]="_flagsDisabled() || null"
-                    aria-describedby="installDotnet-hint"
-                  />
-                  Install .NET SDK
-                </label>
-                <span id="installDotnet-hint" class="general-settings__field-hint general-settings__toggle-hint">Adds the .NET SDK to the worker image.</span>
-              </div>
-
-              <div class="general-settings__toggle">
-                <label class="general-settings__toggle-row" for="installAngular">
-                  <input
-                    type="checkbox"
-                    id="installAngular"
-                    [ngModel]="_installAngularValue()"
-                    (ngModelChange)="_installAngularValue.set($event)"
-                    [attr.disabled]="_flagsDisabled() || null"
-                    aria-describedby="installAngular-hint"
-                  />
-                  Install Angular CLI
-                </label>
-                <span id="installAngular-hint" class="general-settings__field-hint general-settings__toggle-hint">Adds the Angular CLI (ng).</span>
-              </div>
-
-              <div class="general-settings__toggle">
-                <label class="general-settings__toggle-row" for="installChromium">
-                  <input
-                    type="checkbox"
-                    id="installChromium"
-                    [ngModel]="_installChromiumValue()"
-                    (ngModelChange)="_installChromiumValue.set($event)"
-                    [attr.disabled]="_flagsDisabled() || null"
-                    aria-describedby="installChromium-hint"
-                  />
-                  Install Chromium (headless)
-                </label>
-                <span id="installChromium-hint" class="general-settings__field-hint general-settings__toggle-hint">Adds a headless Chromium browser for Angular component tests.</span>
-              </div>
-
-              <div class="general-settings__toggle">
-                <label class="general-settings__toggle-row" for="installDocker">
-                  <input
-                    type="checkbox"
-                    id="installDocker"
-                    [ngModel]="_installDockerValue()"
-                    (ngModelChange)="_installDockerValue.set($event)"
-                    [attr.disabled]="_flagsDisabled() || null"
-                    aria-describedby="installDocker-hint installDocker-warning"
-                  />
-                  Install Docker engine + CLI
-                </label>
-                <span id="installDocker-hint" class="general-settings__field-hint general-settings__toggle-hint">Runs Testcontainers integration tests inside the worker via a nested rootless Docker daemon.</span>
-                <p id="installDocker-warning" class="general-settings__callout general-settings__callout--warning general-settings__toggle-hint">
-                  <span class="general-settings__callout-icon" aria-hidden="true">⚠</span>
-                  <span>
-                    <strong class="general-settings__callout-lead">Security cost:</strong>
-                    the worker runs with CAP_SYS_ADMIN and seccomp/AppArmor unconfined, so a privilege escalation inside
-                    a worker can reach the Docker host (the WSL VM on Docker Desktop). Applies to every worker in every
-                    repository. Enable only if you trust all monitored repositories.
-                  </span>
-                </p>
-              </div>
-            </div>
-          </fieldset>
 
           <div class="general-settings__image-feedback">
             <span class="sr-only general-settings__image-failure-alert" role="alert" aria-live="assertive">{{ imageFailureAlertText() }}</span>
@@ -193,6 +120,49 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
             }
           </div>
         </div>
+
+        <!-- A privilege switch, not image contents (ADR 0110): saved on its own, it rebuilds nothing, so it stays
+             usable while a build runs or building is off. -->
+        <div class="general-settings__image-form general-settings__nested-docker-form">
+          <div class="general-settings__toggle">
+            <label class="general-settings__toggle-row" for="nestedDockerEnabled">
+              <input
+                type="checkbox"
+                id="nestedDockerEnabled"
+                [ngModel]="_nestedDockerValue()"
+                (ngModelChange)="_nestedDockerValue.set($event)"
+                [attr.disabled]="settingsService.savingNestedDocker() || null"
+                aria-describedby="nestedDockerEnabled-hint nestedDockerEnabled-warning nested-docker-error"
+              />
+              Nested Docker for implement runs
+            </label>
+            <span id="nestedDockerEnabled-hint" class="general-settings__field-hint general-settings__toggle-hint">Runs Testcontainers integration tests inside implement workers through a nested rootless Docker daemon.</span>
+            <p id="nestedDockerEnabled-warning" class="general-settings__callout general-settings__callout--warning general-settings__toggle-hint">
+              <span class="general-settings__callout-icon" aria-hidden="true">⚠</span>
+              <span>
+                <strong class="general-settings__callout-lead">Security cost:</strong>
+                implement workers run with CAP_SYS_ADMIN and seccomp/AppArmor unconfined, so a privilege escalation inside
+                a worker can reach the Docker host (the WSL VM on Docker Desktop). Applies to implement runs in every
+                repository; triage runs never get it. Enable only if you trust all monitored repositories.
+              </span>
+            </p>
+          </div>
+
+          <div class="general-settings__image-feedback">
+            <div id="nested-docker-error" role="alert" class="general-settings__save-error">{{ settingsService.saveNestedDockerError() ?? '' }}</div>
+            <div role="status" class="general-settings__save-success">{{ settingsService.saveNestedDockerSuccess() ? 'Nested Docker setting saved — applies to runs dispatched from now on.' : '' }}</div>
+          </div>
+
+          <div class="general-settings__image-actions">
+            <button
+              class="general-settings__save-btn"
+              type="button"
+              aria-label="Save nested Docker setting"
+              [disabled]="settingsService.savingNestedDocker() || !_isNestedDockerDirty()"
+              (click)="saveNestedDocker()"
+            >{{ settingsService.savingNestedDocker() ? 'Saving...' : 'Save' }}</button>
+          </div>
+        </div>
       </section>
     </div>
   `,
@@ -204,16 +174,10 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
 
   protected readonly _imageTagValue: WritableSignal<string> = signal('');
   protected readonly _buildEnabledValue: WritableSignal<boolean> = signal(true);
-  protected readonly _installDotnetValue: WritableSignal<boolean> = signal(false);
-  protected readonly _installAngularValue: WritableSignal<boolean> = signal(false);
-  protected readonly _installChromiumValue: WritableSignal<boolean> = signal(false);
-  protected readonly _installDockerValue: WritableSignal<boolean> = signal(false);
+  protected readonly _nestedDockerValue: WritableSignal<boolean> = signal(false);
   protected readonly _hasInteracted: WritableSignal<boolean> = signal(false);
   private _imageInitialized = false;
-
-  protected readonly _flagsDisabled: Signal<boolean> = computed(
-    () => this.settingsService.imageBuildStatus() === 'Building' || this.settingsService.savingImageFlags() || !this._buildEnabledValue()
-  );
+  private _nestedDockerInitialized = false;
 
   protected readonly _imageTagHasError: Signal<boolean> = computed(() => {
     const tag = this._imageTagValue().trim();
@@ -238,12 +202,13 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
     }
     return (
       this._imageTagValue().trim() !== saved.imageTag ||
-      this._buildEnabledValue() !== saved.buildEnabled ||
-      this._installDotnetValue() !== saved.installDotnet ||
-      this._installAngularValue() !== saved.installAngular ||
-      this._installChromiumValue() !== saved.installChromium ||
-      this._installDockerValue() !== saved.installDocker
+      this._buildEnabledValue() !== saved.buildEnabled
     );
+  });
+
+  protected readonly _isNestedDockerDirty: Signal<boolean> = computed(() => {
+    const saved = this.settingsService.nestedDockerEnabled();
+    return saved !== null && this._nestedDockerValue() !== saved;
   });
 
   protected readonly _imageBuildingText: Signal<string> = computed(() =>
@@ -287,10 +252,18 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
         this._imageInitialized = true;
         this._imageTagValue.set(flags.imageTag);
         this._buildEnabledValue.set(flags.buildEnabled);
-        this._installDotnetValue.set(flags.installDotnet);
-        this._installAngularValue.set(flags.installAngular);
-        this._installChromiumValue.set(flags.installChromium);
-        this._installDockerValue.set(flags.installDocker);
+      }
+    });
+
+    effect(() => {
+      const enabled = this.settingsService.nestedDockerEnabled();
+      if (enabled === null) {
+        this._nestedDockerInitialized = false;
+        return;
+      }
+      if (!this._nestedDockerInitialized) {
+        this._nestedDockerInitialized = true;
+        this._nestedDockerValue.set(enabled);
       }
     });
 
@@ -316,19 +289,19 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
   }
 
   hasUnsavedChanges(): boolean {
-    return this._isImageFlagsDirty();
+    return this._isImageFlagsDirty() || this._isNestedDockerDirty();
   }
 
   saveImageFlags(): void {
     const flags: WorkerImageFlags = {
       imageTag: this._imageTagValue().trim(),
       buildEnabled: this._buildEnabledValue(),
-      installDotnet: this._installDotnetValue(),
-      installAngular: this._installAngularValue(),
-      installChromium: this._installChromiumValue(),
-      installDocker: this._installDockerValue(),
     };
     this.settingsService.updateWorkerImageFlags(flags);
+  }
+
+  saveNestedDocker(): void {
+    this.settingsService.updateNestedDocker(this._nestedDockerValue());
   }
 
   retryImageBuild(): void {

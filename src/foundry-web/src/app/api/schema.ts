@@ -815,8 +815,25 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the worker image tag, build toggle, and build flags */
+        /** Updates the worker image tag and build toggle */
         put: operations["UpdateWorkerImageConfiguration"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/nested-docker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Turns nested Docker for implement runs on or off; rebuilds nothing */
+        put: operations["UpdateNestedDocker"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1057,10 +1074,7 @@ export interface components {
             autoResumeOnUsageReset: boolean;
             imageTag: string;
             buildEnabled: boolean;
-            installDotnet: boolean;
-            installAngular: boolean;
-            installChromium: boolean;
-            installDocker: boolean;
+            nestedDockerEnabled: boolean;
             imageBuildStatus: components["schemas"]["ImageBuildStatus"];
             lastImageBuildError: null | string;
             hasUsableImage: boolean;
@@ -1438,6 +1452,9 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: number | string;
         };
+        UpdateNestedDockerRequestBody: {
+            enabled: boolean;
+        };
         UpdateRepositoryRequestBody: {
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
@@ -1463,10 +1480,6 @@ export interface components {
         UpdateWorkerImageConfigurationRequestBody: {
             imageTag: string;
             buildEnabled: boolean;
-            installDotnet: boolean;
-            installAngular: boolean;
-            installChromium: boolean;
-            installDocker: boolean;
         };
         UpdateWorkerLimitsRequestBody: {
             /** Format: int32 */
@@ -3536,6 +3549,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateWorkerImageConfigurationRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateNestedDocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNestedDockerRequestBody"];
             };
         };
         responses: {
