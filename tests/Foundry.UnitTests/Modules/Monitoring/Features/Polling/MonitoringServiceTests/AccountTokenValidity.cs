@@ -318,7 +318,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
     {
         await using FoundryDbContext db = CreateDbContext();
         GitHubCredential account = GitHubCredential.Create(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             string.Concat("ghp_", "test_token"),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         account.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);

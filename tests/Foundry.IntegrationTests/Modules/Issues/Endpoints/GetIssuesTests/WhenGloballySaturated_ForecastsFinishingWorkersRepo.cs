@@ -67,7 +67,7 @@ public sealed class WhenGloballySaturated_ForecastsFinishingWorkersRepo : IAsync
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GitHubCredential credential = GitHubCredential.Create(
-            slug.Replace("/", "-", StringComparison.Ordinal),
+            AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(),
             "TOKEN",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);

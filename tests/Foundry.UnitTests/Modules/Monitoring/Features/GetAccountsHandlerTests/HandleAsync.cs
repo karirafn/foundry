@@ -50,7 +50,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -71,7 +71,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -92,7 +92,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), null, baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -113,7 +113,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), null, baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -204,7 +204,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -225,7 +225,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
         credential.SetNamespaces([Namespace.Create("org-a").ValueOrThrow(), Namespace.Create("org-b").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

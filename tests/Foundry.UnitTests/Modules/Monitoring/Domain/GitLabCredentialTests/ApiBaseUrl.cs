@@ -14,7 +14,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitLabCom_ReturnsApiV4Url()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-account").ValueOrThrow(), "my-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
         Uri result = credential.ApiBaseUrl;
@@ -27,7 +27,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsSelfHosted_ReturnsApiV4Url()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create("my-account", "my-token", BaseUrl.Create("https://gitlab.example.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-account").ValueOrThrow(), "my-token", BaseUrl.Create("https://gitlab.example.com").ValueOrThrow());
 
         // Act
         Uri result = credential.ApiBaseUrl;

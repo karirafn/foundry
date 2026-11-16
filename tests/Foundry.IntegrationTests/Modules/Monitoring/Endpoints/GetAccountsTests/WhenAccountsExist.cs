@@ -11,6 +11,7 @@ using Xunit;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.GetAccountsTests;
@@ -39,7 +40,7 @@ public sealed class WhenAccountsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(name, token, parsedBaseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token, parsedBaseUrl);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

@@ -608,14 +608,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             case TokenUsability.Unreadable:
                 _logger.LogWarning(
                     "Credential '{CredentialName}' (id '{CredentialId}') has an unreadable token; skipping poll for repo '{Slug}'.",
-                    credential.Name,
+                    credential.Name.Value,
                     credential.Id,
                     repo.Slug);
                 return null;
             case TokenUsability.Absent:
                 _logger.LogDebug(
                     "Credential '{CredentialName}' has no token configured; skipping poll for repo '{Slug}'.",
-                    credential.Name,
+                    credential.Name.Value,
                     repo.Slug);
                 return null;
             default:
@@ -640,7 +640,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         {
             _logger.LogDebug(
                 "Credential '{CredentialName}' (id '{CredentialId}') has an invalid token; skipping poll for repo '{Slug}'.",
-                credential.Name,
+                credential.Name.Value,
                 credential.Id,
                 repo.Slug);
             return null;

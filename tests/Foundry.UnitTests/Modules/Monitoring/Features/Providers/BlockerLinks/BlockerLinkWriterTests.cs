@@ -221,7 +221,7 @@ public sealed class BlockerLinkWriterTests : IAsyncDisposable
     private async Task<MonitoredRepositoryId> SeedRepoAsync()
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
+            AccountName.Create("my-org").ValueOrThrow(), "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 

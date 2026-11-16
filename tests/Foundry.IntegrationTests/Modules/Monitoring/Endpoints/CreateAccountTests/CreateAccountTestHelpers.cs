@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -120,7 +121,7 @@ internal static class CredentialSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(name, "ghp_seeded", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), "ghp_seeded", baseUrl);
         credential.SetNamespaces(namespaces.Select(n => Namespace.Create(n).ValueOrThrow()));
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);

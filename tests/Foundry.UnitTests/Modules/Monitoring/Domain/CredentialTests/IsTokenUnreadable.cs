@@ -16,7 +16,7 @@ public sealed class IsTokenUnreadable
     public void WhenTokenIsUnreadable_ReturnsTrue()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken("my-org", GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken(AccountName.Create("my-org").ValueOrThrow(), GitHubBaseUrl());
 
         // Act
         bool result = credential.IsTokenUnreadable;
@@ -29,7 +29,7 @@ public sealed class IsTokenUnreadable
     public void WhenTokenIsPresent_ReturnsFalse()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_abc", GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_abc", GitHubBaseUrl());
 
         // Act
         bool result = credential.IsTokenUnreadable;
@@ -42,7 +42,7 @@ public sealed class IsTokenUnreadable
     public void WhenTokenIsNull_ReturnsFalse()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", null, GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), null, GitHubBaseUrl());
 
         // Act
         bool result = credential.IsTokenUnreadable;

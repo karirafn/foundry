@@ -170,7 +170,7 @@ internal static class CreateRepository
             RepositorySummary summary = RepositoryMappings.ToSummary(
                 repository,
                 credential.Id.Value,
-                credential.Name,
+                credential.Name.Value,
                 providerType,
                 defaultPollIntervalSeconds,
                 webhookIngressConfigured);

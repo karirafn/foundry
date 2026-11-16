@@ -68,7 +68,7 @@ public sealed class PersistBranchRulesToken : IAsyncDisposable
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
-            "my-org", "ghp_worker", BaseUrl.Create("https://github.com").ValueOrThrow(), RulesToken);
+            AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", BaseUrl.Create("https://github.com").ValueOrThrow(), RulesToken);
 
         // Act
         Credential reloaded = await SaveAndReloadAsync(credential);
@@ -84,7 +84,7 @@ public sealed class PersistBranchRulesToken : IAsyncDisposable
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
-            "my-org", "ghp_worker", BaseUrl.Create("https://github.com").ValueOrThrow(), RulesToken);
+            AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", BaseUrl.Create("https://github.com").ValueOrThrow(), RulesToken);
 
         // Act
         await SaveAndReloadAsync(credential);
@@ -100,7 +100,7 @@ public sealed class PersistBranchRulesToken : IAsyncDisposable
     {
         // Arrange
         GitLabCredential credential = GitLabCredential.Create(
-            "my-group", "glpat-worker", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+            AccountName.Create("my-group").ValueOrThrow(), "glpat-worker", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
         Credential reloaded = await SaveAndReloadAsync(credential);
@@ -115,7 +115,7 @@ public sealed class PersistBranchRulesToken : IAsyncDisposable
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
-            "my-org", "ghp_worker", BaseUrl.Create("https://github.com").ValueOrThrow(), RulesToken);
+            AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", BaseUrl.Create("https://github.com").ValueOrThrow(), RulesToken);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();

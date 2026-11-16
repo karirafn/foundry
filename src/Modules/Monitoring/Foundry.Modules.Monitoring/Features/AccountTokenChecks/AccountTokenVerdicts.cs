@@ -42,7 +42,7 @@ internal sealed class AccountTokenVerdicts(
                 {
                     logger.LogWarning(
                         "The provider rejected the token of account '{CredentialName}' (id '{CredentialId}'); the account is marked as having an invalid token and its repositories are paused.",
-                        credential.Name,
+                        credential.Name.Value,
                         credential.Id);
                 }
 
@@ -51,14 +51,14 @@ internal sealed class AccountTokenVerdicts(
             case CheckVerdict.Authenticated:
                 logger.LogInformation(
                     "A call with the token of account '{CredentialName}' (id '{CredentialId}') was refused with 401, but the token still authenticates; the account stays valid.",
-                    credential.Name,
+                    credential.Name.Value,
                     credential.Id);
                 return false;
 
             default:
                 logger.LogWarning(
                     "Could not confirm the 401 for account '{CredentialName}' (id '{CredentialId}'): the token check gave no verdict. It runs again next cycle.",
-                    credential.Name,
+                    credential.Name.Value,
                     credential.Id);
                 return false;
         }
@@ -84,7 +84,7 @@ internal sealed class AccountTokenVerdicts(
                 {
                     logger.LogInformation(
                         "The token of account '{CredentialName}' (id '{CredentialId}') authenticates again; monitoring resumes.",
-                        credential.Name,
+                        credential.Name.Value,
                         credential.Id);
                 }
 
@@ -94,7 +94,7 @@ internal sealed class AccountTokenVerdicts(
                 await RecordAsync(credential, c => c.MarkTokenInvalid(now), cancellationToken);
                 logger.LogDebug(
                     "The token of account '{CredentialName}' (id '{CredentialId}') is still rejected.",
-                    credential.Name,
+                    credential.Name.Value,
                     credential.Id);
                 return false;
 
@@ -102,7 +102,7 @@ internal sealed class AccountTokenVerdicts(
                 // No verdict: LastCheckedAt stays unstamped, so the recheck runs again next cycle.
                 logger.LogWarning(
                     "Could not recheck the invalid token of account '{CredentialName}' (id '{CredentialId}'): the token check gave no verdict. It runs again next cycle.",
-                    credential.Name,
+                    credential.Name.Value,
                     credential.Id);
                 return false;
         }

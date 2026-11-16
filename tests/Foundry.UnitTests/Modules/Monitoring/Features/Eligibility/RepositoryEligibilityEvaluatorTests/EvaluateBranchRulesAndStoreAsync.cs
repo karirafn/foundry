@@ -55,7 +55,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -76,7 +76,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -128,7 +128,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     private static GitHubCredential CreateInvalidCredential()
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             string.Concat("ghp_", "rejected"),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
@@ -173,7 +173,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange
         MonitoredRepository repo = CreateRepo("owner/repo", new WriteProbeVerdict.Denied());
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
@@ -196,7 +196,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange — Denied short-circuits before branch-rules GET
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Denied());
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
@@ -217,7 +217,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange — Unknown means never probed; pit-of-success: do not treat as eligible
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Unknown());
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -237,7 +237,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange — Unknown short-circuits without invoking the provider
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Unknown());
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
@@ -259,7 +259,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -280,7 +280,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
@@ -303,7 +303,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -324,7 +324,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         // Arrange
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -345,7 +345,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -367,7 +367,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(

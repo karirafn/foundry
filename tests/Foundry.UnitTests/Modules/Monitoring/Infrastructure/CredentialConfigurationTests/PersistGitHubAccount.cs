@@ -46,7 +46,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_mytoken", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_mytoken", baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -61,7 +61,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
         GitHubCredential gitHub = result.ShouldBeOfType<GitHubCredential>();
         gitHub.ShouldSatisfyAllConditions(
             () => gitHub.Id.ShouldBe(credential.Id),
-            () => gitHub.Name.ShouldBe("my-org"),
+            () => gitHub.Name.Value.ShouldBe("my-org"),
             () => gitHub.Token.ShouldBe(new ProviderToken.Present("ghp_mytoken")),
             () => gitHub.BaseUrl.Value.ShouldBe(new Uri("https://github.com")),
             () => gitHub.Host.ShouldBe("github.com"));
@@ -72,7 +72,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), null, baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

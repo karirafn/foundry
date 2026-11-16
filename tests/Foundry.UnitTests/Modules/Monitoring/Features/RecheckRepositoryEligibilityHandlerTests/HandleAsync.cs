@@ -60,7 +60,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         Namespace ns = Namespace.Create(owner).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("test-account", token: "ghp_test", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("test-account").ValueOrThrow(), token: "ghp_test", baseUrl);
         credential.SetNamespaces([ns]);
         _dbContext.Set<Credential>().Add(credential);
 

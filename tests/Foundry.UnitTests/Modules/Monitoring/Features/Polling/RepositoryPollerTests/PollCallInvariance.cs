@@ -88,7 +88,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
     private RepositoryPoller BuildPoller(CountingIssueProvider countingProvider, IIssueQueries issueQueries)
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "test",
+            AccountName.Create("test").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 

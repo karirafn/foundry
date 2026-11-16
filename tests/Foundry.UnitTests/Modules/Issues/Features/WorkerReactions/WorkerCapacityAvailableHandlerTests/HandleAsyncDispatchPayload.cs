@@ -77,7 +77,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         string? token = "ghp_test_token")
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "Test Account",
+            AccountName.Create("Test Account").ValueOrThrow(),
             token,
             BaseUrl.Create("https://github.com").ValueOrThrow());
 

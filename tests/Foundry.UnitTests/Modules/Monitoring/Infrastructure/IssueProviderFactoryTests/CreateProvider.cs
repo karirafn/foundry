@@ -39,7 +39,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitHubCredential credential = GitHubCredential.Create("my-account", "GITHUB_TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-account").ValueOrThrow(), "GITHUB_TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
         IIssueProvider provider = sut.CreateProvider(credential, "ghp_token123");
@@ -53,7 +53,7 @@ public sealed class CreateProvider
     {
         // Arrange
         IIssueProviderFactory sut = BuildSut();
-        GitLabCredential credential = GitLabCredential.Create("my-gitlab", "glpat_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-gitlab").ValueOrThrow(), "glpat_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
         IIssueProvider provider = sut.CreateProvider(credential, "glpat_token123");
