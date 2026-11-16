@@ -626,6 +626,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
 
+                    b.Property<bool>("NestedDockerEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("nested_docker_enabled");
+
                     b.Property<int>("PollIntervalSeconds")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")

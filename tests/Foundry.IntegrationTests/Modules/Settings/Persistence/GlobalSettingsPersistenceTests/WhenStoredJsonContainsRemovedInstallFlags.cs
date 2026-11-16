@@ -12,15 +12,15 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Settings.Persistence.GlobalSettingsPersistenceTests;
 
 /// <summary>
-/// AC3 regression: a persisted JSON blob that still contains the removed InstallGh / InstallGlab keys
-/// (written by an older version of the application) must deserialize without error and bind the four
-/// surviving flags correctly. Default STJ unknown-property handling silently drops unknown keys.
+/// A persisted JSON blob that still carries removed members — the InstallGh / InstallGlab keys (#580) and the four
+/// toolchain install flags (ADR 0109) — must deserialize without error and bind the surviving ImageTag and
+/// BuildEnabled. Default STJ unknown-property handling silently drops unknown keys.
 /// </summary>
-public sealed class WhenStoredJsonContainsRemovedGhGlabFlags : IAsyncDisposable
+public sealed class WhenStoredJsonContainsRemovedInstallFlags : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
 
-    public WhenStoredJsonContainsRemovedGhGlabFlags()
+    public WhenStoredJsonContainsRemovedInstallFlags()
     {
         _factory = new FoundryWebAppFactory();
     }
@@ -45,7 +45,7 @@ public sealed class WhenStoredJsonContainsRemovedGhGlabFlags : IAsyncDisposable
     }
 
     [Fact]
-    public async Task InstallDotnetBindsCorrectly()
+    public async Task ImageTagBindsCorrectly()
     {
         // Arrange
         GlobalSettingsId id = await SeedSettingsWithLegacyJsonAsync();
@@ -53,13 +53,13 @@ public sealed class WhenStoredJsonContainsRemovedGhGlabFlags : IAsyncDisposable
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
 
-        // Assert — legacy JSON has InstallDotnet=true; it must bind to the surviving flag
+        // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.InstallDotnet.ShouldBeTrue();
+        reloaded.WorkerImageConfiguration.ImageTag.ShouldBe("foundry-worker:v7");
     }
 
     [Fact]
-    public async Task InstallAngularBindsCorrectly()
+    public async Task BuildEnabledBindsCorrectly()
     {
         // Arrange
         GlobalSettingsId id = await SeedSettingsWithLegacyJsonAsync();
@@ -67,44 +67,16 @@ public sealed class WhenStoredJsonContainsRemovedGhGlabFlags : IAsyncDisposable
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
 
-        // Assert — legacy JSON has InstallAngular=false
+        // Assert — the removed keys must not cross-wire to the surviving flag
         reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task InstallChromiumBindsCorrectly()
-    {
-        // Arrange
-        GlobalSettingsId id = await SeedSettingsWithLegacyJsonAsync();
-
-        // Act
-        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
-
-        // Assert — legacy JSON has InstallChromium=false; the removed keys must not cross-wire to this flag
-        reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.InstallChromium.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task InstallDockerBindsCorrectly()
-    {
-        // Arrange
-        GlobalSettingsId id = await SeedSettingsWithLegacyJsonAsync();
-
-        // Act
-        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
-
-        // Assert — legacy JSON has InstallDocker=true; it must bind to the surviving flag
-        reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.InstallDocker.ShouldBeTrue();
+        reloaded.WorkerImageConfiguration.BuildEnabled.ShouldBeFalse();
     }
 
     private async Task<GlobalSettingsId> SeedSettingsWithLegacyJsonAsync()
     {
         // Seed a normal row first so all other required columns are populated via EF,
-        // then overwrite worker_image_configuration with a legacy 6-key JSON blob via raw SQL
-        // to simulate a row written before InstallGh / InstallGlab were removed.
+        // then overwrite worker_image_configuration with a legacy JSON blob via raw SQL
+        // to simulate a row written before the install flags were removed.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
@@ -112,9 +84,9 @@ public sealed class WhenStoredJsonContainsRemovedGhGlabFlags : IAsyncDisposable
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Legacy blob: contains the now-removed InstallGlab and InstallGh keys alongside the survivors.
+        // Legacy blob: contains every removed install key alongside the survivors.
         const string legacyJson =
-            """{"InstallDotnet":true,"InstallAngular":false,"InstallGlab":true,"InstallGh":false,"InstallChromium":false,"InstallDocker":true}""";
+            """{"ImageTag":"foundry-worker:v7","BuildEnabled":false,"InstallDotnet":true,"InstallAngular":true,"InstallGlab":true,"InstallGh":true,"InstallChromium":true,"InstallDocker":true}""";
 
         await dbContext.Database.ExecuteSqlRawAsync(
             "UPDATE global_settings SET worker_image_configuration = {0}",

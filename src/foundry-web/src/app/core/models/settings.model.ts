@@ -21,10 +21,6 @@ export interface LoginSessionUpdate {
 export interface WorkerImageFlags {
   imageTag: string;
   buildEnabled: boolean;
-  installDotnet: boolean;
-  installAngular: boolean;
-  installChromium: boolean;
-  installDocker: boolean;
 }
 
 export interface OAuthCredentialInfo {
@@ -92,10 +88,8 @@ export interface GlobalSettingsResponse {
   autoResumeOnUsageReset: boolean;
   imageTag: string;
   buildEnabled: boolean;
-  installDotnet: boolean;
-  installAngular: boolean;
-  installChromium: boolean;
-  installDocker: boolean;
+  /** Whether implement runs get the nested rootless Docker daemon and its allowances (ADR 0110). */
+  nestedDockerEnabled: boolean;
   imageBuildStatus: ImageBuildStatus;
   lastImageBuildError: string | null;
   hasUsableImage: boolean;

@@ -65,7 +65,7 @@ describe('SettingsWorkerImageComponent', () => {
       expect(imageHeading).toBeTruthy();
     });
 
-    it('should render four checkboxes for the image flags inside the fieldset', () => {
+    it('should render no toolchain install toggles', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
@@ -74,11 +74,12 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const fieldset = el.querySelector('.general-settings__image-fieldset') as HTMLElement;
-      const checkboxes = fieldset?.querySelectorAll('input[type="checkbox"]');
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const checkboxIds = Array.from(imageForm.querySelectorAll('input[type="checkbox"]')).map(cb => cb.id);
 
       // Assert
-      expect(checkboxes?.length).toBe(4);
+      expect(checkboxIds).toEqual(['buildEnabled']);
+      expect(el.textContent).not.toContain('Preinstalled toolchains');
     });
 
     it('should initialize imageTag input from loaded settings', () => {
@@ -110,26 +111,6 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Assert
       expect(ngModel.model).toBe(false);
-    });
-
-    it('should initialize checkboxes from loaded settings', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: true });
-      fixture.detectChanges();
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const dotnetCheckbox = el.querySelector('#installDotnet') as HTMLInputElement;
-      const angularCheckbox = el.querySelector('#installAngular') as HTMLInputElement;
-
-      // Assert
-      const dotnetModel = fixture.debugElement.query(By.css('#installDotnet')).injector.get(NgModel);
-      const angularModel = fixture.debugElement.query(By.css('#installAngular')).injector.get(NgModel);
-      expect(dotnetModel.model).toBe(true);
-      expect(angularModel.model).toBe(false);
-      expect(dotnetCheckbox).toBeTruthy();
     });
 
     it('should mark dirty when imageTag is changed', () => {
@@ -172,7 +153,7 @@ describe('SettingsWorkerImageComponent', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false });
+      flushSettings(httpMock, { ...API_KEY_RESPONSE });
       fixture.detectChanges();
 
       // Act
@@ -184,30 +165,11 @@ describe('SettingsWorkerImageComponent', () => {
       expect(saveBtn.disabled).toBe(true);
     });
 
-    it('should enable the Save button when a flag has changed', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false });
-      fixture.detectChanges();
-
-      // Act — toggle installDotnet to make it dirty
-      const component = fixture.componentInstance as unknown as { _installDotnetValue: { set: (v: boolean) => void } };
-      component._installDotnetValue.set(true);
-      fixture.detectChanges();
-
-      // Assert
-      const el = fixture.nativeElement as HTMLElement;
-      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
-      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
-      expect(saveBtn.disabled).toBe(false);
-    });
-
     it('should trim the imageTag value before sending in the save payload', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local', installDotnet: false });
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
       fixture.detectChanges();
 
       // Make dirty by setting a tag with surrounding whitespace
@@ -230,12 +192,12 @@ describe('SettingsWorkerImageComponent', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false, installAngular: false });
+      flushSettings(httpMock, { ...API_KEY_RESPONSE });
       fixture.detectChanges();
 
       // Make dirty
-      const component = fixture.componentInstance as unknown as { _installDotnetValue: { set: (v: boolean) => void } };
-      component._installDotnetValue.set(true);
+      const component = fixture.componentInstance as unknown as { _buildEnabledValue: { set: (v: boolean) => void } };
+      component._buildEnabledValue.set(false);
       fixture.detectChanges();
 
       // Act
@@ -247,44 +209,8 @@ describe('SettingsWorkerImageComponent', () => {
       // Assert
       const req = httpMock.expectOne('/api/settings/worker-image');
       expect(req.request.method).toBe('PUT');
-      expect(req.request.body).toEqual({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
-      req.flush({ ...API_KEY_RESPONSE, installDotnet: true });
-    });
-
-    it('should disable the four toolchain checkboxes when buildEnabled is false', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false });
-      fixture.detectChanges();
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const fieldset = el.querySelector('.general-settings__image-fieldset') as HTMLElement;
-      const toolchainCheckboxes = Array.from(fieldset?.querySelectorAll('input[type="checkbox"]') ?? []) as HTMLInputElement[];
-
-      // Assert — all four toolchain flags are disabled
-      expect(toolchainCheckboxes.length).toBe(4);
-      toolchainCheckboxes.forEach(cb => expect(cb.disabled).toBe(true));
-    });
-
-    it('should not reset flag values when build is toggled off', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true, installDotnet: true });
-      fixture.detectChanges();
-
-      // Act — disable build
-      const component = fixture.componentInstance as unknown as {
-        _buildEnabledValue: { set: (v: boolean) => void };
-        _installDotnetValue: () => boolean;
-      };
-      component._buildEnabledValue.set(false);
-      fixture.detectChanges();
-
-      // Assert — installDotnet value is preserved
-      expect(component._installDotnetValue()).toBe(true);
+      expect(req.request.body).toEqual({ imageTag: 'foundry-worker:local', buildEnabled: false });
+      req.flush({ ...API_KEY_RESPONSE });
     });
 
     it('should show explanatory warning note when buildEnabled is false', () => {
@@ -446,67 +372,6 @@ describe('SettingsWorkerImageComponent', () => {
       req.flush({ ...API_KEY_RESPONSE, imageBuildStatus: 'Building' });
     });
 
-    it('should have labels with correct "for" attributes for each checkbox', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock);
-      fixture.detectChanges();
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const dotnetLabel = el.querySelector('label[for="installDotnet"]');
-      const angularLabel = el.querySelector('label[for="installAngular"]');
-      const chromiumLabel = el.querySelector('label[for="installChromium"]');
-      const dockerLabel = el.querySelector('label[for="installDocker"]');
-
-      // Assert
-      expect(dotnetLabel).toBeTruthy();
-      expect(angularLabel).toBeTruthy();
-      expect(chromiumLabel).toBeTruthy();
-      expect(dockerLabel).toBeTruthy();
-    });
-
-    it('should initialize installChromium and installDocker checkboxes from loaded settings', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installChromium: true, installDocker: true });
-      fixture.detectChanges();
-
-      // Act
-      const chromiumModel = fixture.debugElement.query(By.css('#installChromium')).injector.get(NgModel);
-      const dockerModel = fixture.debugElement.query(By.css('#installDocker')).injector.get(NgModel);
-
-      // Assert
-      expect(chromiumModel.model).toBe(true);
-      expect(dockerModel.model).toBe(true);
-    });
-
-    it('should include installChromium and installDocker in the save payload', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installChromium: false, installDocker: false });
-      fixture.detectChanges();
-
-      // Make dirty by toggling installChromium
-      const component = fixture.componentInstance as unknown as { _installChromiumValue: { set: (v: boolean) => void } };
-      component._installChromiumValue.set(true);
-      fixture.detectChanges();
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
-      const saveBtn = imageForm?.querySelector('.general-settings__save-btn') as HTMLButtonElement;
-      saveBtn.click();
-
-      // Assert
-      const req = httpMock.expectOne('/api/settings/worker-image');
-      expect(req.request.body).toEqual({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: true, installDocker: false });
-      req.flush({ ...API_KEY_RESPONSE, installChromium: true });
-    });
-
     it('should show error message when save image flags fails', () => {
       // Arrange
       const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
@@ -515,7 +380,7 @@ describe('SettingsWorkerImageComponent', () => {
       fixture.detectChanges();
 
       // Make dirty and attempt save
-      service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+      service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
       httpMock.expectOne('/api/settings/worker-image').flush('Error', { status: 500, statusText: 'Server Error' });
       fixture.detectChanges();
 
@@ -621,26 +486,6 @@ describe('SettingsWorkerImageComponent', () => {
       });
     });
 
-    it('should wrap the four checkboxes in a fieldset with a sr-only legend', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock);
-      fixture.detectChanges();
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const fieldset = el.querySelector('fieldset.general-settings__image-fieldset') as HTMLFieldSetElement;
-      const legend = fieldset?.querySelector('legend');
-      const checkboxesInsideFieldset = fieldset?.querySelectorAll('input[type="checkbox"]');
-
-      // Assert
-      expect(fieldset).toBeTruthy();
-      expect(legend?.classList.contains('sr-only')).toBe(true);
-      expect(legend?.textContent?.trim()).toBe('Preinstalled toolchains');
-      expect(checkboxesInsideFieldset?.length).toBe(4);
-    });
-
     it('should show success message in role="status" region after a successful image flags save', () => {
       // Arrange
       const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
@@ -649,8 +494,8 @@ describe('SettingsWorkerImageComponent', () => {
       fixture.detectChanges();
 
       // Act
-      service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
-      httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true, imageBuildStatus: 'Building' });
+      service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
+      httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, imageBuildStatus: 'Building' });
       fixture.detectChanges();
 
       // Assert
@@ -989,7 +834,7 @@ describe('SettingsWorkerImageComponent', () => {
         fixture.detectChanges();
 
         // Act — trigger a save so savingImageFlags becomes true mid-request
-        service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+        service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
         fixture.detectChanges();
 
         const el = fixture.nativeElement as HTMLElement;
@@ -999,30 +844,9 @@ describe('SettingsWorkerImageComponent', () => {
         expect(buildCheckbox.disabled).toBe(true);
 
         // Cleanup
-        httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true });
+        httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE });
       });
 
-      it('should disable toolchain checkboxes while savingImageFlags is true', () => {
-        // Arrange
-        const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
-        fixture.detectChanges();
-        flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
-        fixture.detectChanges();
-
-        // Act — trigger a save
-        service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
-        fixture.detectChanges();
-
-        const el = fixture.nativeElement as HTMLElement;
-        const fieldset = el.querySelector('.general-settings__image-fieldset') as HTMLElement;
-        const toolchainCheckboxes = Array.from(fieldset.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
-
-        // Assert — all four disabled during save
-        toolchainCheckboxes.forEach(cb => expect(cb.disabled).toBe(true));
-
-        // Cleanup
-        httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true });
-      });
     });
 
     describe('fix 4 — build toggle hint', () => {
@@ -1039,7 +863,7 @@ describe('SettingsWorkerImageComponent', () => {
 
         // Assert
         expect(hint).toBeTruthy();
-        expect(hint.textContent).toContain('locks');
+        expect(hint.textContent).toContain('stops Foundry building the image');
       });
 
       it('should include buildEnabled-hint in aria-describedby of the buildEnabled checkbox', () => {
@@ -1059,53 +883,58 @@ describe('SettingsWorkerImageComponent', () => {
       });
     });
 
-  describe('installDocker hint and security callout', () => {
-    it('should render the Docker hint and an always-visible security-cost callout', () => {
+  describe('Nested Docker switch', () => {
+    const NESTED_DOCKER_URL = '/api/settings/nested-docker';
+
+    function saveNestedDockerButton(el: HTMLElement): HTMLButtonElement {
+      return el.querySelector('button[aria-label="Save nested Docker setting"]') as HTMLButtonElement;
+    }
+
+    it('should render the switch with its label and hint', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDocker: false });
+      flushSettings(httpMock);
       fixture.detectChanges();
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const hint = el.querySelector('#installDocker-hint') as HTMLElement;
-      const callout = el.querySelector('#installDocker-warning') as HTMLElement;
+      const checkbox = el.querySelector('#nestedDockerEnabled') as HTMLInputElement;
+      const label = el.querySelector('label[for="nestedDockerEnabled"]') as HTMLLabelElement;
+      const hint = el.querySelector('#nestedDockerEnabled-hint') as HTMLElement;
 
       // Assert
-      expect(hint.textContent).toContain('Testcontainers');
-      expect(callout).toBeTruthy();
+      expect(checkbox.type).toBe('checkbox');
+      expect(label.textContent?.trim()).toBe('Nested Docker for implement runs');
+      expect(hint.textContent?.trim()).toBe(
+        'Runs Testcontainers integration tests inside implement workers through a nested rootless Docker daemon.'
+      );
+    });
+
+    it('should render an always-visible security-cost callout beside the switch', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, nestedDockerEnabled: false });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const callout = el.querySelector('#nestedDockerEnabled-warning') as HTMLElement;
+
+      // Assert
       expect(callout.hidden).toBe(false);
       expect(callout.classList).toContain('general-settings__callout--warning');
       expect(callout.querySelector('.general-settings__callout-lead')?.textContent?.trim()).toBe('Security cost:');
       expect(callout.querySelector('.general-settings__callout-icon')?.getAttribute('aria-hidden')).toBe('true');
-      expect(callout.textContent).toContain('CAP_SYS_ADMIN');
-      expect(callout.textContent).toContain('seccomp/AppArmor unconfined');
-      expect(callout.textContent).toContain('Docker host');
-      expect(callout.textContent?.replace(/\s+/g, ' ').trim()).toMatch(
-        /Applies to every worker in every repository\. Enable only if you trust all monitored repositories\.$/
+      expect(callout.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        '⚠Security cost: implement workers run with CAP_SYS_ADMIN and seccomp/AppArmor unconfined, so a privilege ' +
+          'escalation inside a worker can reach the Docker host (the WSL VM on Docker Desktop). Applies to implement ' +
+          'runs in every repository; triage runs never get it. Enable only if you trust all monitored repositories.'
       );
-      expect(callout.textContent).not.toContain('Off by default');
     });
 
-    it('should keep the Docker callout visible when the toolchain checkboxes are locked', () => {
-      // Arrange
-      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
-      fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false, installDocker: true });
-      fixture.detectChanges();
-
-      // Act
-      const el = fixture.nativeElement as HTMLElement;
-      const checkbox = el.querySelector('#installDocker') as HTMLInputElement;
-      const callout = el.querySelector('#installDocker-warning') as HTMLElement;
-
-      // Assert
-      expect(checkbox.disabled).toBe(true);
-      expect(callout.hidden).toBe(false);
-    });
-
-    it('should reference both the hint and the callout from the Docker checkbox', () => {
+    it('should reference the hint, the callout and the error region from the switch', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
@@ -1114,15 +943,145 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const describedBy = (el.querySelector('#installDocker') as HTMLInputElement).getAttribute('aria-describedby') ?? '';
+      const describedBy = (el.querySelector('#nestedDockerEnabled') as HTMLInputElement).getAttribute('aria-describedby') ?? '';
 
       // Assert
-      expect(describedBy.split(' ')).toEqual(['installDocker-hint', 'installDocker-warning']);
+      expect(describedBy.split(' ')).toEqual(['nestedDockerEnabled-hint', 'nestedDockerEnabled-warning', 'nested-docker-error']);
+    });
+
+    it('should initialize the switch from loaded settings', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, nestedDockerEnabled: true });
+      fixture.detectChanges();
+
+      // Act
+      const ngModel = fixture.debugElement.query(By.css('#nestedDockerEnabled')).injector.get(NgModel);
+
+      // Assert
+      expect(ngModel.model).toBe(true);
+    });
+
+    it('should disable its Save button until the switch changes', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, nestedDockerEnabled: false });
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const disabledBefore = saveNestedDockerButton(el).disabled;
+
+      // Act
+      const component = fixture.componentInstance as unknown as { _nestedDockerValue: { set: (v: boolean) => void } };
+      component._nestedDockerValue.set(true);
+      fixture.detectChanges();
+
+      // Assert
+      expect(disabledBefore).toBe(true);
+      expect(saveNestedDockerButton(el).disabled).toBe(false);
+    });
+
+    it('should PUT only the switch to its own endpoint when its Save is clicked', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, nestedDockerEnabled: false });
+      fixture.detectChanges();
+      const component = fixture.componentInstance as unknown as { _nestedDockerValue: { set: (v: boolean) => void } };
+      component._nestedDockerValue.set(true);
+      fixture.detectChanges();
+
+      // Act
+      saveNestedDockerButton(fixture.nativeElement as HTMLElement).click();
+
+      // Assert
+      httpMock.expectNone('/api/settings/worker-image');
+      const req = httpMock.expectOne(NESTED_DOCKER_URL);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ enabled: true });
+      req.flush({ ...API_KEY_RESPONSE, nestedDockerEnabled: true });
+    });
+
+    it('should show its own saved message and not the image rebuild status after saving', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, nestedDockerEnabled: false });
+      fixture.detectChanges();
+      const component = fixture.componentInstance as unknown as { _nestedDockerValue: { set: (v: boolean) => void } };
+      component._nestedDockerValue.set(true);
+      fixture.detectChanges();
+
+      // Act
+      saveNestedDockerButton(fixture.nativeElement as HTMLElement).click();
+      httpMock.expectOne(NESTED_DOCKER_URL).flush({ ...API_KEY_RESPONSE, nestedDockerEnabled: true });
+      fixture.detectChanges();
+
+      // Assert
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).toContain('Nested Docker setting saved — applies to runs dispatched from now on.');
+      expect(text).not.toContain('Worker image settings saved');
+      expect(text).not.toContain('Building worker image');
+    });
+
+    it('should show its own error when saving the switch fails', () => {
+      // Arrange
+      const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      service.updateNestedDocker(true);
+      httpMock.expectOne(NESTED_DOCKER_URL).flush('Error', { status: 500, statusText: 'Server Error' });
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const errorEl = el.querySelector('#nested-docker-error') as HTMLElement;
+      expect(errorEl.getAttribute('role')).toBe('alert');
+      expect(errorEl.textContent).toContain('Failed to save the nested Docker setting');
+      expect(el.querySelector('#image-flags-error')?.textContent?.trim()).toBe('');
+    });
+
+    it('should keep the switch usable while the image builds and when building is off', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false, imageBuildStatus: 'Building', nestedDockerEnabled: false });
+      fixture.detectChanges();
+
+      // Act
+      const component = fixture.componentInstance as unknown as { _nestedDockerValue: { set: (v: boolean) => void } };
+      component._nestedDockerValue.set(true);
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      expect((el.querySelector('#nestedDockerEnabled') as HTMLInputElement).disabled).toBe(false);
+      expect(saveNestedDockerButton(el).disabled).toBe(false);
+    });
+
+    it('should disable the switch while its save is in flight', () => {
+      // Arrange
+      const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      service.updateNestedDocker(true);
+      fixture.detectChanges();
+
+      // Assert
+      expect(((fixture.nativeElement as HTMLElement).querySelector('#nestedDockerEnabled') as HTMLInputElement).disabled).toBe(true);
+      httpMock.expectOne(NESTED_DOCKER_URL).flush({ ...API_KEY_RESPONSE, nestedDockerEnabled: true });
     });
   });
 
   describe('toggle layout', () => {
-    it('should render all five checkboxes in the shared toggle row with the hint stacked underneath', () => {
+    it('should render both checkboxes in the shared toggle row with the hint stacked underneath', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
@@ -1131,7 +1090,7 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const ids = ['buildEnabled', 'installDotnet', 'installAngular', 'installChromium', 'installDocker'];
+      const ids = ['buildEnabled', 'nestedDockerEnabled'];
 
       // Assert
       for (const id of ids) {
@@ -1161,7 +1120,7 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Assert
       expect(hint.textContent?.trim()).toBe(
-        'Turning this off stops Foundry building the image and locks the toolchain settings below.'
+        'Turning this off stops Foundry building the image; Foundry runs the tag above as it is.'
       );
     });
   });
@@ -1176,14 +1135,15 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const wrapper = el.querySelector('.general-settings__image-feedback') as HTMLElement;
+      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
+      const wrapper = imageForm.querySelector('.general-settings__image-feedback') as HTMLElement;
 
       // Assert
       expect(wrapper).toBeTruthy();
       expect(wrapper.querySelectorAll('.general-settings__image-status[role="status"]').length).toBe(2);
       expect(wrapper.querySelector('#image-flags-error[role="alert"]')).toBeTruthy();
       expect(wrapper.querySelector('.general-settings__save-success[role="status"]')).toBeTruthy();
-      expect(el.querySelectorAll('.general-settings__image-feedback').length).toBe(1);
+      expect(imageForm.querySelectorAll('.general-settings__image-feedback').length).toBe(1);
     });
 
     it('should render the build log below the feedback wrapper when the build failed', () => {
@@ -1210,7 +1170,7 @@ describe('SettingsWorkerImageComponent', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false });
+      flushSettings(httpMock, { ...API_KEY_RESPONSE });
       fixture.detectChanges();
 
       // Act
@@ -1220,16 +1180,16 @@ describe('SettingsWorkerImageComponent', () => {
       expect(result).toBe(false);
     });
 
-    it('should return true when a flag has changed', () => {
+    it('should return true when the nested Docker switch has changed', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
-      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDotnet: false });
+      flushSettings(httpMock, { ...API_KEY_RESPONSE });
       fixture.detectChanges();
 
       // Act
-      const component = fixture.componentInstance as unknown as { _installDotnetValue: { set: (v: boolean) => void } };
-      component._installDotnetValue.set(true);
+      const component = fixture.componentInstance as unknown as { _nestedDockerValue: { set: (v: boolean) => void } };
+      component._nestedDockerValue.set(true);
       fixture.detectChanges();
 
       // Assert

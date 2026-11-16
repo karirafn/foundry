@@ -61,9 +61,9 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFlagsChange_WorkerImageSettingsChangedRowPersistedAtomically()
+    public async Task WhenImageTagChanges_WorkerImageSettingsChangedRowPersistedAtomically()
     {
-        // Arrange — seed settings with all flags off
+        // Arrange — seed default settings
         using (IServiceScope seedScope = _serviceProvider.CreateScope())
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
@@ -80,12 +80,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: "foundry-worker:local",
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            ImageTag: "foundry-worker:v2",
+            BuildEnabled: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -104,20 +100,16 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFlagsUnchanged_NoOutboxRowWritten()
+    public async Task WhenConfigurationUnchanged_NoOutboxRowWritten()
     {
-        // Arrange — seed settings with dotnet on, send same config
+        // Arrange — seed a configuration, send the same one
         using (IServiceScope seedScope = _serviceProvider.CreateScope())
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
             GlobalSettings settings = GlobalSettings.Create();
             WorkerImageConfiguration config = WorkerImageConfiguration.Create(
                 imageTag: "foundry-worker:local",
-                buildEnabled: true,
-                installDotnet: true,
-                installAngular: false,
-                installChromium: false,
-                installDocker: false)
+                buildEnabled: true)
                 .Match(v => v, e => throw new InvalidOperationException(e.Message));
             settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);
@@ -133,16 +125,12 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:local",
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
 
-        // Assert — no outbox row because flags did not change
+        // Assert — no outbox row because the configuration did not change
         dbContext.ChangeTracker.Clear();
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()

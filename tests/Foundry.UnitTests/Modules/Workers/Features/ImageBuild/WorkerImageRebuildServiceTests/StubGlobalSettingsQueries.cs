@@ -11,7 +11,6 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebui
 /// </summary>
 internal sealed class StubGlobalSettingsQueries(
     bool settingsExists = true,
-    IReadOnlyDictionary<string, string>? buildArgs = null,
     int attempt = 0,
     string imageTag = "foundry-worker:local",
     bool buildEnabled = true) : IGlobalSettingsQueries
@@ -26,10 +25,7 @@ internal sealed class StubGlobalSettingsQueries(
         AutoResumeOnUsageReset: true,
         ImageTag: imageTag,
         BuildEnabled: buildEnabled,
-        InstallDotnet: false,
-        InstallAngular: false,
-        InstallChromium: false,
-        InstallDocker: false,
+        NestedDockerEnabled: false,
         ImageBuildStatus: ImageBuildStatus.Idle,
         LastImageBuildError: null,
         HasUsableImage: false,
@@ -64,23 +60,14 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
         => Task.FromResult(ImageBuildStatus.Idle);
 
-    public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-        => Task.FromResult(false);
-
-
-    public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
-
-        => Task.FromResult(false);
-
     public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
         => Task.FromResult(imageTag);
 
     public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
         => Task.FromResult(buildEnabled);
 
-    public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
-        CancellationToken cancellationToken)
-        => Task.FromResult(buildArgs ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
+    public Task<bool> GetNestedDockerEnabledAsync(CancellationToken cancellationToken)
+        => Task.FromResult(false);
 
     public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
         => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));

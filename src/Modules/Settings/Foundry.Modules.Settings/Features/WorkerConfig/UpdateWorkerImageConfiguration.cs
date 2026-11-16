@@ -16,11 +16,7 @@ internal static class UpdateWorkerImageConfiguration
 {
     internal sealed record Command(
         string ImageTag,
-        bool BuildEnabled,
-        bool InstallDotnet,
-        bool InstallAngular,
-        bool InstallChromium,
-        bool InstallDocker) : ICommand<GlobalSettingsSummary>;
+        bool BuildEnabled) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Handler(
         DbContext dbContext,
@@ -41,11 +37,7 @@ internal static class UpdateWorkerImageConfiguration
 
             Result<WorkerImageConfiguration> configResult = WorkerImageConfiguration.Create(
                 imageTag: command.ImageTag,
-                buildEnabled: command.BuildEnabled,
-                installDotnet: command.InstallDotnet,
-                installAngular: command.InstallAngular,
-                installChromium: command.InstallChromium,
-                installDocker: command.InstallDocker);
+                buildEnabled: command.BuildEnabled);
 
             if (configResult is not Result<WorkerImageConfiguration>.Success configSuccess)
             {
@@ -72,11 +64,7 @@ internal static class UpdateWorkerImageConfiguration
     {
         private sealed record RequestBody(
             string ImageTag,
-            bool BuildEnabled,
-            bool InstallDotnet,
-            bool InstallAngular,
-            bool InstallChromium,
-            bool InstallDocker);
+            bool BuildEnabled);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -85,13 +73,7 @@ internal static class UpdateWorkerImageConfiguration
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(
-                        body.ImageTag,
-                        body.BuildEnabled,
-                        body.InstallDotnet,
-                        body.InstallAngular,
-                        body.InstallChromium,
-                        body.InstallDocker);
+                    Command command = new(body.ImageTag, body.BuildEnabled);
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
@@ -104,7 +86,7 @@ internal static class UpdateWorkerImageConfiguration
                         });
                 })
                 .WithName("UpdateWorkerImageConfiguration")
-                .WithSummary("Updates the worker image tag, build toggle, and build flags")
+                .WithSummary("Updates the worker image tag and build toggle")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

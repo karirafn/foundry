@@ -542,33 +542,25 @@ public sealed class ProcessRebuildAsync
     }
 
     [Fact]
-    public async Task WhenBuildSucceeds_PassesBuildArgsFromConfig()
+    public async Task WhenBuildSucceeds_WorkerBuildGetsTheBaseImageAsItsOnlyBuildArg()
     {
-        // Arrange
+        // Arrange — every toolchain is installed unconditionally (ADR 0109), so no settings reach the build
         (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
-            Dictionary<string, string> configBuildArgs = new()
-            {
-                ["INSTALL_DOTNET"] = "true",
-                ["INSTALL_ANGULAR"] = "false",
-            };
-            StubGlobalSettingsQueries settingsQueries = new(settingsExists: true, buildArgs: configBuildArgs);
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                settingsQueries: settingsQueries,
                 contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — worker build (index 1) receives INSTALL_DOTNET from config
+            // Assert — worker build (index 1)
             sequenced.AllParameters.Count.ShouldBe(4);
             ImageBuildParameters workerParams = sequenced.AllParameters[1];
-            workerParams.BuildArgs.ShouldContainKey("INSTALL_DOTNET");
-            workerParams.BuildArgs["INSTALL_DOTNET"].ShouldBe("true");
+            workerParams.BuildArgs.Keys.ShouldBe(["BASE_IMAGE"]);
         }
         finally
         {

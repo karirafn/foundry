@@ -47,11 +47,7 @@ public sealed class GetWorkerImageBuildEnabledAsync : IAsyncDisposable
             GlobalSettings settings = GlobalSettings.Create();
             WorkerImageConfiguration config = WorkerImageConfiguration.Create(
                 imageTag: "foundry-worker:local",
-                buildEnabled: true,
-                installDotnet: false,
-                installAngular: false,
-                installChromium: false,
-                installDocker: false)
+                buildEnabled: true)
                 .Match(v => v, e => throw new InvalidOperationException(e.Message));
             settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);
@@ -77,11 +73,7 @@ public sealed class GetWorkerImageBuildEnabledAsync : IAsyncDisposable
             GlobalSettings settings = GlobalSettings.Create();
             WorkerImageConfiguration config = WorkerImageConfiguration.Create(
                 imageTag: "foundry-worker:local",
-                buildEnabled: false,
-                installDotnet: false,
-                installAngular: false,
-                installChromium: false,
-                installDocker: false)
+                buildEnabled: false)
                 .Match(v => v, e => throw new InvalidOperationException(e.Message));
             settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);

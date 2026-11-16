@@ -88,25 +88,30 @@ A non-`Idle` state drives the dashboard image-build banner and disables the work
 
 ## Worker Image Configuration
 
-The worker image settings stored on Global Settings: the **image tag** (default `foundry-worker:local`; empty or `:latest` rejected) and the **build toggle** (default enabled), alongside the set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) that drive Docker build args.
+The worker image settings stored on Global Settings: the **image tag** (default `foundry-worker:local`; empty or `:latest` rejected) and the **build toggle** (default enabled).
+Every image installs the full toolchain (the .NET SDK with `dotnet-ef` and `csharp-ls`, the Angular CLI, headless Chromium, the Docker engine) unconditionally, so the configuration holds no install flags and the build passes no toolchain build args ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)); stored rows that still carry the removed `Install*` members deserialize with them skipped.
 Any change publishes `WorkerImageSettingsChanged`; with build enabled this requests an immediate rebuild, with build disabled it triggers an inspect (see Worker Image Build).
+
+Beside it, but outside the configuration, Global Settings holds the **nested-Docker switch** (`NestedDockerEnabled`, column `nested_docker_enabled`, default off; shown in Settings as "Nested Docker for implement runs"): whether implement runs get the nested rootless Docker daemon and its relaxed allowances ([ADR 0110](docs/adr/0110-nested-docker-privileges-stay-an-operator-switch.md)).
+It governs privileges, not image contents: it is saved on its own (`PUT /api/settings/nested-docker`), publishes no `WorkerImageSettingsChanged` and starts no rebuild, and applies to runs dispatched afterwards — running containers keep their spec.
+The migration that added it took its value from the stored `InstallDocker` member (off when absent).
 
 ### Worker Image Toolchain
 
-What a worker image actually carries, read from the image rather than from the preinstall flags ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)): a list of `{name, version}` entries (`node`, `claude-code`, `dotnet-sdk`, `csharp-ls`, `angular-cli`, `chromium`, `docker`, `playwright-core`, `gh`, `glab`, `git`; an absent tool is omitted) printed by `/opt/foundry/toolchain.sh` as one `FOUNDRY_TOOLCHAIN <json>` line.
+What a worker image actually carries, read from the image rather than assumed from its Dockerfile ([ADR 0109](docs/adr/0109-the-worker-image-installs-every-toolchain-and-reports-what-it-has.md)): a list of `{name, version}` entries (`node`, `claude-code`, `dotnet-sdk`, `csharp-ls`, `angular-cli`, `chromium`, `docker`, `playwright-core`, `gh`, `glab`, `git`; an absent tool is omitted) printed by `/opt/foundry/toolchain.sh` as one `FOUNDRY_TOOLCHAIN <json>` line.
 After every successful build, and every successful inspect when building is disabled, Foundry runs the script in a hardened, short-lived container of that image ID and stores the list in `worker_image_toolchains`, keyed by image ID; earlier images keep their rows.
 While the current image (the role catalog's image ID) has no stored list, the probe is retried with backoff (1 minute, doubling, capped at 30 minutes); a new build restarts it.
 The toolchain-dependent prompt sections follow the current image's list: the C# code-navigation section when it has `csharp-ls`, the pre-PR section when it has `docker`; an image with no recorded list gets neither.
 
 ### Docker-Enabled Worker Run Spec
 
-When `InstallDocker` is true, a `Full` run's worker runs its own nested rootless `dockerd` so Testcontainers-based integration tests work inside the container.
+When the nested-Docker switch is on, an implement (`Full`) run's worker runs its own nested rootless `dockerd` so Testcontainers-based integration tests work inside the container; Foundry then passes `FOUNDRY_NESTED_DOCKER=1`, which the entrypoint requires before starting the daemon.
 This requires the relaxed allowance set from [ADR 0079](docs/adr/0079-relaxed-allowances-for-nested-rootless-docker.md): `CAP_SYS_ADMIN`, `seccomp=unconfined`, `apparmor=unconfined`, unmasked `/proc` system paths (empty `MaskedPaths`/`ReadonlyPaths` — the Engine API form of the CLI's `systempaths=unconfined`), and the `/dev/net/tun` device.
-Only `Full` runs get the daemon and these allowances: a `Restricted` run has no tool that could use Docker ([ADR 0098](docs/adr/0098-judgment-roles-run-restricted-with-code-supplied-issue-content.md)), so its spec carries none of them, no data-root volume is created for it, and its entrypoint starts no daemon, whatever `InstallDocker` says.
+Only `Full` runs get the daemon and these allowances: a `Restricted` run has no tool that could use Docker ([ADR 0098](docs/adr/0098-judgment-roles-run-restricted-with-code-supplied-issue-content.md)), so its spec carries none of them, no data-root volume is created for it, and its entrypoint starts no daemon, whatever the switch says.
 A named per-run data-root volume (`foundry-worker-docker-<workerRunId>`, labelled `foundry.managed=true` + `foundry.worker-run-id=<id>`) is mounted at `/home/node/.local/share/docker`; the nested daemon uses native overlayfs on this volume, so `/dev/fuse` is not required.
 The isolation boundary weakens: the worker runs as uid 1000 with no route to container root under normal operation, but `CAP_SYS_ADMIN` plus unconfined seccomp/AppArmor mean that code inside the worker that escalates to root can reach the Docker host (on Docker Desktop, the WSL VM).
 On hosts where the daemon cannot start, the entrypoint logs `FOUNDRY_DOCKER_UNAVAILABLE`, leaves `DOCKER_HOST` unset, and the run continues in degraded mode — authoring integration tests that execute where a daemon is available (CI, native Linux).
-Workers built without `InstallDocker` receive an unchanged run spec and entrypoint.
+With the switch off, an implement run gets the plain hardened spec, no `DOCKER_HOST`, and no daemon; the entrypoint skips it silently (no `FOUNDRY_DOCKER_UNAVAILABLE` line).
 
 ## Publisher
 
@@ -283,7 +288,7 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout), the Worker Image Configuration (image tag, build toggle, and toolchain flags) and Image Build State, the Worker Resource Limits (memory MB, CPU count, PID ceiling), the Claude Code Settings (additional deny rules; the model is a per-role setting, see Worker Role), the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`), the separate manual operator pause (`IsDispatchPaused`), and the [Host Pauses](#host-pause) (`HostPauses`, one `HostPause(Host, PausedAt, ProbeAttempts, NextProbeAt)` per unreachable provider host, a JSON column `host_pauses`). Keeping every pause reason on this one row means `ResumeAllDispatch` clears them all in one method and the dispatcher reads them in one `DispatchPauseState` (`PausedHosts` beside the global flags); `GET /api/settings` returns them as `pausedHosts` (`host`, `pausedAt`, `nextProbeAt`, `probeAttempts`).
+Includes worker settings (max concurrent, timeout), the Worker Image Configuration (image tag and build toggle), the nested-Docker switch, and Image Build State, the Worker Resource Limits (memory MB, CPU count, PID ceiling), the Claude Code Settings (additional deny rules; the model is a per-role setting, see Worker Role), the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`), the separate manual operator pause (`IsDispatchPaused`), and the [Host Pauses](#host-pause) (`HostPauses`, one `HostPause(Host, PausedAt, ProbeAttempts, NextProbeAt)` per unreachable provider host, a JSON column `host_pauses`). Keeping every pause reason on this one row means `ResumeAllDispatch` clears them all in one method and the dispatcher reads them in one `DispatchPauseState` (`PausedHosts` beside the global flags); `GET /api/settings` returns them as `pausedHosts` (`host`, `pausedAt`, `nextProbeAt`, `probeAttempts`).
 Worker prompts are not settings: they ship in the worker image with each Worker Role (see Worker Role).
 Additional deny rules are appended after the always-enforced base deny list.
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).

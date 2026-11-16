@@ -39,7 +39,7 @@ public sealed class ToSummary
     }
 
     [Fact]
-    public void WhenDefaultSettings_WorkerImageFlagsAreAllFalse()
+    public void WhenDefaultSettings_NestedDockerIsOff()
     {
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
@@ -48,59 +48,21 @@ public sealed class ToSummary
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
 
         // Assert
-        result.ShouldSatisfyAllConditions(
-            () => result.InstallDotnet.ShouldBeFalse(),
-            () => result.InstallAngular.ShouldBeFalse(),
-            () => result.InstallChromium.ShouldBeFalse(),
-            () => result.InstallDocker.ShouldBeFalse());
+        result.NestedDockerEnabled.ShouldBeFalse();
     }
 
     [Fact]
-    public void WhenInstallDotnetIsTrue_SummaryReflectsIt()
+    public void WhenNestedDockerIsOn_SummaryReflectsIt()
     {
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
-        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
-            imageTag: "foundry-worker:local",
-            buildEnabled: true,
-            installDotnet: true,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false)
-            .Match(v => v, e => throw new InvalidOperationException(e.Message));
-        settings.UpdateWorkerImageConfiguration(config);
+        settings.UpdateNestedDocker(true);
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
 
         // Assert
-        result.InstallDotnet.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenAllFlagsEnabled_SummaryReflectsAllFlags()
-    {
-        // Arrange
-        GlobalSettings settings = CreateDefaultSettings();
-        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
-            imageTag: "foundry-worker:local",
-            buildEnabled: true,
-            installDotnet: true,
-            installAngular: true,
-            installChromium: true,
-            installDocker: true)
-            .Match(v => v, e => throw new InvalidOperationException(e.Message));
-        settings.UpdateWorkerImageConfiguration(config);
-
-        // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
-
-        // Assert
-        result.ShouldSatisfyAllConditions(
-            () => result.InstallDotnet.ShouldBeTrue(),
-            () => result.InstallAngular.ShouldBeTrue(),
-            () => result.InstallChromium.ShouldBeTrue(),
-            () => result.InstallDocker.ShouldBeTrue());
+        result.NestedDockerEnabled.ShouldBeTrue();
     }
 
     [Fact]

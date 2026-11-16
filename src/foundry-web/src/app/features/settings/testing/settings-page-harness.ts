@@ -37,10 +37,7 @@ export const mockRateBudgetService = {
 export const IMAGE_FLAGS_DEFAULTS: {
   imageTag: string;
   buildEnabled: boolean;
-  installDotnet: boolean;
-  installAngular: boolean;
-  installChromium: boolean;
-  installDocker: boolean;
+  nestedDockerEnabled: boolean;
   imageBuildStatus: ImageBuildStatus;
   lastImageBuildError: string | null;
   hasUsableImage: boolean;
@@ -49,10 +46,7 @@ export const IMAGE_FLAGS_DEFAULTS: {
 } = {
   imageTag: 'foundry-worker:local',
   buildEnabled: true,
-  installDotnet: false,
-  installAngular: false,
-  installChromium: false,
-  installDocker: false,
+  nestedDockerEnabled: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
   hasUsableImage: false,

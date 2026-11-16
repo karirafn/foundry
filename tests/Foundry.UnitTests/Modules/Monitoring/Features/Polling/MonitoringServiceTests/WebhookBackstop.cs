@@ -586,23 +586,14 @@ public sealed class WebhookBackstop : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Foundry.Modules.Settings.Contracts.ImageBuildStatus.Idle);
 
-        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(false);
-
-
-        public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
-
-            => Task.FromResult(false);
-
         public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
             => Task.FromResult(string.Empty);
 
         public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
 
-        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+        public Task<bool> GetNestedDockerEnabledAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
 
         public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
             => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));

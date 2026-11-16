@@ -2431,13 +2431,64 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the worker image tag, build toggle, and build flags",
+        "summary": "Updates the worker image tag and build toggle",
         "operationId": "UpdateWorkerImageConfiguration",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateWorkerImageConfigurationRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/nested-docker": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Turns nested Docker for implement runs on or off; rebuilds nothing",
+        "operationId": "UpdateNestedDocker",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNestedDockerRequestBody"
               }
             }
           },
@@ -3292,10 +3343,7 @@
           "autoResumeOnUsageReset",
           "imageTag",
           "buildEnabled",
-          "installDotnet",
-          "installAngular",
-          "installChromium",
-          "installDocker",
+          "nestedDockerEnabled",
           "imageBuildStatus",
           "lastImageBuildError",
           "hasUsableImage",
@@ -3361,16 +3409,7 @@
           "buildEnabled": {
             "type": "boolean"
           },
-          "installDotnet": {
-            "type": "boolean"
-          },
-          "installAngular": {
-            "type": "boolean"
-          },
-          "installChromium": {
-            "type": "boolean"
-          },
-          "installDocker": {
+          "nestedDockerEnabled": {
             "type": "boolean"
           },
           "imageBuildStatus": {
@@ -5007,6 +5046,17 @@
           }
         }
       },
+      "UpdateNestedDockerRequestBody": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "UpdateRepositoryRequestBody": {
         "required": [
           "pollIntervalSeconds",
@@ -5109,11 +5159,7 @@
       "UpdateWorkerImageConfigurationRequestBody": {
         "required": [
           "imageTag",
-          "buildEnabled",
-          "installDotnet",
-          "installAngular",
-          "installChromium",
-          "installDocker"
+          "buildEnabled"
         ],
         "type": "object",
         "properties": {
@@ -5121,18 +5167,6 @@
             "type": "string"
           },
           "buildEnabled": {
-            "type": "boolean"
-          },
-          "installDotnet": {
-            "type": "boolean"
-          },
-          "installAngular": {
-            "type": "boolean"
-          },
-          "installChromium": {
-            "type": "boolean"
-          },
-          "installDocker": {
             "type": "boolean"
           }
         }

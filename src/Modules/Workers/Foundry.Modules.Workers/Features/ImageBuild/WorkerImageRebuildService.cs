@@ -197,9 +197,6 @@ internal sealed class WorkerImageRebuildService(
             return;
         }
 
-        IReadOnlyDictionary<string, string> buildArgs =
-            await settingsQueries.GetWorkerImageBuildArgsAsync(cancellationToken);
-
         string contextPath = ResolveContextPath(ContextPath);
 
         logger.LogInformation(
@@ -226,7 +223,7 @@ internal sealed class WorkerImageRebuildService(
             {
                 catalogContent = catalogSuccess.Value;
                 tarStream.Seek(0, SeekOrigin.Begin);
-                errorTail = await BuildImagesAsync(tarStream, imageTag, buildArgs, cancellationToken);
+                errorTail = await BuildImagesAsync(tarStream, imageTag, cancellationToken);
             }
             else
             {
@@ -321,7 +318,6 @@ internal sealed class WorkerImageRebuildService(
     private async Task<string?> BuildImagesAsync(
         Stream tarStream,
         string imageTag,
-        IReadOnlyDictionary<string, string> buildArgs,
         CancellationToken cancellationToken)
     {
         string? errorTail = null;
@@ -354,7 +350,8 @@ internal sealed class WorkerImageRebuildService(
             // Base image succeeded — rewind tar stream and build the worker image.
             tarStream.Seek(0, SeekOrigin.Begin);
 
-            Dictionary<string, string> workerBuildArgs = new(buildArgs)
+            // Every toolchain is installed unconditionally (ADR 0109); the base image is the only build argument.
+            Dictionary<string, string> workerBuildArgs = new()
             {
                 ["BASE_IMAGE"] = BaseImageTag,
             };
