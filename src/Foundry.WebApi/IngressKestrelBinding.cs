@@ -19,9 +19,17 @@ internal static class IngressKestrelBinding
     /// Appends an <c>http://*:&lt;port&gt;</c> URL for each configured port under <paramref name="portSettingKeys"/>.
     /// An unset key binds nothing; a value that is not a TCP port, or a port two keys share, fails startup.
     /// </summary>
-    internal static void AddIngressEndpoints(WebApplicationBuilder builder, params IReadOnlyList<string> portSettingKeys)
+    internal static void AddIngressEndpoints(WebApplicationBuilder builder, params IReadOnlyList<string> portSettingKeys) =>
+        AddIngressEndpoints(builder, [.. portSettingKeys.Select(key => new IngressPortSetting(key))]);
+
+    /// <summary>
+    /// Appends an <c>http://*:&lt;port&gt;</c> URL for each ingress port: the configured value of its key, else its
+    /// default. A setting with neither binds nothing; a value that is not a TCP port, or a port two settings share,
+    /// fails startup.
+    /// </summary>
+    internal static void AddIngressEndpoints(WebApplicationBuilder builder, params IReadOnlyList<IngressPortSetting> portSettings)
     {
-        List<int> ports = ReadPorts(builder, portSettingKeys);
+        List<int> ports = ReadPorts(builder, portSettings);
         if (ports.Count == 0)
         {
             return;
@@ -52,16 +60,21 @@ internal static class IngressKestrelBinding
         builder.WebHost.UseUrls([.. urls]);
     }
 
-    private static List<int> ReadPorts(WebApplicationBuilder builder, IReadOnlyList<string> portSettingKeys)
+    private static List<int> ReadPorts(WebApplicationBuilder builder, IReadOnlyList<IngressPortSetting> portSettings)
     {
         Dictionary<int, string> keysByPort = [];
 
-        foreach (string key in portSettingKeys)
+        foreach ((string key, int? defaultPort) in portSettings)
         {
             string? portSetting = builder.Configuration[key];
             if (string.IsNullOrWhiteSpace(portSetting))
             {
-                continue;
+                if (defaultPort is not { } fallback)
+                {
+                    continue;
+                }
+
+                portSetting = fallback.ToString(CultureInfo.InvariantCulture);
             }
 
             if (!int.TryParse(portSetting, NumberStyles.None, CultureInfo.InvariantCulture, out int port) || port is < 1 or > 65535)
@@ -81,3 +94,9 @@ internal static class IngressKestrelBinding
     private static string[] Split(string? value) =>
         (value ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
+
+/// <summary>
+/// An ingress port setting: the configuration key holding the port, and the port used when the key is unset
+/// (<see langword="null"/> for an ingress that is off unless configured).
+/// </summary>
+internal sealed record IngressPortSetting(string Key, int? DefaultPort = null);

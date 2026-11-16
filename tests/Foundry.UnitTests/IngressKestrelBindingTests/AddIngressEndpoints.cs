@@ -58,6 +58,35 @@ public sealed class AddIngressEndpoints
         exception.Message.ShouldContain("5099");
     }
 
+    [Fact]
+    public void WhenAPortWithADefaultIsUnset_BindsTheDefault()
+    {
+        // Arrange
+        WebApplicationBuilder builder = CreateBuilder(("urls", "http://localhost:5000"));
+
+        // Act
+        IngressKestrelBinding.AddIngressEndpoints(
+            builder,
+            new IngressPortSetting(WebhookPortKey),
+            new IngressPortSetting(ProxyPortKey, DefaultPort: 5287));
+
+        // Assert
+        builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey).ShouldBe("http://localhost:5000;http://*:5287");
+    }
+
+    [Fact]
+    public void WhenAPortWithADefaultIsConfigured_BindsTheConfiguredPort()
+    {
+        // Arrange
+        WebApplicationBuilder builder = CreateBuilder(("urls", "http://localhost:5000"), (ProxyPortKey, "5199"));
+
+        // Act
+        IngressKestrelBinding.AddIngressEndpoints(builder, new IngressPortSetting(ProxyPortKey, DefaultPort: 5287));
+
+        // Assert
+        builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey).ShouldBe("http://localhost:5000;http://*:5199");
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("65536")]

@@ -8,6 +8,7 @@ using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
@@ -40,7 +41,10 @@ bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == DocGenerat
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-IngressKestrelBinding.AddIngressEndpoints(builder, WebhookIngressOptions.PortKey);
+IngressKestrelBinding.AddIngressEndpoints(
+    builder,
+    new IngressPortSetting(WebhookIngressOptions.PortKey),
+    new IngressPortSetting(PackageSourceProxyOptions.ProxyPortKey, PackageSourceProxyOptions.DefaultProxyPort));
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -185,7 +189,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// Ingress ports are plain HTTP (the webhook port sits behind the operator's tunnel or reverse proxy); never redirect them.
+// Ingress ports are plain HTTP (the webhook port sits behind the operator's tunnel or reverse proxy, and workers reach the
+// package source proxy over the Docker host gateway); never redirect them.
 app.UseWhen(context => !IngressPortGuard.IsIngressPortRequest(context), branch => branch.UseHttpsRedirection());
 app.UseStatusCodePages();
 
