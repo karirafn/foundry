@@ -1148,6 +1148,12 @@ export interface components {
             checksPendingReason?: null | string;
             mergeOutcome?: null | string;
             mergeSkippedReason?: null | string;
+            rebasePendingReason?: null | string;
+            /** Format: int32 */
+            catchUpRound?: null | number | string;
+            /** Format: int32 */
+            catchUpRoundLimit?: null | number | string;
+            mergeWait?: null | components["schemas"]["MergeWaitDetails"];
         };
         IssueSummary: {
             /** Format: uuid */
@@ -1181,6 +1187,12 @@ export interface components {
             providerType?: null | string;
             revisionTriggerKind?: null | string;
             publishPhase?: null | string;
+        };
+        MergeWaitDetails: {
+            /** Format: int32 */
+            position: number | string;
+            /** Format: int32 */
+            waitingForIssueNumber: null | number | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */
