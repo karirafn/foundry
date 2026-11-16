@@ -173,6 +173,44 @@ jobs:
             || { echo "FAIL: DISABLE_AUTOUPDATER and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC must both be 1"; exit 1; }
           echo "PASS: auto-updater and nonessential traffic disabled"
 
+      - name: Image contract check — playwright-core matches workers/package.json and drives the image's Chromium
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        # Renders the way the prompt tells workers to: an ES module importing playwright-core by absolute path from
+        # another working directory, launching CHROME_BIN, as node with a read-only root and scratch home and /tmp.
+        # Catches a playwright-core bump that no longer drives the image's (older, Debian) Chromium.
+        run: |
+          expected=$(node -p "require('./workers/package.json').dependencies['playwright-core']")
+          actual=$(docker run --rm foundry-worker:ci jq -r .version /opt/claude-code/node_modules/playwright-core/package.json)
+          [ "$actual" = "$expected" ] \
+            || { echo "FAIL: playwright-core in the image is '$actual', workers/package.json pins '$expected'"; exit 1; }
+          echo "PASS: playwright-core $actual matches workers/package.json"
+
+          script=$(cat <<'JS'
+          import { chromium } from '/opt/claude-code/node_modules/playwright-core/index.mjs';
+          const browser = await chromium.launch({ executablePath: process.env.CHROME_BIN });
+          try {
+            const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+            await page.setContent('<div id="box" style="width: 321px; height: 45px"></div>');
+            const box = await page.evaluate(() => {
+              const rect = document.getElementById('box').getBoundingClientRect();
+              return { width: rect.width, height: rect.height };
+            });
+            if (box.width !== 321 || box.height !== 45) {
+              console.error('measured ' + JSON.stringify(box) + ', expected 321x45');
+              process.exitCode = 1;
+            } else {
+              console.log('rendered with Chromium ' + browser.version() + ': ' + JSON.stringify(box));
+            }
+          } finally {
+            await browser.close();
+          }
+          JS
+          )
+          docker run --rm --user node --read-only --cap-drop ALL -v /home/node -v /tmp --workdir /tmp foundry-worker:ci \
+            node --input-type=module -e "$script" \
+            || { echo "FAIL: playwright-core could not launch CHROME_BIN and render a page"; exit 1; }
+          echo "PASS: playwright-core launches the image's Chromium and renders a page"
+
       - name: Image test — workers get the task-list tools
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: WORKER_IMAGE=foundry-worker:ci bats workers/tests/task_tools.bats
@@ -186,7 +224,7 @@ jobs:
             || { echo "FAIL: expected exactly one line, got: $output"; exit 1; }
           json=${output#FOUNDRY_TOOLCHAIN }
           [ "$json" != "$output" ] || { echo "FAIL: no FOUNDRY_TOOLCHAIN prefix: $output"; exit 1; }
-          for tool in node claude-code dotnet-sdk csharp-ls docker git; do
+          for tool in node claude-code dotnet-sdk csharp-ls chromium playwright-core docker git; do
             jq -e --arg tool "$tool" 'any(.[]; .name == $tool and (.version | length > 0))' <<<"$json" >/dev/null \
               || { echo "FAIL: $tool missing from $json"; exit 1; }
           done
