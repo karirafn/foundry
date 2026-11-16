@@ -562,6 +562,7 @@ describe('SettingsLayoutComponent', () => {
       harness.detectChanges();
       await harness.fixture.whenStable();
       harness.detectChanges();
+      httpMock.expectOne('/api/workers/image-toolchain').flush({ status: 'unknown', imageId: null });
 
       // Assert — active element is a heading inside .settings-layout__content
       const rootEl = harness.fixture.nativeElement as HTMLElement;

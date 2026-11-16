@@ -10,10 +10,43 @@ import {
   API_KEY_RESPONSE,
 } from '../testing/settings-page-harness';
 import { SettingsWorkerImageComponent } from './settings-worker-image';
+import { WORKER_IMAGE_TOOLCHAIN_URL } from './worker-image-toolchain';
 
 describe('SettingsWorkerImageComponent', () => {
   afterEach(() => {
-    TestBed.inject(HttpTestingController).verify();
+    const httpMock = TestBed.inject(HttpTestingController);
+    // The toolchain block fetches on its own; its specs live in worker-image-toolchain.spec.ts.
+    httpMock.match(WORKER_IMAGE_TOOLCHAIN_URL);
+    httpMock.verify();
+  });
+
+  describe('Installed toolchain block', () => {
+    it('should not render the block before settings load', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect((fixture.nativeElement as HTMLElement).querySelector('fd-worker-image-toolchain')).toBeNull();
+      flushSettings(httpMock);
+    });
+
+    it('should place the block between the section description and the image form', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+
+      // Act
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Assert
+      const block = (fixture.nativeElement as HTMLElement).querySelector('fd-worker-image-toolchain')!;
+      expect(block.previousElementSibling?.classList.contains('general-settings__section-description')).toBe(true);
+      expect(block.nextElementSibling?.classList.contains('general-settings__image-form')).toBe(true);
+    });
   });
 
   describe('Worker Image section', () => {
@@ -732,6 +765,7 @@ describe('SettingsWorkerImageComponent', () => {
         expect(errorEl.textContent?.trim()).toBe('');
         expect(input2.getAttribute('aria-invalid')).toBeNull();
 
+        h2.match(WORKER_IMAGE_TOOLCHAIN_URL);
         h2.verify();
       });
 
