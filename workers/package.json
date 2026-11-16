@@ -3,7 +3,7 @@
   "private": true,
   "description": "Pins the Claude Code CLI and playwright-core installed into the worker and login images (see Dockerfile.base). playwright-core downloads no browser; it drives the image's Chromium. Dependabot bumps both.",
   "dependencies": {
-    "@anthropic-ai/claude-code": "2.1.319",
+    "@anthropic-ai/claude-code": "2.1.323",
     "playwright-core": "1.65.1"
   }
 }
