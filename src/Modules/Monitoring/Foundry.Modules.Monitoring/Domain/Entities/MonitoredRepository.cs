@@ -104,6 +104,33 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// </summary>
     public WebhookStatus WebhookStatus { get; private set; } = WebhookStatus.NotRegistered;
 
+    /// <summary>
+    /// The Package Sources the repository's root <c>nuget.config</c> on its default branch declares, as last read
+    /// by the poll. Empty when it has no root config or the config is invalid.
+    /// </summary>
+    internal IReadOnlyList<DeclaredPackageSource> DeclaredPackageSources { get; private set; } = [];
+
+    /// <summary>The raw text of the root <c>nuget.config</c> last read, kept to generate a worker's config from.</summary>
+    internal string? RootNuGetConfigText { get; private set; }
+
+    /// <summary>The blob SHA of the root <c>nuget.config</c> last read; an unchanged SHA is not read again.</summary>
+    internal string? RootNuGetConfigBlobSha { get; private set; }
+
+    /// <summary>Why the root <c>nuget.config</c> could not be read as a source list, or null when it could.</summary>
+    internal string? RootNuGetConfigInvalidReason { get; private set; }
+
+    /// <summary>The ETag of the last root directory listing whose state was recorded (GitHub only).</summary>
+    internal string? RootListingETag { get; private set; }
+
+    /// <summary>The root <c>nuget.config</c> state, composed from the stored columns.</summary>
+    internal RootNuGetConfig RootNuGetConfig =>
+        (RootNuGetConfigInvalidReason, RootNuGetConfigBlobSha, RootNuGetConfigText) switch
+        {
+            ({ } reason, _, _) => new RootNuGetConfig.Invalid(RootNuGetConfigBlobSha, RootNuGetConfigText, reason),
+            (null, { } sha, { } text) => new RootNuGetConfig.Declared(sha, text, DeclaredPackageSources),
+            _ => new RootNuGetConfig.Absent(),
+        };
+
     public static Result<MonitoredRepository> Create(
         RepositorySlug slug,
         string host,
@@ -381,6 +408,42 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     internal void SetWriteProbeVerdict(WriteProbeVerdict verdict)
     {
         WriteProbeVerdict = verdict;
+    }
+
+    /// <summary>
+    /// Records a root directory listing: replaces the root <c>nuget.config</c> state with
+    /// <paramref name="config"/> and stores <paramref name="listingETag"/> for the next conditional listing.
+    /// </summary>
+    internal void RecordRootListing(RootNuGetConfig config, string? listingETag)
+    {
+        switch (config)
+        {
+            case RootNuGetConfig.Absent:
+                ReplaceRootNuGetConfig([], text: null, blobSha: null, invalidReason: null);
+                break;
+            case RootNuGetConfig.Declared declared:
+                ReplaceRootNuGetConfig([.. declared.Sources], declared.RawText, declared.BlobSha, invalidReason: null);
+                break;
+            case RootNuGetConfig.Invalid invalid:
+                ReplaceRootNuGetConfig([], invalid.RawText, invalid.BlobSha, invalid.Message);
+                break;
+            default:
+                throw new UnreachableException($"Unhandled root nuget.config variant: {config.GetType().Name}");
+        }
+
+        RootListingETag = listingETag;
+    }
+
+    private void ReplaceRootNuGetConfig(
+        IReadOnlyList<DeclaredPackageSource> sources,
+        string? text,
+        string? blobSha,
+        string? invalidReason)
+    {
+        DeclaredPackageSources = sources;
+        RootNuGetConfigText = text;
+        RootNuGetConfigBlobSha = blobSha;
+        RootNuGetConfigInvalidReason = invalidReason;
     }
 
     public void RecordIntegrationEvent(IIntegrationEvent integrationEvent)
