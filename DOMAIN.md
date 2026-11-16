@@ -475,6 +475,7 @@ It waits for input on the thread where the question was posted. Display group: N
 ## Clarification
 
 One round on an issue's append-only clarification log (`Issue.Clarifications`, column `clarifications`): the questions, the input that arrived, and when each happened (`askedAt`, `answeredAt`).
+The input is typed parts (`ClarificationInput`, a non-empty list of the closed union `InputPart`, today only `Comments(text)`), stored as a JSON array of `{"kind":"comments","text":...}`; a round stored before parts existed holds a plain string and reads as one `Comments` part. The prompt renders a round's parts into one text.
 A round is open until input arrives; a round left when the issue moved on without input (closed, or its pull request closed) stays unanswered.
 Every implement prompt (fresh, continuation, revision) and every triage prompt renders the log in its own section, so an answer lasts as long as the issue does; with an empty log the prompt is unchanged.
 

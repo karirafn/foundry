@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Infrastructure.Outbox;
 
@@ -68,7 +69,7 @@ public sealed class RoundTrip
     {
         // Arrange
         Clarification answered = Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Postgres.")], Now)
-            .Answer("Use Postgres.", Now.AddHours(1));
+            .Answer(ClarificationInput.FromComments("Use Postgres."), Now.AddHours(1));
         IssueClaimed original = new(new ClaimedIssueDispatch(
             IssueId.New(),
             WorkerRunId.New(),

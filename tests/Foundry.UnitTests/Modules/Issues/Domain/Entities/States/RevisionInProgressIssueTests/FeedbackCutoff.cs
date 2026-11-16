@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -64,7 +65,7 @@ public sealed class FeedbackCutoff
     {
         // Arrange
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(RunStartedAt.AddHours(-2));
-        RevisionInProgressIssue revisionInProgress = ((RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", RunStartedAt.AddHours(-1), DateTimeOffset.UtcNow))
+        RevisionInProgressIssue revisionInProgress = ((RevisionQueuedIssue)awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), RunStartedAt.AddHours(-1), DateTimeOffset.UtcNow))
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Act

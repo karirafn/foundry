@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -27,9 +26,7 @@ internal sealed class AwaitingInputArrivedHandler(
             .Where(i => i.MonitoredRepositoryId == @event.RepositoryId)
             .FirstOrDefaultAsync(i => i.IssueNumber == @event.IssueNumber, cancellationToken);
 
-        // Input that arrived no later than the question was posted belongs to an earlier round.
-        if (issue is not AwaitingInputIssue { QuestionPost: QuestionPost.Posted posted } awaiting
-            || @event.ArrivedAt <= posted.PostedAt)
+        if (issue is not AwaitingInputIssue awaiting || !awaiting.AcceptsInputArrivedAt(@event.ArrivedAt))
         {
             logger.LogWarning(
                 "AwaitingInputArrived received for repository {RepositoryId} issue {IssueNumber} but it is not awaiting input on a question posted before it (state: {State}); ignoring.",

@@ -155,7 +155,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromAwaitingInput(
         AwaitingInputIssue source,
         ResumeTarget.Revision target,
-        string input,
+        ClarificationInput input,
         DateTimeOffset answeredAt,
         DateTimeOffset transitionedAt)
     {

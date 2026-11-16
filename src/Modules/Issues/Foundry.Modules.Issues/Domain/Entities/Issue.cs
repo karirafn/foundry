@@ -245,7 +245,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         Clarifications = [.. Clarifications, Clarification.Ask(questions, askedAt)];
     }
 
-    private protected void AnswerClarification(string input, DateTimeOffset answeredAt)
+    private protected void AnswerClarification(ClarificationInput input, DateTimeOffset answeredAt)
     {
         Clarification open = OpenClarification
             ?? throw new InvalidOperationException("No clarification round is open.");

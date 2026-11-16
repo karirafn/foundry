@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -26,7 +27,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = builder.AwaitingInputPosted(PostedAt);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
+        QueuedIssue queued = awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionQueuedIssue revision = queued.ShouldBeOfType<RevisionQueuedIssue>();
@@ -44,7 +45,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = new IssueBuilder().WithBranchName("feat/1-test").AwaitingInputPosted(PostedAt, withPullRequest: false);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
+        QueuedIssue queued = awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         ContinuationQueuedIssue continuation = queued.ShouldBeOfType<ContinuationQueuedIssue>();
@@ -61,13 +62,13 @@ public sealed class ProvideInput
         awaiting.RecordQuestionPosted(1, PostedAt, commentUrl: null);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use the v2 API.", AnsweredAt, DateTimeOffset.UtcNow);
+        QueuedIssue queued = awaiting.ProvideInput(ClarificationInput.FromComments("Use the v2 API."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         TriageQueuedIssue triageQueued = queued.ShouldBeOfType<TriageQueuedIssue>();
         triageQueued.ShouldSatisfyAllConditions(
             () => triageQueued.OpenClarification.ShouldBeNull(),
-            () => triageQueued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe("Use the v2 API."),
+            () => triageQueued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use the v2 API.")),
             () => awaiting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueTriageQueued>());
     }
 
@@ -79,7 +80,7 @@ public sealed class ProvideInput
         awaiting.RecordQuestionPosted(1, PostedAt, commentUrl: null);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
+        QueuedIssue queued = awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldBeOfType<FreshQueuedIssue>();
@@ -92,13 +93,13 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(PostedAt);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
+        QueuedIssue queued = awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         Clarification round = queued.Clarifications.ShouldHaveSingleItem();
         round.ShouldSatisfyAllConditions(
             () => round.Questions.ShouldBe(IssueBuilder.DefaultQuestions),
-            () => round.Input.ShouldBe("Use Postgres."),
+            () => round.Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")),
             () => round.AnsweredAt.ShouldBe(AnsweredAt),
             () => queued.OpenClarification.ShouldBeNull());
     }
@@ -110,7 +111,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInput();
 
         // Act + Assert
-        Should.Throw<InvalidOperationException>(() => awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow));
+        Should.Throw<InvalidOperationException>(() => awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow));
     }
 
     [Fact]
@@ -118,12 +119,23 @@ public sealed class ProvideInput
     {
         // Arrange
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(PostedAt);
-        RevisionQueuedIssue queued = (RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
+        RevisionQueuedIssue queued = (RevisionQueuedIssue)awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Act
         RevisionInProgressIssue inProgress = queued.Claim(Foundry.Modules.Workers.Contracts.WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.Clarifications.ShouldBe(queued.Clarifications);
+    }
+
+    [Fact]
+    public void WhenTheInputArrivedNoLaterThanThePost_Throws()
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(PostedAt);
+
+        // Act + Assert
+        Should.Throw<InvalidOperationException>(
+            () => awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), PostedAt, DateTimeOffset.UtcNow));
     }
 }

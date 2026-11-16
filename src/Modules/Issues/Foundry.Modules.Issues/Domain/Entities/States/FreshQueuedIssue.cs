@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
@@ -65,7 +66,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
 
     internal static FreshQueuedIssue FromAwaitingInput(
         AwaitingInputIssue source,
-        string input,
+        ClarificationInput input,
         DateTimeOffset answeredAt,
         DateTimeOffset transitionedAt)
     {

@@ -70,14 +70,14 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new AwaitingInputArrived(_repositoryId, 3, "Use Postgres.", PostedAt.AddMinutes(5)),
+            new AwaitingInputArrived(_repositoryId, 3, ClarificationInput.FromComments("Use Postgres."), PostedAt.AddMinutes(5)),
             TestContext.Current.CancellationToken);
 
         // Assert
         RevisionQueuedIssue queued = (await LoadAsync()).ShouldBeOfType<RevisionQueuedIssue>();
         queued.ShouldSatisfyAllConditions(
             () => queued.Trigger.ShouldBeOfType<RevisionTrigger.InputProvided>(),
-            () => queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe("Use Postgres."));
+            () => queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new AwaitingInputArrived(_repositoryId, 3, "Use Postgres.", PostedAt.AddMinutes(5)),
+            new AwaitingInputArrived(_repositoryId, 3, ClarificationInput.FromComments("Use Postgres."), PostedAt.AddMinutes(5)),
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -103,7 +103,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new AwaitingInputArrived(_repositoryId, 3, "An earlier round's answer.", PostedAt.AddMinutes(-5)),
+            new AwaitingInputArrived(_repositoryId, 3, ClarificationInput.FromComments("An earlier round's answer."), PostedAt.AddMinutes(-5)),
             TestContext.Current.CancellationToken);
 
         // Assert

@@ -211,9 +211,28 @@ public sealed class RunAsync : IAsyncDisposable
         AwaitingInputArrived arrived = _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
         arrived.ShouldSatisfyAllConditions(
             () => arrived.IssueNumber.ShouldBe(1),
-            () => arrived.Input.ShouldBe("Use Postgres."),
+            () => arrived.Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")),
             () => arrived.ArrivedAt.ShouldBe(PostedAt.AddMinutes(5)),
             () => _provider.IssueFeedbackSince.ShouldBe(PostedAt));
+    }
+
+    [Fact]
+    public async Task WhenSeveralRepliesOutlastTheQuietPeriod_InputArrivesAsOneCommentsPartJoinedOldestFirst()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres. ").WithCreatedAt(PostedAt.AddMinutes(5)).Build(),
+            new ProviderCommentBuilder().WithId(2003).WithAuthorLogin("operator").WithBody("And keep SQLite for tests.").WithCreatedAt(PostedAt.AddMinutes(6)).Build(),
+        ];
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input.Parts.ShouldHaveSingleItem()
+            .ShouldBe(new InputPart.Comments("Use Postgres.\n\nAnd keep SQLite for tests."));
     }
 
     [Fact]
@@ -231,7 +250,7 @@ public sealed class RunAsync : IAsyncDisposable
         await RunStepAsync();
 
         // Assert
-        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input.ShouldBe(longReply);
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments(longReply));
     }
 
     [Fact]
@@ -281,7 +300,7 @@ public sealed class RunAsync : IAsyncDisposable
         await RunStepAsync();
 
         // Assert
-        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input.ShouldBe("Use Postgres.");
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres."));
         _provider.ReviewFeedbackSince.ShouldBe(PostedAt);
     }
 

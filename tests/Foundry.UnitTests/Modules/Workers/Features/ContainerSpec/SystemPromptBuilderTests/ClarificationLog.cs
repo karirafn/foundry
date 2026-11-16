@@ -21,7 +21,7 @@ public sealed class ClarificationLog
 
     private static readonly Clarification Answered =
         Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Use <sqlite>.")], AskedAt)
-            .Answer("Use <postgres>.", AskedAt.AddHours(1));
+            .Answer(ClarificationInput.FromComments("Use <postgres>."), AskedAt.AddHours(1));
 
     public static TheoryData<DispatchContext> Contexts() =>
     [

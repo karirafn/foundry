@@ -2229,7 +2229,7 @@ public sealed class Build
 
         return input is null
             ? Clarification.Ask(questions, askedAt)
-            : new Clarification(questions, input, askedAt, askedAt.AddHours(1));
+            : new Clarification(questions, ClarificationInput.FromComments(input), askedAt, askedAt.AddHours(1));
     }
 
     private static string BuildWithLog(

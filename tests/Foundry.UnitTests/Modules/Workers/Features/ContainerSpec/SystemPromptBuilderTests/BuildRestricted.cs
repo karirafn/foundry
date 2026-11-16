@@ -45,7 +45,7 @@ public sealed class BuildRestricted
 
         return input is null
             ? Clarification.Ask(questions, askedAt)
-            : new Clarification(questions, input, askedAt, askedAt.AddHours(1));
+            : new Clarification(questions, ClarificationInput.FromComments(input), askedAt, askedAt.AddHours(1));
     }
 
     private static int ByteCount(string prompt) => Encoding.UTF8.GetByteCount(prompt);
