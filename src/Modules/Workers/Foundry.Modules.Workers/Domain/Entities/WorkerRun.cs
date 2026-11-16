@@ -127,6 +127,17 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// </summary>
     public IReadOnlyList<int>? SuppliedOpenIssueNumbers { get; private set; }
 
+    /// <summary>
+    /// The hash of the run's Run Source Token (ADR 0112), minted when the run begins and kept through every state;
+    /// <see langword="null"/> for a run recorded before runs had one.
+    /// </summary>
+    public RunSourceTokenHash? SourceTokenHash { get; private set; }
+
+    protected void StoreSourceTokenHash(RunSourceTokenHash sourceTokenHash)
+    {
+        SourceTokenHash = sourceTokenHash;
+    }
+
     protected void StoreSuppliedOpenIssueNumbers(IReadOnlyList<int>? suppliedOpenIssueNumbers)
     {
         SuppliedOpenIssueNumbers = suppliedOpenIssueNumbers;
@@ -184,6 +195,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
 
         RecordBase(source.Base, source.PreparedRepositoryId);
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
+        SourceTokenHash = source.SourceTokenHash;
     }
 
     protected void RecordVerdict(RunVerdict? verdict)

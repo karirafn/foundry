@@ -98,6 +98,7 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
     private const int VerdictStatusMaxLength = 20;
     private const int CommitShaMaxLength = 64;
     private const int DivergenceReasonMaxLength = 30;
+    private const int SourceTokenHashMaxLength = 64;
 
     private static readonly ValueConverter<BranchDivergenceReason, string> DivergenceReasonConverter = new(
         reason => BranchDivergenceReasonTokens.ToToken(reason),
@@ -257,6 +258,17 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.Ignore(r => r.FalsePositiveConfirmation);
 
+        builder.Property(r => r.SourceTokenHash)
+            .HasConversion(new ValueConverter<RunSourceTokenHash, string>(
+                hash => hash.Value,
+                value => RunSourceTokenHash.FromStored(value)))
+            .HasMaxLength(SourceTokenHashMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("source_token_hash");
+
+        builder.HasIndex(r => r.SourceTokenHash)
+            .HasDatabaseName("ix_worker_runs_source_token_hash");
+
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")
             .HasValue<ActiveRun>("active")
@@ -273,6 +285,15 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.HasIndex(r => r.IssueId)
             .HasDatabaseName("ix_worker_runs_issue_id");
+    }
+}
+
+public sealed class StartingRunConfiguration : IEntityTypeConfiguration<StartingRun>
+{
+    public void Configure(EntityTypeBuilder<StartingRun> builder)
+    {
+        // The Run Source Token itself is never persisted (ADR 0112); the run keeps only its hash.
+        builder.Ignore(r => r.SourceToken);
     }
 }
 
