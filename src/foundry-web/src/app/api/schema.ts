@@ -654,6 +654,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/image-toolchain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns the toolchain recorded for the worker image workers run now, or unknown until it is recorded */
+        get: operations["GetWorkerImageToolchain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/status": {
         parameters: {
             query?: never;
@@ -1539,6 +1556,24 @@ export interface components {
             reason?: null | string;
             detail?: null | string;
             isRegistered?: boolean;
+        };
+        WorkerImageTool: {
+            name: string;
+            version: string;
+        };
+        WorkerImageToolchainResponse: components["schemas"]["WorkerImageToolchainResponseRecordedWorkerImageToolchain"] | components["schemas"]["WorkerImageToolchainResponseUnknownWorkerImageToolchain"];
+        WorkerImageToolchainResponseRecordedWorkerImageToolchain: {
+            /** @enum {string} */
+            status?: "recorded";
+            imageId: string;
+            /** Format: date-time */
+            recordedAt: string;
+            tools: components["schemas"]["WorkerImageTool"][];
+        };
+        WorkerImageToolchainResponseUnknownWorkerImageToolchain: {
+            /** @enum {string} */
+            status?: "unknown";
+            imageId: null | string;
         };
         WorkerRoleCard: {
             name: string;
@@ -3249,6 +3284,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DispatchCapacity"];
+                };
+            };
+        };
+    };
+    GetWorkerImageToolchain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerImageToolchainResponse"];
                 };
             };
         };

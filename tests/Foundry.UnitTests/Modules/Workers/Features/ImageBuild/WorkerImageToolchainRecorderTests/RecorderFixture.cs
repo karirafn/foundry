@@ -1,6 +1,7 @@
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
@@ -39,6 +40,7 @@ internal sealed class RecorderFixture : IAsyncDisposable
             _services.GetRequiredService<IServiceScopeFactory>(),
             Probe,
             Catalog,
+            Broadcaster,
             TimeProvider.System,
             NullLogger<WorkerImageToolchainRecorder>.Instance,
             retryPolicy ?? FastRetryPolicy);
@@ -47,6 +49,8 @@ internal sealed class RecorderFixture : IAsyncDisposable
     public ScriptedToolchainProbe Probe { get; } = new();
 
     public StubWorkerRoleCatalogStore Catalog { get; }
+
+    public CapturingSystemNotificationBroadcaster Broadcaster { get; } = new();
 
     public WorkerImageToolchainRecorder Recorder { get; }
 

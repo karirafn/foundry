@@ -1,4 +1,5 @@
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -29,6 +30,11 @@ internal static class WorkerEndpoints
             .WithTags("Workers");
 
         GetDispatchCapacity.Endpoint.Map(capacityGroup);
+
+        RouteGroupBuilder imageToolchainGroup = routes.MapGroup("/api/workers/image-toolchain")
+            .WithTags("Workers");
+
+        GetWorkerImageToolchain.Endpoint.Map(imageToolchainGroup);
 
         return routes;
     }
