@@ -36,10 +36,6 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
         {
             imageTag = "foundry-worker:local",
             buildEnabled = true,
-            installDotnet = false,
-            installAngular = false,
-            installChromium = false,
-            installDocker = false,
         };
 
         // Act

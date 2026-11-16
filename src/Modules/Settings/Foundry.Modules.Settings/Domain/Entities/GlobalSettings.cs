@@ -80,6 +80,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
 
+    /// <summary>
+    /// Whether full-capability (implement) runs get the nested rootless Docker daemon and its relaxed container
+    /// allowances (ADR 0110). An operator switch about privileges, separate from the image: changing it rebuilds nothing.
+    /// </summary>
+    public bool NestedDockerEnabled { get; private set; }
+
     public WorkerResourceLimits WorkerResourceLimits { get; private set; } = null!;
 
     public ClaudeCodeSettings ClaudeCodeSettings { get; private set; } = null!;
@@ -270,6 +276,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         WorkerImageConfiguration = config;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    public bool UpdateNestedDocker(bool enabled)
+    {
+        if (NestedDockerEnabled == enabled)
+        {
+            return false;
+        }
+
+        NestedDockerEnabled = enabled;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

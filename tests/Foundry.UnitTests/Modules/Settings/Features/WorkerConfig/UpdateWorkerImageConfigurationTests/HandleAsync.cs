@@ -48,18 +48,10 @@ public sealed class HandleAsync : IAsyncLifetime
 
     private static WorkerImageConfiguration CreateConfig(
         string imageTag = DefaultImageTag,
-        bool buildEnabled = true,
-        bool dotnet = false,
-        bool angular = false,
-        bool chromium = false,
-        bool docker = false) =>
+        bool buildEnabled = true) =>
         WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: buildEnabled,
-            installDotnet: dotnet,
-            installAngular: angular,
-            installChromium: chromium,
-            installDocker: docker)
+            buildEnabled: buildEnabled)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
     private async Task SeedSettingsAsync(WorkerImageConfiguration? config = null)
@@ -76,7 +68,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenFlagsChange_PublishesWorkerImageSettingsChangedEvent()
+    public async Task WhenConfigurationUnchanged_DoesNotPublishEvent()
     {
         // Arrange
         await SeedSettingsAsync(CreateConfig());
@@ -87,24 +79,17 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
+        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
+        dispatcher.Captured.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenFlagsChange_DoesNotSetImageBuildStatusToBuilding()
+    public async Task WhenImageTagChanges_DoesNotSetImageBuildStatusToBuilding()
     {
         // Arrange — status transition to Building is owned by WorkerImageRebuildService, not this handler
         await SeedSettingsAsync(CreateConfig());
@@ -114,12 +99,8 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            ImageTag: "my-registry/foundry-worker:v2",
+            BuildEnabled: true);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -133,180 +114,6 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenOnlyInstallChromiumChanges_PublishesWorkerImageSettingsChangedEvent()
-    {
-        // Arrange
-        await SeedSettingsAsync(CreateConfig());
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
-
-        UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: true,
-            InstallDocker: false);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
-    }
-
-    [Fact]
-    public async Task WhenOnlyInstallDockerChanges_PublishesWorkerImageSettingsChangedEvent()
-    {
-        // Arrange
-        await SeedSettingsAsync(CreateConfig());
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
-
-        UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: true);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
-    }
-
-    [Fact]
-    public async Task WhenFlagsUnchanged_DoesNotPublishEvent()
-    {
-        // Arrange
-        await SeedSettingsAsync(CreateConfig(dotnet: true));
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
-
-        UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        // Act
-        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        dispatcher.Captured.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenFlagsUnchanged_DoesNotSetBuildingStatus()
-    {
-        // Arrange
-        await SeedSettingsAsync(CreateConfig(dotnet: true));
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
-
-        UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        // Act
-        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-        stored.ShouldNotBeNull();
-        stored.ImageBuildState.ShouldNotBeOfType<ImageBuildState.Building>();
-    }
-
-    [Fact]
-    public async Task WhenFlagsChange_PersistsUpdatedFlagsToDatabase()
-    {
-        // Arrange
-        await SeedSettingsAsync(CreateConfig());
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
-
-        UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: true,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        // Act
-        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
-        stored.ShouldNotBeNull();
-        stored.ShouldSatisfyAllConditions(
-            () => stored.WorkerImageConfiguration.InstallDotnet.ShouldBeTrue(),
-            () => stored.WorkerImageConfiguration.InstallAngular.ShouldBeTrue());
-    }
-
-    [Fact]
-    public async Task WhenFlagsChange_ReturnsUpdatedSummary()
-    {
-        // Arrange
-        await SeedSettingsAsync(CreateConfig());
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
-
-        UpdateWorkerImageConfiguration.Command command = new(
-            ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: true,
-            InstallAngular: true,
-            InstallChromium: false,
-            InstallDocker: true);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Result<GlobalSettingsSummary>.Success success =
-            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.InstallDotnet.ShouldBeTrue(),
-            () => success.Value.InstallAngular.ShouldBeTrue(),
-            () => success.Value.InstallChromium.ShouldBeFalse(),
-            () => success.Value.InstallDocker.ShouldBeTrue());
-    }
-
-    [Fact]
     public async Task WhenSettingsNotFound_ReturnsNotFoundError()
     {
         // Arrange
@@ -316,11 +123,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -345,11 +148,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -373,11 +172,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -402,11 +197,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -431,11 +222,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
-            BuildEnabled: false,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -459,11 +246,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
-            BuildEnabled: false,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -488,11 +271,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "",
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -517,11 +296,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: ":latest",
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -546,11 +321,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "   ",
-            BuildEnabled: true,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: true);
 
         // Act
         await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -571,11 +342,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:v1",
-            BuildEnabled: false,
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+            BuildEnabled: false);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

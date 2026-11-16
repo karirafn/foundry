@@ -51,10 +51,6 @@ public sealed class WhenImageTagInvalid : IAsyncDisposable
         {
             imageTag = "",
             buildEnabled = true,
-            installDotnet = false,
-            installAngular = false,
-            installChromium = false,
-            installDocker = false,
         };
 
         // Act
@@ -81,10 +77,6 @@ public sealed class WhenImageTagInvalid : IAsyncDisposable
         {
             imageTag = ":latest",
             buildEnabled = true,
-            installDotnet = false,
-            installAngular = false,
-            installChromium = false,
-            installDocker = false,
         };
 
         // Act

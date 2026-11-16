@@ -26,15 +26,12 @@ public interface IGlobalSettingsQueries
 
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);
 
-    Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken);
-
-    Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken);
-
     Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken);
 
     Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken);
+    /// <summary>Whether full-capability runs get the nested rootless Docker daemon and its allowances (ADR 0110).</summary>
+    Task<bool> GetNestedDockerEnabledAsync(CancellationToken cancellationToken);
 
     Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken);
 

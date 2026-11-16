@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -14,12 +15,12 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerImageConfigurationTests;
 
-public sealed class WhenFlagsChange : IAsyncDisposable
+public sealed class WhenConfigurationUnchanged : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenFlagsChange()
+    public WhenConfigurationUnchanged()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
@@ -31,30 +32,30 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task SeedDefaultSettingsAsync()
+    private async Task SeedSettingsAsync()
     {
-        // SettingsSeeder is a hosted service and is removed in tests — seed directly via DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        settings.UpdateWorkerImageConfiguration(config);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public async Task ReturnsOkWithUpdatedFlags()
+    public async Task ReturnsOkWithExistingConfiguration()
     {
         // Arrange
-        await SeedDefaultSettingsAsync();
+        await SeedSettingsAsync();
         object body = new
         {
             imageTag = "foundry-worker:local",
             buildEnabled = true,
-            installDotnet = true,
-            installAngular = false,
-            installChromium = true,
-            installDocker = true,
         };
 
         // Act
@@ -70,26 +71,18 @@ public sealed class WhenFlagsChange : IAsyncDisposable
                 FoundryWebAppFactory.JsonOptions,
                 TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.InstallDotnet.ShouldBeTrue(),
-            () => summary.InstallAngular.ShouldBeFalse(),
-            () => summary.InstallChromium.ShouldBeTrue(),
-            () => summary.InstallDocker.ShouldBeTrue());
+        summary.ImageTag.ShouldBe("foundry-worker:local");
     }
 
     [Fact]
-    public async Task ReturnsIdleStatusBeforeBackgroundConsumerRuns()
+    public async Task DoesNotSetBuildingStatus()
     {
-        // Arrange — Building status is set by WorkerImageRebuildService (background), not the handler
-        await SeedDefaultSettingsAsync();
+        // Arrange
+        await SeedSettingsAsync();
         object body = new
         {
             imageTag = "foundry-worker:local",
             buildEnabled = true,
-            installDotnet = true,
-            installAngular = false,
-            installChromium = false,
-            installDocker = false,
         };
 
         // Act
@@ -105,6 +98,6 @@ public sealed class WhenFlagsChange : IAsyncDisposable
                 FoundryWebAppFactory.JsonOptions,
                 TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
-        summary.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
+        summary.ImageBuildStatus.ShouldNotBe(ImageBuildStatus.Building);
     }
 }

@@ -11,11 +11,15 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Settings.Persistence.GlobalSettingsPersistenceTests;
 
-public sealed class WhenStoredJsonHasOnlyOriginalTwoFlags : IAsyncDisposable
+/// <summary>
+/// A row written before ImageTag and BuildEnabled existed holds only the original install keys; it loads as the default
+/// configuration.
+/// </summary>
+public sealed class WhenStoredJsonPredatesTheImageTag : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
 
-    public WhenStoredJsonHasOnlyOriginalTwoFlags()
+    public WhenStoredJsonPredatesTheImageTag()
     {
         _factory = new FoundryWebAppFactory();
     }
@@ -26,11 +30,9 @@ public sealed class WhenStoredJsonHasOnlyOriginalTwoFlags : IAsyncDisposable
     }
 
     [Fact]
-    public async Task InstallChromiumDefaultsToFalse()
+    public async Task LoadsAsTheDefaultConfiguration()
     {
-        // Arrange — write a row whose worker_image_configuration JSON contains only the original two keys
-        // (InstallDotnet and InstallAngular), simulating a database row written before InstallChromium
-        // and InstallDocker were added. InstallChromium is absent and must default to false.
+        // Arrange
         GlobalSettingsId id = await SeedSettingsWithTwoKeyJsonAsync();
 
         // Act
@@ -38,47 +40,14 @@ public sealed class WhenStoredJsonHasOnlyOriginalTwoFlags : IAsyncDisposable
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.InstallChromium.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task InstallDockerDefaultsToFalse()
-    {
-        // Arrange — write a row whose worker_image_configuration JSON contains only the original two keys
-        // (InstallDotnet and InstallAngular), simulating a database row written before InstallChromium
-        // and InstallDocker were added. InstallDocker is absent and must default to false.
-        GlobalSettingsId id = await SeedSettingsWithTwoKeyJsonAsync();
-
-        // Act
-        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
-
-        // Assert
-        reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.InstallDocker.ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task OriginalTwoFlagsDeserializeCorrectly()
-    {
-        // Arrange — write a row whose worker_image_configuration JSON contains only the original two keys.
-        // The stored JSON has InstallDotnet=true and InstallAngular=false.
-        GlobalSettingsId id = await SeedSettingsWithTwoKeyJsonAsync();
-
-        // Act
-        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
-
-        // Assert
-        reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerImageConfiguration.InstallDotnet.ShouldBeTrue(),
-            () => reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeFalse());
+        reloaded.WorkerImageConfiguration.ShouldBe(WorkerImageConfiguration.Default);
     }
 
     private async Task<GlobalSettingsId> SeedSettingsWithTwoKeyJsonAsync()
     {
         // Seed a normal row first so all other required columns are populated via EF,
         // then overwrite worker_image_configuration with a 2-key JSON string via raw SQL
-        // to simulate a pre-migration row that does not contain InstallChromium or InstallDocker.
+        // to simulate a row written before ImageTag and BuildEnabled were added.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 

@@ -348,8 +348,6 @@ internal sealed class IssueClaimedHandler(
         }
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
-        // Read only for the container spec's Docker allowances; the prompt follows the image's recorded toolchain.
-        bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
         Toolchain toolchain = await dbContext.GetRecordedToolchainAsync(catalog.Image.ImageId, cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
@@ -358,6 +356,10 @@ internal sealed class IssueClaimedHandler(
         IReadOnlyList<FailingJobLog> failingJobLogs = await ReadFailingJobLogsAsync(claimed, cancellationToken);
 
         bool restricted = role.Capability == WorkerCapability.Restricted;
+
+        // Nested Docker is an operator switch (ADR 0110) that only a profile able to run commands can use (ADR 0098).
+        bool nestedDocker = role.Capability.UsesDocker()
+            && await settingsQueries.GetNestedDockerEnabledAsync(cancellationToken);
 
         Result<string> systemPromptResult = restricted
             ? SystemPromptBuilder.BuildRestricted(
@@ -421,6 +423,11 @@ internal sealed class IssueClaimedHandler(
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model),
         };
 
+        if (nestedDocker)
+        {
+            envVars["FOUNDRY_NESTED_DOCKER"] = "1";
+        }
+
         // A restricted run gets no branch.
         if (!restricted && claimed.BranchName is { } branchName)
         {
@@ -463,7 +470,7 @@ internal sealed class IssueClaimedHandler(
             VolumeMounts = volumeMounts,
         });
 
-        return installsDocker && role.Capability.UsesDocker()
+        return nestedDocker
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))
             : Result<WorkerContainerSpec>.Ok(spec);
     }

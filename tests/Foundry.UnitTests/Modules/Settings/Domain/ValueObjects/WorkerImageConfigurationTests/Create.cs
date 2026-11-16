@@ -17,11 +17,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: ValidTag,
-            buildEnabled: true,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: true);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -33,21 +29,13 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: ValidTag,
-            buildEnabled: true,
-            installDotnet: true,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: true);
 
         // Assert
         WorkerImageConfiguration config = result.ShouldBeOfType<Result<WorkerImageConfiguration>.Success>().Value;
         config.ShouldSatisfyAllConditions(
             () => config.ImageTag.ShouldBe(ValidTag),
-            () => config.BuildEnabled.ShouldBeTrue(),
-            () => config.InstallDotnet.ShouldBeTrue(),
-            () => config.InstallAngular.ShouldBeFalse(),
-            () => config.InstallChromium.ShouldBeFalse(),
-            () => config.InstallDocker.ShouldBeFalse());
+            () => config.BuildEnabled.ShouldBeTrue());
     }
 
     [Fact]
@@ -56,11 +44,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: string.Empty,
-            buildEnabled: true,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: true);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -72,11 +56,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: string.Empty,
-            buildEnabled: true,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: true);
 
         // Assert
         Result<WorkerImageConfiguration>.Failure failure = result.ShouldBeOfType<Result<WorkerImageConfiguration>.Failure>();
@@ -89,11 +69,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: "   ",
-            buildEnabled: true,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: true);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -110,11 +86,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: false);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -131,11 +103,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: false);
 
         // Assert
         Result<WorkerImageConfiguration>.Failure failure = result.ShouldBeOfType<Result<WorkerImageConfiguration>.Failure>();
@@ -151,11 +119,7 @@ public sealed class Create
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: false);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
@@ -170,11 +134,7 @@ public sealed class Create
         // Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: false);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
@@ -189,11 +149,7 @@ public sealed class Create
         // Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: false);
 
         // Assert
         Result<WorkerImageConfiguration>.Failure failure = result.ShouldBeOfType<Result<WorkerImageConfiguration>.Failure>();
@@ -209,11 +165,7 @@ public sealed class Create
         // Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
             imageTag: imageTag,
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false);
+            buildEnabled: false);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();

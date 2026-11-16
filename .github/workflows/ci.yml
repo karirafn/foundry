@@ -158,7 +158,7 @@ jobs:
 
       - name: Build worker image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: docker build --build-arg INSTALL_DOCKER=true --build-arg INSTALL_DOTNET=true -t foundry-worker:ci workers/
+        run: docker build -t foundry-worker:ci workers/
 
       - name: Image contract check — Claude Code CLI matches workers/package.json
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
