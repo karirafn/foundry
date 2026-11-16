@@ -78,10 +78,13 @@ internal static class PackageSourceCredentialCommands
                         PackageSourceCredential.Validate(body.Username, body.Token);
                     if (errors.Count > 0)
                     {
-                        return (Results<NoContent, ValidationProblem, ProblemHttpResult>)TypedResults.ValidationProblem(
+                        return (Results<NoContent, ProblemHttpResult>)TypedResults.Problem(new HttpValidationProblemDetails(
                             errors
                                 .GroupBy(e => FieldName(e.Field))
-                                .ToDictionary(g => g.Key, g => g.Select(e => e.Message).ToArray()));
+                                .ToDictionary(g => g.Key, g => g.Select(e => e.Message).ToArray()))
+                        {
+                            Status = StatusCodes.Status400BadRequest,
+                        });
                     }
 
                     Result result = await handler.SetAsync(
@@ -90,7 +93,7 @@ internal static class PackageSourceCredentialCommands
                         body.Token!,
                         cancellationToken);
 
-                    return result.Match<Results<NoContent, ValidationProblem, ProblemHttpResult>>(
+                    return result.Match<Results<NoContent, ProblemHttpResult>>(
                         () => TypedResults.NoContent(),
                         error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
