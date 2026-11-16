@@ -68,7 +68,7 @@ internal static class GetRepositories
                 .Select(r => RepositoryMappings.ToSummary(
                     r,
                     credential.Id.Value,
-                    credential.Name,
+                    credential.Name.Value,
                     providerType,
                     defaultPollIntervalSeconds,
                     webhookIngressConfigured))

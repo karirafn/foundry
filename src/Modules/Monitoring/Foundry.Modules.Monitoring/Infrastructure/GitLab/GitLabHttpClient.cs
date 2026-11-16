@@ -1155,4 +1155,7 @@ internal static class GitLabErrors
 
     public static Error ProviderError(string message) =>
         new("GitLab.ProviderError", message);
+
+    public static Error RootDirectoryTooLarge(int maxEntries) =>
+        new("GitLab.RootDirectoryTooLarge", $"The repository's root directory has more than {maxEntries} entries.");
 }

@@ -6,6 +6,8 @@ const MERGE_SKIPPED_REASON_LABELS: Record<string, string> = {
   unauthorized: 'no merge permission',
   head_moved: 'branch moved after checks',
   provider_error: 'provider error',
+  fell_behind: 'fell behind',
+  catch_up_failed: 'catch-up failed',
 };
 
 export function formatMergeSkippedReason(reason: string | null | undefined): string | null {

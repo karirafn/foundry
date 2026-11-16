@@ -44,7 +44,8 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new NullGlobalSettingsQueries());
+            new NullGlobalSettingsQueries(),
+            new NullMergeQueueQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

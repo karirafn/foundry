@@ -3,8 +3,10 @@ using System.Text;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
 
@@ -25,12 +27,12 @@ public sealed class BuildRestricted
     private static IssueContent Issue(params IssueContentComment[] comments) =>
         new("Add retry", "Retry webhook delivery.", comments);
 
-    private static string BuildPrompt(IssueContent issue, bool installsDotnet = false) =>
-        SystemPromptBuilder.BuildRestricted(Principles, 42, Template, issue, installsDotnet)
+    private static string BuildPrompt(IssueContent issue, Toolchain? toolchain = null) =>
+        SystemPromptBuilder.BuildRestricted(Principles, 42, Template, issue, toolchain ?? Toolchain.Unrecorded)
             .ShouldBeOfType<Result<string>.Success>().Value;
 
     private static string BuildPrompt(IssueContent issue, params Clarification[] log) =>
-        SystemPromptBuilder.BuildRestricted(Principles, 42, Template, issue, installsDotnet: false, log)
+        SystemPromptBuilder.BuildRestricted(Principles, 42, Template, issue, toolchain: ToolchainFixtures.With(csharpLs: false), log)
             .ShouldBeOfType<Result<string>.Success>().Value;
 
     private static Clarification Round(
@@ -91,7 +93,7 @@ public sealed class BuildRestricted
         Clarification answered = Round("Only <outgoing> ones.", CreatedAt, "Which webhooks?", "Two kinds exist.");
 
         // Act
-        string prompt = SystemPromptBuilder.BuildRestricted(Principles, 42, Template, Issue(), installsDotnet: false, [answered])
+        string prompt = SystemPromptBuilder.BuildRestricted(Principles, 42, Template, Issue(), toolchain: ToolchainFixtures.With(csharpLs: false), [answered])
             .ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert
@@ -156,7 +158,7 @@ public sealed class BuildRestricted
     public void WhenTheRoleSelectsNoPrincipleSection_EmitsNoPrinciplesBlockAndNoExtraBlankLines()
     {
         // Act
-        string prompt = SystemPromptBuilder.BuildRestricted(string.Empty, 42, Template, Issue(), installsDotnet: false)
+        string prompt = SystemPromptBuilder.BuildRestricted(string.Empty, 42, Template, Issue(), toolchain: ToolchainFixtures.With(csharpLs: false))
             .ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert
@@ -167,7 +169,7 @@ public sealed class BuildRestricted
     public void WhenBuilt_LeavesOutEveryImplementOnlySection()
     {
         // Act
-        string prompt = BuildPrompt(Issue(), installsDotnet: true);
+        string prompt = BuildPrompt(Issue(), toolchain: ToolchainFixtures.With(csharpLs: true));
 
         // Assert
         prompt.ShouldSatisfyAllConditions(
@@ -198,13 +200,33 @@ public sealed class BuildRestricted
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void WhenTheImageInstallsDotnet_IncludesTheCSharpNavigationSection(bool installsDotnet)
+    public void WhenTheToolchainHasCSharpLs_IncludesTheCSharpNavigationSection(bool hasCSharpLs)
     {
         // Act
-        string prompt = BuildPrompt(Issue(), installsDotnet);
+        string prompt = BuildPrompt(Issue(), ToolchainFixtures.With(csharpLs: hasCSharpLs));
 
         // Assert
-        prompt.Contains(SystemPromptBuilder.CSharpLspSectionMarker, StringComparison.Ordinal).ShouldBe(installsDotnet);
+        prompt.Contains(SystemPromptBuilder.CSharpLspSectionMarker, StringComparison.Ordinal).ShouldBe(hasCSharpLs);
+    }
+
+    [Fact]
+    public void WhenTheToolchainIsUnrecorded_OmitsTheCSharpNavigationSection()
+    {
+        // Act
+        string prompt = BuildPrompt(Issue(), Toolchain.Unrecorded);
+
+        // Assert
+        prompt.ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public void WhenTheToolchainHasDocker_StillOmitsThePrePrSection()
+    {
+        // Act
+        string prompt = BuildPrompt(Issue(), ToolchainFixtures.With(docker: true, csharpLs: true));
+
+        // Assert
+        prompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker);
     }
 
     [Fact]

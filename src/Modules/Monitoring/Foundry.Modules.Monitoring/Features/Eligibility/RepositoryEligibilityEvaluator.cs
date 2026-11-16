@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -16,6 +17,7 @@ internal sealed class RepositoryEligibilityEvaluator(
     ICredentialResolver credentialResolver,
     IIssueProviderFactory providerFactory,
     IGitHubWriteProber gitHubWriteProber,
+    IPackageSourceVerdicts packageSourceVerdicts,
     ILogger<RepositoryEligibilityEvaluator> logger) : IRepositoryEligibilityEvaluator
 {
     private readonly EligibilityComposer _composer = new(providerFactory);
@@ -63,18 +65,18 @@ internal sealed class RepositoryEligibilityEvaluator(
                 throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
 
+        RepositoryEligibility eligibility;
         try
         {
             WriteProbeVerdict verdict = await RunWriteProbeAsync(repo, credential, token, now, cancellationToken);
             repo.SetWriteProbeVerdict(verdict);
 
-            RepositoryEligibility eligibility = await _composer.ComposeAsync(
+            eligibility = await _composer.ComposeAsync(
                 repo.Slug,
                 verdict,
                 credential,
                 token,
                 cancellationToken);
-            repo.SetEligibility(eligibility);
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -90,8 +92,10 @@ internal sealed class RepositoryEligibilityEvaluator(
             // succeeding. Stamping LastAttemptedAt = now ensures the next automatic retry is
             // one cooldown away rather than immediate.
             repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(LastAttemptedAt: now));
-            repo.SetEligibility(new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed));
+            eligibility = new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed);
         }
+
+        repo.SetEligibility(await WithPackageSourceViolationsAsync(repo, credential, eligibility, cancellationToken));
     }
 
     /// <inheritdoc/>
@@ -136,15 +140,15 @@ internal sealed class RepositoryEligibilityEvaluator(
                 throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
 
+        RepositoryEligibility eligibility;
         try
         {
-            RepositoryEligibility eligibility = await _composer.ComposeAsync(
+            eligibility = await _composer.ComposeAsync(
                 repo.Slug,
                 repo.WriteProbeVerdict,
                 credential,
                 token,
                 cancellationToken);
-            repo.SetEligibility(eligibility);
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — treat all as unreachable
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -154,8 +158,67 @@ internal sealed class RepositoryEligibilityEvaluator(
                 ex,
                 "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
-            repo.SetEligibility(new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed));
+            eligibility = new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed);
         }
+
+        repo.SetEligibility(await WithPackageSourceViolationsAsync(repo, credential, eligibility, cancellationToken));
+    }
+
+    /// <summary>
+    /// Adds a violation for each declared Package Source whose stored verdict, for the credential Foundry reads it
+    /// with, is not Readable (Unchecked included), and for a root <c>nuget.config</c> recorded as invalid. They join
+    /// any other violations in one Ineligible list, and replace Eligible and Unreachable: an unreadable source is a
+    /// concrete cause the operator can fix, and every one of these states blocks dispatch.
+    /// </summary>
+    private async Task<RepositoryEligibility> WithPackageSourceViolationsAsync(
+        MonitoredRepository repo,
+        Credential account,
+        RepositoryEligibility composed,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<EligibilityViolation> violations = await PackageSourceViolationsAsync(repo, account, cancellationToken);
+
+        if (violations.Count == 0)
+        {
+            return composed;
+        }
+
+        return composed is RepositoryEligibility.Ineligible ineligible
+            ? new RepositoryEligibility.Ineligible([.. ineligible.Violations, .. violations])
+            : new RepositoryEligibility.Ineligible(violations);
+    }
+
+    private async Task<IReadOnlyList<EligibilityViolation>> PackageSourceViolationsAsync(
+        MonitoredRepository repo,
+        Credential account,
+        CancellationToken cancellationToken)
+    {
+        if (repo.RootNuGetConfig is RootNuGetConfig.Invalid)
+        {
+            return [EligibilityViolation.NuGetConfigInvalid()];
+        }
+
+        List<EligibilityViolation> violations = [];
+
+        foreach (DeclaredPackageSource source in repo.DeclaredPackageSources)
+        {
+            ProbeCredential probeCredential = PackageSourceAccess.ProbeCredentialFor(
+                source.ServiceIndexUrl,
+                repo.Host,
+                account);
+            PackageSourceVerdict verdict = await packageSourceVerdicts.VerdictForAsync(
+                source.ServiceIndexUrl,
+                probeCredential,
+                cancellationToken);
+
+            EligibilityViolation violation = EligibilityViolation.PackageSourceUnreachable(source.ServiceIndexUrl);
+            if (verdict is not PackageSourceVerdict.Readable && !violations.Contains(violation))
+            {
+                violations.Add(violation);
+            }
+        }
+
+        return violations;
     }
 
     private async Task<WriteProbeVerdict> RunWriteProbeAsync(

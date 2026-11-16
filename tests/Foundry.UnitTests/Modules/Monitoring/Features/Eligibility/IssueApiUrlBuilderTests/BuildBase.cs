@@ -17,7 +17,7 @@ public sealed class BuildBase
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("Test", "token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("Test").ValueOrThrow(), "token", baseUrl);
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
         // Act
@@ -32,7 +32,7 @@ public sealed class BuildBase
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://ghe.example.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("Test", "token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("Test").ValueOrThrow(), "token", baseUrl);
         RepositorySlug slug = RepositorySlug.Create("org/project").ValueOrThrow();
 
         // Act
@@ -47,7 +47,7 @@ public sealed class BuildBase
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create("Test", "token", baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("Test").ValueOrThrow(), "token", baseUrl);
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
         // Act
@@ -62,7 +62,7 @@ public sealed class BuildBase
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create("Test", "token", baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("Test").ValueOrThrow(), "token", baseUrl);
         RepositorySlug slug = RepositorySlug.Create("group/sub/project").ValueOrThrow();
 
         // Act

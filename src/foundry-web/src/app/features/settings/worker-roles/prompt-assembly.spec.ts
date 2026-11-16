@@ -140,6 +140,23 @@ describe('PromptAssemblyComponent', () => {
     ]);
   });
 
+  it('should tag a browser-rendering section as an image condition', () => {
+    // Act
+    const { el } = render([
+      {
+        key: 'rendering-ui-changes',
+        title: 'Rendering UI changes',
+        condition: 'BrowserRenderingImage',
+        content: 'Render it.',
+      },
+    ]);
+
+    // Assert
+    const tag = el.querySelector('.prompt-assembly__condition')!;
+    expect(text(tag)).toBe('Chromium + Playwright image');
+    expect(tag.className).toContain('condition--image');
+  });
+
   it('should treat an unknown condition as a run-kind tag labelled with its raw value', () => {
     // Act
     const { el } = render([{ key: 'x', title: 'X', condition: 'Future' as never, content: 'x' }]);

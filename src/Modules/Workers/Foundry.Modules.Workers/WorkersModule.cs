@@ -40,6 +40,7 @@ public static class WorkersModule
     {
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IRunningBranchQueries, RunningBranchQueries>();
+        services.AddScoped<IRunSourceTokenQueries, RunSourceTokenQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
         services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddCommandHandler<RequestPublishRetry.Command, RequestPublishRetry.Response, RequestPublishRetry.Handler>();
@@ -68,6 +69,9 @@ public static class WorkersModule
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
         services.AddSingleton<IWorkerRoleCatalogStore, WorkerRoleCatalogStore>();
         services.AddSingleton<FoundryImageSweep>();
+        services.AddSingleton<IWorkerImageToolchainProbe, DockerWorkerImageToolchainProbe>();
+        services.AddSingleton<WorkerImageToolchainRecorder>();
+        services.AddSingleton<IWorkerImageToolchainRecorder>(sp => sp.GetRequiredService<WorkerImageToolchainRecorder>());
         services.AddHttpClient<IClaudeModelsApi, AnthropicModelsClient>(client =>
         {
             client.BaseAddress = AnthropicModelsClient.BaseAddress;
@@ -100,6 +104,7 @@ public static class WorkersModule
         services.AddHostedService<AgentActivityFollowerService>();
         services.AddHostedService<WorkerImageRebuildService>();
         services.AddHostedService<FoundryImageSweepService>();
+        services.AddHostedService(sp => sp.GetRequiredService<WorkerImageToolchainRecorder>());
         services.AddHostedService<StaleStartingRunService>();
         services.AddHostedService<StaleReservationService>();
         services.AddHostedService<RunTranscriptRetentionService>();

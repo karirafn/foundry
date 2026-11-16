@@ -31,6 +31,7 @@ const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_WEBHOOKS_ERROR = 'Failed to save webhook settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
+const SAVE_NESTED_DOCKER_ERROR = 'Failed to save the nested Docker setting';
 const SAVE_WORKER_ENVIRONMENT_ERROR = 'Failed to save worker environment';
 const SAVE_CLAUDE_CODE_ERROR = 'Failed to save Claude Code settings';
 const SAVE_HOSTS_ERROR = 'Failed to save provider hosts';
@@ -156,6 +157,19 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
+  /** Nested Docker for implement runs (ADR 0110): a privilege switch saved apart from the image, rebuilding nothing. */
+  private readonly _nestedDockerEnabledSignal: WritableSignal<boolean | null> = signal(null);
+  readonly nestedDockerEnabled: Signal<boolean | null> = this._nestedDockerEnabledSignal.asReadonly();
+
+  private readonly _savingNestedDockerSignal: WritableSignal<boolean> = signal(false);
+  readonly savingNestedDocker: Signal<boolean> = this._savingNestedDockerSignal.asReadonly();
+
+  private readonly _saveNestedDockerSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveNestedDockerSuccess: Signal<boolean> = this._saveNestedDockerSuccessSignal.asReadonly();
+
+  private readonly _saveNestedDockerErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveNestedDockerError: Signal<string | null> = this._saveNestedDockerErrorSignal.asReadonly();
+
   private readonly _workerEnvironmentSignal: WritableSignal<WorkerEnvironment | null> = signal(null);
   readonly workerEnvironment: Signal<WorkerEnvironment | null> = this._workerEnvironmentSignal.asReadonly();
 
@@ -227,6 +241,9 @@ export class SettingsService {
     this._saveDispatchErrorSignal.set(null);
     this._saveImageFlagsErrorSignal.set(null);
     this._saveHostsErrorSignal.set(null);
+    this._saveNestedDockerErrorSignal.set(null);
+    this._saveNestedDockerSuccessSignal.set(false);
+    this._savingNestedDockerSignal.set(false);
     this._saveWorkerEnvironmentErrorSignal.set(null);
     this._saveWorkerEnvironmentErrorCodeSignal.set(null);
     this._saveWorkerEnvironmentSuccessSignal.set(false);
@@ -260,6 +277,7 @@ export class SettingsService {
           this._allowedProviderHostsSignal.set(settings.allowedProviderHosts ?? []);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
+          this._nestedDockerEnabledSignal.set(settings.nestedDockerEnabled);
           this._workerEnvironmentSignal.set(this._mapToWorkerEnvironment(settings));
           this._claudeCodeSettingsSignal.set(this._mapToClaudeCodeSettings(settings));
           this._applyImageBuildResponse(settings);
@@ -464,6 +482,25 @@ export class SettingsService {
     });
   }
 
+  updateNestedDocker(enabled: boolean): void {
+    this._saveNestedDockerErrorSignal.set(null);
+    this._saveNestedDockerSuccessSignal.set(false);
+    this._savingNestedDockerSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/nested-docker', { enabled }).subscribe({
+      next: (response) => {
+        this._nestedDockerEnabledSignal.set(response.nestedDockerEnabled);
+        this._savingNestedDockerSignal.set(false);
+        this._saveNestedDockerSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveNestedDockerErrorSignal.set(extractErrorMessage(err) ?? SAVE_NESTED_DOCKER_ERROR);
+        this._savingNestedDockerSignal.set(false);
+      },
+    });
+  }
+
   updateWorkerEnvironment(environment: WorkerEnvironment): void {
     this._saveWorkerEnvironmentErrorSignal.set(null);
     this._saveWorkerEnvironmentErrorCodeSignal.set(null);
@@ -541,10 +578,6 @@ export class SettingsService {
     return {
       imageTag: response.imageTag,
       buildEnabled: response.buildEnabled,
-      installDotnet: response.installDotnet,
-      installAngular: response.installAngular,
-      installChromium: response.installChromium,
-      installDocker: response.installDocker,
     };
   }
 

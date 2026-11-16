@@ -42,6 +42,12 @@ public sealed record EligibilityViolation(string Rule)
 
     public static EligibilityViolation CannotPush(RepositorySlug slug) =>
         CannotPush(slug.ToString());
+
+    public static EligibilityViolation PackageSourceUnreachable(Uri serviceIndexUrl) =>
+        new(EligibilityViolationInfo.PackageSourceUnreachableRule(serviceIndexUrl.AbsoluteUri));
+
+    public static EligibilityViolation NuGetConfigInvalid() =>
+        new(EligibilityViolationInfo.NuGetConfigInvalidRule);
 }
 
 /// <summary>

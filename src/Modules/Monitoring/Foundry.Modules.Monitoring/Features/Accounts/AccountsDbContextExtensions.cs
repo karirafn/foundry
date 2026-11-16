@@ -38,6 +38,6 @@ internal static class AccountsDbContextExtensions
 
         return rows.ToDictionary(
             r => r.Value,
-            r => (r.HolderCredentialId, r.HolderName));
+            r => (r.HolderCredentialId, r.HolderName.Value));
     }
 }

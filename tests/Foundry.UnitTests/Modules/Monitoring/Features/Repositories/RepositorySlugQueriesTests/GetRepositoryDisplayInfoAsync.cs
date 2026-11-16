@@ -104,8 +104,8 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
     public async Task WhenRepositoriesOnDifferentHosts_ReturnsSlugAndProviderOfEachCoveringCredential()
     {
         // Arrange
-        await AddCredentialAsync(GitHubCredential.Create("gh", "TOKEN", ValidBaseUrl("https://github.com")), "owner");
-        await AddCredentialAsync(GitLabCredential.Create("gl", "TOKEN", ValidBaseUrl("https://gitlab.com")), "group");
+        await AddCredentialAsync(GitHubCredential.Create(AccountName.Create("gh").ValueOrThrow(), "TOKEN", ValidBaseUrl("https://github.com")), "owner");
+        await AddCredentialAsync(GitLabCredential.Create(AccountName.Create("gl").ValueOrThrow(), "TOKEN", ValidBaseUrl("https://gitlab.com")), "group");
         MonitoredRepository githubRepo = await AddRepositoryAsync("owner/repo", "github.com", position: 0);
         MonitoredRepository gitlabRepo = await AddRepositoryAsync("group/project", "gitlab.com", position: 1);
 
@@ -126,7 +126,7 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
     public async Task WhenNoCoveringCredential_ReturnsSlugWithNullProviderType()
     {
         // Arrange
-        await AddCredentialAsync(GitHubCredential.Create("gh", "TOKEN", ValidBaseUrl("https://github.com")), "someone-else");
+        await AddCredentialAsync(GitHubCredential.Create(AccountName.Create("gh").ValueOrThrow(), "TOKEN", ValidBaseUrl("https://github.com")), "someone-else");
         MonitoredRepository repo = await AddRepositoryAsync("uncovered/repo", "github.com");
 
         // Act
@@ -143,7 +143,7 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
     public async Task WhenCoveringCredentialIsOnAnotherHost_ReturnsNullProviderType()
     {
         // Arrange — the namespace matches, but the credential belongs to a different host
-        await AddCredentialAsync(GitLabCredential.Create("gl", "TOKEN", ValidBaseUrl("https://gitlab.com")), "owner");
+        await AddCredentialAsync(GitLabCredential.Create(AccountName.Create("gl").ValueOrThrow(), "TOKEN", ValidBaseUrl("https://gitlab.com")), "owner");
         MonitoredRepository repo = await AddRepositoryAsync("owner/repo", "github.com");
 
         // Act
@@ -163,8 +163,8 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
         bool addSpecificFirst)
     {
         // Arrange — a GitHub credential owns "group", a GitLab credential owns "group/sub" on the same host
-        GitHubCredential broad = GitHubCredential.Create("broad", "TOKEN", ValidBaseUrl(SelfHostedBaseUrl));
-        GitLabCredential specific = GitLabCredential.Create("specific", "TOKEN", ValidBaseUrl(SelfHostedBaseUrl));
+        GitHubCredential broad = GitHubCredential.Create(AccountName.Create("broad").ValueOrThrow(), "TOKEN", ValidBaseUrl(SelfHostedBaseUrl));
+        GitLabCredential specific = GitLabCredential.Create(AccountName.Create("specific").ValueOrThrow(), "TOKEN", ValidBaseUrl(SelfHostedBaseUrl));
 
         if (addSpecificFirst)
         {

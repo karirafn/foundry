@@ -369,16 +369,10 @@
     }
   }
 
-  &__image-fieldset {
-    border: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  &__image-flags {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-xs);
+  &__nested-docker-form {
+    border-top: 1px solid var(--fd-border-default);
+    margin-top: var(--fd-spacing-xl);
+    padding-top: var(--fd-spacing-xl);
   }
 
   // Checkbox toggle: checkbox + label row (__toggle-row, shared with __checkbox-label) with the hint stacked

@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 
 namespace Foundry.Modules.Monitoring.Domain.Entities;
 
@@ -116,12 +117,35 @@ internal sealed class MergeQueue
     /// The queue head: the queued row of a held issue with the earliest <see cref="PendingMerge.QueuedAt"/>, then the
     /// lowest issue number. Only the head starts a catch-up. <see langword="null"/> when nothing is queued.
     /// </summary>
-    public PendingMerge? Head(IReadOnlySet<int> heldIssueNumbers) =>
+    public PendingMerge? Head(IReadOnlySet<int> heldIssueNumbers) => InQueueOrder(heldIssueNumbers).FirstOrDefault();
+
+    /// <summary>
+    /// The queue entry of <paramref name="issueNumber"/>: its rounds and, while it waits for a catch-up, its 1-based
+    /// place in the order <see cref="Head"/> picks from. <see langword="null"/> when the issue has no row.
+    /// <paramref name="heldIssueNumbers"/> must be every held issue of the repository (<see cref="HeldIssueNumbers"/>).
+    /// </summary>
+    public MergeQueueEntry? EntryOf(int issueNumber, IReadOnlySet<int> heldIssueNumbers) =>
+        _rows.TryGetValue(issueNumber, out PendingMerge? merge) ? EntryOf(merge, heldIssueNumbers) : null;
+
+    /// <summary>The entries of every row, by issue number (<see cref="EntryOf(int, IReadOnlySet{int})"/>).</summary>
+    public IReadOnlyDictionary<int, MergeQueueEntry> Entries(IReadOnlySet<int> heldIssueNumbers) =>
+        _rows.ToDictionary(r => r.Key, r => EntryOf(r.Value, heldIssueNumbers));
+
+    private MergeQueueEntry EntryOf(PendingMerge merge, IReadOnlySet<int> heldIssueNumbers)
+    {
+        MergeQueueWait? wait = merge.AwaitsCatchUp
+            ? new MergeQueueWait(
+                InQueueOrder(heldIssueNumbers).TakeWhile(m => m != merge).Count() + 1,
+                merge.WaitingForIssueNumber)
+            : null;
+        return new MergeQueueEntry(merge.CatchUpRounds, MaxCatchUpRounds, wait);
+    }
+
+    private IEnumerable<PendingMerge> InQueueOrder(IReadOnlySet<int> heldIssueNumbers) =>
         _rows.Values
             .Where(m => m.IsQueued && heldIssueNumbers.Contains(m.IssueNumber))
             .OrderBy(m => m.QueuedAt)
-            .ThenBy(m => m.IssueNumber)
-            .FirstOrDefault();
+            .ThenBy(m => m.IssueNumber);
 
     /// <summary>
     /// The issues the head waits for when their pull request is already up to date with the default branch: another

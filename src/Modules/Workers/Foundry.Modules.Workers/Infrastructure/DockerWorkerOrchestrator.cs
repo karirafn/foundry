@@ -72,6 +72,8 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
         {
             Image = spec.Image,
             Cmd = [.. spec.Command],
+            Entrypoint = spec.Entrypoint is null ? null : [.. spec.Entrypoint],
+            User = spec.User,
             Env = [.. spec.EnvironmentVariables.Select(kv => $"{kv.Key}={kv.Value}")],
             Labels = new Dictionary<string, string>(spec.Labels),
             HostConfig = new HostConfig

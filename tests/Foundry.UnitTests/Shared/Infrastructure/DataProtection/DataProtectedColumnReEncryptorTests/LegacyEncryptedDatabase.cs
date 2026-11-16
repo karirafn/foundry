@@ -66,7 +66,7 @@ internal sealed class LegacyEncryptedDatabase : IAsyncDisposable
         WebhookSecret = repository.EnsureWebhookSecret();
         ClaudeAccount account = new ClaudeAccountBuilder().WithApiKey(ApiKeyValue).Build();
         GitHubCredential credential = GitHubCredential.Create(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             TokenValue,
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             BranchRulesTokenValue);

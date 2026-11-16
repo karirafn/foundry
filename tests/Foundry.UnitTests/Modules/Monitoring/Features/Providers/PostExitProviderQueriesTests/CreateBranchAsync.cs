@@ -55,7 +55,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
     private async Task<MonitoredRepositoryId> SeedRepoAsync(string? token = "ghp_test_token")
     {
-        GitHubCredential credential = GitHubCredential.Create("my-org", token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token, BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 
@@ -132,7 +132,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         // returning an Unreadable credential (state only reachable at EF materialization time).
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential unreadableCredential = GitHubCredential.CreateWithUnreadableToken(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         IPostExitProviderQueries sut = new PostExitProviderQueries(
@@ -158,7 +158,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential invalidCredential = GitHubCredential.Create(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             string.Concat("ghp_", "rejected"),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         invalidCredential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));

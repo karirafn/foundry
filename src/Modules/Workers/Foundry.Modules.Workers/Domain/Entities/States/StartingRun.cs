@@ -26,10 +26,26 @@ public sealed class StartingRun : WorkerRun
     /// Begins a run. <paramref name="role"/> defaults to <see cref="WorkerRole.Implement"/>; <paramref name="image"/> is the
     /// worker image the run is dispatched on (see <see cref="WorkerRun.Image"/>).
     /// </summary>
+    /// <remarks>
+    /// Every run mints a Run Source Token (ADR 0112): the run persists only its hash, and the token itself is readable
+    /// from <see cref="SourceToken"/> on the begun run alone.
+    /// </remarks>
     public static StartingRun Begin(IssueId issueId, WorkerRunId workerRunId, WorkerRole? role = null, string? image = null)
     {
-        return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image);
+        RunSourceToken sourceToken = RunSourceToken.Mint();
+        StartingRun starting = new(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image)
+        {
+            SourceToken = sourceToken,
+        };
+        starting.StoreSourceTokenHash(sourceToken.Hash);
+        return starting;
     }
+
+    /// <summary>
+    /// The run's Run Source Token, for its worker. Set only on the run <see cref="Begin"/> returned: it is never
+    /// persisted, so a run loaded from the database has none.
+    /// </summary>
+    public RunSourceToken? SourceToken { get; private init; }
 
     /// <summary>
     /// Records the base the Publisher prepared for the run (ADR 0100) from <paramref name="repositoryId"/>; later states

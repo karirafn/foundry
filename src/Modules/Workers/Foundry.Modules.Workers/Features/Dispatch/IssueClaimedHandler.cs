@@ -12,6 +12,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.HostPauses;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Roles;
@@ -347,8 +348,7 @@ internal sealed class IssueClaimedHandler(
         }
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
-        bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
-        bool installsDotnet = await settingsQueries.GetWorkerImageInstallsDotnetAsync(cancellationToken);
+        Toolchain toolchain = await dbContext.GetRecordedToolchainAsync(catalog.Image.ImageId, cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
         string model = await GetRoleModelAsync(role.Role, cancellationToken);
@@ -357,13 +357,17 @@ internal sealed class IssueClaimedHandler(
 
         bool restricted = role.Capability == WorkerCapability.Restricted;
 
+        // Nested Docker is an operator switch (ADR 0110) that only a profile able to run commands can use (ADR 0098).
+        bool nestedDocker = role.Capability.UsesDocker()
+            && await settingsQueries.GetNestedDockerEnabledAsync(cancellationToken);
+
         Result<string> systemPromptResult = restricted
             ? SystemPromptBuilder.BuildRestricted(
                 principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
                 issueContent,
-                installsDotnet,
+                toolchain,
                 claimed.Clarifications ?? [],
                 trackerContext: trackerContext)
             : SystemPromptBuilder.Build(
@@ -373,8 +377,7 @@ internal sealed class IssueClaimedHandler(
                 claimed.Context,
                 issueContent,
                 timeoutMinutes,
-                installsDocker,
-                installsDotnet,
+                toolchain,
                 failingJobLogs,
                 claimed.Clarifications ?? [],
                 trackerContext: trackerContext);
@@ -420,6 +423,11 @@ internal sealed class IssueClaimedHandler(
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model),
         };
 
+        if (nestedDocker)
+        {
+            envVars["FOUNDRY_NESTED_DOCKER"] = "1";
+        }
+
         // A restricted run gets no branch.
         if (!restricted && claimed.BranchName is { } branchName)
         {
@@ -462,7 +470,7 @@ internal sealed class IssueClaimedHandler(
             VolumeMounts = volumeMounts,
         });
 
-        return installsDocker && role.Capability.UsesDocker()
+        return nestedDocker
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))
             : Result<WorkerContainerSpec>.Ok(spec);
     }

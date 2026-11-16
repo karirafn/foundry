@@ -32,6 +32,27 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
     public static string CannotPushRule(string slug) =>
         $"{CannotPushRulePrefix}:{slug}";
 
+    public const string PackageSourceUnreachableRulePrefix = "package-source-unreachable";
+
+    public static string PackageSourceUnreachableRule(string url) =>
+        $"{PackageSourceUnreachableRulePrefix}:{url}";
+
+    public static string PackageSourceUnreachableDescription(string url) =>
+        $"Foundry can't read the package source {url}.";
+
+    public const string NuGetConfigInvalidRule = "nuget-config-invalid";
+
+    public const string NuGetConfigInvalidDescription =
+        "The repository's root nuget.config could not be parsed.";
+
+    /// <summary>
+    /// Whether <paramref name="rule"/> is about the repository's package sources (<c>package-source-unreachable:*</c>
+    /// or <c>nuget-config-invalid</c>) rather than its branch rules or provider access.
+    /// </summary>
+    public static bool IsPackageSourceRule(string rule) =>
+        rule == NuGetConfigInvalidRule
+        || rule.StartsWith(PackageSourceUnreachableRulePrefix + ":", StringComparison.Ordinal);
+
     /// <summary>
     /// Returns the provider-aware sentence-case description for a cannot-push violation.
     /// The provider token must be one of the ProviderTypes constants ("github" / "gitlab").

@@ -63,29 +63,7 @@ public sealed class WhenBackfillingWorkerImageTag : IAsyncDisposable
         reloaded.WorkerImageConfiguration.BuildEnabled.ShouldBeTrue();
     }
 
-    [Fact]
-    public async Task BackfilledRow_ExistingFlagsArePreserved()
-    {
-        // Arrange — seed a row with non-default install flags written before the backfill migration.
-        GlobalSettingsId id = await SeedPreMigrationRowWithFlagsAsync(installDotnet: true, installAngular: true);
-
-        // Act — run the backfill. It must not overwrite the existing install flags.
-        await ExecuteBackfillSqlAsync();
-
-        // Assert — install flags survive the json_set that adds ImageTag and BuildEnabled.
-        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
-        reloaded.ShouldNotBeNull();
-        reloaded.WorkerImageConfiguration.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerImageConfiguration.InstallDotnet.ShouldBeTrue(),
-            () => reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeTrue());
-    }
-
     private async Task<GlobalSettingsId> SeedPreMigrationRowAsync()
-    {
-        return await SeedPreMigrationRowWithFlagsAsync(installDotnet: false, installAngular: false);
-    }
-
-    private async Task<GlobalSettingsId> SeedPreMigrationRowWithFlagsAsync(bool installDotnet, bool installAngular)
     {
         // Seed a normal row via EF, then strip the ImageTag and BuildEnabled keys from the JSON
         // blob via raw SQL to simulate a row written before the AddWorkerImageTagAndBuildToggle
@@ -96,11 +74,7 @@ public sealed class WhenBackfillingWorkerImageTag : IAsyncDisposable
 
         WorkerImageConfiguration config = WorkerImageConfiguration.Create(
                 imageTag: WorkerImageConfiguration.Default.ImageTag,
-                buildEnabled: WorkerImageConfiguration.Default.BuildEnabled,
-                installDotnet: installDotnet,
-                installAngular: installAngular,
-                installChromium: false,
-                installDocker: false)
+                buildEnabled: WorkerImageConfiguration.Default.BuildEnabled)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         GlobalSettings settings = GlobalSettings.Create();

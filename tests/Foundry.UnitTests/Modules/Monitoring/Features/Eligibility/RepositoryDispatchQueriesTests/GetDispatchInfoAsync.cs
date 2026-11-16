@@ -58,7 +58,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         // returning an Unreadable credential (state only reachable at EF materialization time).
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential unreadableCredential = GitHubCredential.CreateWithUnreadableToken(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         RepositoryDispatchQueries sut = BuildSut(new StubCredentialResolver(unreadableCredential));
@@ -78,7 +78,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential invalidCredential = GitHubCredential.Create(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             string.Concat("ghp_", "rejected"),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         invalidCredential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
@@ -118,7 +118,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         const string RulesToken = "github_pat_branch_rules_secret";
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential credential = GitHubCredential.Create(
-            "owner",
+            AccountName.Create("owner").ValueOrThrow(),
             AccountToken,
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             RulesToken);
@@ -151,7 +151,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         GitHubCredential credential = GitHubCredential.Create(
-            "owner",
+            AccountName.Create("owner").ValueOrThrow(),
             AccountToken,
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             ServerToken);

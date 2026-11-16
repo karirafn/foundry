@@ -57,42 +57,15 @@ internal sealed class TokenAccountResolver(
                 $"Token validation returned an unexpected result type: {tokenResult.GetType().Name}");
         }
 
-        string? resolvedName = tokenResponse.Kind switch
-        {
-            ValidateToken.Kinds.Authenticated when tokenResponse.MissingScopes.Count == 0
-                => tokenResponse.AccountName,
-            ValidateToken.Kinds.ScopesUnverifiable
-                => tokenResponse.AccountName,
-            _ => null,
-        };
+        Result<ResolvedTokenIdentity> identityResult = TokenIdentityResolution.Resolve(tokenResponse);
 
-        if (resolvedName is null)
+        if (identityResult is not Result<ResolvedTokenIdentity>.Success { Value: ResolvedTokenIdentity identity })
         {
-            Error kindError = tokenResponse.Kind switch
-            {
-                ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
-                ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
-                ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
-                ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
-                ValidateToken.Kinds.ProviderMismatch =>
-                    CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
-                _ => CredentialErrors.InvalidToken,
-            };
-            return new TokenResolution.Rejected(kindError);
-        }
-
-        if (string.IsNullOrWhiteSpace(resolvedName))
-        {
-            return new TokenResolution.Rejected(CredentialErrors.UnresolvedIdentity);
-        }
-
-        if (resolvedName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || resolvedName.Any(char.IsControl))
-        {
-            return new TokenResolution.Rejected(CredentialErrors.UnresolvedIdentity);
+            return new TokenResolution.Rejected(((Result<ResolvedTokenIdentity>.Failure)identityResult).Error);
         }
 
         return await DeriveAndGuardAsync(
-            resolvedName,
+            identity,
             credential.Id.Value,
             apiBaseUrl,
             token,
@@ -104,10 +77,10 @@ internal sealed class TokenAccountResolver(
     /// <summary>
     /// Derives namespaces for the token and guards against duplicate-account,
     /// fully-claimed-by-other-logins, and transient-unavailability failures.
-    /// Returns <see cref="TokenResolution.Resolved"/> with the account name on success.
+    /// Returns <see cref="TokenResolution.Resolved"/> with the identity on success.
     /// </summary>
     private async Task<TokenResolution> DeriveAndGuardAsync(
-        string resolvedName,
+        ResolvedTokenIdentity identity,
         Guid excludeCredentialId,
         Uri apiBaseUrl,
         string token,
@@ -138,7 +111,7 @@ internal sealed class TokenAccountResolver(
 
         bool allDerivedClaimedByOthers = derivedNamespaces.All(ns => claimedByOthers.TryGetValue(ns.Value, out _));
 
-        if (DuplicateAccount.Find(resolvedName, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
+        if (DuplicateAccount.Find(identity.Name.Value, derivedNamespaces, claimedByOthers) is (string holderName, string sharedOwner))
         {
             // Reject only when rotation would strand the credential on zero namespace claims
             // because the sibling already covers the entire derived set.
@@ -168,6 +141,6 @@ internal sealed class TokenAccountResolver(
             return new TokenResolution.ClaimedElsewhere(claimedError);
         }
 
-        return new TokenResolution.Resolved(resolvedName, derivedNamespaces);
+        return new TokenResolution.Resolved(identity, derivedNamespaces);
     }
 }

@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
 
@@ -136,7 +137,7 @@ public sealed class PublishingInstructions
     public void WhenInstallsDocker_ThePrePrSectionHasNoPushOrPullRequestWording()
     {
         // Act
-        string section = PrePrSection.Extract(BuildPrompt("fresh", installsDocker: true));
+        string section = PrePrSection.Extract(BuildPrompt("fresh", hasDocker: true));
 
         // Assert
         section.ShouldSatisfyAllConditions(
@@ -150,7 +151,7 @@ public sealed class PublishingInstructions
     public void WhenInstallsDocker_ThePrePrSectionKeepsTheLocalTestGateAndTheCommitFirstRule()
     {
         // Act
-        string section = PrePrSection.Extract(BuildPrompt("fresh", installsDocker: true));
+        string section = PrePrSection.Extract(BuildPrompt("fresh", hasDocker: true));
 
         // Assert
         int commitIndex = section.IndexOf(PrePrSection.CommitInstruction, StringComparison.Ordinal);
@@ -169,14 +170,14 @@ public sealed class PublishingInstructions
         // Act
         Result<string> result = SystemPromptBuilder.Build(
             Principles, 1, Template, ContextsByVariant["fresh"], Issue,
-            timeoutMinutes: 90, installsDocker: false, installsDotnet: false);
+            timeoutMinutes: 90, toolchain: ToolchainFixtures.With(docker: false, csharpLs: false));
         string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert
         prompt.ShouldContain("roughly 90 minutes of wall-clock budget");
     }
 
-    private static string BuildPrompt(string variant, bool installsDocker = true)
+    private static string BuildPrompt(string variant, bool hasDocker = true)
     {
         Result<string> result = SystemPromptBuilder.Build(
             Principles,
@@ -185,8 +186,7 @@ public sealed class PublishingInstructions
             ContextsByVariant[variant],
             Issue,
             timeoutMinutes: 120,
-            installsDocker: installsDocker,
-            installsDotnet: true,
+            toolchain: ToolchainFixtures.With(docker: hasDocker, csharpLs: true),
             clarifications: [new Clarification([new InputQuestion("Which?", "Context.", "This one.")], "This one.", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)]);
 
         return result.ShouldBeOfType<Result<string>.Success>().Value;

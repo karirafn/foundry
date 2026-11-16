@@ -999,6 +999,253 @@ describe('buildCallout', () => {
     });
   });
 
+  describe('catch-up queue (ADR 0111)', () => {
+    const PR_URL = 'https://github.com/acme/api/pull/7';
+    const PR_LINK = { label: 'View PR', href: PR_URL, ariaLabel: 'View pull request for issue #42' };
+
+    function catchUp(
+      state: IssueDetail['state'],
+      details: Partial<IssueStateDetails>,
+      providerType = 'github',
+      pullRequestUrl: string | null = PR_URL,
+    ) {
+      return buildCallout(detail(state, details), null, summary({ state, providerType, pullRequestUrl }), null);
+    }
+
+    describe('rebase_pending', () => {
+      it('explains a catch-up rebase with its round, linking the pull request', () => {
+        // Act
+        const callout = catchUp('rebase_pending', {
+          rebasePendingReason: 'catch_up',
+          catchUpRound: 1,
+          catchUpRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.title).toBe('Catching up (round 1 of 3)');
+        expect(callout.lines).toEqual([
+          'The pull request fell behind the default branch, so GitHub refused the merge.',
+          'Foundry is rebasing it onto the default branch; checks run again before it merges.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+        expect(callout.chip).toBeNull();
+        expect(callout.rows).toEqual([]);
+      });
+
+      it('titles a catch-up rebase without a round as catching up', () => {
+        // Act
+        const callout = catchUp('rebase_pending', { rebasePendingReason: 'catch_up', catchUpRound: null });
+
+        // Assert
+        expect(callout.title).toBe('Catching up');
+      });
+
+      for (const [name, reason] of [
+        ['after_run', 'after_run'],
+        ['null', null],
+        ['an unknown value', 'from_the_future'],
+      ] as const) {
+        it(`keeps today's rebasing copy when the reason is ${name}`, () => {
+          // Act
+          const callout = catchUp('rebase_pending', {
+            rebasePendingReason: reason as IssueStateDetails['rebasePendingReason'],
+          });
+
+          // Assert
+          expect(callout.tone).toBe('working');
+          expect(callout.title).toBe('Rebasing');
+          expect(callout.lines).toEqual(['Foundry is rebasing the branch onto the default branch.']);
+          expect(callout.links).toEqual([]);
+        });
+      }
+    });
+
+    describe('checks_pending', () => {
+      it('explains checks on the rebased commits of a catch-up, linking the pull request', () => {
+        // Act
+        const callout = catchUp('checks_pending', {
+          checksPendingReason: 'catch_up',
+          catchUpRound: 2,
+          catchUpRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.title).toBe('Catching up (round 2 of 3)');
+        expect(callout.lines).toEqual([
+          'Foundry rebased the pull request onto the default branch after it fell behind.',
+          'Waiting for CI checks on the rebased commits before merging.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+      });
+
+      it('explains a catch-up on GitLab in merge-request terms', () => {
+        // Act
+        const callout = catchUp('checks_pending', { checksPendingReason: 'catch_up', catchUpRound: 1 }, 'gitlab', null);
+
+        // Assert
+        expect(callout.title).toBe('Catching up (round 1)');
+        expect(callout.lines[0]).toBe('Foundry rebased the merge request onto the default branch after it fell behind.');
+        expect(callout.links).toEqual([]);
+      });
+    });
+
+    describe('merge_pending', () => {
+      it('explains a pull request next in the catch-up queue', () => {
+        // Act
+        const callout = catchUp('merge_pending', { mergeWait: { position: 1, waitingForIssueNumber: null } });
+
+        // Assert
+        expect(callout.tone).toBe('neutral');
+        expect(callout.title).toBe('Waiting to catch up');
+        expect(callout.lines).toEqual([
+          'Checks passed, but the pull request fell behind the default branch, so GitHub refused the merge.',
+          'Next to catch up.',
+          'Foundry rebases one pull request at a time in this repository and reruns its checks before merging.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+        expect(callout.rows).toEqual([]);
+      });
+
+      it('names a later place in the catch-up queue', () => {
+        // Act
+        const callout = catchUp('merge_pending', { mergeWait: { position: 3, waitingForIssueNumber: null } });
+
+        // Assert
+        expect(callout.lines[1]).toBe('#3 in the catch-up queue.');
+      });
+
+      it('names the up-to-date issue the queue head waits for', () => {
+        // Act
+        const callout = catchUp('merge_pending', { mergeWait: { position: 1, waitingForIssueNumber: 57 } });
+
+        // Assert
+        expect(callout.lines).toEqual([
+          'Checks passed, but the pull request fell behind the default branch, so GitHub refused the merge.',
+          'Next to catch up.',
+          'It waits for #57, whose pull request is already up to date, to finish its checks and merge first.',
+          'Foundry rebases one pull request at a time in this repository and reruns its checks before merging.',
+        ]);
+      });
+
+      it('shows the rounds a waiting pull request has used', () => {
+        // Act
+        const callout = catchUp('merge_pending', {
+          mergeWait: { position: 2, waitingForIssueNumber: null },
+          catchUpRound: 1,
+          catchUpRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.rows).toEqual([
+          { key: 'Catch-up rounds', value: '1 of 3', href: null, ariaLabel: null, mono: false },
+        ]);
+      });
+
+      it('shows no rounds for a waiting pull request with no round', () => {
+        // Act
+        const callout = catchUp('merge_pending', {
+          mergeWait: { position: 2, waitingForIssueNumber: null },
+          catchUpRound: null,
+          catchUpRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.rows).toEqual([]);
+      });
+
+      it('explains a merge after a catch-up round', () => {
+        // Act
+        const callout = catchUp('merge_pending', { mergeWait: null, catchUpRound: 1, catchUpRoundLimit: 3 });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.title).toBe('Merging');
+        expect(callout.lines).toEqual([
+          'Checks passed after catch-up round 1 of 3. Foundry is merging the pull request on GitHub.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+      });
+
+      it('names the round alone when the limit is missing', () => {
+        // Act
+        const callout = catchUp('merge_pending', { catchUpRound: 1, catchUpRoundLimit: null });
+
+        // Assert
+        expect(callout.lines).toEqual([
+          'Checks passed after catch-up round 1. Foundry is merging the pull request on GitHub.',
+        ]);
+      });
+
+      it("keeps today's merging copy with no wait and no round", () => {
+        // Act
+        const callout = catchUp('merge_pending', { mergeWait: null, catchUpRound: null });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.title).toBe('Merging');
+        expect(callout.lines).toEqual(['Checks passed. Foundry is merging the pull request on GitHub.']);
+        expect(callout.links).toEqual([]);
+      });
+    });
+
+    describe('review, merge skipped', () => {
+      function skipped(reason: string, rebaseSkippedReason: string | null) {
+        return buildCallout(
+          detail('review', { mergeOutcome: 'skipped', mergeSkippedReason: reason, rebaseSkippedReason }),
+          null,
+          summary({
+            state: 'review',
+            mergeOutcome: 'skipped',
+            mergeSkippedReason: reason,
+            rebaseSkippedReason,
+            pullRequestUrl: PR_URL,
+          }),
+          null,
+        );
+      }
+
+      for (const [reason, rebaseSkippedReason, line] of [
+        [
+          'fell_behind',
+          null,
+          'Checks passed, but the pull request kept falling behind the default branch as other merges landed, so '
+            + 'Foundry stopped catching it up. Update the branch on GitHub and merge the pull request yourself.',
+        ],
+        [
+          'catch_up_failed',
+          'force-push-protected',
+          "Checks passed, but the pull request fell behind the default branch and Foundry couldn't rebase it "
+            + '(force-push protected). Update the branch on GitHub and merge the pull request yourself.',
+        ],
+        [
+          'catch_up_failed',
+          null,
+          "Checks passed, but the pull request fell behind the default branch and Foundry couldn't rebase it. "
+            + 'Update the branch on GitHub and merge the pull request yourself.',
+        ],
+        [
+          'catch_up_failed',
+          'from_the_future',
+          "Checks passed, but the pull request fell behind the default branch and Foundry couldn't rebase it "
+            + '(from_the_future). Update the branch on GitHub and merge the pull request yourself.',
+        ],
+      ] as const) {
+        it(`explains a skipped merge (${reason}, rebase ${rebaseSkippedReason ?? 'no reason'}) and links the pull request`, () => {
+          // Act
+          const callout = skipped(reason, rebaseSkippedReason);
+
+          // Assert
+          expect(callout.tone).toBe('warning');
+          expect(callout.title).toBe('Merge skipped');
+          expect(callout.lines).toEqual([line, 'Foundry addresses review comments in a revision run.']);
+          expect(callout.links.map((l) => l.label)).toEqual(['View PR']);
+        });
+      }
+    });
+  });
+
   describe('priority', () => {
     it('lets publishing win over a revision in progress and keeps the revision as a row', () => {
       // Act

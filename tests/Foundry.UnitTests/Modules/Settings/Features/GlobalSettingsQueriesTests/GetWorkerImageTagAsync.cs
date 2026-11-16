@@ -47,11 +47,7 @@ public sealed class GetWorkerImageTagAsync : IAsyncDisposable
             GlobalSettings settings = GlobalSettings.Create();
             WorkerImageConfiguration config = WorkerImageConfiguration.Create(
                 imageTag: "my-registry/foundry-worker:v2",
-                buildEnabled: true,
-                installDotnet: false,
-                installAngular: false,
-                installChromium: false,
-                installDocker: false)
+                buildEnabled: true)
                 .Match(v => v, e => throw new InvalidOperationException(e.Message));
             settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);

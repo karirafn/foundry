@@ -45,6 +45,9 @@ internal sealed class PendingMergeConfiguration : IEntityTypeConfiguration<Pendi
             .HasDefaultValue(false)
             .HasColumnName("awaits_catch_up");
 
+        builder.Property(m => m.WaitingForIssueNumber)
+            .HasColumnName("waiting_for_issue_number");
+
         builder.Ignore(m => m.IsResolved);
         builder.Ignore(m => m.IsQueued);
 

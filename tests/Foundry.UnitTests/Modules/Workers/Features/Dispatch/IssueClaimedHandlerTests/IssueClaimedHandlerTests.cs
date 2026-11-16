@@ -54,6 +54,15 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
     }
 
+    private const string ToolchainImageId = "sha256:current-worker-image";
+
+    private async Task StoreToolchainAsync(string imageId, Toolchain toolchain)
+    {
+        _dbContext.Set<WorkerImageToolchain>().Add(WorkerImageToolchain.Create(imageId, toolchain, DateTimeOffset.UnixEpoch));
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+    }
+
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
         await _dbContext.DisposeAsync();
@@ -1085,14 +1094,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerEnabled_RootlessDindAllowancesAreSet()
+    public async Task WhenNestedDockerEnabled_RootlessDindAllowancesAreSet()
     {
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent(workerRunId: runId);
 
         // Act
@@ -1117,14 +1126,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerEnabled_SpecMatchesRootlessDindRunSpec()
+    public async Task WhenNestedDockerEnabled_SpecMatchesRootlessDindRunSpec()
     {
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind-parity");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent(workerRunId: runId);
 
         // Act
@@ -1141,13 +1150,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerEnabled_TempDirectoriesAreScratchVolumesNotTmpfs()
+    public async Task WhenNestedDockerEnabled_TempDirectoriesAreScratchVolumesNotTmpfs()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind-tmp");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1162,13 +1171,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
+    public async Task WhenNestedDockerDisabled_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: false));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: false));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1193,14 +1202,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerEnabledAndTheRoleIsRestricted_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
+    public async Task WhenNestedDockerEnabledAndTheRoleIsRestricted_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
     {
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-restricted-no-dind");
         IssueClaimedHandler sut = BuildRestrictedHandler(
             orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent(workerRunId: runId);
 
         // Act
@@ -1216,6 +1225,54 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.UnmaskSystemPaths.ShouldBeFalse(),
             () => spec.VolumeMounts.ShouldNotContain(m =>
                 m.VolumeName.StartsWith(WorkerVolumeNames.DataRootVolumeNamePrefix, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task WhenNestedDockerEnabled_ContainerGetsTheNestedDockerVariable()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-nested-docker-env");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldContainKeyAndValue("FOUNDRY_NESTED_DOCKER", "1");
+    }
+
+    [Fact]
+    public async Task WhenNestedDockerDisabled_ContainerGetsNoNestedDockerVariable()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-nested-docker-env");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: false));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldNotContainKey("FOUNDRY_NESTED_DOCKER");
+    }
+
+    [Fact]
+    public async Task WhenNestedDockerEnabledAndTheRoleIsRestricted_ContainerGetsNoNestedDockerVariable()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-restricted-no-nested-docker-env");
+        IssueClaimedHandler sut = BuildRestrictedHandler(
+            orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldNotContainKey("FOUNDRY_NESTED_DOCKER");
     }
 
     [Fact]
@@ -1317,13 +1374,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerInstalled_SystemPromptEnvVarContainsPrePrSection()
+    public async Task WhenTheImagesRecordedToolchainHasDocker_SystemPromptEnvVarContainsPrePrSection()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-docker");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1339,13 +1397,15 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerNotInstalled_SystemPromptEnvVarOmitsPrePrSection()
+    public async Task WhenTheImagesRecordedToolchainLacksDocker_SystemPromptEnvVarOmitsPrePrSectionEvenWithNestedDockerOn()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: false, csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-no-docker");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: false));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true),
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1358,13 +1418,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDotnetInstalled_SystemPromptEnvVarContainsCSharpLspSection()
+    public async Task WhenTheImagesRecordedToolchainHasCSharpLs_SystemPromptEnvVarContainsCSharpLspSection()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-dotnet");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: true));
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1377,13 +1438,30 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDotnetNotInstalled_SystemPromptEnvVarOmitsCSharpLspSection()
+    public async Task WhenTheImagesRecordedToolchainHasCSharpLs_TheRestrictedSystemPromptContainsCSharpLspSection()
     {
         // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(csharpLs: true));
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, imageId: ToolchainImageId);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"]
+            .ShouldContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenTheImagesRecordedToolchainLacksCSharpLs_SystemPromptEnvVarOmitsCSharpLspSection()
+    {
+        // Arrange
+        await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: true, csharpLs: false));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-no-dotnet");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: false));
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1393,6 +1471,47 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenOnlyAnotherImageHasARecordedToolchain_SystemPromptEnvVarOmitsBothSections()
+    {
+        // Arrange
+        await StoreToolchainAsync("sha256:an-older-image", ToolchainFixtures.With(docker: true, csharpLs: true));
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true),
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker));
+    }
+
+    [Fact]
+    public async Task WhenTheImageIdIsUnknown_SystemPromptEnvVarOmitsBothSections()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true),
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageId: null));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker));
     }
 
     [Fact]
@@ -1472,13 +1591,15 @@ public sealed class HandleAsync : IAsyncDisposable
         StubPostExitProviderQueries? postExitProviderQueries = null,
         IIssueContentQueries? issueContentQueries = null,
         IGlobalSettingsQueries? settingsQueries = null,
-        ITrackerContextQueries? trackerContextQueries = null) =>
+        ITrackerContextQueries? trackerContextQueries = null,
+        string? imageId = null) =>
         BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: settingsQueries,
             postExitProviderQueries: postExitProviderQueries,
             roleCatalog: StubWorkerRoleCatalogStore.With(
                 systemPrompt: "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+                imageId: imageId,
                 capability: WorkerCapability.Restricted),
             issueContentQueries: issueContentQueries,
             trackerContextQueries: trackerContextQueries);
@@ -1652,7 +1773,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         IssueClaimedHandler sut = BuildRestrictedHandler(
             orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+            settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2157,8 +2278,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private sealed class StubGlobalSettingsQueries(
-        bool installsDocker = false,
-        bool installsDotnet = false,
+        bool nestedDockerEnabled = false,
         string imageTag = "stub-image:v1",
         WorkerResourceLimitsSnapshot? limits = null) : IGlobalSettingsQueries
     {
@@ -2186,20 +2306,14 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);
 
-        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(installsDocker);
-
-        public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
-            => Task.FromResult(installsDotnet);
-
         public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
             => Task.FromResult(imageTag);
 
         public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
 
-        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
-            => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
+        public Task<bool> GetNestedDockerEnabledAsync(CancellationToken cancellationToken)
+            => Task.FromResult(nestedDockerEnabled);
 
         public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
             => Task.FromResult(limits ?? new WorkerResourceLimitsSnapshot(8192, 2.0, 512));

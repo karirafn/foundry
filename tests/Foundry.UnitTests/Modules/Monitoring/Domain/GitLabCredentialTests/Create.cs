@@ -32,7 +32,7 @@ public sealed class Create
         BaseUrl baseUrl = BuildTamperedBaseUrl("https://gitlab.example.com/?x=1");
 
         // Act
-        Action act = () => GitLabCredential.Create("account", "token", baseUrl);
+        Action act = () => GitLabCredential.Create(AccountName.Create("account").ValueOrThrow(), "token", baseUrl);
 
         // Assert
         Should.Throw<ArgumentException>(act);
@@ -46,7 +46,7 @@ public sealed class Create
         BaseUrl baseUrl = BuildTamperedBaseUrl("https://gitlab.example.com/#section");
 
         // Act
-        Action act = () => GitLabCredential.Create("account", "token", baseUrl);
+        Action act = () => GitLabCredential.Create(AccountName.Create("account").ValueOrThrow(), "token", baseUrl);
 
         // Assert
         Should.Throw<ArgumentException>(act);
@@ -61,11 +61,11 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
-        GitLabCredential credential = GitLabCredential.Create(name, token, baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token, baseUrl);
 
         // Assert
         credential.ShouldSatisfyAllConditions(
-            () => credential.Name.ShouldBe(name),
+            () => credential.Name.Value.ShouldBe(name),
             () => credential.Token.ShouldBe(new ProviderToken.Present(token)),
             () => credential.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")),
             () => credential.Host.ShouldBe("gitlab.com"));
@@ -78,8 +78,8 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
-        GitLabCredential a = GitLabCredential.Create("account-a", "token-a", baseUrl);
-        GitLabCredential b = GitLabCredential.Create("account-b", "token-b", baseUrl);
+        GitLabCredential a = GitLabCredential.Create(AccountName.Create("account-a").ValueOrThrow(), "token-a", baseUrl);
+        GitLabCredential b = GitLabCredential.Create(AccountName.Create("account-b").ValueOrThrow(), "token-b", baseUrl);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
@@ -93,7 +93,7 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
 
         // Act
-        GitLabCredential credential = GitLabCredential.Create(name, null, baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), null, baseUrl);
 
         // Assert
         credential.Token.ShouldBeNull();

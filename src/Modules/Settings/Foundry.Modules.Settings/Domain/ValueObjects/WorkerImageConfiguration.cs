@@ -5,10 +5,13 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Settings.Domain.ValueObjects;
 
+/// <summary>
+/// Which worker image runs use and whether Foundry builds it. Every image carries the full toolchain
+/// (ADR 0109), so the configuration holds no install flags; stored rows that still carry them deserialize
+/// with those members skipped.
+/// </summary>
 public sealed record WorkerImageConfiguration
 {
-    private const string TrueValue = "true";
-    private const string FalseValue = "false";
     private const string LatestTag = ":latest";
     private const string DefaultImageTag = "foundry-worker:local";
 
@@ -16,29 +19,15 @@ public sealed record WorkerImageConfiguration
     internal const int MaxImageTagLength = 255;
 
     [JsonConstructor]
-    private WorkerImageConfiguration(
-        string imageTag,
-        bool buildEnabled,
-        bool installDotnet,
-        bool installAngular,
-        bool installChromium,
-        bool installDocker)
+    private WorkerImageConfiguration(string imageTag, bool buildEnabled)
     {
         ImageTag = imageTag;
         BuildEnabled = buildEnabled;
-        InstallDotnet = installDotnet;
-        InstallAngular = installAngular;
-        InstallChromium = installChromium;
-        InstallDocker = installDocker;
     }
 
     public static readonly WorkerImageConfiguration Default = Create(
         imageTag: DefaultImageTag,
-        buildEnabled: true,
-        installDotnet: false,
-        installAngular: false,
-        installChromium: false,
-        installDocker: false)
+        buildEnabled: true)
         .Match(
             onSuccess: v => v,
             onFailure: e => throw new InvalidOperationException($"WorkerImageConfiguration.Default is invalid: {e.Message}"));
@@ -47,21 +36,7 @@ public sealed record WorkerImageConfiguration
 
     public bool BuildEnabled { get; }
 
-    public bool InstallDotnet { get; }
-
-    public bool InstallAngular { get; }
-
-    public bool InstallChromium { get; }
-
-    public bool InstallDocker { get; }
-
-    public static Result<WorkerImageConfiguration> Create(
-        string imageTag,
-        bool buildEnabled,
-        bool installDotnet,
-        bool installAngular,
-        bool installChromium,
-        bool installDocker)
+    public static Result<WorkerImageConfiguration> Create(string imageTag, bool buildEnabled)
     {
         if (string.IsNullOrWhiteSpace(imageTag))
         {
@@ -78,21 +53,6 @@ public sealed record WorkerImageConfiguration
             return Result<WorkerImageConfiguration>.Fail(SettingsErrors.LatestImageTag);
         }
 
-        return Result<WorkerImageConfiguration>.Ok(new WorkerImageConfiguration(
-            imageTag,
-            buildEnabled,
-            installDotnet,
-            installAngular,
-            installChromium,
-            installDocker));
+        return Result<WorkerImageConfiguration>.Ok(new WorkerImageConfiguration(imageTag, buildEnabled));
     }
-
-    public IReadOnlyDictionary<string, string> ToBuildArgs() =>
-        new Dictionary<string, string>
-        {
-            ["INSTALL_DOTNET"] = InstallDotnet ? TrueValue : FalseValue,
-            ["INSTALL_ANGULAR"] = InstallAngular ? TrueValue : FalseValue,
-            ["INSTALL_CHROMIUM"] = InstallChromium ? TrueValue : FalseValue,
-            ["INSTALL_DOCKER"] = InstallDocker ? TrueValue : FalseValue,
-        };
 }

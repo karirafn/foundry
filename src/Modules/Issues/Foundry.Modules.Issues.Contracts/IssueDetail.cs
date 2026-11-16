@@ -49,9 +49,13 @@ public sealed record TriageVerdictDetails(
 /// <paramref name="SideBranchUrl"/> and <paramref name="DivergenceReason"/> are set only for <c>branch_diverged</c>: the
 /// issue branch and the side branch the run's work was pushed to, with their web URLs on the provider, and why
 /// (<c>branch-moved</c> or <c>force-push-protected</c>). <paramref name="ChecksPendingReason"/> is set only for
-/// <c>checks_pending</c>: <c>after_run</c> or <c>head_moved</c>. <paramref name="MergeOutcome"/> and
-/// <paramref name="MergeSkippedReason"/> are set only for a <c>review</c> issue that left merge-pending without a
-/// merge (ADR 0105).
+/// <c>checks_pending</c>: <c>after_run</c>, <c>head_moved</c>, <c>checks_rerun</c> or <c>catch_up</c>.
+/// <paramref name="MergeOutcome"/> and <paramref name="MergeSkippedReason"/> are set only for a <c>review</c> issue that
+/// left merge-pending without a merge (ADR 0105). <paramref name="RebasePendingReason"/> is set only for
+/// <c>rebase_pending</c>: <c>after_run</c> or <c>catch_up</c>. <paramref name="CatchUpRound"/> and
+/// <paramref name="CatchUpRoundLimit"/> are set while a catch-up (ADR 0111) has started: in <c>rebase_pending</c> or
+/// <c>checks_pending</c> with reason <c>catch_up</c>, or in <c>merge_pending</c>. <paramref name="MergeWait"/> is set
+/// only for a <c>merge_pending</c> issue waiting in the catch-up queue.
 /// </summary>
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
@@ -76,7 +80,18 @@ public sealed record IssueStateDetails(
     string? DivergenceReason = null,
     string? ChecksPendingReason = null,
     string? MergeOutcome = null,
-    string? MergeSkippedReason = null);
+    string? MergeSkippedReason = null,
+    string? RebasePendingReason = null,
+    int? CatchUpRound = null,
+    int? CatchUpRoundLimit = null,
+    MergeWaitDetails? MergeWait = null);
+
+/// <summary>
+/// A merge-pending issue's place in its repository's catch-up queue (ADR 0111): <paramref name="Position"/> is 1-based,
+/// 1 meaning next to catch up, and <paramref name="WaitingForIssueNumber"/> is the issue whose up-to-date pull request
+/// merges first, when the queue head waits for one.
+/// </summary>
+public sealed record MergeWaitDetails(int Position, int? WaitingForIssueNumber);
 
 /// <summary>
 /// An awaiting-input issue's open questions and how their post stands (ADR 0096): <paramref name="PostStatus"/> is

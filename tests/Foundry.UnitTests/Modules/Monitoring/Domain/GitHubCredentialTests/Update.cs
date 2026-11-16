@@ -17,16 +17,16 @@ public sealed class Update
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
-            "original-name",
+            AccountName.Create("original-name").ValueOrThrow(),
             "original-token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        credential.Update("updated-name", "new-token", BaseUrl.Create("https://github.example.com").ValueOrThrow());
+        credential.Update(AccountName.Create("updated-name").ValueOrThrow(), "new-token", BaseUrl.Create("https://github.example.com").ValueOrThrow());
 
         // Assert
         credential.ShouldSatisfyAllConditions(
-            () => credential.Name.ShouldBe("updated-name"),
+            () => credential.Name.Value.ShouldBe("updated-name"),
             () => credential.Token.ShouldBe(new ProviderToken.Present("new-token")),
             () => credential.BaseUrl.Value.ShouldBe(new Uri("https://github.example.com")),
             () => credential.Host.ShouldBe("github.example.com"));
@@ -37,16 +37,16 @@ public sealed class Update
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
-            "my-account",
+            AccountName.Create("my-account").ValueOrThrow(),
             "existing-token",
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        credential.Update("updated-name", null, BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.Update(AccountName.Create("updated-name").ValueOrThrow(), null, BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Assert
         credential.ShouldSatisfyAllConditions(
-            () => credential.Name.ShouldBe("updated-name"),
+            () => credential.Name.Value.ShouldBe("updated-name"),
             () => credential.Token.ShouldBe(new ProviderToken.Present("existing-token")));
     }
 }

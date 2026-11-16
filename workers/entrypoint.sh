@@ -192,7 +192,9 @@ prepare_role_verdict_schema() {
 # and the transient-error -c resume) expand verbatim, and CAPABILITY_USES_DOCKER,
 # which gates the start_rootless_dockerd call:
 #   full       — --dangerously-skip-permissions, and the nested rootless Docker
-#                daemon (CAPABILITY_USES_DOCKER=true) when the image has one.
+#                daemon (CAPABILITY_USES_DOCKER=true) when the operator enabled
+#                nested Docker, which Foundry signals with FOUNDRY_NESTED_DOCKER=1
+#                (ADR 0110).
 #   restricted — --restricted --strict-mcp-config, never the permission skip.
 #                The branch is unset so no branch reaches the run (and no Run
 #                bundle is written) even if one was set, and no Docker daemon
@@ -211,7 +213,9 @@ prepare_capability_profile() {
     case "$capability" in
         full)
             CAPABILITY_CLAUDE_ARGS=(--dangerously-skip-permissions)
-            CAPABILITY_USES_DOCKER=true
+            if [[ "${FOUNDRY_NESTED_DOCKER:-}" == "1" ]]; then
+                CAPABILITY_USES_DOCKER=true
+            fi
             ;;
         restricted)
             CAPABILITY_CLAUDE_ARGS=(--restricted --strict-mcp-config)
@@ -587,8 +591,9 @@ export GIT_EDITOR=true
 # startup, claude invocation) are out of scope for bootstrap classification.
 trap - ERR
 
-# Only a profile that can run commands gets the daemon (ADR 0098); a restricted run
-# skips it silently, with the inherited Docker environment still swept.
+# Only a profile that can run commands gets the daemon (ADR 0098), and only when the
+# operator enabled nested Docker (ADR 0110); any other run skips it silently, with the
+# inherited Docker environment still swept.
 if [[ "$CAPABILITY_USES_DOCKER" != true ]]; then
     clear_docker_environment
 elif ! start_rootless_dockerd; then

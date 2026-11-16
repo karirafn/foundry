@@ -44,10 +44,7 @@ const SETTINGS_RESPONSE = {
   autoResumeOnUsageReset: true,
   imageTag: 'foundry-worker:local',
   buildEnabled: true,
-  installDotnet: false,
-  installAngular: false,
-  installChromium: false,
-  installDocker: false,
+  nestedDockerEnabled: false,
   imageBuildStatus: 'Idle',
   lastImageBuildError: null,
   hasUsableImage: false,
@@ -565,6 +562,7 @@ describe('SettingsLayoutComponent', () => {
       harness.detectChanges();
       await harness.fixture.whenStable();
       harness.detectChanges();
+      httpMock.expectOne('/api/workers/image-toolchain').flush({ status: 'unknown', imageId: null });
 
       // Assert — active element is a heading inside .settings-layout__content
       const rootEl = harness.fixture.nativeElement as HTMLElement;

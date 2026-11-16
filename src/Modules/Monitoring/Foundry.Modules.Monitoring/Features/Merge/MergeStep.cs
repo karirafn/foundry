@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -36,6 +37,7 @@ internal sealed class MergeStep(
     DbContext dbContext,
     PostedCommentRegistry postedCommentRegistry,
     IIntegrationEventDispatcher integrationEventDispatcher,
+    IIntegrationEventProcessor integrationEventProcessor,
     WebhookNudgeQueue nudgeQueue,
     ILogger<MergeStep> logger)
 {
@@ -68,6 +70,7 @@ internal sealed class MergeStep(
             .ToListAsync(cancellationToken);
         MergeQueue queue = MergeQueue.From(repository.Id, rows);
         QueuePass pass = new(queue, MergeQueue.HeldIssueNumbers(pendingIssues, queueIssues), queueIssues);
+        IReadOnlyDictionary<int, MergeQueueEntry> entriesBefore = queue.Entries(pass.HeldIssueNumbers);
 
         if (issueNumber is null)
         {
@@ -75,6 +78,7 @@ internal sealed class MergeStep(
         }
 
         List<IIntegrationEvent> events = [];
+        HashSet<int> resolvedIssueNumbers = [];
         PostedCommentIds? postedComments = null;
         bool merged = false;
 
@@ -114,7 +118,13 @@ internal sealed class MergeStep(
                 pass,
                 postedComments,
                 cancellationToken);
+            int eventCount = events.Count;
             Apply(repository, pending, merge, pass, result, now, events);
+            if (events.Count > eventCount)
+            {
+                resolvedIssueNumbers.Add(pending.IssueNumber);
+            }
+
             merged |= result is StepResult.Resolved { Outcome: MergeOutcomes.Merged };
         }
 
@@ -127,6 +137,51 @@ internal sealed class MergeStep(
 
         await integrationEventDispatcher.DispatchAsync(events, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        List<int> changed = ChangedEntries(queue, pass, entriesBefore, resolvedIssueNumbers);
+        if (changed.Count > 0)
+        {
+            await PublishQueueChangedAsync(new MergeQueueChanged(repository.Id, changed), cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// The held issues whose queue entry reads differently than before the pass: a waiting entry joined, moved up,
+    /// or changed the issue it waits for. Issues resolved in this pass are left out: their state change is broadcast
+    /// once the outbox delivers the outcome.
+    /// </summary>
+    private static List<int> ChangedEntries(
+        MergeQueue queue,
+        QueuePass pass,
+        IReadOnlyDictionary<int, MergeQueueEntry> entriesBefore,
+        HashSet<int> resolvedIssueNumbers) =>
+        queue.Entries(pass.HeldIssueNumbers)
+            .Where(e => pass.HeldIssueNumbers.Contains(e.Key) && !resolvedIssueNumbers.Contains(e.Key))
+            .Where(e => !entriesBefore.TryGetValue(e.Key, out MergeQueueEntry? before) || before != e.Value)
+            .Select(e => e.Key)
+            .Order()
+            .ToList();
+
+    /// <summary>
+    /// Delivers <paramref name="event"/> directly, not through the outbox: it only refreshes an open issue pane, and
+    /// the queue is persisted already.
+    /// </summary>
+    private async Task PublishQueueChangedAsync(MergeQueueChanged @event, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await integrationEventProcessor.ProcessAsync(Guid.NewGuid(), @event, cancellationToken);
+        }
+#pragma warning disable CA1031 // A failed refresh must not fail the merge pass; the next queue change refreshes the pane.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to deliver {EventType} for repository {RepositoryId} directly.",
+                nameof(MergeQueueChanged),
+                @event.RepositoryId.Value);
+        }
     }
 
     private void Apply(
@@ -210,6 +265,7 @@ internal sealed class MergeStep(
                 break;
 
             case StepResult.Waiting waiting:
+                merge.WaitFor(waiting.AwaitedIssueNumber);
                 // Waiting is not a provider failure: the scheduled poll, or a merge nudge, evaluates the queue again.
                 logger.LogDebug(
                     "Issue #{IssueNumber} in '{Slug}' waits in the catch-up queue: {Reason}.",
@@ -374,7 +430,7 @@ internal sealed class MergeStep(
     {
         if (pass.Queue.Head(pass.HeldIssueNumbers) != merge)
         {
-            return new StepResult.Waiting("not the queue head");
+            return new StepResult.Waiting("not the queue head", AwaitedIssueNumber: null);
         }
 
         foreach (MergeQueueIssueInfo awaitable in pass.Queue.AwaitableIssues(merge, pass.QueueIssues))
@@ -387,7 +443,7 @@ internal sealed class MergeStep(
 
             if (upToDate is Result<bool>.Success { Value: true })
             {
-                return new StepResult.Waiting($"issue #{awaitable.IssueNumber} is already up to date");
+                return new StepResult.Waiting($"issue #{awaitable.IssueNumber} is already up to date", awaitable.IssueNumber);
             }
         }
 
@@ -515,8 +571,11 @@ internal sealed class MergeStep(
         /// <summary>The waiting queue head starts a catch-up round.</summary>
         public sealed record CatchUp : StepResult;
 
-        /// <summary>The queue entry keeps waiting for its catch-up, for <see cref="Reason"/>.</summary>
-        public sealed record Waiting(string Reason) : StepResult;
+        /// <summary>
+        /// The queue entry keeps waiting for its catch-up, for <see cref="Reason"/>; <see cref="AwaitedIssueNumber"/>
+        /// names the up-to-date issue it waits for, if any.
+        /// </summary>
+        public sealed record Waiting(string Reason, int? AwaitedIssueNumber) : StepResult;
     }
 
     /// <summary>The pull request read that precedes every merge decision.</summary>
