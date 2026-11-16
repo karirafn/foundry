@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Foundry.WebApi.Migrations
 {
     [DbContext(typeof(FoundryDbContext))]
-    [Migration("20261116103315_AddWorkerRunToolchain")]
+    [Migration("20261116104345_AddWorkerRunToolchain")]
     partial class AddWorkerRunToolchain
     {
         /// <inheritdoc />
@@ -464,6 +464,69 @@ namespace Foundry.WebApi.Migrations
                         .HasDatabaseName("ix_monitored_repositories_host_slug");
 
                     b.ToTable("monitored_repositories", (string)null);
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PackageSource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ServiceIndexUrl")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceIndexUrl")
+                        .IsUnique()
+                        .HasDatabaseName("ix_package_sources_url");
+
+                    b.ToTable("package_sources", (string)null);
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PackageSourceProbe", b =>
+                {
+                    b.Property<Guid>("PackageSourceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("package_source_id");
+
+                    b.Property<string>("CredentialKey")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_key");
+
+                    b.Property<DateTimeOffset>("CheckedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("checked_at");
+
+                    b.Property<int>("TokenVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("token_version");
+
+                    b.Property<int?>("_httpStatus")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("http_status");
+
+                    b.Property<string>("_outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("outcome");
+
+                    b.Property<string>("_reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reason");
+
+                    b.HasKey("PackageSourceId", "CredentialKey");
+
+                    b.ToTable("package_source_probes", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingMerge", b =>
@@ -3262,6 +3325,15 @@ namespace Foundry.WebApi.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PackageSourceProbe", b =>
+                {
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.PackageSource", null)
+                        .WithMany("Probes")
+                        .HasForeignKey("PackageSourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingMerge", b =>
                 {
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
@@ -3447,6 +3519,11 @@ namespace Foundry.WebApi.Migrations
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.Credential", b =>
                 {
                     b.Navigation("Namespaces");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PackageSource", b =>
+                {
+                    b.Navigation("Probes");
                 });
 #pragma warning restore 612, 618
         }
