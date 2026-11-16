@@ -2088,6 +2088,27 @@
         }
       }
     },
+    "/api/workers/image-toolchain": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Returns the toolchain recorded for the worker image workers run now, or unknown until it is recorded",
+        "operationId": "GetWorkerImageToolchain",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerImageToolchainResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/system/status": {
       "get": {
         "tags": [
@@ -5440,6 +5461,89 @@
           },
           "isRegistered": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkerImageTool": {
+        "required": [
+          "name",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkerImageToolchainResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkerImageToolchainResponseRecordedWorkerImageToolchain"
+          },
+          {
+            "$ref": "#/components/schemas/WorkerImageToolchainResponseUnknownWorkerImageToolchain"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "status",
+          "mapping": {
+            "recorded": "#/components/schemas/WorkerImageToolchainResponseRecordedWorkerImageToolchain",
+            "unknown": "#/components/schemas/WorkerImageToolchainResponseUnknownWorkerImageToolchain"
+          }
+        }
+      },
+      "WorkerImageToolchainResponseRecordedWorkerImageToolchain": {
+        "required": [
+          "imageId",
+          "recordedAt",
+          "tools"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded"
+            ],
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerImageTool"
+            }
+          }
+        }
+      },
+      "WorkerImageToolchainResponseUnknownWorkerImageToolchain": {
+        "required": [
+          "imageId"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "imageId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

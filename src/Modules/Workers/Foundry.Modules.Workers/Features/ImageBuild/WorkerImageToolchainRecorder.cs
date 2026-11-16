@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Roles;
+using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,7 @@ internal sealed class WorkerImageToolchainRecorder(
     IServiceScopeFactory scopeFactory,
     IWorkerImageToolchainProbe probe,
     IWorkerRoleCatalogStore roleCatalogStore,
+    ISystemNotificationBroadcaster broadcaster,
     TimeProvider timeProvider,
     ILogger<WorkerImageToolchainRecorder> logger) : BackgroundService, IWorkerImageToolchainRecorder
 {
@@ -49,10 +51,11 @@ internal sealed class WorkerImageToolchainRecorder(
         IServiceScopeFactory scopeFactory,
         IWorkerImageToolchainProbe probe,
         IWorkerRoleCatalogStore roleCatalogStore,
+        ISystemNotificationBroadcaster broadcaster,
         TimeProvider timeProvider,
         ILogger<WorkerImageToolchainRecorder> logger,
         ImageBuildRetryPolicy retryPolicy)
-        : this(scopeFactory, probe, roleCatalogStore, timeProvider, logger)
+        : this(scopeFactory, probe, roleCatalogStore, broadcaster, timeProvider, logger)
     {
         _retryPolicy = retryPolicy;
     }
@@ -106,6 +109,8 @@ internal sealed class WorkerImageToolchainRecorder(
                 "Recorded the toolchain of worker image {ImageId}: {Tools}.",
                 imageId,
                 string.Join(", ", toolchain.Entries.Select(e => $"{e.Name} {e.Version}")));
+
+            await NotifyStoredAsync(imageId, cancellationToken);
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -121,6 +126,33 @@ internal sealed class WorkerImageToolchainRecorder(
                 imageId,
                 SecretRedactor.Redact(ex.Message));
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends the image-build notification so an open Settings page reloads and shows the stored list. The list is
+    /// already stored, so a failed send is only logged: it must not make the loop probe the image again.
+    /// </summary>
+    private async Task NotifyStoredAsync(string imageId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await broadcaster.SendAsync(
+                new SystemNotification(WorkerImageRebuildService.ImageBuildCategory, IsActive: false, Message: string.Empty),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // A failed broadcast only delays the Settings refresh until the next reload.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                "Recorded the toolchain of worker image {ImageId} but could not notify the dashboard: {Error}",
+                imageId,
+                SecretRedactor.Redact(ex.Message));
         }
     }
 

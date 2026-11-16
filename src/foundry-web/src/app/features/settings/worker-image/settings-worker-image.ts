@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
 import { ImageBuildStatus, WorkerImageFlags } from '../../../core/models/settings.model';
 import { UnsavedChanges } from '../guards/unsaved-changes.guard';
+import { WorkerImageToolchainComponent } from './worker-image-toolchain';
 
 const LATEST_TAG_SUFFIX = ':latest';
 const ERROR_IMAGE_TAG_REQUIRED = 'Image tag is required.';
@@ -21,7 +22,7 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
 @Component({
   selector: 'fd-settings-worker-image',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, WorkerImageToolchainComponent],
   providers: [DatePipe],
   template: `
     <div class="general-settings">
@@ -32,6 +33,10 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
           engine. Saving the image tag or the build toggle rebuilds the image in the background; dispatch pauses until the
           build finishes.
         </p>
+
+        @if (settingsService.settings()) {
+          <fd-worker-image-toolchain />
+        }
 
         <div class="general-settings__image-form">
           <div class="general-settings__field">
