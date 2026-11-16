@@ -104,7 +104,7 @@ internal sealed class PackageSourceProbing(
         IReadOnlyCollection<ProbeTarget> targets = await CollectTargetsAsync(repositories, sourceUrl, sources, cancellationToken);
 
         // Every declared source is stored, probed or not, so Settings can list it and take a credential for it.
-        if (dbContext.ChangeTracker.HasChanges())
+        if (dbContext.ChangeTracker.Entries<PackageSource>().Any(e => e.State == EntityState.Added))
         {
             await SaveAsync(sourceUrl, cancellationToken);
         }
