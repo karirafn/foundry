@@ -11,6 +11,7 @@ import { PUBLISH_RUN_STATES, RevertedFile, WorkerRunDetail } from '../../workers
 import { MAX_CHECKS_FIX_ATTEMPTS, MAX_REBASE_CONFLICT_ATTEMPTS } from '../../../shared/utils/issue-state';
 import { rebaseOutcomeLabel } from '../../issues/rebase-outcome.format';
 import { formatCost, formatDuration, formatTokenTotal } from '../../issues/run-stats.format';
+import { ToolchainEntry } from '../../../core/models/toolchain.model';
 
 const SHORT_SHA_LENGTH = 7;
 const SHORT_RUN_ID_LENGTH = 8;
@@ -89,6 +90,7 @@ export type PaneFact =
     }
   | { readonly type: 'reverted_files'; readonly key: 'Reverted files'; readonly files: readonly RevertedFile[] }
   | { readonly type: 'run'; readonly key: 'Run'; readonly role: string | null; readonly shortId: string; readonly id: string }
+  | { readonly type: 'toolchain'; readonly key: 'Toolchain'; readonly summary: string; readonly tools: readonly ToolchainEntry[] }
   | { readonly type: 'blockers'; readonly key: 'Blocked by'; readonly blockers: readonly BlockerFact[] }
   | { readonly type: 'labels'; readonly key: 'Labels'; readonly labels: readonly string[] }
   | { readonly type: 'date'; readonly key: string; readonly iso: string }
@@ -194,6 +196,15 @@ function attempts(key: string, count: number | null | undefined, cap: number): P
   return count ? text(key, `${count} of ${cap}`) : null;
 }
 
+/** The tools the run's container reported, behind a count; null when it reported none. */
+function toolchainFact(run: WorkerRunDetail | null): PaneFact | null {
+  const tools = run?.toolchain ?? [];
+  if (tools.length === 0) {
+    return null;
+  }
+  return { type: 'toolchain', key: 'Toolchain', summary: tools.length === 1 ? '1 tool' : `${tools.length} tools`, tools };
+}
+
 /** How many findings an operator confirmed as false positives, and when; null when never. */
 function confirmedFindingsFact(run: WorkerRunDetail | null): PaneFact | null {
   if (!run?.falsePositivesConfirmedAt) {
@@ -245,6 +256,7 @@ export function buildFacts(
     runId === null
       ? null
       : { type: 'run', key: 'Run', role: run?.role ?? null, shortId: runId.slice(0, SHORT_RUN_ID_LENGTH), id: runId },
+    toolchainFact(run),
     attempts('Checks fixes', s?.checksFixAttempts, MAX_CHECKS_FIX_ATTEMPTS),
     attempts('Conflict fixes', s?.rebaseConflictAttempts, MAX_REBASE_CONFLICT_ATTEMPTS),
     text('Rebase', rebaseOutcomeLabel(s?.rebaseOutcome, s?.rebaseSkippedReason)),

@@ -102,6 +102,7 @@ What a worker image actually carries, read from the image rather than assumed fr
 After every successful build, and every successful inspect when building is disabled, Foundry runs the script in a hardened, short-lived container of that image ID and stores the list in `worker_image_toolchains`, keyed by image ID; earlier images keep their rows.
 While the current image (the role catalog's image ID) has no stored list, the probe is retried with backoff (1 minute, doubling, capped at 30 minutes); a new build restarts it.
 The toolchain-dependent prompt sections follow the current image's list: the C# code-navigation section when it has `csharp-ls`, the pre-PR section when it has `docker`, the "Rendering UI changes" section (full runs only) when it has both `chromium` and `playwright-core`; an image with no recorded list gets none of them.
+Each run also records its own toolchain: the entrypoint runs the script once, after the privilege drop and before the nested `dockerd`, and writes its line to stderr; Foundry reads it from the container's full log and stores it on the run (`worker_runs.toolchain`), shown as the issue pane's Toolchain fact. A run whose script failed, whose bootstrap failed first, or that predates this has none.
 
 ### Docker-Enabled Worker Run Spec
 
@@ -1490,7 +1491,8 @@ All of these run through `UsagePollCoordinator`, which holds a `SemaphoreSlim(1,
 ## System Notification
 
 A lightweight SignalR broadcast (`Category`, `IsActive`, `Message`) delivered to all dashboard clients via the system hub, used for global operational banners.
-Categories in use: `dispatch`, `docker`, `image-build`, `credits`.
+Categories in use: `dispatch`, `docker`, `image-build`, `credits`, `account-token`.
+The `account-token` category (see Invalid Token) carries a server-built message counting accounts whose token is Invalid — `isActive: true` while the count is above zero, `isActive: false` once every account token is valid again — and `/api/system/status` seeds it on page load.
 Auth-invalid and auth-restored conditions broadcast on `dispatch` (they gate dispatch via `ClaudeAccount.Validity`), not on a separate category.
 Client semantics: an `isActive: true` notification is stored, replacing any prior entry for its category; `isActive: false` removes the category's entry.
 Both `dispatch` and `image-build` are pure reload triggers — each broadcast carries an empty message and signals the client to re-sync authoritative state from `/api/settings` rather than reading any payload (see Dispatch Pause and Worker Image Build State).

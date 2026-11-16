@@ -68,6 +68,7 @@ const runningRun = {
   publishBlockedAt: null,
   falsePositivesConfirmedAt: null,
   confirmedFindings: [],
+  toolchain: null,
 };
 
 @Component({

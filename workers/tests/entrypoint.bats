@@ -4,6 +4,8 @@
 # committed helpers/ directory is never modified and tests are safe under parallel
 # execution.
 
+bats_require_minimum_version 1.5.0
+
 ENTRYPOINT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)/entrypoint.sh"
 
 # Testcontainers connection environment owned by start_rootless_dockerd.
@@ -92,6 +94,11 @@ setup() {
     # valid root-owned 0644 file (see make_fake_stat) rather than provisioning a live
     # managed policy in the runner's own /etc.
     make_fake_stat
+
+    # The image bakes the real toolchain report at /opt/foundry/toolchain.sh; inside a live
+    # worker it would take seconds per test, so every test gets a fast fake (see make_fake_toolchain).
+    make_fake_toolchain 'FOUNDRY_TOOLCHAIN [{"name":"node","version":"22.22.3"}]' 0
+    export FOUNDRY_TOOLCHAIN_SCRIPT="$BATS_TEST_TMPDIR/toolchain.sh"
 
     # Full-entrypoint tests resolve the run's role plugins before cloning. Point the
     # entrypoint at a per-test roles tree holding the implement and shared plugins
@@ -3593,4 +3600,89 @@ make_executable() {
     [ "${entries[3]}" != "$with" ]
     [ ! -e "${entries[3]}/dockerd-rootless.sh" ]
     [ "${entries[4]}" = "$without" ]
+}
+
+# ---------------------------------------------------------------------------
+# Toolchain report (ADR 0109, #991)
+# ---------------------------------------------------------------------------
+
+# make_fake_toolchain <stdout line> <exit code>
+# Writes a fake toolchain script that prints <stdout line> and exits with <exit code>.
+make_fake_toolchain() {
+    cat > "$BATS_TEST_TMPDIR/toolchain.sh" <<FAKE
+#!/bin/bash
+printf '%s\n' '$1'
+exit $2
+FAKE
+    chmod +x "$BATS_TEST_TMPDIR/toolchain.sh"
+}
+
+@test "toolchain: the entrypoint writes the script's FOUNDRY_TOOLCHAIN line to stderr" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *$'\nFOUNDRY_TOOLCHAIN [{"name":"node","version":"22.22.3"}]\n'* ]]
+    [[ "$output" != *"FOUNDRY_TOOLCHAIN"* ]]
+}
+
+@test "toolchain: the line is written once, before rootless dockerd starts" {
+    set_required_env
+    export FOUNDRY_NESTED_DOCKER=1
+    make_fake_git
+    make_fake_claude
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^FOUNDRY_TOOLCHAIN ' <<< "$stderr")" -eq 1 ]
+    local toolchain_line dockerd_line
+    toolchain_line="$(grep -n '^FOUNDRY_TOOLCHAIN ' <<< "$stderr" | cut -d: -f1)"
+    dockerd_line="$(grep -n 'Starting rootless dockerd' <<< "$stderr" | head -n 1 | cut -d: -f1)"
+    [ -n "$dockerd_line" ]
+    [ "$toolchain_line" -lt "$dockerd_line" ]
+}
+
+@test "toolchain: a restricted run writes the line too" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    make_fake_git
+    make_fake_claude
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *'FOUNDRY_TOOLCHAIN [{"name":"node","version":"22.22.3"}]'* ]]
+}
+
+@test "toolchain: a failing script is ignored and claude still runs" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_toolchain 'partial' 3
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$stderr" == *"Toolchain: not reported ($FOUNDRY_TOOLCHAIN_SCRIPT failed)"* ]]
+    [[ "$stderr" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+}
+
+@test "toolchain: a missing script is ignored and claude still runs" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    export FOUNDRY_TOOLCHAIN_SCRIPT="$BATS_TEST_TMPDIR/absent-toolchain.sh"
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$stderr" == *"Toolchain: not reported ($FOUNDRY_TOOLCHAIN_SCRIPT is missing)"* ]]
 }

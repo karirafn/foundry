@@ -1513,6 +1513,8 @@ public sealed partial class ResolveAsync
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     private sealed class UsageLimitedParser(DateTimeOffset resetsAt) : IContainerOutputParser
@@ -1523,6 +1525,8 @@ public sealed partial class ResolveAsync
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     private sealed class NoResultLineParser : IContainerOutputParser
@@ -1533,6 +1537,8 @@ public sealed partial class ResolveAsync
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     private sealed class TransientApiErrorParser : IContainerOutputParser
@@ -1543,6 +1549,8 @@ public sealed partial class ResolveAsync
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     private sealed class CreditsExhaustedParser : IContainerOutputParser
@@ -1553,5 +1561,7 @@ public sealed partial class ResolveAsync
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 }

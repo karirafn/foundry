@@ -244,6 +244,8 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         public RunResultSummary? ParseRunResultSummary(string? log) => runResultSummary;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     private sealed class ExitedWorkerOrchestrator(WorkerStatus status, string? logs) : IWorkerOrchestrator

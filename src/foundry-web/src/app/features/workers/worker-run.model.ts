@@ -1,3 +1,5 @@
+import { ToolchainEntry } from '../../core/models/toolchain.model';
+
 export type WorkerRunState = 'starting' | 'running' | 'publishing' | 'publish_failed' | 'publish_blocked' | 'completed' | 'failed';
 
 /** What Foundry published for a run. Provider URLs are built by the API. */
@@ -80,6 +82,8 @@ export interface WorkerRunDetail {
   readonly falsePositivesConfirmedAt: string | null;
   /** Every finding an operator confirmed as a false positive on this run; empty when none. */
   readonly confirmedFindings: readonly ConfirmedFinding[];
+  /** The toolchain the run's container reported when it started, in its order; null when it reported none. */
+  readonly toolchain: readonly ToolchainEntry[] | null;
 }
 
 /** Run states in which the agent has stopped and Foundry owns the run's commits. */

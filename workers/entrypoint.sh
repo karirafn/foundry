@@ -591,6 +591,16 @@ export GIT_EDITOR=true
 # startup, claude invocation) are out of scope for bootstrap classification.
 trap - ERR
 
+# Report the toolchain this container has (ADR 0109) on one FOUNDRY_TOOLCHAIN stderr line, which
+# Foundry stores on the run.  The report is informational: a missing or failing script only loses
+# the line, never the run.  FOUNDRY_TOOLCHAIN_SCRIPT only redirects the script for the bats suite.
+readonly TOOLCHAIN_SCRIPT="${FOUNDRY_TOOLCHAIN_SCRIPT:-/opt/foundry/toolchain.sh}"
+if [[ ! -x "$TOOLCHAIN_SCRIPT" ]]; then
+    echo "Toolchain: not reported ($TOOLCHAIN_SCRIPT is missing)" >&2
+elif ! "$TOOLCHAIN_SCRIPT" >&2; then
+    echo "Toolchain: not reported ($TOOLCHAIN_SCRIPT failed)" >&2
+fi
+
 # Only a profile that can run commands gets the daemon (ADR 0098), and only when the
 # operator enabled nested Docker (ADR 0110); any other run skips it silently, with the
 # inherited Docker environment still swept.

@@ -78,6 +78,12 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
         AddDomainEvent(new WorkerActivityObservedEvent(Id, IssueId, observedAt));
     }
 
+    /// <summary>Keeps the toolchain the run's container reported; every later state carries it.</summary>
+    public void RecordToolchain(Toolchain? toolchain)
+    {
+        StoreToolchain(toolchain);
+    }
+
     internal static ActiveRun FromStarting(
         StartingRun starting,
         ContainerId containerId,

@@ -138,9 +138,21 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         SourceTokenHash = sourceTokenHash;
     }
 
+    /// <summary>
+    /// The toolchain the run's container reported when it started (ADR 0109). <see langword="null"/> for a run whose
+    /// container reported none (bootstrap failed first, or the line was missing or malformed) and for runs recorded
+    /// before runs kept it.
+    /// </summary>
+    public Toolchain? Toolchain { get; private set; }
+
     protected void StoreSuppliedOpenIssueNumbers(IReadOnlyList<int>? suppliedOpenIssueNumbers)
     {
         SuppliedOpenIssueNumbers = suppliedOpenIssueNumbers;
+    }
+
+    protected void StoreToolchain(Toolchain? toolchain)
+    {
+        Toolchain = toolchain;
     }
 
     protected void RecordPublishFacts(
@@ -196,6 +208,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         RecordBase(source.Base, source.PreparedRepositoryId);
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
         SourceTokenHash = source.SourceTokenHash;
+        StoreToolchain(source.Toolchain);
     }
 
     protected void RecordVerdict(RunVerdict? verdict)

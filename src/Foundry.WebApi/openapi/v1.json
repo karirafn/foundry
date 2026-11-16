@@ -5972,6 +5972,15 @@
             "items": {
               "$ref": "#/components/schemas/WorkerRunConfirmedFinding"
             }
+          },
+          "toolchain": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/WorkerRunTool"
+            }
           }
         }
       },
@@ -6094,6 +6103,21 @@
             "type": "string"
           },
           "ruleId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkerRunTool": {
+        "required": [
+          "name",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
             "type": "string"
           }
         }

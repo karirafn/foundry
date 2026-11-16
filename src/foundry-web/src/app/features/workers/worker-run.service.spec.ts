@@ -30,6 +30,7 @@ const mockDetail: WorkerRunDetail = {
   publishBlockedAt: null,
   falsePositivesConfirmedAt: null,
   confirmedFindings: [],
+  toolchain: null,
 };
 
 function setup() {
