@@ -46,7 +46,7 @@ public sealed class ProbeNowAsync : IAsyncDisposable
         prober.Verdicts[GroupSourceUrl] = new PackageSourceVerdict.Unreadable(401, "service index returned 401");
         ProbeDueAsync.SlugCredentialResolver resolver = new();
         resolver.Accounts["group/app"] = GitLabCredential.Create(
-            "deploy-bot",
+            AccountName.Create("deploy-bot").ValueOrThrow(),
             "token",
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         MonitoredRepository repository = MonitoredRepository.Create(

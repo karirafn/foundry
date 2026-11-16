@@ -116,7 +116,7 @@ internal sealed class PackageSourceProbing(
                         declared.ServiceIndexUrl,
                         new ProbeCredential.Account(account.Id),
                         account.TokenVersion,
-                        new UpstreamCredential(account.Name, usable.Token))
+                        new UpstreamCredential(account.Name.Value, usable.Token))
                     : new ProbeTarget(declared.ServiceIndexUrl, new ProbeCredential.Anonymous(), TokenVersion: 0, UpstreamCredential: null);
 
                 targets.TryAdd((target.SourceUrl.AbsoluteUri, target.Credential.Key), target);

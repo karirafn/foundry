@@ -390,7 +390,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     private const string OtherHostSourceUrl = "https://nuget.pkg.github.com/owner/index.json";
 
     private static GitHubCredential CreateUsableCredential() =>
-        GitHubCredential.Create("test", "token", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential.Create(AccountName.Create("test").ValueOrThrow(), "token", BaseUrl.Create("https://github.com").ValueOrThrow());
 
     private static MonitoredRepository CreateRepoDeclaring(params string[] sourceUrls)
     {

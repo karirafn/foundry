@@ -625,7 +625,7 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     private static GitHubCredential UsableCredential() =>
-        GitHubCredential.Create("test", "token", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential.Create(AccountName.Create("test").ValueOrThrow(), "token", BaseUrl.Create("https://github.com").ValueOrThrow());
 
     [Fact]
     public async Task WhenPushIsDeniedAndASourceIsUnreadable_ListsBothViolations()
