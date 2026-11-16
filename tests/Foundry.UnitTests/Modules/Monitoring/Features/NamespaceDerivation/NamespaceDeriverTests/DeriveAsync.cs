@@ -33,7 +33,7 @@ public sealed class DeriveAsync
     private static GitHubCredential BuildGitHubCredential(string token = "ghp_test")
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        return GitHubCredential.Create("octocat", token, baseUrl);
+        return GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), token, baseUrl);
     }
 
     private static NamespaceDeriver BuildSut(HttpClient gitHubClient, HttpClient? gitLabClient = null)
@@ -178,7 +178,7 @@ public sealed class DeriveAsync
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("octocat", token: null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), token: null, baseUrl);
         NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()));
 
         // Act
@@ -193,7 +193,7 @@ public sealed class DeriveAsync
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken("octocat", baseUrl);
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken(AccountName.Create("octocat").ValueOrThrow(), baseUrl);
         NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()));
 
         // Act
@@ -208,7 +208,7 @@ public sealed class DeriveAsync
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("octocat", string.Concat("ghp_", "rejected"), baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), string.Concat("ghp_", "rejected"), baseUrl);
         credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
         NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()));
 

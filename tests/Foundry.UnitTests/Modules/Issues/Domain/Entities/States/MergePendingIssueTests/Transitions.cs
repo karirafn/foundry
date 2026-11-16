@@ -101,4 +101,33 @@ public sealed class Transitions
             () => failed.FailureCategory.ShouldBe(FailureCategory.PrClosed));
         mergePending.DomainEvents.OfType<IssueContinuableFailed>().ShouldHaveSingleItem();
     }
+
+    [Fact]
+    public void CatchUp_RebasesForTheCatchUpPinnedToTheVerifiedHead()
+    {
+        // Arrange
+        MergePendingIssue mergePending = new IssueBuilder()
+            .WithBranchName("feat/1-merge")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/9")
+            .WithVerifiedHeadSha(Head)
+            .MergePending();
+        DateTimeOffset transitionedAt = new(2026, 11, 15, 9, 0, 0, TimeSpan.Zero);
+
+        // Act
+        RebasePendingIssue rebasePending = mergePending.CatchUp(transitionedAt);
+
+        // Assert
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Id.ShouldBe(mergePending.Id),
+            () => rebasePending.Reason.ShouldBe(new RebasePendingReason.CatchUp()),
+            () => rebasePending.CatchUpHeadSha.ShouldBe(Head),
+            () => rebasePending.BranchName.ShouldBe("feat/1-merge"),
+            () => rebasePending.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/9"),
+            () => rebasePending.WorkerRunId.ShouldBe(mergePending.WorkerRunId),
+            () => rebasePending.FeedbackCutoffAt.ShouldBe(mergePending.FeedbackCutoffAt),
+            () => rebasePending.RebaseConflictAttempts.ShouldBe(mergePending.RebaseConflictAttempts),
+            () => rebasePending.EnteredRebasePendingAt.ShouldBe(transitionedAt));
+        IssueRebasePending domainEvent = mergePending.DomainEvents.OfType<IssueRebasePending>().ShouldHaveSingleItem();
+        domainEvent.EnteredRebasePendingAt.ShouldBe(transitionedAt);
+    }
 }

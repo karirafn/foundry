@@ -3,6 +3,7 @@ using Docker.DotNet;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Publisher;
 
@@ -14,7 +15,7 @@ namespace Foundry.IntegrationTests.Smoke;
 
 /// <summary>
 /// The external boundaries of the composed host, faked at the seams production uses: the Docker daemon
-/// (image operations, worker and Publisher containers, credential helper containers, daemon ping) and the Git provider.
+/// (image operations, worker, Publisher and toolchain probe containers, credential helper containers, daemon ping) and the Git provider.
 /// Everything inside the host stays real.
 /// </summary>
 internal sealed class ComposedHostBoundaries : IDisposable
@@ -42,6 +43,8 @@ internal sealed class ComposedHostBoundaries : IDisposable
             services.AddSingleton<IWorkerOrchestrator>(Containers);
             services.RemoveAll<IPublisher>();
             services.AddSingleton<IPublisher>(new PreparedPublisher());
+            services.RemoveAll<IWorkerImageToolchainProbe>();
+            services.AddSingleton<IWorkerImageToolchainProbe>(new RecordedToolchainProbe());
             services.RemoveAll<ICredentialsOrchestrator>();
             services.AddSingleton<ICredentialsOrchestrator>(new IdleCredentialsOrchestrator());
 

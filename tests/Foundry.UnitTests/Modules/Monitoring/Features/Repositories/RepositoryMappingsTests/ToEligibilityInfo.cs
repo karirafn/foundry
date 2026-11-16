@@ -108,6 +108,40 @@ public sealed class ToEligibilityInfo
     }
 
     [Fact]
+    public void WhenEligibilityIsIneligibleWithPackageSourceUnreachableViolation_DerivesTheDescriptionFromTheUrl()
+    {
+        // Arrange
+        RepositoryEligibility.Ineligible ineligible = new(
+            [EligibilityViolation.PackageSourceUnreachable(new Uri("https://gitlab.com/api/v4/groups/7/-/packages/nuget/index.json"))]);
+
+        // Act
+        RepositoryEligibilityInfo? result = RepositoryMappings.ToEligibilityInfo(ineligible, "gitlab");
+
+        // Assert
+        EligibilityViolationInfo violation = result.ShouldNotBeNull().Violations.ShouldHaveSingleItem();
+        violation.ShouldSatisfyAllConditions(
+            () => violation.Rule.ShouldBe("package-source-unreachable:https://gitlab.com/api/v4/groups/7/-/packages/nuget/index.json"),
+            () => violation.Description.ShouldBe(
+                "Foundry can't read the package source https://gitlab.com/api/v4/groups/7/-/packages/nuget/index.json."));
+    }
+
+    [Fact]
+    public void WhenEligibilityIsIneligibleWithNuGetConfigInvalidViolation_ReturnsItsDescription()
+    {
+        // Arrange
+        RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.NuGetConfigInvalid()]);
+
+        // Act
+        RepositoryEligibilityInfo? result = RepositoryMappings.ToEligibilityInfo(ineligible, "github");
+
+        // Assert
+        EligibilityViolationInfo violation = result.ShouldNotBeNull().Violations.ShouldHaveSingleItem();
+        violation.ShouldSatisfyAllConditions(
+            () => violation.Rule.ShouldBe("nuget-config-invalid"),
+            () => violation.Description.ShouldBe("The repository's root nuget.config could not be parsed."));
+    }
+
+    [Fact]
     public void WhenEligibilityIsUnreachableWithNeverProbedReason_ReturnsNeverProbedToken()
     {
         // Arrange

@@ -11,18 +11,10 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.Entities.GlobalSettingsTests
 
 public sealed class UpdateWorkerImageConfiguration
 {
-    private static ImageConfig CreateConfig(
-        bool dotnet = false,
-        bool angular = false,
-        bool chromium = false,
-        bool docker = false) =>
+    private static ImageConfig CreateConfig() =>
         ImageConfig.Create(
-            imageTag: "foundry-worker:local",
-            buildEnabled: true,
-            installDotnet: dotnet,
-            installAngular: angular,
-            installChromium: chromium,
-            installDocker: docker)
+            imageTag: "foundry-worker:v2",
+            buildEnabled: true)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
     [Fact]
@@ -30,7 +22,7 @@ public sealed class UpdateWorkerImageConfiguration
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        ImageConfig newConfig = CreateConfig(dotnet: true);
+        ImageConfig newConfig = CreateConfig();
 
         // Act
         bool changed = settings.UpdateWorkerImageConfiguration(newConfig);
@@ -61,7 +53,7 @@ public sealed class UpdateWorkerImageConfiguration
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
         DateTimeOffset before = settings.UpdatedAt;
-        ImageConfig newConfig = CreateConfig(dotnet: true);
+        ImageConfig newConfig = CreateConfig();
 
         // Act
         settings.UpdateWorkerImageConfiguration(newConfig);
@@ -93,11 +85,7 @@ public sealed class UpdateWorkerImageConfiguration
         DateTimeOffset before = settings.UpdatedAt;
         ImageConfig newConfig = ImageConfig.Create(
             imageTag: "foundry-worker:v2",
-            buildEnabled: true,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false)
+            buildEnabled: true)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         // Act
@@ -117,11 +105,7 @@ public sealed class UpdateWorkerImageConfiguration
         DateTimeOffset before = settings.UpdatedAt;
         ImageConfig newConfig = ImageConfig.Create(
             imageTag: "foundry-worker:local",
-            buildEnabled: false,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false)
+            buildEnabled: false)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         // Act
@@ -134,18 +118,14 @@ public sealed class UpdateWorkerImageConfiguration
     }
 
     [Fact]
-    public void WhenTagAndBuildEnabledAndFlagsAllMatch_ReturnsFalseAndDoesNotBumpUpdatedAt()
+    public void WhenTagAndBuildEnabledMatch_ReturnsFalseAndDoesNotBumpUpdatedAt()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
         DateTimeOffset originalUpdatedAt = settings.UpdatedAt;
         ImageConfig identicalConfig = ImageConfig.Create(
             imageTag: "foundry-worker:local",
-            buildEnabled: true,
-            installDotnet: false,
-            installAngular: false,
-            installChromium: false,
-            installDocker: false)
+            buildEnabled: true)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         // Act

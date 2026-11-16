@@ -1,5 +1,6 @@
 ARG BASE_IMAGE=foundry-claude-base:local
 FROM ${BASE_IMAGE}
+LABEL dev.foundry.image=login
 
 # Login image — runs 'claude auth login --claudeai' driven entirely by the
 # Foundry Docker API. Operators do not run 'docker run' manually; Foundry

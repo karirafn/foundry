@@ -8,6 +8,7 @@ using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -20,6 +21,8 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
     private const int HostMaxLength = 253;
     private const int EligibilityStatusMaxLength = 20;
     private const int WebhookStatusMaxLength = 20;
+    private const int BlobShaMaxLength = 64;
+    private const int ETagMaxLength = 200;
 
     private static readonly JsonSerializerOptions EligibilitySerializerOptions = new();
 
@@ -170,7 +173,65 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
             .HasSentinel(WebhookStatus.NotConfigured)
             .HasColumnName("webhook_status");
 
+        ValueConverter<IReadOnlyList<DeclaredPackageSource>, string> packageSourcesConverter = new(
+            sources => SerializePackageSources(sources),
+            json => DeserializePackageSources(json));
+
+        ValueComparer<IReadOnlyList<DeclaredPackageSource>> packageSourcesComparer = new(
+            (left, right) => left!.SequenceEqual(right!),
+            sources => sources.Aggregate(0, (hash, source) => HashCode.Combine(hash, source)),
+            sources => sources.ToList());
+
+        builder.Property(r => r.DeclaredPackageSources)
+            .HasConversion(packageSourcesConverter, packageSourcesComparer)
+            .HasColumnType("TEXT")
+            .HasDefaultValue(Array.Empty<DeclaredPackageSource>())
+            .IsRequired()
+            .HasColumnName("declared_package_sources");
+
+        builder.Property(r => r.RootNuGetConfigText)
+            .HasColumnType("TEXT")
+            .HasColumnName("root_nuget_config_text");
+
+        builder.Property(r => r.RootNuGetConfigBlobSha)
+            .HasMaxLength(BlobShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("root_nuget_config_blob_sha");
+
+        builder.Property(r => r.RootNuGetConfigInvalidReason)
+            .HasColumnType("TEXT")
+            .HasColumnName("root_nuget_config_invalid_reason");
+
+        builder.Property(r => r.RootListingETag)
+            .HasMaxLength(ETagMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("root_listing_etag");
+
+        builder.Ignore(r => r.RootNuGetConfig);
     }
+
+
+    private static string SerializePackageSources(IReadOnlyList<DeclaredPackageSource> sources) =>
+        JsonSerializer.Serialize(
+            sources.Select(source => new PackageSourceRow(source.Key, source.ServiceIndexUrl.AbsoluteUri)).ToList(),
+            EligibilitySerializerOptions);
+
+    /// <summary>
+    /// Rebuilds each stored source through <see cref="DeclaredPackageSource.Create"/>, so a row that no longer
+    /// passes its rules is dropped rather than read back as a source.
+    /// </summary>
+    private static List<DeclaredPackageSource> DeserializePackageSources(string json)
+    {
+        List<PackageSourceRow> rows = JsonSerializer.Deserialize<List<PackageSourceRow>>(json, EligibilitySerializerOptions) ?? [];
+
+        return rows
+            .Select(row => DeclaredPackageSource.Create(row.Key, row.Url))
+            .OfType<Result<DeclaredPackageSource>.Success>()
+            .Select(success => success.Value)
+            .ToList();
+    }
+
+    private sealed record PackageSourceRow(string Key, string Url);
 
     private static RepositorySlug ParseSlug(string value)
     {

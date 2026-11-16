@@ -179,4 +179,24 @@ public sealed class HandleAsync : IAsyncDisposable
         (await LoadAsync(repositoryId)).ShouldBeOfType<ReviewIssue>().MergeOutcome.ShouldBeNull();
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task WhenCatchUp_RebasesTheIssueForItsCatchUp()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedMergePending(repositoryId);
+
+        // Act
+        await _sut.HandleAsync(new MergeResolved(repositoryId, 1, "catch_up"), TestContext.Current.CancellationToken);
+
+        // Assert
+        RebasePendingIssue rebasePending = (await LoadAsync(repositoryId)).ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBe(new RebasePendingReason.CatchUp()),
+            () => rebasePending.CatchUpHeadSha.ShouldBe("4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e"),
+            () => rebasePending.BranchName.ShouldBe("feat/1-test-issue"),
+            () => rebasePending.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"));
+        _dispatcher.DispatchedEvents.OfType<IssueRebasePending>().ShouldHaveSingleItem();
+    }
 }

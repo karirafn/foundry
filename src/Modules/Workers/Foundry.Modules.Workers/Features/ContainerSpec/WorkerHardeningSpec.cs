@@ -71,6 +71,16 @@ internal static class WorkerHardeningSpec
             ScratchVolumePaths = ScratchVolumePaths,
         };
 
+    /// <summary>
+    /// The toolchain probe starts as the unprivileged user and only runs version commands, so it needs no capability
+    /// back; it keeps the worker's read-only root and scratch paths, so it sees the image as a run does.
+    /// </summary>
+    public static WorkerContainerSpec ApplyToToolchainProbe(WorkerContainerSpec spec) =>
+        Apply(spec) with
+        {
+            Capabilities = [],
+        };
+
     public static WorkerContainerSpec ApplyToPublisher(WorkerContainerSpec spec) =>
         spec with
         {

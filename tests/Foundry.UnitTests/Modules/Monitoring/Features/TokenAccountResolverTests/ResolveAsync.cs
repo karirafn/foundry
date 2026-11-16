@@ -52,7 +52,7 @@ public sealed class ResolveAsync : IAsyncDisposable
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(accountName, "ghp_original", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(accountName).ValueOrThrow(), "ghp_original", baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return credential;
@@ -83,7 +83,7 @@ public sealed class ResolveAsync : IAsyncDisposable
         // Assert
         TokenResolution.Resolved resolved = result.ShouldBeOfType<TokenResolution.Resolved>();
         resolved.ShouldSatisfyAllConditions(
-            () => resolved.AccountName.ShouldBe("alice"),
+            () => resolved.Identity.Name.Value.ShouldBe("alice"),
             () => resolved.Namespaces.ShouldContain(n => n.Value == "alice"));
     }
 
@@ -201,7 +201,7 @@ public sealed class ResolveAsync : IAsyncDisposable
 
         // Assert
         TokenResolution.Resolved resolved = result.ShouldBeOfType<TokenResolution.Resolved>();
-        resolved.AccountName.ShouldBe("unverifiable-user");
+        resolved.Identity.Name.Value.ShouldBe("unverifiable-user");
     }
 
     [Fact]
@@ -261,12 +261,12 @@ public sealed class ResolveAsync : IAsyncDisposable
         // The fully-claimed guard must NOT fire on an empty derived set (AC#4 empty≠unavailable).
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
         Namespace holderNs = Namespace.Create("some-org").ValueOrThrow();
         holder.SetNamespaces([holderNs]);
         _dbContext.Set<Credential>().Add(holder);
 
-        GitHubCredential subject = GitHubCredential.Create("subject-user", "ghp_subject", baseUrl);
+        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), "ghp_subject", baseUrl);
         _dbContext.Set<Credential>().Add(subject);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -293,12 +293,12 @@ public sealed class ResolveAsync : IAsyncDisposable
         // Rotating second with a token resolving to "first-user" and deriving "first-user" collides.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential first = GitHubCredential.Create("first-user", "ghp_first", baseUrl);
+        GitHubCredential first = GitHubCredential.Create(AccountName.Create("first-user").ValueOrThrow(), "ghp_first", baseUrl);
         Namespace firstNs = Namespace.Create("first-user").ValueOrThrow();
         first.SetNamespaces([firstNs]);
         _dbContext.Set<Credential>().Add(first);
 
-        GitHubCredential second = GitHubCredential.Create("second-user", "ghp_second", baseUrl);
+        GitHubCredential second = GitHubCredential.Create(AccountName.Create("second-user").ValueOrThrow(), "ghp_second", baseUrl);
         _dbContext.Set<Credential>().Add(second);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -326,7 +326,7 @@ public sealed class ResolveAsync : IAsyncDisposable
         // Rotating with a token deriving the same namespace must succeed because the account
         // is excluded from the claimed-by-others check.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("alice", "ghp_old", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("alice").ValueOrThrow(), "ghp_old", baseUrl);
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
         credential.SetNamespaces([aliceNs]);
         _dbContext.Set<Credential>().Add(credential);
@@ -353,12 +353,12 @@ public sealed class ResolveAsync : IAsyncDisposable
         // Arrange — holder claims "org-a"; subject's new token derives only "org-a".
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
         Namespace orgNs = Namespace.Create("org-a").ValueOrThrow();
         holder.SetNamespaces([orgNs]);
         _dbContext.Set<Credential>().Add(holder);
 
-        GitHubCredential subject = GitHubCredential.Create("subject-user", "ghp_subject", baseUrl);
+        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), "ghp_subject", baseUrl);
         subject.SetNamespaces([]);
         _dbContext.Set<Credential>().Add(subject);
 
@@ -390,12 +390,12 @@ public sealed class ResolveAsync : IAsyncDisposable
         // Guard must NOT fire — "free-org" is available, so resolution can proceed.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
         Namespace claimedNs = Namespace.Create("claimed-org").ValueOrThrow();
         holder.SetNamespaces([claimedNs]);
         _dbContext.Set<Credential>().Add(holder);
 
-        GitHubCredential subject = GitHubCredential.Create("subject-user", "ghp_subject", baseUrl);
+        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), "ghp_subject", baseUrl);
         _dbContext.Set<Credential>().Add(subject);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -413,7 +413,7 @@ public sealed class ResolveAsync : IAsyncDisposable
 
         // Assert — partial overlap must not trigger the fully-claimed guard
         TokenResolution.Resolved resolved = result.ShouldBeOfType<TokenResolution.Resolved>();
-        resolved.AccountName.ShouldBe("subject-user");
+        resolved.Identity.Name.Value.ShouldBe("subject-user");
     }
 
     // ── Stubs and fakes ─────────────────────────────────────────────────────────────

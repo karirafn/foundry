@@ -67,6 +67,10 @@ public static class WorkersModule
         services.AddSingleton<IProbeOutcomeClassifier, ProbeOutcomeClassifier>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
         services.AddSingleton<IWorkerRoleCatalogStore, WorkerRoleCatalogStore>();
+        services.AddSingleton<FoundryImageSweep>();
+        services.AddSingleton<IWorkerImageToolchainProbe, DockerWorkerImageToolchainProbe>();
+        services.AddSingleton<WorkerImageToolchainRecorder>();
+        services.AddSingleton<IWorkerImageToolchainRecorder>(sp => sp.GetRequiredService<WorkerImageToolchainRecorder>());
         services.AddHttpClient<IClaudeModelsApi, AnthropicModelsClient>(client =>
         {
             client.BaseAddress = AnthropicModelsClient.BaseAddress;
@@ -98,6 +102,8 @@ public static class WorkersModule
         services.AddHostedService<RunPublishingService>();
         services.AddHostedService<AgentActivityFollowerService>();
         services.AddHostedService<WorkerImageRebuildService>();
+        services.AddHostedService<FoundryImageSweepService>();
+        services.AddHostedService(sp => sp.GetRequiredService<WorkerImageToolchainRecorder>());
         services.AddHostedService<StaleStartingRunService>();
         services.AddHostedService<StaleReservationService>();
         services.AddHostedService<RunTranscriptRetentionService>();

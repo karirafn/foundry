@@ -17,4 +17,13 @@ public static class MergeSkipReasons
 
     /// <summary>Transient provider failures (5xx, timeouts, rate limits) exhausted the retry budget.</summary>
     public const string ProviderError = "provider_error";
+
+    /// <summary>
+    /// The pull request kept falling behind the default branch: its merge was refused as behind again after every
+    /// catch-up round its queue entry allows (ADR 0111).
+    /// </summary>
+    public const string FellBehind = "fell_behind";
+
+    /// <summary>A catch-up rebase could not bring the pull request up to date with the default branch (ADR 0111).</summary>
+    public const string CatchUpFailed = "catch_up_failed";
 }

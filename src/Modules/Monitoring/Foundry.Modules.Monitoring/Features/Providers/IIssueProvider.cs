@@ -8,6 +8,7 @@ using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Chec
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Merge;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
+using Foundry.Modules.Monitoring.Features.Providers.RootDirectory;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
@@ -181,6 +182,32 @@ internal interface IIssueProvider
         CancellationToken cancellationToken)
         => Task.FromResult(Result<bool>.Fail(
             RunPublishingErrors.Permanent("This provider does not support comparing refs.")));
+
+    /// <summary>
+    /// Lists the repository's root directory on its default branch, without descending into subdirectories:
+    /// each entry's name, kind and blob SHA. <paramref name="ifNoneMatch"/> is the ETag of the previous listing;
+    /// a provider that supports conditional requests answers <see cref="RootDirectoryListing.Unchanged"/> when
+    /// nothing changed since it.
+    /// </summary>
+    /// <remarks>Providers without a root listing keep this default, which fails with
+    /// <see cref="RootDirectoryErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<RootDirectoryListing>> ListRootDirectoryAsync(
+        RepositorySlug slug,
+        string? ifNoneMatch,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<RootDirectoryListing>.Fail(RootDirectoryErrors.NotSupported()));
+
+    /// <summary>
+    /// Reads the raw content of the file whose blob SHA is <paramref name="blobSha"/>, as returned by
+    /// <see cref="ListRootDirectoryAsync"/>, decoded as UTF-8.
+    /// </summary>
+    /// <remarks>Providers without a blob read keep this default, which fails with
+    /// <see cref="RootDirectoryErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<string>> ReadBlobAsync(
+        RepositorySlug slug,
+        string blobSha,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<string>.Fail(RootDirectoryErrors.NotSupported()));
 
     Task<Result<BranchProtection>> GetBranchProtectionAsync(
         RepositorySlug slug,

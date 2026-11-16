@@ -21,11 +21,11 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubCredential credential = GitHubCredential.Create(name, token, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token, baseUrl);
 
         // Assert
         credential.ShouldSatisfyAllConditions(
-            () => credential.Name.ShouldBe(name),
+            () => credential.Name.Value.ShouldBe(name),
             () => credential.Token.ShouldBe(new ProviderToken.Present(token)),
             () => credential.BaseUrl.Value.ShouldBe(new Uri("https://github.com")),
             () => credential.Host.ShouldBe("github.com"));
@@ -38,8 +38,8 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubCredential a = GitHubCredential.Create("account-a", "token-a", baseUrl);
-        GitHubCredential b = GitHubCredential.Create("account-b", "token-b", baseUrl);
+        GitHubCredential a = GitHubCredential.Create(AccountName.Create("account-a").ValueOrThrow(), "token-a", baseUrl);
+        GitHubCredential b = GitHubCredential.Create(AccountName.Create("account-b").ValueOrThrow(), "token-b", baseUrl);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
@@ -53,7 +53,7 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubCredential credential = GitHubCredential.Create(name, null, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), null, baseUrl);
 
         // Assert
         credential.Token.ShouldBeNull();

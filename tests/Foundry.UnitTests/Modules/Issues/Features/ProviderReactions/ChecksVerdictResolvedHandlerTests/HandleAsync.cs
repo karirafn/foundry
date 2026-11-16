@@ -278,6 +278,35 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenChecksPendingAndOutcomeInfrastructureFailed_TransitionsToReviewIssueWithInfrastructureFailed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+        FailingCheck failingCheck = new(
+            "build", "ci_quota_exceeded", "https://gitlab.com/group/project/-/jobs/1", IsInfrastructureFailure: true);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "infrastructure_failed",
+            FailingChecks: [failingCheck],
+            HeadSha: VerifiedHead);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ReviewIssue>().ChecksOutcome
+            .ShouldBeOfType<ChecksOutcome.InfrastructureFailed>().FailingChecks.ShouldBe([failingCheck]);
+    }
+
+    [Fact]
     public async Task WhenChecksPendingAndOutcomeStillFailingWithNoNamedCheckAndUnderCap_TransitionsToReviewIssueWithEmptyFailingChecks()
     {
         // Arrange

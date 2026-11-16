@@ -99,7 +99,8 @@ public sealed class GetCurrentActivity
             CompletedTaskCount: 0,
             Subagents: [],
             InFlightTool: new InFlightTool("Bash"),
-            Tokens: new AgentTokenTotals(1, 2));
+            Tokens: new AgentTokenTotals(1, 2),
+            BackgroundTasks: []);
     }
 
     private static WorkerHub CreateHub(

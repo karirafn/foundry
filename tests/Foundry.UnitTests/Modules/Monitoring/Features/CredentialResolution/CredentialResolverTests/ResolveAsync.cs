@@ -51,7 +51,7 @@ public sealed class ResolveAsync : IAsyncDisposable
 
     private async Task<GitHubCredential> SeedGitHubCredentialAsync(string name, params string[] namespaces)
     {
-        GitHubCredential credential = GitHubCredential.Create(name, "ghp_token", GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), "ghp_token", GitHubBaseUrl());
         credential.SetNamespaces(namespaces.Select(n => Namespace.Create(n).ValueOrThrow()));
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -61,7 +61,7 @@ public sealed class ResolveAsync : IAsyncDisposable
 
     private async Task<GitLabCredential> SeedGitLabCredentialAsync(string name, params string[] namespaces)
     {
-        GitLabCredential credential = GitLabCredential.Create(name, "glpat_token", GitLabBaseUrl());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), "glpat_token", GitLabBaseUrl());
         credential.SetNamespaces(namespaces.Select(n => Namespace.Create(n).ValueOrThrow()));
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);

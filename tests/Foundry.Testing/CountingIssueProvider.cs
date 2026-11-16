@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.RootDirectory;
 using Foundry.Shared;
 
 namespace Foundry.Testing;
@@ -39,6 +40,18 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int GetBranchCommitSummaryCallCount { get; private set; }
     public int CanPushCallCount { get; private set; }
     public int GetChecksCallCount { get; private set; }
+    public int ListRootDirectoryCallCount { get; private set; }
+    public int ReadBlobCallCount { get; private set; }
+
+    /// <summary>The answer to every root directory listing; an empty root by default.</summary>
+    public Result<RootDirectoryListing> RootListing { get; set; } =
+        Result<RootDirectoryListing>.Ok(new RootDirectoryListing.Listed([], ETag: null));
+
+    /// <summary>The ETag passed to the last root directory listing.</summary>
+    public string? LastIfNoneMatch { get; private set; }
+
+    /// <summary>Blob contents by SHA; a SHA not here fails the read.</summary>
+    public Dictionary<string, Result<string>> Blobs { get; } = [];
 
     /// <summary>When set, the listing call fails with this error instead of returning the configured issues.</summary>
     public Error? ListingError { get; set; }
@@ -196,5 +209,28 @@ internal sealed class CountingIssueProvider : IIssueProvider
         TotalCalls++;
         GetChecksCallCount++;
         return Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
+    }
+
+    public Task<Result<RootDirectoryListing>> ListRootDirectoryAsync(
+        RepositorySlug slug,
+        string? ifNoneMatch,
+        CancellationToken cancellationToken)
+    {
+        TotalCalls++;
+        ListRootDirectoryCallCount++;
+        LastIfNoneMatch = ifNoneMatch;
+        return Task.FromResult(RootListing);
+    }
+
+    public Task<Result<string>> ReadBlobAsync(
+        RepositorySlug slug,
+        string blobSha,
+        CancellationToken cancellationToken)
+    {
+        TotalCalls++;
+        ReadBlobCallCount++;
+        return Task.FromResult(Blobs.TryGetValue(blobSha, out Result<string>? blob)
+            ? blob
+            : Result<string>.Fail(new Error("Provider.NotFound", $"No blob {blobSha}.")));
     }
 }

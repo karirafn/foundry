@@ -194,4 +194,51 @@ public sealed class HandleAsync : IAsyncDisposable
         unchanged.RebaseOutcome.ShouldBeOfType<RebaseOutcome.UpToDate>();
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task WhenCatchUpRebaseIsSkipped_MovesToReviewAsCatchUpFailed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RebasePendingIssue catchUp = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .RebasePendingForCatchUp();
+        _dbContext.Set<Issue>().Add(catchUp);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        await _sut.HandleAsync(
+            new RebaseResolved(repositoryId, 1, "skipped", RebaseSkipReasons.Timeout),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        ReviewIssue review = (await LoadAsync(repositoryId)).ShouldBeOfType<ReviewIssue>();
+        review.ShouldSatisfyAllConditions(
+            () => review.MergeOutcome.ShouldBe(new MergeOutcome.Skipped("catch_up_failed")),
+            () => review.RebaseOutcome.ShouldBe(new RebaseOutcome.Skipped(RebaseSkipReasons.Timeout)),
+            () => review.VerifiedHeadSha.ShouldBe("4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e"));
+    }
+
+    [Fact]
+    public async Task WhenCatchUpRebaseSucceeds_EntersChecksPendingForTheCatchUp()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RebasePendingIssue catchUp = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .RebasePendingForCatchUp();
+        _dbContext.Set<Issue>().Add(catchUp);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        await _sut.HandleAsync(new RebaseResolved(repositoryId, 1, "rebased"), TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(repositoryId)).ShouldBeOfType<ChecksPendingIssue>()
+            .Reason.ShouldBe(new ChecksPendingReason.CatchUp());
+    }
 }

@@ -14,7 +14,7 @@ public sealed class IsDueForTokenRecheck
 
     private static GitHubCredential CreateAccount() =>
         GitHubCredential.Create(
-            "my-org",
+            AccountName.Create("my-org").ValueOrThrow(),
             string.Concat("ghp_", "token"),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 

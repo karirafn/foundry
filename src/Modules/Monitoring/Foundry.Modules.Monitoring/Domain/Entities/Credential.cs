@@ -26,7 +26,7 @@ public abstract class Credential : AggregateRoot<CredentialId>
     {
     }
 
-    public string Name { get; private protected set; } = string.Empty;
+    public AccountName Name { get; private protected set; } = null!;
 
     public ProviderToken? Token { get; private set; }
 
@@ -176,7 +176,7 @@ public abstract class Credential : AggregateRoot<CredentialId>
     /// <c>tests/Foundry.IntegrationTests/Modules/Monitoring/Endpoints/GetAccountsTests/</c>.
     /// </summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    protected static void ApplyUnreadableToken(Credential credential, string name, BaseUrl baseUrl)
+    protected static void ApplyUnreadableToken(Credential credential, AccountName name, BaseUrl baseUrl)
     {
         credential.Name = name;
         credential.Token = new ProviderToken.Unreadable();

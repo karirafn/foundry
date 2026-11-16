@@ -45,7 +45,10 @@ internal sealed class CredentialConfiguration(
             .HasColumnName("id");
 
         builder.Property(a => a.Name)
-            .HasMaxLength(AccountsDatabaseHelpers.AccountNameMaxLength)
+            .HasConversion(
+                name => name.Value,
+                value => AccountName.FromPersistedString(value))
+            .HasMaxLength(AccountName.MaxLength)
             .IsUnicode(true)
             .IsRequired()
             .HasColumnName("name");

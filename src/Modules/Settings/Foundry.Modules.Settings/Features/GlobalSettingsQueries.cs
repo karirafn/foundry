@@ -97,28 +97,6 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings.ImageBuildState.ToStatus();
     }
 
-    public async Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-    {
-        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
-        // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return settings?.WorkerImageConfiguration.InstallDocker ?? false;
-    }
-
-    public async Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
-    {
-        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
-        // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return settings?.WorkerImageConfiguration.InstallDotnet ?? false;
-    }
-
     public async Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
     {
         // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
@@ -141,16 +119,14 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings?.WorkerImageConfiguration.BuildEnabled ?? WorkerImageConfiguration.Default.BuildEnabled;
     }
 
-    public async Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
-        CancellationToken cancellationToken)
+    public async Task<bool> GetNestedDockerEnabledAsync(CancellationToken cancellationToken)
     {
-        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
-        // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+        bool? value = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
+            .Select(s => (bool?)s.NestedDockerEnabled)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return (settings?.WorkerImageConfiguration ?? WorkerImageConfiguration.Default).ToBuildArgs();
+        return value ?? false;
     }
 
     public async Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)

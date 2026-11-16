@@ -15,7 +15,7 @@ namespace Foundry.Modules.Monitoring.Features.Eligibility;
 /// </summary>
 /// <remarks>
 /// The write is attempted only when the full evaluation is <see cref="RepositoryEligibility.Ineligible"/>
-/// solely because of <c>branch-protection:*</c> violations. After a successful write the rules are
+/// solely because of <c>branch-protection:*</c> violations, package source violations aside. After a successful write the rules are
 /// re-read through <see cref="IRepositoryEligibilityEvaluator.EvaluateBranchRulesAndStoreAsync"/>
 /// (no second write probe), and the stored eligibility reflects that re-read — never the write's
 /// status code.
@@ -47,11 +47,18 @@ internal sealed class BranchRuleEnforcer(
             return new BranchRulesOutcome(BranchRulesOutcome.NotRequestedKind, SettingsUrl: settingsUrl);
         }
 
+        // Package source violations (ADR 0112) are independent of the branch rules: the rules are judged without them.
         switch (repository.Eligibility)
         {
             case RepositoryEligibility.Eligible:
                 return new BranchRulesOutcome(BranchRulesOutcome.AlreadyPresentKind, SettingsUrl: settingsUrl);
-            case RepositoryEligibility.Ineligible ineligible when !AreAllBranchProtection(ineligible.Violations):
+            case RepositoryEligibility.Ineligible ineligible when BranchRelated(ineligible.Violations).Count == 0:
+                // Only package source violations. With a Granted write probe the branch rules were read and hold;
+                // otherwise the package source violations replaced an Unreachable result and the rules are unknown.
+                return repository.WriteProbeVerdict is WriteProbeVerdict.Granted
+                    ? new BranchRulesOutcome(BranchRulesOutcome.AlreadyPresentKind, SettingsUrl: settingsUrl)
+                    : Skipped(BranchRulesOutcome.UnverifiableReason, settingsUrl);
+            case RepositoryEligibility.Ineligible ineligible when !AreAllBranchProtection(BranchRelated(ineligible.Violations)):
                 return Skipped(BranchRulesOutcome.AccessFailureReason, settingsUrl);
             case RepositoryEligibility.Ineligible:
                 break;
@@ -84,7 +91,8 @@ internal sealed class BranchRuleEnforcer(
         // provider now enforces, not the write's status code.
         await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
 
-        if (repository.Eligibility is RepositoryEligibility.Eligible)
+        if (repository.Eligibility is RepositoryEligibility.Eligible
+            || (repository.Eligibility is RepositoryEligibility.Ineligible reread && BranchRelated(reread.Violations).Count == 0))
         {
             return new BranchRulesOutcome(BranchRulesOutcome.AppliedKind);
         }
@@ -118,6 +126,9 @@ internal sealed class BranchRuleEnforcer(
                 "The provider could not be reached while writing the branch rules."));
         }
     }
+
+    private static List<EligibilityViolation> BranchRelated(IReadOnlyList<EligibilityViolation> violations) =>
+        violations.Where(v => !EligibilityViolationInfo.IsPackageSourceRule(v.Rule)).ToList();
 
     private static bool AreAllBranchProtection(IReadOnlyList<EligibilityViolation> violations) =>
         violations.All(v => v.Rule.StartsWith(BranchProtectionRulePrefix, StringComparison.Ordinal));

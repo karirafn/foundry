@@ -104,6 +104,22 @@ public sealed class MergePendingIssue : Issue
     }
 
     /// <summary>
+    /// The merge was refused because the pull request fell behind the default branch, and it is the head of its
+    /// repository's catch-up queue (ADR 0111): its branch rebases onto the default branch, then its checks run again
+    /// before it merges.
+    /// </summary>
+    public RebasePendingIssue CatchUp(DateTimeOffset transitionedAt)
+    {
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromMergePendingCatchUp(this, transitionedAt);
+        AddDomainEvent(new Events.IssueRebasePending(
+            Id,
+            MonitoredRepositoryId,
+            rebasePending.IssueNumber,
+            rebasePending.EnteredRebasePendingAt));
+        return rebasePending;
+    }
+
+    /// <summary>
     /// A person's review feedback arrived before Foundry merged (issue #917): the merge is abandoned and the feedback
     /// drives a revision, exactly as from checks-pending.
     /// </summary>

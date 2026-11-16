@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
@@ -14,6 +15,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.IssueReactions;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.Rebase;
@@ -33,11 +35,14 @@ using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Http.Ingress;
 
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Monitoring;
 
@@ -67,6 +72,12 @@ public static class MonitoringModule
         services.AddHttpClient<GitHubJobLogClient>(client =>
                 client.MaxResponseContentBufferSize = MaxResponseContentBufferSize)
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        // Package source requests follow redirects themselves so the credential only reaches the source origin.
+        services.AddHttpClient<PackageSourceUpstreamClient>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddTransient<IPackageSourceProber, PackageSourceProber>();
+        services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
+        services.AddScoped<PackageSourceProbing>();
         services.AddHttpClient<GitLabHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
 
@@ -99,6 +110,9 @@ public static class MonitoringModule
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
         services.AddScoped<MergeStep>();
+        services.AddScoped<IMergeQueueQueries>(sp => new MergeQueueQueries(
+            sp.GetRequiredService<DbContext>(),
+            () => sp.GetRequiredService<IIssueQueries>()));
         services.AddScoped<AwaitingInputStep>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
@@ -122,6 +136,8 @@ public static class MonitoringModule
         // Webhook ingress (ADR 0085): host configuration, the single-consumer nudge channel, the
         // receiving endpoint and the manual-registration endpoints.
         services.AddOptions<WebhookIngressOptions>().BindConfiguration(WebhookIngressOptions.SectionName);
+        services.AddIngressEntry(static sp =>
+            new IngressEntry(sp.GetRequiredService<IOptions<WebhookIngressOptions>>().Value.Port, WebhookIngressOptions.PathPrefix));
         services.TryAddSingleton<WebhookNudgeQueue>();
         services.AddScoped<WebhookIngress>();
         services.AddScoped<ReceiveGitHubWebhook.Handler>();

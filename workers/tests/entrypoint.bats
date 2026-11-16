@@ -99,6 +99,8 @@ setup() {
     make_role_fixture "$BATS_TEST_TMPDIR/roles" implement shared
     export FOUNDRY_ROLES_DIR="$BATS_TEST_TMPDIR/roles"
     export WORKER_ROLE="implement"
+    # The operator switch (ADR 0110); tests that need the nested daemon set it themselves.
+    unset FOUNDRY_NESTED_DOCKER
     export WORKER_CAPABILITY="full"
 
     # The suite also runs inside a live worker, whose /workspace is the agent's own
@@ -181,11 +183,14 @@ make_role_fixture() {
     done
 }
 
-# Loads start_rootless_dockerd from entrypoint.sh into the current shell.
+# Loads start_rootless_dockerd, and the clear_docker_environment it calls, from
+# entrypoint.sh into the current shell.
 load_function() {
-    local func_body
-    func_body="$(awk '/^start_rootless_dockerd\(\)/,/^\}/' "$ENTRYPOINT")"
-    eval "$func_body"
+    local func_name func_body
+    for func_name in clear_docker_environment start_rootless_dockerd; do
+        func_body="$(awk "/^${func_name}\\(\\)/,/^\\}/" "$ENTRYPOINT")"
+        eval "$func_body"
+    done
 }
 
 teardown() {
@@ -558,6 +563,7 @@ EOF
 
 @test "start_rootless_dockerd failure does NOT emit FOUNDRY_BOOTSTRAP_FAILED (trap disarmed)" {
     set_required_env
+    export FOUNDRY_NESTED_DOCKER=1
     make_fake_git
     make_fake_claude
     make_fake_docker_unhealthy
@@ -571,6 +577,7 @@ EOF
 
 @test "dockerd failure: entrypoint exits 0 and claude is still invoked (degraded mode)" {
     set_required_env
+    export FOUNDRY_NESTED_DOCKER=1
     make_fake_git
     make_fake_claude
     make_fake_dockerd_fail
@@ -584,6 +591,7 @@ EOF
 
 @test "dockerd failure: entrypoint emits FOUNDRY_DOCKER_UNAVAILABLE sentinel" {
     set_required_env
+    export FOUNDRY_NESTED_DOCKER=1
     make_fake_git
     make_fake_claude
     make_fake_dockerd_fail
@@ -596,6 +604,7 @@ EOF
 
 @test "dockerd failure: entrypoint does NOT emit FOUNDRY_BOOTSTRAP_FAILED" {
     set_required_env
+    export FOUNDRY_NESTED_DOCKER=1
     make_fake_git
     make_fake_claude
     make_fake_dockerd_fail
@@ -2551,6 +2560,135 @@ FAKE
     ! grep -q '^switch ' "$BATS_TEST_TMPDIR/git_args"
 }
 
+
+# Write a fake dockerd-rootless.sh that records it was started, then fails fast.
+make_fake_dockerd_record_start() {
+    local started_file="$BATS_TEST_TMPDIR/dockerd_started"
+    cat > "$FAKE_BIN_DIR/dockerd-rootless.sh" <<FAKE
+#!/bin/bash
+echo "dockerd-started" > "${started_file}"
+exit 1
+FAKE
+    chmod +x "$FAKE_BIN_DIR/dockerd-rootless.sh"
+}
+
+# Write a fake claude that records the DOCKER_HOST and Testcontainers host it was started with.
+make_fake_claude_record_docker_env() {
+    local env_file="$BATS_TEST_TMPDIR/claude_docker_env"
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+printf 'DOCKER_HOST=%s TESTCONTAINERS_HOST_OVERRIDE=%s\n' "\${DOCKER_HOST-unset}" "\${TESTCONTAINERS_HOST_OVERRIDE-unset}" > "${env_file}"
+exit 0
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "capability: a restricted run starts no dockerd even when dockerd-rootless.sh is on PATH" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+    [[ "$output" != *"Starting rootless dockerd"* ]]
+    [[ "$output" != *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
+
+@test "capability: a restricted run reaches claude with DOCKER_HOST and the Testcontainers host unset" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    export DOCKER_HOST="unix:///leaked.sock"
+    export TESTCONTAINERS_HOST_OVERRIDE="leaked"
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_docker_env")" = "DOCKER_HOST=unset TESTCONTAINERS_HOST_OVERRIDE=unset" ]
+}
+
+@test "capability: a full run with nested Docker enabled starts dockerd when dockerd-rootless.sh is on PATH" {
+    set_required_env
+    export FOUNDRY_NESTED_DOCKER=1
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+    [[ "$output" == *"Starting rootless dockerd"* ]]
+    [[ "$output" == *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
+
+@test "capability: a full run without nested Docker starts no dockerd and prints no unavailable line" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+    [[ "$output" != *"Starting rootless dockerd"* ]]
+    [[ "$output" != *"FOUNDRY_DOCKER_UNAVAILABLE"* ]]
+}
+
+@test "capability: a full run whose nested Docker variable is not 1 starts no dockerd" {
+    set_required_env
+    export FOUNDRY_NESTED_DOCKER=true
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+}
+
+@test "capability: a full run without nested Docker reaches claude with DOCKER_HOST and the Testcontainers host unset" {
+    set_required_env
+    export DOCKER_HOST="unix:///leaked.sock"
+    export TESTCONTAINERS_HOST_OVERRIDE="leaked"
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_docker_env")" = "DOCKER_HOST=unset TESTCONTAINERS_HOST_OVERRIDE=unset" ]
+}
+
+@test "capability: a restricted run with nested Docker enabled starts no dockerd" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    export FOUNDRY_NESTED_DOCKER=1
+    make_fake_git
+    make_fake_claude_record_docker_env
+    make_fake_docker_unhealthy
+    make_fake_dockerd_record_start
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/dockerd_started" ]
+}
 @test "capability: a full run keeps --dangerously-skip-permissions and no restricted flags on both invocations" {
     set_required_env
     make_fake_git
@@ -3307,6 +3445,78 @@ FAKE
     [ "$exit_status" -eq 143 ]
     grep -q "SIGTERM received" "$BATS_TEST_TMPDIR/stderr"
     ! grep -q "claude idle" "$BATS_TEST_TMPDIR/stderr"
+}
+
+# ---------------------------------------------------------------------------
+# Signal marker (#963): when claude dies from a signal, and the idle stop did not
+# end it, the entrypoint writes one FOUNDRY_CLAUDE_SIGNALED line to stderr with
+# the container's cgroup pid and memory counters.  The CI runner's cgroup is not
+# under the test's control, so the tests check the format, not the values.
+# ---------------------------------------------------------------------------
+
+# A counter value: a number, the literal max (no limit), or ? (unreadable).
+SIGNAL_MARKER_VALUE='([0-9]+|max|\?)'
+
+# run_entrypoint_split — runs the entrypoint with stdout and stderr in separate
+# files, setting ENTRYPOINT_STATUS.
+run_entrypoint_split() {
+    ENTRYPOINT_STATUS=0
+    bash "$ENTRYPOINT" > "$BATS_TEST_TMPDIR/stdout" 2> "$BATS_TEST_TMPDIR/stderr" 3>&- || ENTRYPOINT_STATUS=$?
+}
+
+@test "signal marker: claude aborted by SIGABRT writes one marker with every counter to stderr and keeps status 134" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'kill -ABRT $$'
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 134 ]
+    [ "$(grep -c '^FOUNDRY_CLAUDE_SIGNALED ' "$BATS_TEST_TMPDIR/stderr")" -eq 1 ]
+    local v="$SIGNAL_MARKER_VALUE"
+    grep -Eq "^FOUNDRY_CLAUDE_SIGNALED signal=6 status=134 pids_current=$v pids_peak=$v pids_max=$v pids_refused=$v mem_current=$v mem_peak=$v mem_max=$v oom_kill=$v\$" \
+        "$BATS_TEST_TMPDIR/stderr"
+    ! grep -q FOUNDRY_CLAUDE_SIGNALED "$BATS_TEST_TMPDIR/stdout"
+}
+
+@test "signal marker: claude exiting 1 with its own error writes no marker" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_error; exit 1'
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 1 ]
+    ! grep -q FOUNDRY_CLAUDE_SIGNALED "$BATS_TEST_TMPDIR/stderr"
+}
+
+@test "signal marker: claude ended by the idle stop writes no marker" {
+    prepare_idle_stop_test
+    make_fake_claude_script 'result_ok; sleep 60'
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 0 ]
+    grep -q "claude idle" "$BATS_TEST_TMPDIR/stderr"
+    ! grep -q FOUNDRY_CLAUDE_SIGNALED "$BATS_TEST_TMPDIR/stderr"
+}
+
+@test "signal marker: the transient-error resume writes its own marker" {
+    prepare_idle_stop_test
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+echo call >> "$BATS_TEST_TMPDIR/claude_calls"
+if [ "\$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    exit 1
+fi
+kill -ABRT \$\$
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+
+    run_entrypoint_split
+
+    [ "$ENTRYPOINT_STATUS" -eq 134 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")" -eq 2 ]
+    [ "$(grep -c '^FOUNDRY_CLAUDE_SIGNALED signal=6 status=134 ' "$BATS_TEST_TMPDIR/stderr")" -eq 1 ]
 }
 
 # ---------------------------------------------------------------------------

@@ -51,6 +51,7 @@ public sealed class InProgressIssue : Issue
             branchName,
             pullRequestUrl,
             feedbackCutoffAt,
+            new RebasePendingReason.AfterRun(),
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,

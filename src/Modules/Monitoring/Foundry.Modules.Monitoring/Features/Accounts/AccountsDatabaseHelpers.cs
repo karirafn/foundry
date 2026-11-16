@@ -10,8 +10,6 @@ namespace Foundry.Modules.Monitoring.Features.Accounts;
 
 internal static class AccountsDatabaseHelpers
 {
-    internal const int AccountNameMaxLength = 200;
-
     // Real GitHub/GitLab tokens are under 200 characters; 500 gives ample headroom
     // while preventing oversized values from bloating the encrypted column (max 2000 chars ciphertext).
     internal const int TokenMaxLength = 500;
@@ -54,7 +52,7 @@ internal static class AccountsDatabaseHelpers
     internal static CredentialSummary ToSummary(Credential credential) =>
         new(
             credential.Id.Value,
-            credential.Name,
+            credential.Name.Value,
             credential is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
             credential.BaseUrl.Value.ToString(),
             credential.Token is not null,

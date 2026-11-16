@@ -654,6 +654,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/image-toolchain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns the toolchain recorded for the worker image workers run now, or unknown until it is recorded */
+        get: operations["GetWorkerImageToolchain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/status": {
         parameters: {
             query?: never;
@@ -815,8 +832,25 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the worker image tag, build toggle, and build flags */
+        /** Updates the worker image tag and build toggle */
         put: operations["UpdateWorkerImageConfiguration"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/nested-docker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Turns nested Docker for implement runs on or off; rebuilds nothing */
+        put: operations["UpdateNestedDocker"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1057,10 +1091,7 @@ export interface components {
             autoResumeOnUsageReset: boolean;
             imageTag: string;
             buildEnabled: boolean;
-            installDotnet: boolean;
-            installAngular: boolean;
-            installChromium: boolean;
-            installDocker: boolean;
+            nestedDockerEnabled: boolean;
             imageBuildStatus: components["schemas"]["ImageBuildStatus"];
             lastImageBuildError: null | string;
             hasUsableImage: boolean;
@@ -1148,6 +1179,12 @@ export interface components {
             checksPendingReason?: null | string;
             mergeOutcome?: null | string;
             mergeSkippedReason?: null | string;
+            rebasePendingReason?: null | string;
+            /** Format: int32 */
+            catchUpRound?: null | number | string;
+            /** Format: int32 */
+            catchUpRoundLimit?: null | number | string;
+            mergeWait?: null | components["schemas"]["MergeWaitDetails"];
         };
         IssueSummary: {
             /** Format: uuid */
@@ -1182,6 +1219,12 @@ export interface components {
             revisionTriggerKind?: null | string;
             publishPhase?: null | string;
         };
+        MergeWaitDetails: {
+            /** Format: int32 */
+            position: number | string;
+            /** Format: int32 */
+            waitingForIssueNumber: null | number | string;
+        };
         MoveRepositoryRequestBody: {
             /** Format: int32 */
             position: number | string;
@@ -1214,7 +1257,7 @@ export interface components {
             instance?: null | string;
         };
         /** @enum {unknown} */
-        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict" | "Clarifications";
+        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "BrowserRenderingImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict" | "Clarifications";
         PromptSectionDescriptor: {
             key: string;
             title: string;
@@ -1426,6 +1469,9 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: number | string;
         };
+        UpdateNestedDockerRequestBody: {
+            enabled: boolean;
+        };
         UpdateRepositoryRequestBody: {
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
@@ -1451,10 +1497,6 @@ export interface components {
         UpdateWorkerImageConfigurationRequestBody: {
             imageTag: string;
             buildEnabled: boolean;
-            installDotnet: boolean;
-            installAngular: boolean;
-            installChromium: boolean;
-            installDocker: boolean;
         };
         UpdateWorkerLimitsRequestBody: {
             /** Format: int32 */
@@ -1514,6 +1556,24 @@ export interface components {
             reason?: null | string;
             detail?: null | string;
             isRegistered?: boolean;
+        };
+        WorkerImageTool: {
+            name: string;
+            version: string;
+        };
+        WorkerImageToolchainResponse: components["schemas"]["WorkerImageToolchainResponseRecordedWorkerImageToolchain"] | components["schemas"]["WorkerImageToolchainResponseUnknownWorkerImageToolchain"];
+        WorkerImageToolchainResponseRecordedWorkerImageToolchain: {
+            /** @enum {string} */
+            status?: "recorded";
+            imageId: string;
+            /** Format: date-time */
+            recordedAt: string;
+            tools: components["schemas"]["WorkerImageTool"][];
+        };
+        WorkerImageToolchainResponseUnknownWorkerImageToolchain: {
+            /** @enum {string} */
+            status?: "unknown";
+            imageId: null | string;
         };
         WorkerRoleCard: {
             name: string;
@@ -3228,6 +3288,26 @@ export interface operations {
             };
         };
     };
+    GetWorkerImageToolchain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerImageToolchainResponse"];
+                };
+            };
+        };
+    };
     GetSystemStatus: {
         parameters: {
             query?: never;
@@ -3524,6 +3604,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateWorkerImageConfigurationRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateNestedDocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNestedDockerRequestBody"];
             };
         };
         responses: {

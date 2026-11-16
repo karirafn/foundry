@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -61,7 +62,24 @@ public sealed class CreatePullRequestAsync
             () => handler.Requests[1].RequestUri!.AbsolutePath.ShouldBe("/api/v4/projects/group%2Fproject/merge_requests"),
             () => handler.Requests[1].Headers.GetValues("PRIVATE-TOKEN").ShouldBe([ValidToken]),
             () => handler.RequestBodies[1].ShouldBe(
-                """{"source_branch":"feat/42-add-retry","target_branch":"main","title":"feat: add retry","description":"Body\n\nCloses #42","remove_source_branch":false}"""));
+                """{"source_branch":"feat/42-add-retry","target_branch":"main","title":"feat: add retry","description":"Body\n\nCloses #42"}"""));
+    }
+
+    [Fact]
+    public async Task WhenCreated_LeavesBranchRemovalAndSquashToTheProjectSettings()
+    {
+        // Arrange
+        SequentialFakeHandler handler = new([(HttpStatusCode.OK, ProjectJson), (HttpStatusCode.Created, CreatedJson)]);
+        GitLabIssueProvider sut = BuildSut(handler);
+
+        // Act
+        await CreateAsync(sut);
+
+        // Assert
+        using JsonDocument body = JsonDocument.Parse(handler.RequestBodies[1]!);
+        body.RootElement.ShouldSatisfyAllConditions(
+            () => body.RootElement.TryGetProperty("remove_source_branch", out _).ShouldBeFalse(),
+            () => body.RootElement.TryGetProperty("squash", out _).ShouldBeFalse());
     }
 
     [Fact]

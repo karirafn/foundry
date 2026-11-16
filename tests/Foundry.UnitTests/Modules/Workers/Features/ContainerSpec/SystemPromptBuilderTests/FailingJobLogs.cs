@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
 
@@ -30,8 +31,7 @@ public sealed class FailingJobLogs
                 new RevisionTrigger.FailedChecks(checks)),
             new IssueContent("Fix", "Body.", []),
             timeoutMinutes: 120,
-            installsDocker: false,
-            installsDotnet: false,
+            toolchain: ToolchainFixtures.With(docker: false, csharpLs: false),
             failingJobLogs: logs);
 
     private static string BuildPromptText(IReadOnlyList<FailingCheck> checks, IReadOnlyList<FailingJobLog> logs) =>

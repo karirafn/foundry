@@ -2088,6 +2088,27 @@
         }
       }
     },
+    "/api/workers/image-toolchain": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Returns the toolchain recorded for the worker image workers run now, or unknown until it is recorded",
+        "operationId": "GetWorkerImageToolchain",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerImageToolchainResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/system/status": {
       "get": {
         "tags": [
@@ -2431,13 +2452,64 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the worker image tag, build toggle, and build flags",
+        "summary": "Updates the worker image tag and build toggle",
         "operationId": "UpdateWorkerImageConfiguration",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateWorkerImageConfigurationRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/nested-docker": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Turns nested Docker for implement runs on or off; rebuilds nothing",
+        "operationId": "UpdateNestedDocker",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNestedDockerRequestBody"
               }
             }
           },
@@ -3292,10 +3364,7 @@
           "autoResumeOnUsageReset",
           "imageTag",
           "buildEnabled",
-          "installDotnet",
-          "installAngular",
-          "installChromium",
-          "installDocker",
+          "nestedDockerEnabled",
           "imageBuildStatus",
           "lastImageBuildError",
           "hasUsableImage",
@@ -3361,16 +3430,7 @@
           "buildEnabled": {
             "type": "boolean"
           },
-          "installDotnet": {
-            "type": "boolean"
-          },
-          "installAngular": {
-            "type": "boolean"
-          },
-          "installChromium": {
-            "type": "boolean"
-          },
-          "installDocker": {
+          "nestedDockerEnabled": {
             "type": "boolean"
           },
           "imageBuildStatus": {
@@ -3785,6 +3845,40 @@
               "null",
               "string"
             ]
+          },
+          "rebasePendingReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "catchUpRound": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "catchUpRoundLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "mergeWait": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MergeWaitDetails"
+              }
+            ]
           }
         }
       },
@@ -3942,6 +4036,32 @@
           }
         }
       },
+      "MergeWaitDetails": {
+        "required": [
+          "position",
+          "waitingForIssueNumber"
+        ],
+        "type": "object",
+        "properties": {
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "waitingForIssueNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "MoveRepositoryRequestBody": {
         "required": [
           "position"
@@ -4072,6 +4192,7 @@
           "Always",
           "DotnetImage",
           "DockerImage",
+          "BrowserRenderingImage",
           "Fresh",
           "Continuation",
           "Revision",
@@ -4947,6 +5068,17 @@
           }
         }
       },
+      "UpdateNestedDockerRequestBody": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "UpdateRepositoryRequestBody": {
         "required": [
           "pollIntervalSeconds",
@@ -5049,11 +5181,7 @@
       "UpdateWorkerImageConfigurationRequestBody": {
         "required": [
           "imageTag",
-          "buildEnabled",
-          "installDotnet",
-          "installAngular",
-          "installChromium",
-          "installDocker"
+          "buildEnabled"
         ],
         "type": "object",
         "properties": {
@@ -5061,18 +5189,6 @@
             "type": "string"
           },
           "buildEnabled": {
-            "type": "boolean"
-          },
-          "installDotnet": {
-            "type": "boolean"
-          },
-          "installAngular": {
-            "type": "boolean"
-          },
-          "installChromium": {
-            "type": "boolean"
-          },
-          "installDocker": {
             "type": "boolean"
           }
         }
@@ -5346,6 +5462,89 @@
           },
           "isRegistered": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkerImageTool": {
+        "required": [
+          "name",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkerImageToolchainResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkerImageToolchainResponseRecordedWorkerImageToolchain"
+          },
+          {
+            "$ref": "#/components/schemas/WorkerImageToolchainResponseUnknownWorkerImageToolchain"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "status",
+          "mapping": {
+            "recorded": "#/components/schemas/WorkerImageToolchainResponseRecordedWorkerImageToolchain",
+            "unknown": "#/components/schemas/WorkerImageToolchainResponseUnknownWorkerImageToolchain"
+          }
+        }
+      },
+      "WorkerImageToolchainResponseRecordedWorkerImageToolchain": {
+        "required": [
+          "imageId",
+          "recordedAt",
+          "tools"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded"
+            ],
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerImageTool"
+            }
+          }
+        }
+      },
+      "WorkerImageToolchainResponseUnknownWorkerImageToolchain": {
+        "required": [
+          "imageId"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "imageId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

@@ -20,7 +20,7 @@ public sealed class GitLabCredential : Credential
         new(baseUrl.Value.ToString().TrimEnd('/') + "/api/v4");
 
     public static GitLabCredential Create(
-        string name,
+        AccountName name,
         string? token,
         BaseUrl baseUrl,
         string? branchRulesToken = null)
@@ -55,14 +55,14 @@ public sealed class GitLabCredential : Credential
     /// <c>tests/Foundry.IntegrationTests/Modules/Monitoring/Endpoints/GetAccountsTests/</c>.
     /// </summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    internal static GitLabCredential CreateWithUnreadableToken(string name, BaseUrl baseUrl)
+    internal static GitLabCredential CreateWithUnreadableToken(AccountName name, BaseUrl baseUrl)
     {
         GitLabCredential credential = new(CredentialId.New());
         ApplyUnreadableToken(credential, name, baseUrl);
         return credential;
     }
 
-    public void Update(string name, string? token, BaseUrl baseUrl)
+    public void Update(AccountName name, string? token, BaseUrl baseUrl)
     {
         GuardAgainstQueryOrFragment(baseUrl);
 
