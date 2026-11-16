@@ -2,6 +2,9 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.PackageSources;
+using Foundry.UnitTests.Modules.Monitoring.Features.PackageSources.PackageSourceProbingTests;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Repositories;
@@ -144,6 +147,64 @@ public sealed class HandleAsync : IAsyncDisposable
         result.ShouldBeOfType<Result<RepositorySummary>.Success>();
         evaluator.FullEvaluateCallCount.ShouldBe(1);
         evaluator.CheapEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryDeclaresAPackageSource_ProbesItBeforeEvaluating()
+    {
+        // Arrange — the Re-check bypasses the probe cadence, so a just-probed source is probed again
+        (Guid accountId, Guid repositoryId) = await SeedAsync();
+        MonitoredRepository repository = await _dbContext.Set<MonitoredRepository>()
+            .SingleAsync(r => r.Id == MonitoredRepositoryId.From(repositoryId), TestContext.Current.CancellationToken);
+        repository.RecordRootListing(
+            new RootNuGetConfig.Declared(
+                "sha",
+                "<configuration />",
+                [DeclaredPackageSource.Create("feed", "https://github.com/api/packages/index.json").ValueOrThrow()]),
+            listingETag: null);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        ProbeDueAsync.RecordingProber prober = new();
+        PackageSourceProbing probing = new(
+            _dbContext,
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            prober,
+            NullLogger<PackageSourceProbing>.Instance);
+        await probing.ProbeDueAsync([repository], DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
+        ProbeCountingEvaluator evaluator = new(prober);
+        RecheckRepositoryEligibility.Handler handler = new(
+            _dbContext,
+            evaluator,
+            new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()),
+            new StubGlobalSettingsQueries([]),
+            NullLogger<RecheckRepositoryEligibility.Handler>.Instance,
+            webhookIngress: null,
+            packageSourceProbing: probing);
+
+        // Act
+        await handler.HandleAsync(new RecheckRepositoryEligibility.Command(accountId, repositoryId), TestContext.Current.CancellationToken);
+
+        // Assert
+        evaluator.ProbesSeenWhenEvaluated.ShouldBe(2);
+    }
+
+    private sealed class ProbeCountingEvaluator(ProbeDueAsync.RecordingProber prober) : IRepositoryEligibilityEvaluator
+    {
+        public int? ProbesSeenWhenEvaluated { get; private set; }
+
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            DateTimeOffset now,
+            CancellationToken cancellationToken)
+        {
+            ProbesSeenWhenEvaluated = prober.Probes.Count;
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 
     private sealed class StubNamespaceDeriver(NamespaceDerivationOutcome outcome) : INamespaceDeriver

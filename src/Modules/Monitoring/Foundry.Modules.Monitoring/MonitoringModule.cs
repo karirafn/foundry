@@ -15,6 +15,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.IssueReactions;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.Rebase;
@@ -71,6 +72,12 @@ public static class MonitoringModule
         services.AddHttpClient<GitHubJobLogClient>(client =>
                 client.MaxResponseContentBufferSize = MaxResponseContentBufferSize)
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        // Package source requests follow redirects themselves so the credential only reaches the source origin.
+        services.AddHttpClient<PackageSourceUpstreamClient>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddTransient<IPackageSourceProber, PackageSourceProber>();
+        services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
+        services.AddScoped<PackageSourceProbing>();
         services.AddHttpClient<GitLabHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
 

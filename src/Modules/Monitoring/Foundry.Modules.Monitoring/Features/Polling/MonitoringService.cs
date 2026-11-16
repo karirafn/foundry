@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Merge;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Webhooks;
@@ -221,6 +222,9 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         // The backstop applies only while webhook ingress is configured (port + public base URL).
         WebhookIngressState? ingress = await GetIngressStateAsync(scope.ServiceProvider, cancellationToken);
         TimeSpan? backstopInterval = ingress is { IsConfigured: true } ? ingress.BackstopInterval : null;
+
+        // Package sources first, so the polls below read fresh verdicts.
+        await ProbePackageSourcesAsync(now, cancellationToken);
 
         List<MonitoredRepository> repos = await LoadActiveReposAsync(dbContext, cancellationToken);
 
@@ -555,6 +559,36 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         // Optional: hosts (and tests) without webhook wiring poll exactly as before.
         WebhookIngress? ingress = services.GetService<WebhookIngress>();
         return ingress is null ? null : await ingress.GetStateAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Probes the Package Sources active repositories declare, once per source and credential, before the polls read
+    /// the verdicts. Runs in its own scope so a failed save never reaches the polls, and outside
+    /// <see cref="RepositoryPoller.PollAsync"/>, so probes never count toward its per-cycle call budget.
+    /// </summary>
+    private async Task ProbePackageSourcesAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+
+        // Optional: hosts (and tests) without package source probing poll exactly as before.
+        PackageSourceProbing? probing = scope.ServiceProvider.GetService<PackageSourceProbing>();
+        if (probing is null)
+        {
+            return;
+        }
+
+        try
+        {
+            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+            List<MonitoredRepository> repos = await LoadActiveReposAsync(dbContext, cancellationToken);
+            await probing.ProbeDueAsync(repos, now, cancellationToken);
+        }
+#pragma warning disable CA1031 // A failed probe pass must not stop the polls; the error log surfaces it.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            _logger.LogError(ex, "Probing package sources failed; their stored verdicts are left as they were.");
+        }
     }
 
     private static async Task<List<MonitoredRepository>> LoadActiveReposAsync(

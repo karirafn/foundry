@@ -76,13 +76,14 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // Root nuget.config first: the declared package sources, saved with the listing pass below. Read before
+        // eligibility, so a newly declared source (Unchecked until the next probe) blocks dispatch in this poll.
+        await RootNuGetConfigRefresh.RefreshAsync(repository, provider, logger, cancellationToken);
+
         // Pass 0: evaluate repository-level eligibility every poll cycle.
         RepositoryEligibility? eligibilityBefore = repository.Eligibility;
         await EvaluateEligibilityAsync(repository, now, cancellationToken);
         bool branchRulesChanged = BranchRuleOutcomeChanged(eligibilityBefore, repository.Eligibility);
-
-        // Root nuget.config: the declared package sources, saved with the listing pass below.
-        await RootNuGetConfigRefresh.RefreshAsync(repository, provider, logger, cancellationToken);
 
         // Passes 1-2: listing (detect, detail change, complete-listing untrack), stamping the poll time.
         Result<bool> listingResult = await RunListingCoreAsync(

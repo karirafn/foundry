@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
+using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
@@ -30,7 +31,8 @@ internal static class RecheckRepositoryEligibility
         INamespaceDeriver namespaceDeriver,
         IGlobalSettingsQueries globalSettingsQueries,
         ILogger<Handler> logger,
-        WebhookIngress? webhookIngress = null) : ICommandHandler<Command, RepositorySummary>
+        WebhookIngress? webhookIngress = null,
+        PackageSourceProbing? packageSourceProbing = null) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -60,7 +62,16 @@ internal static class RecheckRepositoryEligibility
             // newly-granted namespaces become covered before re-evaluating eligibility.
             await RefreshNamespacesAsync(credential, cancellationToken);
 
-            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, DateTimeOffset.UtcNow, cancellationToken);
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+
+            // Re-check bypasses the probe cadence: the operator may just have fixed the credential. Only this
+            // action probes; the evaluator reads the stored verdicts, so polls never probe.
+            if (packageSourceProbing is not null)
+            {
+                await packageSourceProbing.ProbeNowAsync(repository, now, cancellationToken);
+            }
+
+            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, now, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             string providerType = credential switch

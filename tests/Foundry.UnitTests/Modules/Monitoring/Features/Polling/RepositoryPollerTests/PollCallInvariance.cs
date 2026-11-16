@@ -12,6 +12,7 @@ using Foundry.Modules.Monitoring.Features.Providers.RootDirectory;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -96,6 +97,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
             new StubCredentialResolver(credential),
             new FixedCountingProviderFactory(countingProvider),
             new NeverCalledWriteProber(),
+            new StubPackageSourceVerdicts(),
             NullLogger<RepositoryEligibilityEvaluator>.Instance);
 
         return new RepositoryPoller(
