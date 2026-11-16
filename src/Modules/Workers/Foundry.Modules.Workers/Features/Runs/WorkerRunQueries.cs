@@ -145,6 +145,9 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             FalsePositivesConfirmedAt = run.FalsePositivesConfirmedAt,
             ConfirmedFindings = [.. run.ConfirmedFindings.Select(finding =>
                 new WorkerRunConfirmedFinding(finding.Path, finding.Line, finding.RuleId))],
+            Toolchain = run.Toolchain is { } toolchain
+                ? [.. toolchain.Entries.Select(entry => new WorkerRunTool(entry.Name, entry.Version))]
+                : null,
         };
     }
 

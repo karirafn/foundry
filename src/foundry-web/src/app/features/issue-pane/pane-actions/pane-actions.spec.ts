@@ -71,6 +71,7 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     publishBlockedAt: null,
     falsePositivesConfirmedAt: null,
     confirmedFindings: [],
+    toolchain: null,
     ...overrides,
   };
 }

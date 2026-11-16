@@ -310,6 +310,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)

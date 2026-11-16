@@ -71,6 +71,7 @@ function runDetail(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
     publishBlockedAt: null,
     falsePositivesConfirmedAt: null,
     confirmedFindings: [],
+    toolchain: null,
     ...overrides,
   };
 }
@@ -121,6 +122,7 @@ describe('buildFacts', () => {
       revertedFiles: [{ path: 'a.bin', reason: 'binary', sizeBytes: 10 }],
       falsePositivesConfirmedAt: '2026-02-01T09:00:00Z',
       confirmedFindings: [{ path: 'a.env', line: 3, ruleId: 'generic-api-key' }],
+      toolchain: [{ name: 'node', version: '22.22.3' }],
     });
     const stats: RunStats = {
       runCount: 2,
@@ -144,6 +146,7 @@ describe('buildFacts', () => {
       'Secret findings',
       'Runs',
       'Run',
+      'Toolchain',
       'Checks fixes',
       'Conflict fixes',
       'Rebase',
@@ -164,6 +167,64 @@ describe('buildFacts', () => {
 
     // Assert
     expect(keys).toEqual(['Kind', 'Author']);
+  });
+
+  describe('Toolchain', () => {
+    it('counts the tools the run reported and keeps them in their order', () => {
+      // Arrange
+      const tools = [
+        { name: 'node', version: '22.22.3' },
+        { name: 'chromium', version: '156.0.8078.79' },
+      ];
+
+      // Act
+      const toolchain = fact(buildFacts(issue('in_progress'), runDetail({ toolchain: tools }), null), 'toolchain');
+
+      // Assert
+      expect(toolchain).toEqual({ type: 'toolchain', key: 'Toolchain', summary: '2 tools', tools });
+    });
+
+    it('says 1 tool for a single tool', () => {
+      // Act
+      const toolchain = fact(
+        buildFacts(issue('in_progress'), runDetail({ toolchain: [{ name: 'git', version: '2.47.3' }] }), null),
+        'toolchain',
+      );
+
+      // Assert
+      expect(toolchain?.summary).toBe('1 tool');
+    });
+
+    it('sits directly after the Run row', () => {
+      // Act
+      const keys = buildFacts(
+        issue('in_progress', { stateDetails: details({ workerRunId: 'run-1', checksFixAttempts: 1 }) }),
+        runDetail({ toolchain: [{ name: 'git', version: '2.47.3' }] }),
+        null,
+      ).map((f) => f.key);
+
+      // Assert
+      expect(keys.slice(keys.indexOf('Run'), keys.indexOf('Run') + 3)).toEqual(['Run', 'Toolchain', 'Checks fixes']);
+    });
+
+    it.each([
+      ['reported no toolchain', null],
+      ['reported an empty toolchain', []],
+    ])('is left out for a run that %s', (_case, toolchain) => {
+      // Act
+      const facts = buildFacts(issue('in_progress'), runDetail({ toolchain }), null);
+
+      // Assert
+      expect(keyed(facts, 'Toolchain')).toBeUndefined();
+    });
+
+    it('is left out without a run', () => {
+      // Act
+      const facts = buildFacts(issue('in_progress', { stateDetails: details({ workerRunId: 'run-1' }) }), null, null);
+
+      // Assert
+      expect(keyed(facts, 'Toolchain')).toBeUndefined();
+    });
   });
 
   describe('Secret findings', () => {

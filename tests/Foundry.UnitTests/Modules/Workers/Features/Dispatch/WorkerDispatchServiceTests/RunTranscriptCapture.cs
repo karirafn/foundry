@@ -5,10 +5,12 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -23,6 +25,14 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         + """2026-11-10T10:00:01.000000000Z {"type":"assistant","message":{"content":[{"type":"text","text":"Starting the work."}]}}""";
 
     private static readonly WorkerStatus ExitedWithFailure = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+
+    // The FOUNDRY_TOOLCHAIN line the entrypoint writes to stderr before claude starts (ADR 0109).
+    private const string FullLogWithToolchain =
+        "2026-11-10T10:00:00.000000000Z bootstrap: cloning\n"
+        + """2026-11-10T10:00:00.500000000Z FOUNDRY_TOOLCHAIN [{"name":"node","version":"22.22.3"},{"name":"csharp-ls","version":"0.28.0"}]""" + "\n"
+        + """2026-11-10T10:00:01.000000000Z {"type":"assistant","message":{"content":[{"type":"text","text":"Starting the work."}]}}""";
+
+    private static readonly WorkerStatus ExitedCleanly = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
 
     private static readonly WorkerStatus Running = new(IsRunning: true, ExitCode: null, FinishedAt: null);
 
@@ -137,6 +147,59 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         WorkerRunTranscript? transcript = await LoadTranscriptAsync();
         transcript.ShouldBeNull();
     }
+
+    [Fact]
+    public async Task WhenContainerExits_RecordsTheToolchainItReportedOnTheRun()
+    {
+        // Arrange
+        SeedActiveRun("container-toolchain-exited");
+        TranscriptStub orchestrator = new(ExitedWithFailure, tail: "tail output", fullLog: FullLogWithToolchain);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, containerOutputParser: RealParser());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRun run = await LoadRunAsync();
+        run.ShouldBeOfType<FailedRun>();
+        run.Toolchain.ShouldNotBeNull().Entries.Select(entry => (entry.Name, entry.Version)).ShouldBe(
+            [("node", "22.22.3"), ("csharp-ls", "0.28.0")]);
+    }
+
+    [Fact]
+    public async Task WhenContainerExitsCleanly_TheRunKeepsTheToolchainThroughPublishing()
+    {
+        // Arrange
+        SeedActiveRun("container-toolchain-publishing");
+        TranscriptStub orchestrator = new(ExitedCleanly, tail: "tail output", fullLog: FullLogWithToolchain);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, containerOutputParser: RealParser());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRun run = await LoadRunAsync();
+        run.ShouldBeOfType<CompletedRun>();
+        run.Toolchain.ShouldNotBeNull().Entries.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenTheFullLogHasNoToolchainLine_RecordsNoToolchain()
+    {
+        // Arrange
+        SeedActiveRun("container-toolchain-absent");
+        TranscriptStub orchestrator = new(ExitedWithFailure, tail: "tail output", fullLog: FullLog);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, containerOutputParser: RealParser());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRun run = await LoadRunAsync();
+        run.Toolchain.ShouldBeNull();
+    }
+
+    private static ContainerOutputParser RealParser() => new(NullLogger<ContainerOutputParser>.Instance);
 
     private async Task<WorkerRun> LoadRunAsync()
     {

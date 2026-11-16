@@ -158,6 +158,28 @@
   }
 }
 
+// Mirrors the reverted-files overflow summary; the native marker stays.
+.pane-facts__toolchain {
+  summary {
+    color: var(--fd-text-link);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    min-height: 32px;
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+
+    @media (any-pointer: coarse) {
+      min-height: 44px;
+    }
+  }
+
+  fd-toolchain-list {
+    margin-top: var(--fd-spacing-xs);
+  }
+}
+
 .pane-facts__skeleton {
   display: flex;
   flex-direction: column;
