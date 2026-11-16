@@ -55,7 +55,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task<Guid> SeedCredentialAsync()
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("octocat", "ghp_test", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_test", baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return credential.Id.Value;

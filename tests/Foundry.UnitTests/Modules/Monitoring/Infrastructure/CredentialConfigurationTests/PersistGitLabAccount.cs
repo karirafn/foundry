@@ -46,7 +46,7 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create("my-org", "glpat_mytoken", baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "glpat_mytoken", baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -61,7 +61,7 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
         GitLabCredential gitLab = result.ShouldBeOfType<GitLabCredential>();
         gitLab.ShouldSatisfyAllConditions(
             () => gitLab.Id.ShouldBe(credential.Id),
-            () => gitLab.Name.ShouldBe("my-org"),
+            () => gitLab.Name.Value.ShouldBe("my-org"),
             () => gitLab.Token.ShouldBe(new ProviderToken.Present("glpat_mytoken")),
             () => gitLab.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")),
             () => gitLab.Host.ShouldBe("gitlab.com"));
@@ -72,7 +72,7 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create("my-org", null, baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-org").ValueOrThrow(), null, baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

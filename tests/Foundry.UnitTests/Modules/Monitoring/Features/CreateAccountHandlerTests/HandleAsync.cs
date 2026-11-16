@@ -130,7 +130,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange — seed a credential named "octocat" that already claims the "octocat" namespace.
         // The incoming token derives only "octocat" — same-login sibling covers the entire derived set.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -158,7 +158,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // and derives both "octocat" (claimed by sibling) and "octocat-org" (unclaimed).
         // Criterion 1: account is created claiming only "octocat-org".
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -192,7 +192,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange — same setup as the criterion-1 test; verifies criterion 2:
         // no Outcome.Conflict returned for the same-login sibling's namespace.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -225,7 +225,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // and derives both "octocat" (claimed by sibling) and "octocat-org" (unclaimed).
         // Requesting a takeover of "octocat" (same-login sibling's namespace) must be rejected.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -264,7 +264,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Requesting a takeover of "octocat" (same-login sibling's namespace) must be rejected
         // and the sibling must retain its namespace claim.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -305,7 +305,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // "octocat" (different login than "other-user") and derives "octocat".
         // Criterion 4: different-login overlap must still return Outcome.Conflict (unchanged).
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("other-user", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("other-user").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -332,7 +332,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — seed an existing credential that claims "octocat"
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existing = GitHubCredential.Create("other-user", "ghp_other", baseUrl);
+        GitHubCredential existing = GitHubCredential.Create(AccountName.Create("other-user").ValueOrThrow(), "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -403,7 +403,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange — seed existing credential that owns "octocat"
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential existingHolder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        GitHubCredential existingHolder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
         existingHolder.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existingHolder);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -439,7 +439,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // derivation returns [ns-x, ns-b] (both are in the derived set).
         // The new credential must NOT steal ns-b (no takeover requested), so it only gets ns-x.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential holderA = GitHubCredential.Create("holder-a", "ghp_holder_a", baseUrl);
+        GitHubCredential holderA = GitHubCredential.Create(AccountName.Create("holder-a").ValueOrThrow(), "ghp_holder_a", baseUrl);
         holderA.SetNamespaces([
             Namespace.Create("ns-b").ValueOrThrow(),
             Namespace.Create("ns-x").ValueOrThrow(),
@@ -508,7 +508,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // With correct prior-status snapshotting, prior == current == "eligible" → repo is NOT affected.
         // With the bug (empty priorStatus), prior == "unreachable" != "eligible" → repo IS wrongly affected.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential holder = GitHubCredential.Create("holder-user", "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
         holder.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(holder);
 

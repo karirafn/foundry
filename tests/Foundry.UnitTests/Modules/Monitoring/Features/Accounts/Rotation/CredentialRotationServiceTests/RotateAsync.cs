@@ -54,7 +54,7 @@ public sealed class RotateAsync : IAsyncDisposable
         SeedTwoOwnerScenarioAsync()
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("test-user", "ghp_original", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("test-user").ValueOrThrow(), "ghp_original", baseUrl);
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
         Namespace bobNs = Namespace.Create("bob").ValueOrThrow();
         credential.SetNamespaces([aliceNs, bobNs]);
@@ -156,12 +156,12 @@ public sealed class RotateAsync : IAsyncDisposable
     {
         // Arrange — seed two credentials: alice (existing), bob (existing holder of "bob")
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential alice = GitHubCredential.Create("alice", "ghp_alice", baseUrl);
+        GitHubCredential alice = GitHubCredential.Create(AccountName.Create("alice").ValueOrThrow(), "ghp_alice", baseUrl);
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
         alice.SetNamespaces([aliceNs]);
         _dbContext.Set<Credential>().Add(alice);
 
-        GitHubCredential bob = GitHubCredential.Create("bob", "ghp_bob", baseUrl);
+        GitHubCredential bob = GitHubCredential.Create(AccountName.Create("bob").ValueOrThrow(), "ghp_bob", baseUrl);
         Namespace bobNs = Namespace.Create("bob").ValueOrThrow();
         bob.SetNamespaces([bobNs]);
         _dbContext.Set<Credential>().Add(bob);
@@ -188,7 +188,7 @@ public sealed class RotateAsync : IAsyncDisposable
         // Arrange — seed 8 repos under one owner namespace
         // Evaluation is sequential (DbContext is not thread-safe); every repo must be visited once.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("test-user", "ghp_original", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("test-user").ValueOrThrow(), "ghp_original", baseUrl);
         Namespace ownerNs = Namespace.Create("owner").ValueOrThrow();
         credential.SetNamespaces([ownerNs]);
         _dbContext.Set<Credential>().Add(credential);

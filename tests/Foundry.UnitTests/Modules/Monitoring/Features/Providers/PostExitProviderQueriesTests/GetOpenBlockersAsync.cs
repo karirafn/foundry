@@ -54,7 +54,7 @@ public sealed class GetOpenBlockersAsync : IAsyncDisposable
         if (withCredential)
         {
             GitHubCredential credential = GitHubCredential.Create(
-                "my-org",
+                AccountName.Create("my-org").ValueOrThrow(),
                 "ghp_test_token",
                 BaseUrl.Create("https://github.com").ValueOrThrow());
             credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);

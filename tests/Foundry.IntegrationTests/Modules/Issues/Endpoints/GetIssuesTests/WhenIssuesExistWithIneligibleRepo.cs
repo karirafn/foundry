@@ -48,7 +48,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         // Use slug-derived name to avoid (base_url, name) unique constraint violations when
         // seeding multiple accounts with the same base URL.
-        GitHubCredential credential = GitHubCredential.Create(slug.Replace("/", "-", StringComparison.Ordinal), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
@@ -127,7 +127,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();

@@ -164,47 +164,18 @@ internal static partial class CreateAccount
                 return new Outcome.Failure(error);
             }
 
-            ValidateToken.Response tokenResponse = tokenSuccess.Value;
+            Result<ResolvedTokenIdentity> identityResult = TokenIdentityResolution.Resolve(tokenSuccess.Value);
 
-            string? resolvedAccountName = tokenResponse.Kind switch
+            if (identityResult is not Result<ResolvedTokenIdentity>.Success { Value: ResolvedTokenIdentity identity })
             {
-                ValidateToken.Kinds.Authenticated when tokenResponse.MissingScopes.Count == 0
-                    => tokenResponse.AccountName,
-                ValidateToken.Kinds.ScopesUnverifiable
-                    => tokenResponse.AccountName,
-                _ => null,
-            };
-
-            if (resolvedAccountName is null)
-            {
-                Error kindError = tokenResponse.Kind switch
-                {
-                    ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
-                    ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
-                    ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
-                    ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
-                    ValidateToken.Kinds.ProviderMismatch =>
-                        CredentialErrors.ProviderMismatch(tokenResponse.DetectedProvider ?? string.Empty),
-                    _ => CredentialErrors.InvalidToken,
-                };
-                return new Outcome.Failure(kindError);
+                return new Outcome.Failure(((Result<ResolvedTokenIdentity>.Failure)identityResult).Error);
             }
 
-            if (string.IsNullOrWhiteSpace(resolvedAccountName))
-            {
-                return new Outcome.Failure(CredentialErrors.UnresolvedIdentity);
-            }
-
-            string accountName = resolvedAccountName;
-
-            if (accountName.Length > AccountsDatabaseHelpers.AccountNameMaxLength || accountName.Any(char.IsControl))
-            {
-                return new Outcome.Failure(CredentialErrors.UnresolvedIdentity);
-            }
+            string accountName = identity.Name.Value;
 
             Credential credential = isGitLab
-                ? GitLabCredential.Create(accountName, command.Token, baseUrl, command.BranchRulesToken)
-                : GitHubCredential.Create(accountName, command.Token, baseUrl, command.BranchRulesToken);
+                ? GitLabCredential.Create(identity.Name, command.Token, baseUrl, command.BranchRulesToken)
+                : GitHubCredential.Create(identity.Name, command.Token, baseUrl, command.BranchRulesToken);
 
             NamespaceDerivationOutcome derivationOutcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
             IReadOnlyCollection<Namespace> derivedNamespaces;

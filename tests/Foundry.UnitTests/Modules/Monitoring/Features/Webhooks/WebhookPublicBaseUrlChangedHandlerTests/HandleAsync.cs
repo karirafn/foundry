@@ -61,7 +61,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task SeedCredentialAsync()
     {
         GitHubCredential credential = GitHubCredential.Create(
-            "alice",
+            AccountName.Create("alice").ValueOrThrow(),
             "ghp_account",
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             ServerToken);

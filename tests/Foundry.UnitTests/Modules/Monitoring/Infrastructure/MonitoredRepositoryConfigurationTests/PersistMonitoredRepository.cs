@@ -43,7 +43,7 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
     public async Task WhenMonitoredRepositoryPersisted_CanBeReloadedWithCorrectSlug()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

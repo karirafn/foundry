@@ -14,7 +14,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitHubDotCom_ReturnsApiGitHubCom()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("my-account", "GITHUB_TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-account").ValueOrThrow(), "GITHUB_TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
         Uri apiBaseUrl = credential.ApiBaseUrl;
@@ -27,7 +27,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitHubEnterprise_ReturnsBaseUrlWithApiV3Suffix()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("ghe-account", "GHE_TOKEN", BaseUrl.Create("https://github.example.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("ghe-account").ValueOrThrow(), "GHE_TOKEN", BaseUrl.Create("https://github.example.com").ValueOrThrow());
 
         // Act
         Uri apiBaseUrl = credential.ApiBaseUrl;
@@ -40,7 +40,7 @@ public sealed class ApiBaseUrl
     public void WhenBaseUrlIsGitHubEnterpriseWithTrailingPath_PreservesSubPath()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create("ghe-account", "GHE_TOKEN", BaseUrl.Create("https://corp.example.com/github").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("ghe-account").ValueOrThrow(), "GHE_TOKEN", BaseUrl.Create("https://corp.example.com/github").ValueOrThrow());
 
         // Act
         Uri apiBaseUrl = credential.ApiBaseUrl;
