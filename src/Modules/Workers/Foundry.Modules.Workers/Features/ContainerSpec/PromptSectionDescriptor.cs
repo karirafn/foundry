@@ -12,6 +12,12 @@ internal enum PromptSectionCondition
     /// <summary>The worker image's recorded toolchain has <c>docker</c>; an image with no recorded toolchain has none.</summary>
     DockerImage,
 
+    /// <summary>
+    /// The worker image's recorded toolchain has both <c>chromium</c> and <c>playwright-core</c>; an image with no
+    /// recorded toolchain has neither. Restricted runs, which cannot execute code, never get it.
+    /// </summary>
+    BrowserRenderingImage,
+
     /// <summary>A fresh run on a new branch.</summary>
     Fresh,
 
