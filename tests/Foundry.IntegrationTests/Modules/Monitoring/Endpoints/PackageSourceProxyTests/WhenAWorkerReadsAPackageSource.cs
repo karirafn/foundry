@@ -39,6 +39,10 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
 
     private const string AccountToken = "glpat-" + "proxy-test-token";
 
+    private const string RegisteredToken = "registered-" + "feed-token";
+
+    private const string ThirdPartyServiceIndexUrl = "https://packages.example/v3/index.json";
+
     private readonly FakePackageSourceUpstream _upstream = new();
     private readonly FoundryWebAppFactory _factory;
 
@@ -309,6 +313,46 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WithARegisteredCredential_SendsItInsteadOfTheAccount()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync(registered: ("feed-reader", RegisteredToken));
+        _upstream.Json(ServiceIndexUrl, """{"version":"3.0.0","resources":[]}""");
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            ProxyPath(seeded.SourceId, "index.json"),
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+        _upstream.Requests.ShouldHaveSingleItem().Authorization.ShouldBe(Basic("feed-reader", RegisteredToken));
+    }
+
+    [Fact]
+    public async Task WithARegisteredCredentialOnAnotherHost_SendsIt()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync(
+            sourceUrl: ThirdPartyServiceIndexUrl,
+            registered: ("feed-reader", RegisteredToken));
+        _upstream.Json(ThirdPartyServiceIndexUrl, """{"version":"3.0.0","resources":[]}""");
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}/v3/index.json",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+        _upstream.Requests.ShouldHaveSingleItem().Authorization.ShouldBe(Basic("feed-reader", RegisteredToken));
+    }
+
+    [Fact]
     public async Task AnApiPathOnTheProxyPort_Returns404()
     {
         // Act
@@ -352,12 +396,15 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
     /// A GitLab repository declaring the source, the account that covers it, and one of its runs, live unless
     /// <paramref name="publishing"/>.
     /// </summary>
-    private async Task<Seeded> SeedAsync(bool publishing = false)
+    private async Task<Seeded> SeedAsync(
+        bool publishing = false,
+        string sourceUrl = ServiceIndexUrl,
+        (string Username, string Token)? registered = null)
     {
         Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory, AccountName, AccountToken);
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
 
-        PackageSource source = await SeedSourceAsync(ServiceIndexUrl);
+        PackageSource source = await SeedSourceAsync(sourceUrl, registered);
 
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -367,7 +414,7 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
             "gitlab.com",
             null,
             position: 0).ValueOrThrow();
-        DeclaredPackageSource declared = DeclaredPackageSource.Create("group", ServiceIndexUrl).ValueOrThrow();
+        DeclaredPackageSource declared = DeclaredPackageSource.Create("group", sourceUrl).ValueOrThrow();
         repository.RecordRootListing(new RootNuGetConfig.Declared("sha", "<configuration />", [declared]), listingETag: null);
         dbContext.Set<MonitoredRepository>().Add(repository);
 
@@ -387,11 +434,16 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
         return new Seeded(source.Id.Value, starting.SourceToken!.Value);
     }
 
-    private async Task<PackageSource> SeedSourceAsync(string url)
+    private async Task<PackageSource> SeedSourceAsync(string url, (string Username, string Token)? registered = null)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         PackageSource source = PackageSource.Create(new Uri(url));
+        if (registered is { } credential)
+        {
+            source.SetCredential(credential.Username, credential.Token, DateTimeOffset.UtcNow);
+        }
+
         dbContext.Set<PackageSource>().Add(source);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         return source;
