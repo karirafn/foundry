@@ -335,6 +335,8 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
 
         public JsonObject? ParseStructuredOutput(string? log) => null;
+
+        public Toolchain? ParseToolchain(string? fullLog) => null;
     }
 
     private sealed class AlwaysCanDispatchCredentialGate : ICredentialGate

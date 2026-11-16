@@ -186,6 +186,11 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasColumnType("TEXT")
             .HasColumnName("supplied_open_issue_numbers");
 
+        builder.Property(r => r.Toolchain)
+            .HasConversion(ToolchainValueConverters.OptionalConverter, ToolchainValueConverters.OptionalComparer)
+            .HasColumnType("TEXT")
+            .HasColumnName("toolchain");
+
         builder.Ignore(r => r.Verdict);
 
         builder.Property(r => r.BaseDefaultBranchHead)

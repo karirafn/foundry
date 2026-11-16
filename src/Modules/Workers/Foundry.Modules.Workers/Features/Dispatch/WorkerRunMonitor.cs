@@ -295,7 +295,7 @@ internal sealed class WorkerRunMonitor(
             return;
         }
 
-        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+        WorkerRunTranscript? transcript = await TryCaptureFullLogAsync(activeRun, cancellationToken);
 
         await outcomeApplier.ApplyAsync(outcome, activeRun, verdict, transcript, cancellationToken);
     }
@@ -315,7 +315,7 @@ internal sealed class WorkerRunMonitor(
             postExitProviderQueries,
             cancellationToken);
 
-        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+        WorkerRunTranscript? transcript = await TryCaptureFullLogAsync(activeRun, cancellationToken);
 
         await outcomeApplier.ApplyAsync(timeoutOutcome, activeRun, verdict: null, transcript, cancellationToken);
     }
@@ -357,7 +357,7 @@ internal sealed class WorkerRunMonitor(
                 postExitProviderQueries,
                 cancellationToken);
 
-        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+        WorkerRunTranscript? transcript = await TryCaptureFullLogAsync(activeRun, cancellationToken);
 
         await outcomeApplier.ApplyAsync(outcome, activeRun, verdict: null, transcript, cancellationToken);
 
@@ -397,7 +397,7 @@ internal sealed class WorkerRunMonitor(
         bool containerGone = false)
     {
         // A container that is gone has no log left to render.
-        WorkerRunTranscript? transcript = containerGone ? null : await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+        WorkerRunTranscript? transcript = containerGone ? null : await TryCaptureFullLogAsync(activeRun, cancellationToken);
 
         RunPullRequestText? pullRequestText = exit.FinishedCleanly
             ? RunPullRequestTextReader.Read(containerOutputParser.ParseStructuredOutput(containerOutput))
@@ -500,10 +500,11 @@ internal sealed class WorkerRunMonitor(
     }
 
     /// <summary>
-    /// Renders the container's full log as the run's Run Transcript, read before the applier removes the
-    /// container. Best-effort: a failed fetch or render yields no transcript and leaves the outcome as is.
+    /// Reads the container's full log before the applier removes the container: records on the run the toolchain the
+    /// container reported at startup (ADR 0109), and renders the log as the run's Run Transcript. Best-effort: a failed
+    /// fetch or render yields no transcript and leaves the outcome as is.
     /// </summary>
-    private async Task<WorkerRunTranscript?> TryCaptureTranscriptAsync(
+    private async Task<WorkerRunTranscript?> TryCaptureFullLogAsync(
         ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
@@ -515,6 +516,8 @@ internal sealed class WorkerRunMonitor(
             {
                 return null;
             }
+
+            activeRun.RecordToolchain(containerOutputParser.ParseToolchain(fullLog));
 
             string rendered = AgentTranscriptFormatter.FormatLog(fullLog);
 

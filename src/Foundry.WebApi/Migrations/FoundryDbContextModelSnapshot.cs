@@ -899,6 +899,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("supplied_open_issue_numbers");
 
+                    b.Property<string>("Toolchain")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("toolchain");
+
                     b.Property<string>("VerdictQuestions")
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")

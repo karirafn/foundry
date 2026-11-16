@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.Extensions.Logging;
@@ -154,6 +155,8 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
         return resultLine?.Node["structured_output"] as JsonObject;
     }
+
+    public Toolchain? ParseToolchain(string? fullLog) => ToolchainLineParser.Parse(fullLog);
 
     private const int MaxLoggedResultTextLength = 200;
 
