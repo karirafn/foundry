@@ -123,6 +123,34 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task ARunThatAsked_PublishesToTheBranchWithoutOpeningAPullRequest()
+    {
+        // Arrange
+        SeedAskingPublishingRun(refusesNeedsInput: false);
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 1, ["wip"], [], []));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        _commands.Opened.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ARunStartedByContinueWithoutAnswerThatAsked_GetsItsPullRequestOpenedAsIfDone()
+    {
+        // Arrange
+        SeedAskingPublishingRun(refusesNeedsInput: true);
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 1, ["feat: add retry"], [], []));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        _commands.Opened.ShouldHaveSingleItem().Branch.ShouldBe(Branch);
+    }
+
+    [Fact]
     public async Task ATransientFailure_WaitsToRetryAndHoldsNoSlot()
     {
         // Arrange
@@ -479,6 +507,21 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             exit,
             containerOutput: null,
             exit.FinishedCleanly ? RunVerdict.Done() : null,
+            new RunPullRequestText("Add retry", "Adds retry with backoff."));
+        db.Set<WorkerRun>().Add(publishing);
+        db.SaveChanges();
+    }
+
+    private void SeedAskingPublishingRun(bool refusesNeedsInput)
+    {
+        using FoundryDbContext db = CreateDbContext();
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New(), refusesNeedsInput: refusesNeedsInput);
+        starting.RecordPreparedBase(Base, MonitoredRepositoryId.New());
+        ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), MonitoredRepositoryId.New());
+        PublishingRun publishing = active.BeginPublishing(
+            new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
+            containerOutput: null,
+            RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]),
             new RunPullRequestText("Add retry", "Adds retry with backoff."));
         db.Set<WorkerRun>().Add(publishing);
         db.SaveChanges();

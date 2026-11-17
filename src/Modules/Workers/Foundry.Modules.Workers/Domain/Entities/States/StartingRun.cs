@@ -24,13 +24,19 @@ public sealed class StartingRun : WorkerRun
 
     /// <summary>
     /// Begins a run. <paramref name="role"/> defaults to <see cref="WorkerRole.Implement"/>; <paramref name="image"/> is the
-    /// worker image the run is dispatched on (see <see cref="WorkerRun.Image"/>).
+    /// worker image the run is dispatched on (see <see cref="WorkerRun.Image"/>). <paramref name="refusesNeedsInput"/> marks a run started
+    /// by Continue without answer (see <see cref="WorkerRun.RefusesNeedsInput"/>).
     /// </summary>
     /// <remarks>
     /// Every run mints a Run Source Token (ADR 0112): the run persists only its hash, and the token itself is readable
     /// from <see cref="SourceToken"/> on the begun run alone.
     /// </remarks>
-    public static StartingRun Begin(IssueId issueId, WorkerRunId workerRunId, WorkerRole? role = null, string? image = null)
+    public static StartingRun Begin(
+        IssueId issueId,
+        WorkerRunId workerRunId,
+        WorkerRole? role = null,
+        string? image = null,
+        bool refusesNeedsInput = false)
     {
         RunSourceToken sourceToken = RunSourceToken.Mint();
         StartingRun starting = new(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image)
@@ -38,6 +44,11 @@ public sealed class StartingRun : WorkerRun
             SourceToken = sourceToken,
         };
         starting.StoreSourceTokenHash(sourceToken.Hash);
+        if (refusesNeedsInput)
+        {
+            starting.RefuseNeedsInput();
+        }
+
         return starting;
     }
 

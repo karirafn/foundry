@@ -21,4 +21,7 @@ internal interface IResolvableRun
 
     /// <summary>The open issues supplied to the run at dispatch; <see langword="null"/> when none were recorded.</summary>
     IReadOnlyList<int>? SuppliedOpenIssueNumbers { get; }
+
+    /// <summary>Whether the run was started by Continue without answer, so its <c>needs_input</c> verdict is refused (ADR 0096).</summary>
+    bool RefusesNeedsInput { get; }
 }

@@ -104,8 +104,9 @@ internal sealed class WorkerOutcomeResolver(
         RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
         bool succeeded = Succeeded(status, summary);
 
+        // A run started by Continue without answer may not ask again (ADR 0096): its verdict is refused and the facts decide.
         IReadOnlyList<RunVerdictQuestion>? askedQuestions =
-            succeeded && verdict is { Status: RunVerdictStatus.NeedsInput } ? verdict.Questions : null;
+            succeeded && verdict is { Status: RunVerdictStatus.NeedsInput } && !run.RefusesNeedsInput ? verdict.Questions : null;
 
         // Step 5a — MR-state first
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
