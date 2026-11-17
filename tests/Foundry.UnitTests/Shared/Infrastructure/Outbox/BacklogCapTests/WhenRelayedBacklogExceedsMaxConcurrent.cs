@@ -247,6 +247,12 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
 
     private sealed class StubRepositoryDispatchQueries : IRepositoryDispatchQueries
     {
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         private static readonly RepositoryDispatchInfo DefaultInfo = new(
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),

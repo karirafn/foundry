@@ -37,4 +37,7 @@ internal sealed record WorkerContainerSpec(
     public IReadOnlyList<string> ScratchVolumePaths { get; init; } = [];
 
     public IReadOnlyList<VolumeMount> VolumeMounts { get; init; } = [];
+
+    /// <summary>Extra <c>/etc/hosts</c> entries, each <c>name:address</c>; Docker resolves <c>host-gateway</c> to the host.</summary>
+    public IReadOnlyList<string> ExtraHosts { get; init; } = [];
 }

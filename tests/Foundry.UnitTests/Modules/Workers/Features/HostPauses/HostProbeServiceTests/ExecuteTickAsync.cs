@@ -106,6 +106,12 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         private readonly Dictionary<string, MonitoredRepositoryId> _repositories = new(StringComparer.Ordinal);
 
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken)
         {
             lock (_repositories)

@@ -88,6 +88,9 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
                     ? [.. spec.Devices.Select(MapDevice)]
                     : null,
                 Mounts = MapMounts(spec),
+                ExtraHosts = spec.ExtraHosts.Count > 0
+                    ? [.. spec.ExtraHosts]
+                    : null,
                 Tmpfs = spec.TmpfsMounts.Count > 0
                     ? new Dictionary<string, string>(spec.TmpfsMounts)
                     : null,

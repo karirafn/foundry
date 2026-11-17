@@ -278,6 +278,36 @@ public sealed class StartAsync
         captured.HostConfig.CapDrop.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenSpecHasExtraHosts_SetsHostConfigExtraHosts()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec() with { ExtraHosts = ["host.docker.internal:host-gateway"] }, CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.ExtraHosts.ShouldBe(["host.docker.internal:host-gateway"]);
+    }
+
+    [Fact]
+    public async Task WhenSpecHasNoExtraHosts_HostConfigExtraHostsIsNull()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.ExtraHosts.ShouldBeNull();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 using Foundry.Modules.Credentials.Contracts;
@@ -1889,6 +1890,109 @@ public sealed class HandleAsync : IAsyncDisposable
             () => orchestrator.LastSpec.ShouldBeNull());
     }
 
+    [Fact]
+    public async Task WhenTheRepositoryHasAWorkerNuGetConfig_TheWorkerGetsItBase64Encoded()
+    {
+        // Arrange
+        const string xml = "<configuration><packageSources /></configuration>";
+        StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo()) { WorkerNuGetConfig = new WorkerNuGetConfig(xml) };
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-nuget");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyDictionary<string, string> env = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables;
+        env.ShouldContainKey("FOUNDRY_NUGET_CONFIG");
+        Encoding.UTF8.GetString(Convert.FromBase64String(env["FOUNDRY_NUGET_CONFIG"])).ShouldBe(xml);
+    }
+
+    [Fact]
+    public async Task WhenTheWorkerNuGetConfigIsRead_ItIsAskedForWithTheRunsOwnToken()
+    {
+        // Arrange
+        StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo())
+        {
+            WorkerNuGetConfig = new WorkerNuGetConfig("<configuration />"),
+        };
+        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: dispatchQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        string token = dispatchQueries.RequestedRunSourceTokens.ShouldHaveSingleItem();
+        RunSourceTokenHash.Of(token).ShouldBe(run.SourceTokenHash.ShouldNotBeNull());
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryHasNoWorkerNuGetConfig_TheNuGetConfigVariableIsAbsent()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-plain");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            repositoryDispatchQueries: new StubRepositoryDispatchQueries(PackageSourceDispatchInfo()));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldNotContainKey("FOUNDRY_NUGET_CONFIG");
+    }
+
+    [Fact]
+    public async Task WhenAFullRunIsDispatched_ItReachesTheHostThroughTheHostGateway()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().ExtraHosts.ShouldBe(["host.docker.internal:host-gateway"]);
+    }
+
+    [Fact]
+    public async Task WhenATriageRunIsDispatched_ItReachesTheHostThroughTheHostGateway()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-triage-host");
+        WorkerRoleCatalog implementOnly = StubWorkerRoleCatalogStore.Catalog();
+        WorkerRoleDefinition triage = new(
+            WorkerRole.Triage,
+            WorkerCapability.Restricted,
+            new RolePlugin(WorkerRole.Triage.Name, "Triages an issue.", [], []),
+            "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+            "Triage issue #{issueNumber}.",
+            VerdictSchema: null);
+        WorkerRoleCatalog catalog = implementOnly with
+        {
+            Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(context: new DispatchContext.Triage(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().ExtraHosts.ShouldBe(["host.docker.internal:host-gateway"]);
+    }
+
+    private static RepositoryDispatchInfo PackageSourceDispatchInfo() => new(
+        "owner/repo",
+        new Uri("https://github.com/owner/repo.git"),
+        "account-token",
+        new WorkerProvider.GitHub(),
+        "https://api.github.com/repos/owner/repo/issues",
+        "github.com");
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
         public int CreateBranchCallCount { get; private set; }
@@ -2298,7 +2402,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
-
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true, []));

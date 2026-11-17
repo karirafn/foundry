@@ -303,6 +303,12 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
 
     private sealed class StubRepositoryDispatchQueries(RepositoryDispatchInfo? info) : IRepositoryDispatchQueries
     {
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

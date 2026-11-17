@@ -27,9 +27,7 @@ internal static class NuGetConfigParser
         XDocument document;
         try
         {
-            using StringReader stringReader = new(text.TrimStart(ByteOrderMark));
-            using XmlReader xmlReader = XmlReader.Create(stringReader, ReaderSettings);
-            document = XDocument.Load(xmlReader);
+            document = Load(text);
         }
         catch (XmlException ex)
         {
@@ -48,6 +46,14 @@ internal static class NuGetConfigParser
             .ToList();
 
         return new RootNuGetConfig.Declared(blobSha, text, sources);
+    }
+
+    /// <summary>Loads <paramref name="text"/> as XML with no DTD or external entity resolved; throws <see cref="XmlException"/>.</summary>
+    internal static XDocument Load(string text)
+    {
+        using StringReader stringReader = new(text.TrimStart(ByteOrderMark));
+        using XmlReader xmlReader = XmlReader.Create(stringReader, ReaderSettings);
+        return XDocument.Load(xmlReader);
     }
 
     private static IEnumerable<DeclaredPackageSource> DeclaredSources(XElement configuration)

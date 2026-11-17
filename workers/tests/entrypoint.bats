@@ -3686,3 +3686,95 @@ FAKE
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
     [[ "$stderr" == *"Toolchain: not reported ($FOUNDRY_TOOLCHAIN_SCRIPT is missing)"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# Package sources (ADR 0112): a FOUNDRY_NUGET_CONFIG Foundry passes is decoded to
+# ~/.foundry/nuget.config and RestoreConfigFile points every restore at it, the C#
+# LSP pre-restore included.  An unreadable value never fails the bootstrap.
+# ---------------------------------------------------------------------------
+
+# Fake claude that records whether it saw RestoreConfigFile and FOUNDRY_NUGET_CONFIG.
+make_fake_claude_record_package_source_env() {
+    local env_file="$BATS_TEST_TMPDIR/claude_env"
+    local order_file="$BATS_TEST_TMPDIR/order"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf 'RestoreConfigFile=%s\n' "\${RestoreConfigFile-unset}" >> "${env_file}"
+printf 'FOUNDRY_NUGET_CONFIG=%s\n' "\${FOUNDRY_NUGET_CONFIG-unset}" >> "${env_file}"
+echo claude >> "${order_file}"
+echo "claude-invoked" > "$BATS_TEST_TMPDIR/claude_called"
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Fake dotnet that records the RestoreConfigFile each restore ran with, and the
+# content of that file at the time.
+make_fake_dotnet_record_restore_config() {
+    local order_file="$BATS_TEST_TMPDIR/order"
+    local content_file="$BATS_TEST_TMPDIR/restore_config_content"
+    cat > "$FAKE_BIN_DIR/dotnet" <<EOF
+#!/bin/bash
+printf 'dotnet RestoreConfigFile=%s\n' "\${RestoreConfigFile-unset}" >> "${order_file}"
+if [[ -n "\${RestoreConfigFile:-}" && -f "\${RestoreConfigFile}" ]]; then
+    cat "\${RestoreConfigFile}" > "${content_file}"
+fi
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/dotnet"
+}
+
+@test "package sources: without FOUNDRY_NUGET_CONFIG no config is written and RestoreConfigFile stays unset" {
+    set_required_env
+    unset FOUNDRY_NUGET_CONFIG RestoreConfigFile
+    make_fake_git
+    make_fake_claude_record_package_source_env
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.foundry/nuget.config" ]
+    grep -qx 'RestoreConfigFile=unset' "$BATS_TEST_TMPDIR/claude_env"
+    [[ "$stderr" != *"Package sources:"* ]]
+}
+
+@test "package sources: a valid FOUNDRY_NUGET_CONFIG is written 0600 and RestoreConfigFile points the LSP restore and claude at it" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet_record_restore_config
+    make_fake_claude_record_package_source_env
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
+    local config='<configuration><packageSources><add key="group" value="http://host.docker.internal:5287/package-sources/x/index.json" /></packageSources></configuration>'
+    FOUNDRY_NUGET_CONFIG="$(printf '%s' "$config" | base64 -w 0)"
+    export FOUNDRY_NUGET_CONFIG
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local file="$HOME/.foundry/nuget.config"
+    [ "$(cat "$file")" = "$config" ]
+    [ -n "$(find "$file" -perm 0600)" ]
+    [ "$(cat "$BATS_TEST_TMPDIR/restore_config_content")" = "$config" ]
+    [ "$(cat "$BATS_TEST_TMPDIR/order")" = "$(printf '%s\n' "dotnet RestoreConfigFile=$file" claude)" ]
+    grep -qx "RestoreConfigFile=$file" "$BATS_TEST_TMPDIR/claude_env"
+    grep -qx 'FOUNDRY_NUGET_CONFIG=unset' "$BATS_TEST_TMPDIR/claude_env"
+}
+
+@test "package sources: an undecodable FOUNDRY_NUGET_CONFIG warns and the run continues without the redirect" {
+    set_required_env
+    unset RestoreConfigFile
+    make_fake_git
+    make_fake_claude_record_package_source_env
+    export FOUNDRY_NUGET_CONFIG='not base64 !!!'
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$stderr" == *"Package sources: FOUNDRY_NUGET_CONFIG unreadable"* ]]
+    [[ "$stderr" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    [ ! -e "$HOME/.foundry/nuget.config" ]
+    grep -qx 'RestoreConfigFile=unset' "$BATS_TEST_TMPDIR/claude_env"
+    grep -qx 'FOUNDRY_NUGET_CONFIG=unset' "$BATS_TEST_TMPDIR/claude_env"
+}
