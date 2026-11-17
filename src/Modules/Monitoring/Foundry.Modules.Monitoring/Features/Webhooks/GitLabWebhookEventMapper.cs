@@ -24,7 +24,8 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// <item><term><c>note</c> (on an issue or work item)</term><description>awaiting-input pass for that issue when
 /// it is awaiting input with no merge request (its question lives on the issue thread)</description></item>
 /// <item><term><c>pipeline</c> (finished)</term><description>checks pass for the owning issue</description></item>
-/// <item><term><c>push</c></term><description>no nudge — handled by <see cref="BranchPushPublisher"/></description></item>
+/// <item><term><c>push</c></term><description>awaiting-input pass for the awaiting-input issue whose resume branch
+/// it moved</description></item>
 /// </list>
 /// GitLab has no event for issue links or protected branches, so neither the dependency pass (beyond a
 /// blocker closing) nor the branch-rules step is ever nudged from GitLab.
@@ -32,12 +33,6 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 internal static partial class GitLabWebhookEventMapper
 {
     internal const string EventHeaderName = "X-Gitlab-Event";
-
-    /// <summary>
-    /// The <c>object_kind</c> of a Push Hook. Not a nudge: <see cref="BranchPushPublisher"/> turns a push to a
-    /// running worker branch into <c>ProviderBranchPushed</c> so Workers refreshes the run commit count (issue #660).
-    /// </summary>
-    internal const string PushObjectKind = "push";
 
     /// <summary>
     /// The exact triggers the operator ticks on the GitLab webhook form. The confidential variants are
@@ -66,12 +61,13 @@ internal static partial class GitLabWebhookEventMapper
         "confidential_note_events",
         "merge_requests_events",
         "pipeline_events",
+        "push_events",
     ];
 
     /// <summary>
     /// Every project-hook trigger flag Foundry sends explicitly. The ones outside
     /// <see cref="SubscribedTriggers"/> are sent as <see langword="false"/> — notably
-    /// <c>push_events</c>, which GitLab enables by default.
+    /// <c>tag_push_events</c>, since a tag never moves a resume branch.
     /// </summary>
     internal static readonly IReadOnlyList<string> AllTriggers =
     [
@@ -105,7 +101,7 @@ internal static partial class GitLabWebhookEventMapper
 
     /// <summary>Whether mapping <paramref name="objectKind"/> needs the repository's tracked issues.</summary>
     public static bool NeedsTrackingContext(string? objectKind) =>
-        objectKind is "issue" or "work_item" or "merge_request" or "note" or "pipeline";
+        objectKind is "issue" or "work_item" or "merge_request" or "note" or "pipeline" or "push";
 
     /// <summary>Whether mapping <paramref name="objectKind"/> needs the blockers of tracked issues.</summary>
     public static bool NeedsBlockers(string? objectKind) => objectKind is "issue" or "work_item";
@@ -118,6 +114,7 @@ internal static partial class GitLabWebhookEventMapper
             "merge_request" => MapMergeRequest(payload, repositoryId, tracked),
             "note" => MapNote(payload, repositoryId, tracked),
             "pipeline" => MapPipeline(payload, repositoryId, tracked),
+            "push" => MapPush(repositoryId, tracked, payload),
             _ => null,
         };
     }

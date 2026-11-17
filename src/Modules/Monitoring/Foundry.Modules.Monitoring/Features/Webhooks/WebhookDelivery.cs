@@ -112,7 +112,7 @@ internal static class WebhookDelivery
         }
 
         IReadOnlyList<AwaitingInputThread> awaitingInput = [.. (await issueQueries.GetAwaitingInputIssuesAsync(repositoryId, cancellationToken))
-            .Select(i => new AwaitingInputThread(i.IssueNumber, i.PullRequestUrl))];
+            .Select(i => new AwaitingInputThread(i.IssueNumber, i.PullRequestUrl, i.BranchName))];
 
         return new WebhookTrackingContext(known, review, checksPending, blockers, awaitingInput);
     }
