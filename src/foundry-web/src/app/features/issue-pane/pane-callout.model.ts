@@ -25,7 +25,9 @@ export type PaneAction =
   | 'retry_publish'
   | 'discard_run'
   | 'confirm_false_positives'
-  | 'retriage';
+  | 'retriage'
+  | 'continue_without_answer'
+  | 'retry_post';
 
 export interface CalloutChip {
   readonly label: string;
@@ -361,6 +363,9 @@ function awaitingInputCallout(src: CalloutSource): Draft {
           ? `Posted ${medium(awaiting.postedAt)} — waiting for a reply.`
           : 'Posted — waiting for a reply.',
       );
+      if (awaiting.reminderSentAt) {
+        d.notes.push(`Reminder posted ${medium(awaiting.reminderSentAt)}.`);
+      }
       if (awaiting.commentUrl) {
         d.links.push({
           label: 'View question',
@@ -782,6 +787,13 @@ function actionsFor(src: CalloutSource): PaneAction[] {
   }
   if (RETRIAGEABLE_STATES.has(state)) {
     actions.push('retriage');
+  }
+  if (state === 'awaiting_input') {
+    // A failed post is fixed by posting again; continuing gives up on the answer, so it comes second.
+    if (src.details?.awaitingInput?.postStatus === 'failed') {
+      actions.push('retry_post');
+    }
+    actions.push('continue_without_answer');
   }
   return actions;
 }

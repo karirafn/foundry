@@ -5,7 +5,7 @@ using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Monitoring.Features.AwaitingInput;
 
-/// <summary>The comment Foundry posts to ask an awaiting-input issue's questions (ADR 0096), and the link to it.</summary>
+/// <summary>The comments Foundry posts to ask an awaiting-input issue's questions and remind of them (ADR 0096), and the link to them.</summary>
 internal static class QuestionComment
 {
     private const string AcceptRecommendationsClosing =
@@ -42,6 +42,17 @@ internal static class QuestionComment
             ? AcceptRecommendationsClosing
             : ReplyClosing);
         return body.ToString();
+    }
+
+    /// <summary>
+    /// The one reminder posted in the question's thread once it has waited the reminder delay without input, linking the
+    /// question comment when its URL is known.
+    /// </summary>
+    public static string ComposeReminder(string? questionCommentUrl)
+    {
+        string questions = questionCommentUrl is null ? "the questions above" : $"[the questions above]({questionCommentUrl})";
+        return $"Foundry is still waiting for input on {questions} before the work on this issue can continue. "
+            + "Reply in a comment on this thread. The work resumes once replies have been quiet for two minutes.";
     }
 
     /// <summary>

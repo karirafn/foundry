@@ -720,6 +720,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");
 
+                    b.Property<int>("AwaitingInputReminderDelayHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(72)
+                        .HasColumnName("awaiting_input_reminder_delay_hours");
+
                     b.Property<int>("BackstopIntervalMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
@@ -939,6 +945,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("published_head");
 
+                    b.Property<bool>("RefusesNeedsInput")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("refuses_needs_input");
+
                     b.Property<string>("RevertedFiles")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1108,6 +1120,12 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 
+                    b.Property<bool>("ContinuedWithoutAnswer")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("continued_without_answer");
+
                     b.ToTable(t =>
                         {
                             t.HasCheckConstraint("ck_issues_awaiting_input_fields", "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
@@ -1162,6 +1180,13 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(true)
                         .HasColumnType("TEXT")
                         .HasColumnName("question_post");
+
+                    b.Property<string>("Reminder")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .IsUnicode(true)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("question_reminder");
 
                     b.Property<string>("ResumeTarget")
                         .IsRequired()

@@ -171,6 +171,11 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
+
+        public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(TimeSpan.FromDays(3));
+
         // Remaining members not exercised by these tests
         public Task<Foundry.Modules.Settings.Contracts.GlobalSettingsSummary?> GetSettingsAsync(
             CancellationToken cancellationToken)

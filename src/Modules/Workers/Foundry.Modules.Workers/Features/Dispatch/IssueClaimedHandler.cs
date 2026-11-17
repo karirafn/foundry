@@ -88,7 +88,12 @@ internal sealed class IssueClaimedHandler(
         WorkerRoleCatalog? catalog = roleCatalog.Current;
         string image = catalog?.Image.Reference ?? await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
 
-        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, claimed.WorkerRunId, role, image);
+        StartingRun startingRun = StartingRun.Begin(
+            claimed.IssueId,
+            claimed.WorkerRunId,
+            role,
+            image,
+            refusesNeedsInput: claimed.Context.ContinuedWithoutAnswer);
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 

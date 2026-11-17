@@ -9,6 +9,7 @@ namespace Foundry.Modules.Monitoring.Contracts;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(Comments), "comments")]
 [JsonDerivedType(typeof(DescriptionEdited), "descriptionEdited")]
+[JsonDerivedType(typeof(ContinuedWithoutAnswer), "continuedWithoutAnswer")]
 public abstract record InputPart
 {
     private InputPart()
@@ -23,4 +24,7 @@ public abstract record InputPart
 
     /// <summary>The issue description was edited after the question was posted, and the edit settled.</summary>
     public sealed record DescriptionEdited : InputPart;
+
+    /// <summary>No answer arrived, and an operator chose to continue anyway; the run uses its own judgment.</summary>
+    public sealed record ContinuedWithoutAnswer : InputPart;
 }

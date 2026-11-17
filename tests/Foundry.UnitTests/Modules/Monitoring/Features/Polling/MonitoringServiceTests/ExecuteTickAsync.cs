@@ -343,6 +343,9 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(pollIntervalSeconds);
 
+        public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+            => Task.FromResult(TimeSpan.FromDays(3));
+
         public Task<Foundry.Modules.Settings.Contracts.GlobalSettingsSummary?> GetSettingsAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<Foundry.Modules.Settings.Contracts.GlobalSettingsSummary?>(null);

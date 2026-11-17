@@ -27,6 +27,9 @@ internal static class AwaitingInputJsonConversion
     private const string FailedKind = "failed";
     private const string CommentsKind = "comments";
     private const string DescriptionEditedKind = "descriptionEdited";
+    private const string ContinuedWithoutAnswerKind = "continuedWithoutAnswer";
+    private const string UnsentKind = "unsent";
+    private const string SentKind = "sent";
 
     public static ValueConverter<ResumeTarget, string> ResumeTargetConverter { get; } = new(
         target => SerializeResumeTarget(target),
@@ -45,6 +48,15 @@ internal static class AwaitingInputJsonConversion
         (a, b) => a == b,
         post => post.GetHashCode(),
         post => post);
+
+    public static ValueConverter<QuestionReminder, string> QuestionReminderConverter { get; } = new(
+        reminder => SerializeQuestionReminder(reminder),
+        json => DeserializeQuestionReminder(json));
+
+    public static ValueComparer<QuestionReminder> QuestionReminderComparer { get; } = new(
+        (a, b) => a == b,
+        reminder => reminder.GetHashCode(),
+        reminder => reminder);
 
     public static ValueConverter<IReadOnlyList<Clarification>, string> ClarificationsConverter { get; } = new(
         log => SerializeClarifications(log),
@@ -125,6 +137,39 @@ internal static class AwaitingInputJsonConversion
         };
     }
 
+    private static string SerializeQuestionReminder(QuestionReminder reminder)
+    {
+        QuestionReminderDto dto = reminder switch
+        {
+            QuestionReminder.Unsent => new QuestionReminderDto(UnsentKind, null, null, null, null, null),
+            QuestionReminder.Sent sent => new QuestionReminderDto(SentKind, sent.CommentId, sent.SentAt, null, null, null),
+            QuestionReminder.Failed failed => new QuestionReminderDto(
+                FailedKind,
+                null,
+                null,
+                failed.Reason,
+                failed.NextAttemptAt,
+                failed.Attempts),
+            _ => throw new UnreachableException($"Unknown QuestionReminder variant: {reminder.GetType().Name}"),
+        };
+
+        return JsonSerializer.Serialize(dto, (JsonSerializerOptions?)null);
+    }
+
+    private static QuestionReminder DeserializeQuestionReminder(string json)
+    {
+        QuestionReminderDto dto = JsonSerializer.Deserialize<QuestionReminderDto>(json, (JsonSerializerOptions?)null)
+            ?? throw new UnreachableException("Stored question_reminder JSON deserialised to null.");
+
+        return dto.Kind switch
+        {
+            UnsentKind => new QuestionReminder.Unsent(),
+            SentKind => new QuestionReminder.Sent(Required(dto.CommentId), Required(dto.SentAt)),
+            FailedKind => new QuestionReminder.Failed(dto.Reason ?? string.Empty, dto.NextAttemptAt, dto.Attempts ?? 1),
+            _ => throw new UnreachableException($"Unknown QuestionReminder kind: '{dto.Kind}'"),
+        };
+    }
+
     private static string SerializeClarifications(IReadOnlyList<Clarification> log) =>
         JsonSerializer.Serialize(
             log.Select(round => new ClarificationDto(
@@ -149,6 +194,7 @@ internal static class AwaitingInputJsonConversion
             {
                 InputPart.Comments comments => new InputPartDto(CommentsKind, comments.Text),
                 InputPart.DescriptionEdited => new InputPartDto(DescriptionEditedKind, Text: null),
+                InputPart.ContinuedWithoutAnswer => new InputPartDto(ContinuedWithoutAnswerKind, Text: null),
                 _ => throw new UnreachableException($"Unknown InputPart variant: {part.GetType().Name}"),
             }).ToList(),
             (JsonSerializerOptions?)null);
@@ -166,6 +212,7 @@ internal static class AwaitingInputJsonConversion
     {
         CommentsKind => new InputPart.Comments(Required(dto.Text)),
         DescriptionEditedKind => new InputPart.DescriptionEdited(),
+        ContinuedWithoutAnswerKind => new InputPart.ContinuedWithoutAnswer(),
         _ => throw new UnreachableException($"Unknown InputPart kind: '{dto.Kind}'"),
     };
 
@@ -187,6 +234,14 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("commentId")] long? CommentId,
         [property: JsonPropertyName("postedAt")] DateTimeOffset? PostedAt,
         [property: JsonPropertyName("commentUrl")] string? CommentUrl,
+        [property: JsonPropertyName("reason")] string? Reason,
+        [property: JsonPropertyName("nextAttemptAt")] DateTimeOffset? NextAttemptAt,
+        [property: JsonPropertyName("attempts")] int? Attempts);
+
+    private sealed record QuestionReminderDto(
+        [property: JsonPropertyName("kind")] string Kind,
+        [property: JsonPropertyName("commentId")] long? CommentId,
+        [property: JsonPropertyName("sentAt")] DateTimeOffset? SentAt,
         [property: JsonPropertyName("reason")] string? Reason,
         [property: JsonPropertyName("nextAttemptAt")] DateTimeOffset? NextAttemptAt,
         [property: JsonPropertyName("attempts")] int? Attempts);

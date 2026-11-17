@@ -16,7 +16,7 @@ import {
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { providerDisplayName } from '../../../shared/utils/provider.util';
 import { IssueDetail } from '../../issues/issue.model';
-import { IssueService, TriageAction } from '../../issues/issue.service';
+import { IssueService, IssueAction } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { SecretFindingsComponent } from '../../issues/secret-findings/secret-findings';
@@ -25,10 +25,21 @@ import { PaneAction, possibleSecrets } from '../pane-callout.model';
 const RETRIAGE_MESSAGE =
   'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply.';
 const RETRIAGE_BLOCKED_SUFFIX = ' While its blockers are open it waits untriaged, and triage runs once they close.';
+const CONTINUE_WITHOUT_ANSWER_MESSAGE =
+  'The open questions close unanswered and the work resumes; the worker is told to use its judgment and cannot ask again in that run.';
+const CONTINUE_WITHOUT_ANSWER_TRIAGE_MESSAGE =
+  'The open questions close unanswered and the issue is queued without a readiness check, as Skip triage does. If it has open blockers, it waits as Blocked first.';
 
 // Actions whose outcome IssueService reports through its retry signals.
 const RETRY_ACTIONS: ReadonlySet<PaneAction> = new Set<PaneAction>(['retry_issue', 'retry_fresh']);
-const TRIAGE_ACTIONS: ReadonlySet<PaneAction> = new Set<PaneAction>(['retry_triage', 'skip_triage', 'retriage']);
+// Actions whose outcome IssueService reports through its issue-action signals.
+const ISSUE_ACTIONS: ReadonlySet<PaneAction> = new Set<PaneAction>([
+  'retry_triage',
+  'skip_triage',
+  'retriage',
+  'continue_without_answer',
+  'retry_post',
+]);
 
 let nextId = 0;
 
@@ -64,6 +75,7 @@ export class PaneActionsComponent {
   protected readonly confirmRetryFreshOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmSkipTriageOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmRetriageOpen: WritableSignal<boolean> = signal(false);
+  protected readonly confirmContinueWithoutAnswerOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmPublishRetryOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmDiscardOpen: WritableSignal<boolean> = signal(false);
   protected readonly confirmFalsePositivesOpen: WritableSignal<boolean> = signal(false);
@@ -101,8 +113,8 @@ export class PaneActionsComponent {
   /** The block time of the run as rendered; null until a blocked run has loaded. */
   private readonly _publishBlockedAt: Signal<string | null> = computed(() => this.run()?.publishBlockedAt ?? null);
 
-  protected readonly triagePending: Signal<TriageAction | null> = computed(() =>
-    this.issueService.triageActionPending());
+  protected readonly triagePending: Signal<IssueAction | null> = computed(() =>
+    this.issueService.issueActionPending());
 
   protected readonly cancelling: Signal<boolean> = computed(() => {
     const run = this.run();
@@ -132,14 +144,19 @@ export class PaneActionsComponent {
     if (actions.some((a) => RETRY_ACTIONS.has(a)) && this.issueService.retryError() !== null) {
       return this.issueService.retryError();
     }
-    if (actions.some((a) => TRIAGE_ACTIONS.has(a))) {
-      return this.issueService.triageActionError();
+    if (actions.some((a) => ISSUE_ACTIONS.has(a))) {
+      return this.issueService.issueActionError();
     }
     return null;
   });
 
   protected readonly retriageMessage: Signal<string> = computed(() =>
     this.detail().state === 'blocked' ? RETRIAGE_MESSAGE + RETRIAGE_BLOCKED_SUFFIX : RETRIAGE_MESSAGE);
+
+  protected readonly continueWithoutAnswerMessage: Signal<string> = computed(() =>
+    this.detail().stateDetails?.awaitingInput?.resumeTarget === 'retriage'
+      ? CONTINUE_WITHOUT_ANSWER_TRIAGE_MESSAGE
+      : CONTINUE_WITHOUT_ANSWER_MESSAGE);
 
   protected readonly publishRetryMessage: Signal<string> = computed(() => {
     const target = this.detail().stateDetails?.branchName ?? 'the issue branch';
@@ -175,6 +192,7 @@ export class PaneActionsComponent {
         this.confirmRetryFreshOpen.set(false);
         this.confirmSkipTriageOpen.set(false);
         this.confirmRetriageOpen.set(false);
+        this.confirmContinueWithoutAnswerOpen.set(false);
         this.confirmPublishRetryOpen.set(false);
         this._publishRetryError.set(null);
         this.confirmDiscardOpen.set(false);
@@ -192,7 +210,7 @@ export class PaneActionsComponent {
 
     effect(() => {
       const retrySuccess = this.issueService.retrySuccess();
-      const triageSuccess = this.issueService.triageActionSuccess();
+      const triageSuccess = this.issueService.issueActionSuccess();
       const action = untracked(() => this._serviceAction);
       if (action === null) {
         return;
@@ -350,6 +368,17 @@ export class PaneActionsComponent {
     this.confirmRetriageOpen.set(false);
     this._serviceAction = 'retriage';
     this.issueService.retriage(this.detail().id);
+  }
+
+  protected retryQuestionPost(): void {
+    this._serviceAction = 'retry_post';
+    this.issueService.retryQuestionPost(this.detail().id);
+  }
+
+  protected confirmContinueWithoutAnswer(): void {
+    this.confirmContinueWithoutAnswerOpen.set(false);
+    this._serviceAction = 'continue_without_answer';
+    this.issueService.continueWithoutAnswer(this.detail().id);
   }
 
   private _workerRunId(): string | null {

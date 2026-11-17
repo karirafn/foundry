@@ -26,6 +26,11 @@ public sealed class NullGlobalSettingsQueries : IGlobalSettingsQueries
         => Task.FromResult(0);
 
 
+    public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(TimeSpan.FromDays(3));
+
+
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
         => Task.FromResult(new DispatchPauseState(null, false, false, []));
 

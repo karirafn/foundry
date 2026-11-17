@@ -35,7 +35,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     public override BranchNameValue? DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
-        new DispatchContext.Revision(BranchName, PullRequestUrl, Trigger);
+        new DispatchContext.Revision(BranchName, PullRequestUrl, Trigger) { ContinuedWithoutAnswer = ContinuedWithoutAnswer };
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -162,6 +162,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.AnswerClarification(input, answeredAt);
+        revisionQueued.ContinuedWithoutAnswer = input.IsContinuedWithoutAnswer;
         revisionQueued.BranchName = target.BranchName;
         revisionQueued.PullRequestUrl = target.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.InputProvided();

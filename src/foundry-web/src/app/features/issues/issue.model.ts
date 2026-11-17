@@ -109,6 +109,8 @@ export interface AwaitingInputDetails {
   postFailureReason: string | null;
   nextPostAttemptAt: string | null;
   resumeTarget: ResumeTarget;
+  /** When the round's one reminder was posted; null until then. */
+  reminderSentAt: string | null;
 }
 
 export type IssueKind = 'feature' | 'bug' | 'refactor' | 'documentation';

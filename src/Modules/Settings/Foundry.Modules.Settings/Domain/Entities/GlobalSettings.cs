@@ -25,6 +25,9 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxWebhookPublicBaseUrlLength = 2048;
     internal const int MaxProviderHostLength = 255;
     internal const int MaxAllowedProviderHostCount = 50;
+    internal const int MinAwaitingInputReminderDelayHours = 1;
+    internal const int MaxAwaitingInputReminderDelayHours = 8760;
+    internal const int DefaultAwaitingInputReminderDelayHours = 72;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
@@ -37,6 +40,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         ProbeIntervalMinutes = DefaultProbeIntervalMinutes;
         PollIntervalSeconds = DefaultPollIntervalSeconds;
         BackstopIntervalMinutes = DefaultBackstopIntervalMinutes;
+        AwaitingInputReminderDelayHours = DefaultAwaitingInputReminderDelayHours;
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         WorkerResourceLimits = WorkerResourceLimits.Default;
@@ -59,6 +63,11 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     /// health-gated backstop that recovers lost webhook nudges.
     /// </summary>
     public int BackstopIntervalMinutes { get; private set; }
+
+    /// <summary>
+    /// How long a posted question waits without input before Foundry posts its one reminder in the same thread (ADR 0096).
+    /// </summary>
+    public int AwaitingInputReminderDelayHours { get; private set; }
 
     /// <summary>
     /// The operator-supplied public base URL (absolute <c>https</c>) that a tunnel or reverse proxy
@@ -215,6 +224,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         ProbeIntervalMinutes = probeIntervalMinutes;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
+    }
+
+    public Result UpdateAwaitingInputReminderDelay(int hours)
+    {
+        if (hours < MinAwaitingInputReminderDelayHours || hours > MaxAwaitingInputReminderDelayHours)
+        {
+            return SettingsErrors.InvalidAwaitingInputReminderDelay(hours);
+        }
+
+        AwaitingInputReminderDelayHours = hours;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
     }

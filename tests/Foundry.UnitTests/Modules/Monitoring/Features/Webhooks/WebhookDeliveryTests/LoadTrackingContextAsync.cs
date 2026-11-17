@@ -46,7 +46,7 @@ public sealed class LoadTrackingContextAsync
             $"https://github.com/owner/repo/issues/{issueNumber}",
             pullRequestUrl,
             [new InputQuestion("Which?", "Context.", null)],
-            new AwaitingInputPostState.Posted(DateTimeOffset.UnixEpoch));
+            new AwaitingInputPostState.Posted(DateTimeOffset.UnixEpoch, CommentUrl: null, ReminderDueAt: null));
 
     private sealed class StubIssueQueries(IReadOnlyList<AwaitingInputIssueInfo> awaitingInput) : IIssueQueries
     {

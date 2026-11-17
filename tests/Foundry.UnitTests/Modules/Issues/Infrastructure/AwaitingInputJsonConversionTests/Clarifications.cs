@@ -122,6 +122,42 @@ public sealed class Clarifications
     }
 
     [Fact]
+    public void ARoundContinuedWithoutAnswer_WritesItsPartAsItsKindAlone()
+    {
+        // Arrange
+        IReadOnlyList<Clarification> log =
+        [
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3)),
+        ];
+
+        // Act
+        string json = Serialize(log);
+
+        // Assert
+        json.ShouldContain("""
+            "input":[{"kind":"continuedWithoutAnswer"}]
+            """.Trim());
+    }
+
+    [Fact]
+    public void ARoundContinuedWithoutAnswer_RoundTripsItsInput()
+    {
+        // Arrange
+        IReadOnlyList<Clarification> log =
+        [
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3)),
+        ];
+
+        // Act
+        IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
+
+        // Assert
+        read.ShouldBe(log);
+    }
+
+    [Fact]
     public void AnOpenRound_WritesANullInput()
     {
         // Arrange

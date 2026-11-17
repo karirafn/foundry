@@ -19,6 +19,8 @@ internal static class IssueEndpoints
         RetryTriage.Endpoint.Map(group);
         SkipTriage.Endpoint.Map(group);
         Retriage.Endpoint.Map(group);
+        AwaitingInput.ContinueWithoutAnswer.Endpoint.Map(group);
+        AwaitingInput.RetryQuestionPost.Endpoint.Map(group);
 
         return routes;
     }

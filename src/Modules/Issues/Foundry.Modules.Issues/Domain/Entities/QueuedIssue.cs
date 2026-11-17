@@ -35,6 +35,12 @@ public abstract class QueuedIssue : Issue
     public abstract DispatchContext Context { get; }
 
     /// <summary>
+    /// Whether this queue entry resumes a round an operator closed with Continue without answer (ADR 0096); its run
+    /// refuses a <c>needs_input</c> verdict. Only the run started this way is restricted.
+    /// </summary>
+    public bool ContinuedWithoutAnswer { get; private protected set; }
+
+    /// <summary>
     /// Transitions the issue to its in-progress state at <paramref name="claimedAt"/>, assigning the given worker run.
     /// </summary>
     public abstract Issue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt);

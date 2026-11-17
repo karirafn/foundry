@@ -94,6 +94,31 @@ public sealed class RoundTrip
             () => dispatch.Context.ShouldBeOfType<DispatchContext.Revision>().Trigger.ShouldBeOfType<RevisionTrigger.InputProvided>());
     }
 
+    [Fact]
+    public void WhenAClaimResumesARoundContinuedWithoutAnswer_TheRefusalFlagRoundTripsThroughOutbox()
+    {
+        // Arrange
+        IssueClaimed original = new(new ClaimedIssueDispatch(
+            IssueId.New(),
+            WorkerRunId.New(),
+            1,
+            "Title",
+            "owner/repo",
+            new Uri("https://github.com/owner/repo.git"),
+            Foundry.Shared.BranchName.From("feat/1-test"),
+            Foundry.Modules.Monitoring.Contracts.MonitoredRepositoryId.New(),
+            new Foundry.Modules.Monitoring.Contracts.WorkerProvider.GitHub(),
+            new DispatchContext.Continuation("feat/1-test") { ContinuedWithoutAnswer = true },
+            "https://api.github.com/repos/owner/repo/issues/1"));
+
+        // Act
+        IssueClaimed? deserialized = RoundTripThroughOutbox(original);
+
+        // Assert
+        deserialized.ShouldNotBeNull().Dispatch.Context.ShouldBeOfType<DispatchContext.Continuation>()
+            .ContinuedWithoutAnswer.ShouldBeTrue();
+    }
+
     private static T? RoundTripThroughOutbox<T>(T original)
         where T : class, Foundry.Shared.IIntegrationEvent
     {

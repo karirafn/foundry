@@ -56,6 +56,21 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// <summary>The run's recorded verdict, or <see langword="null"/> when none was recorded.</summary>
     public RunVerdict? Verdict => VerdictStatus is { } status ? RunVerdict.FromStored(status, VerdictQuestions) : null;
 
+    /// <summary>
+    /// Whether the run was started by Continue without answer (ADR 0096): it may not send its issue straight back to
+    /// awaiting input, so a <c>needs_input</c> verdict is refused and the fact-based outcome applies.
+    /// </summary>
+    public bool RefusesNeedsInput { get; private set; }
+
+    /// <summary>
+    /// Whether the run returned a <c>needs_input</c> verdict that was refused because the run was started by Continue
+    /// without answer: the refusal as recorded on the run.
+    /// </summary>
+    public bool NeedsInputRefused => RefusesNeedsInput && VerdictStatus == RunVerdictStatus.NeedsInput;
+
+    /// <summary>Whether the run asks for input: a <c>needs_input</c> verdict that was not refused.</summary>
+    public bool AsksForInput => VerdictStatus == RunVerdictStatus.NeedsInput && !RefusesNeedsInput;
+
     /// <summary>The default branch's head the run started from (ADR 0100); <see langword="null"/> before it was prepared.</summary>
     public CommitSha? BaseDefaultBranchHead { get; private set; }
 
@@ -155,6 +170,11 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         Toolchain = toolchain;
     }
 
+    protected void RefuseNeedsInput()
+    {
+        RefusesNeedsInput = true;
+    }
+
     protected void RecordPublishFacts(
         CommitSha? pushedHead,
         int? branchCommitCount,
@@ -209,6 +229,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
         SourceTokenHash = source.SourceTokenHash;
         StoreToolchain(source.Toolchain);
+        RefusesNeedsInput = source.RefusesNeedsInput;
     }
 
     protected void RecordVerdict(RunVerdict? verdict)
