@@ -96,6 +96,7 @@ public static class MonitoringModule
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IAccountTokenValidator, AccountTokenValidator>();
         services.AddScoped<AccountTokenVerdicts>();
+        services.AddHostedService<AccountTokenExpiryBackfillService>();
         services.AddScoped<IAccountTokenHealthQueries, AccountTokenHealthQueries>();
         services.AddDomainEventHandler<CredentialTokenInvalidated, AccountTokenBroadcastHandler>();
         services.AddDomainEventHandler<CredentialTokenRevalidated, AccountTokenBroadcastHandler>();
