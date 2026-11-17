@@ -715,6 +715,12 @@ public sealed class SelectAsync : IAsyncDisposable
     // Stub that always returns the provided dispatch info (or null).
     private sealed class StubRepositoryDispatchQueries(RepositoryDispatchInfo? info) : IRepositoryDispatchQueries
     {
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
@@ -726,6 +732,12 @@ public sealed class SelectAsync : IAsyncDisposable
         MonitoredRepositoryId resolvable,
         RepositoryDispatchInfo dispatchInfo) : IRepositoryDispatchQueries
     {
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
@@ -740,6 +752,12 @@ public sealed class SelectAsync : IAsyncDisposable
         MonitoredRepositoryId? resolvable,
         RepositoryDispatchInfo? dispatchInfo) : IRepositoryDispatchQueries
     {
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         private readonly Dictionary<MonitoredRepositoryId, int> _callCounts = [];
 
         public int CallCount(MonitoredRepositoryId repositoryId) =>

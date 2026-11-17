@@ -3,11 +3,14 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -49,7 +52,11 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
     }
 
     private RepositoryDispatchQueries BuildSut(ICredentialResolver resolver)
-        => new(_dbContext, resolver);
+        => new(
+            _dbContext,
+            resolver,
+            Options.Create(new PackageSourceProxyOptions()),
+            NullLogger<RepositoryDispatchQueries>.Instance);
 
     [Fact]
     public async Task WhenCredentialTokenIsUnreadable_ReturnsNullWithoutCallingProvider()

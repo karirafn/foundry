@@ -284,6 +284,12 @@ public sealed class ProbeAsync : IAsyncDisposable
     private sealed class DictionaryRepositoryDispatchQueries(
         IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDispatchInfo?> infos) : IRepositoryDispatchQueries
     {
+        public Task<WorkerNuGetConfig?> GetWorkerNuGetConfigAsync(
+            MonitoredRepositoryId repositoryId,
+            string runSourceToken,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<WorkerNuGetConfig?>(null);
+
         public Task<RepositoryDispatchInfo?> GetDispatchInfoAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
             Task.FromResult(infos.GetValueOrDefault(repositoryId));
     }

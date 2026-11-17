@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -19,6 +20,7 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -47,7 +49,11 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
 
-        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext, new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance));
+        RepositoryDispatchQueries repositoryDispatchQueries = new(
+            _dbContext,
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            Options.Create(new PackageSourceProxyOptions()),
+            NullLogger<RepositoryDispatchQueries>.Instance);
         DispatchCandidateSelector selector = new(
             _dbContext,
             repositoryDispatchQueries,

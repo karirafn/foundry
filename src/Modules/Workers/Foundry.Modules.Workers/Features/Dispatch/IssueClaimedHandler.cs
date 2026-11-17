@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
@@ -41,6 +42,12 @@ internal sealed class IssueClaimedHandler(
     ISystemNotificationBroadcaster broadcaster,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
+    private const string NuGetConfigVariable = "FOUNDRY_NUGET_CONFIG";
+
+    // Docker Desktop resolves host.docker.internal on its own; a Linux Docker Engine needs the entry to reach the
+    // Package Source Proxy on the host.
+    private const string WorkerHostGatewayEntry = "host.docker.internal:host-gateway";
+
     private static readonly Error EmptyGitPatError =
         new("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings.");
 
@@ -428,6 +435,14 @@ internal sealed class IssueClaimedHandler(
             envVars["FOUNDRY_NESTED_DOCKER"] = "1";
         }
 
+        // A repository with Package Sources restores them through the Package Source Proxy (ADR 0112); the entrypoint
+        // writes this config and points RestoreConfigFile at it. Base64 keeps the XML one env line.
+        if (startingRun.SourceToken is { } sourceToken
+            && await repositoryDispatchQueries.GetWorkerNuGetConfigAsync(claimed.MonitoredRepositoryId, sourceToken.Value, cancellationToken) is { } nuGetConfig)
+        {
+            envVars[NuGetConfigVariable] = Convert.ToBase64String(Encoding.UTF8.GetBytes(nuGetConfig.Xml));
+        }
+
         // A restricted run gets no branch.
         if (!restricted && claimed.BranchName is { } branchName)
         {
@@ -468,6 +483,7 @@ internal sealed class IssueClaimedHandler(
             CpuLimit = limits.CpuLimit,
             PidsLimit = limits.PidsLimit,
             VolumeMounts = volumeMounts,
+            ExtraHosts = [WorkerHostGatewayEntry],
         });
 
         return nestedDocker

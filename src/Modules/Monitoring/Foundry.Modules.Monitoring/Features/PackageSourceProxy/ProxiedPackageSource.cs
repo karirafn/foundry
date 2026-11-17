@@ -40,6 +40,9 @@ internal sealed class ProxiedPackageSource
         _proxyBase = $"{proxyBaseUrl.AbsoluteUri.TrimEnd('/')}/{sourceId.Value}";
     }
 
+    /// <summary>The source's service-index URL on the proxy: the URL a worker's NuGet reads the source at.</summary>
+    public string ServiceIndexProxyUrl => _proxyBase + _serviceIndexUrl.PathAndQuery;
+
     /// <summary>
     /// The upstream URL for a proxied request whose path below the source id is <paramref name="escapedPath"/> (starting
     /// with <c>/</c>) and whose query is <paramref name="escapedQuery"/>; <see langword="null"/> when it falls outside the
