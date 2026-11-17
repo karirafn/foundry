@@ -70,6 +70,27 @@ public sealed class PrepareAsync
     }
 
     [Fact]
+    public async Task WhenPreparingAReview_ReturnsTheReviewPacketToo()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = Exiting(
+            0,
+            $"FOUNDRY_BASE default_branch=main default_sha={DefaultSha}\nFOUNDRY_REVIEW_PATH M\tsrc/a.cs\n");
+        PrepareRequest request = Request() with
+        {
+            Review = new ReviewTarget(BranchName.From("feat/1-x"), CommitSha.From(BranchSha)),
+        };
+
+        // Act
+        PrepareOutcome outcome = await BuildSut(runtime).PrepareAsync(request, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Prepared(
+            new RunBase(CommitSha.From(DefaultSha), RunBranchHead: null),
+            new ReviewPacketFacts([new ChangedPath(ChangeStatus.Modified, "src/a.cs")], patchId: null)));
+    }
+
+    [Fact]
     public async Task CreatesTheRunsHandOffVolumeLabelledWithTheRunId()
     {
         // Arrange

@@ -32,7 +32,7 @@ setup() {
 
     export CLONE_URL="https://git.example.test/owner/repo"
     export GIT_PAT="ghp_publisher_token"
-    unset RUN_BRANCH RUN_ID BASE_DEFAULT_SHA BASE_BRANCH_SHA AUTHOR_NAME AUTHOR_EMAIL
+    unset RUN_BRANCH RUN_ID BASE_DEFAULT_SHA BASE_BRANCH_SHA AUTHOR_NAME AUTHOR_EMAIL REVIEW_BRANCH REVIEW_COMMIT
 
     REMOTE="$BATS_TEST_TMPDIR/remote.git"
     make_remote main
@@ -390,6 +390,258 @@ bundle_heads() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=invalid RUN_BRANCH characters"* ]]
     [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+# ---------------------------------------------------------------------------
+# Prepare for a review run (ADR 0114): REVIEW_BRANCH and REVIEW_COMMIT add the reviewed commit to the
+# bundle and write the review packet.
+# ---------------------------------------------------------------------------
+
+# seed_git <args>... — git in the seed repository with a fixed identity.
+seed_git() {
+    "$REAL_GIT" -C "$BATS_TEST_TMPDIR/seed" -c user.name=t -c user.email=t@t "$@"
+}
+
+# add_review_branch <branch> — the default branch gains edit.txt, gone.txt and kept.txt; <branch> then edits
+# edit.txt, deletes gone.txt and adds "new file.txt", and the default branch moves on with its own commit, so the
+# merge base is not the default branch's head. Exports REVIEW_BRANCH and REVIEW_COMMIT for <branch>'s head.
+add_review_branch() {
+    printf 'one\ntwo\n' > "$BATS_TEST_TMPDIR/seed/edit.txt"
+    echo gone > "$BATS_TEST_TMPDIR/seed/gone.txt"
+    echo kept > "$BATS_TEST_TMPDIR/seed/kept.txt"
+    seed_git add -A
+    seed_git commit --quiet -m files
+    seed_git switch --quiet -c "$1"
+    printf 'one\nTWO\n' > "$BATS_TEST_TMPDIR/seed/edit.txt"
+    seed_git rm --quiet gone.txt
+    echo new > "$BATS_TEST_TMPDIR/seed/new file.txt"
+    seed_git add -A
+    seed_git commit --quiet -m "work on $1"
+    seed_git switch --quiet main
+    echo later > "$BATS_TEST_TMPDIR/seed/kept.txt"
+    seed_git commit --quiet -am "main moves on"
+    seed_git push --quiet "$REMOTE" main "$1"
+    export REVIEW_BRANCH="$1"
+    REVIEW_COMMIT="$(remote_sha "$1")"
+    export REVIEW_COMMIT
+}
+
+# review_merge_base — the merge base Prepare diffs the reviewed commit against.
+review_merge_base() {
+    "$REAL_GIT" -C "$REMOTE" merge-base main "$REVIEW_COMMIT"
+}
+
+@test "review: prepare bundles the reviewed commit as refs/foundry/review" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    bundle_heads | grep -qx "$REVIEW_COMMIT refs/foundry/review"
+    bundle_heads | grep -qx "$(remote_sha main) HEAD"
+    ! bundle_heads | grep -q "refs/heads/feat/9-review"
+}
+
+@test "review: a worker clone of the bundle can check the reviewed commit out" {
+    add_review_branch feat/9-review
+    run sh "$PUBLISHER" prepare
+    [ "$status" -eq 0 ]
+
+    "$REAL_GIT" clone --quiet "$FOUNDRY_HANDOFF_DIR/in/base.bundle" "$BATS_TEST_TMPDIR/clone"
+    "$REAL_GIT" -C "$BATS_TEST_TMPDIR/clone" fetch --quiet "$FOUNDRY_HANDOFF_DIR/in/base.bundle" refs/foundry/review
+    "$REAL_GIT" -C "$BATS_TEST_TMPDIR/clone" checkout --quiet --detach "$REVIEW_COMMIT"
+
+    [ "$("$REAL_GIT" -C "$BATS_TEST_TMPDIR/clone" rev-parse HEAD)" = "$REVIEW_COMMIT" ]
+}
+
+@test "review: prepare writes in/review/diff.patch, the diff from the merge base to the reviewed commit" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$FOUNDRY_HANDOFF_DIR/in/review/diff.patch")" = "$("$REAL_GIT" -C "$REMOTE" diff --no-renames "$(review_merge_base)" "$REVIEW_COMMIT")" ]
+    grep -q '^+TWO$' "$FOUNDRY_HANDOFF_DIR/in/review/diff.patch"
+    ! grep -q 'later' "$FOUNDRY_HANDOFF_DIR/in/review/diff.patch"
+}
+
+@test "review: the review packet is world-readable and leaves no temporary file" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(stat -c '%a' "$FOUNDRY_HANDOFF_DIR/in/review")" = "755" ]
+    [ "$(stat -c '%a' "$FOUNDRY_HANDOFF_DIR/in/review/diff.patch")" = "644" ]
+    [ "$(ls -A "$FOUNDRY_HANDOFF_DIR/in/review")" = "diff.patch" ]
+}
+
+@test "review: prepare prints one tab-separated FOUNDRY_REVIEW_PATH line per changed path" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(grep '^FOUNDRY_REVIEW_PATH ' <<< "$output" | sort)" = "$(printf 'FOUNDRY_REVIEW_PATH A\tnew file.txt\nFOUNDRY_REVIEW_PATH D\tgone.txt\nFOUNDRY_REVIEW_PATH M\tedit.txt')" ]
+}
+
+@test "review: a renamed file reports as a deletion and an addition" {
+    add_review_branch feat/9-review
+    seed_git switch --quiet feat/9-review
+    seed_git mv kept.txt moved.txt
+    seed_git commit --quiet -m rename
+    seed_git push --quiet "$REMOTE" feat/9-review
+    REVIEW_COMMIT="$(remote_sha feat/9-review)"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    grep -qx "$(printf 'FOUNDRY_REVIEW_PATH D\tkept.txt')" <<< "$output"
+    grep -qx "$(printf 'FOUNDRY_REVIEW_PATH A\tmoved.txt')" <<< "$output"
+}
+
+@test "review: prepare prints the -U0 stable patch-id of the review diff" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    local expected
+    expected="$("$REAL_GIT" -C "$REMOTE" diff -U0 --no-renames "$(review_merge_base)" "$REVIEW_COMMIT" \
+        | "$REAL_GIT" patch-id --stable | cut -d' ' -f1)"
+    [ -n "$expected" ]
+    [ "$(grep -c '^FOUNDRY_REVIEW_PATCH_ID ' <<< "$output")" -eq 1 ]
+    grep -qx "FOUNDRY_REVIEW_PATCH_ID $expected" <<< "$output"
+}
+
+@test "review: a reviewed commit with no changes prints no path and no patch-id" {
+    seed_git switch --quiet -c feat/9-empty
+    seed_git commit --quiet --allow-empty -m nothing
+    seed_git push --quiet "$REMOTE" feat/9-empty
+    export REVIEW_BRANCH=feat/9-empty
+    REVIEW_COMMIT="$(remote_sha feat/9-empty)"
+    export REVIEW_COMMIT
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ -f "$FOUNDRY_HANDOFF_DIR/in/review/diff.patch" ]
+    [ ! -s "$FOUNDRY_HANDOFF_DIR/in/review/diff.patch" ]
+    [[ "$output" != *"FOUNDRY_REVIEW_"* ]]
+}
+
+@test "review: the review lines follow the single FOUNDRY_BASE line" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^FOUNDRY_BASE ' <<< "$output")" -eq 1 ]
+    grep -qx "FOUNDRY_BASE default_branch=main default_sha=$(remote_sha main)" <<< "$output"
+}
+
+@test "review: an older commit still on the review branch's history can be reviewed" {
+    add_review_branch feat/9-review
+    local reviewed="$REVIEW_COMMIT"
+    seed_git switch --quiet feat/9-review
+    seed_git commit --quiet --allow-empty -m "pushed after the checks"
+    seed_git push --quiet "$REMOTE" feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    bundle_heads | grep -qx "$reviewed refs/foundry/review"
+}
+
+@test "review: a REVIEW_COMMIT that is not a 40-hex SHA fails before any git transfer" {
+    export REVIEW_BRANCH=feat/9-review
+    export REVIEW_COMMIT="HEAD~1"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=REVIEW_COMMIT must be a 40-hex commit SHA"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+@test "review: an invalid REVIEW_BRANCH fails before any git transfer" {
+    export REVIEW_BRANCH='feat/9;rm -rf /'
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=invalid REVIEW_BRANCH characters"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+@test "review: REVIEW_COMMIT without REVIEW_BRANCH fails before any git transfer" {
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=REVIEW_COMMIT needs REVIEW_BRANCH"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+@test "review: REVIEW_BRANCH without REVIEW_COMMIT fails before any git transfer" {
+    export REVIEW_BRANCH=feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=REVIEW_BRANCH needs REVIEW_COMMIT"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+@test "review: a missing review branch fails at stage=clone naming REVIEW_BRANCH and writes no bundle" {
+    export REVIEW_BRANCH=feat/9-deleted
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=the review branch feat/9-deleted (REVIEW_BRANCH) does not exist on the remote"* ]]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
+}
+
+@test "review: a commit absent after the fetch fails at stage=clone naming REVIEW_COMMIT and writes no packet" {
+    add_review_branch feat/9-review
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=the review commit $REVIEW_COMMIT (REVIEW_COMMIT) is not on the fetched branch feat/9-review"* ]]
+    [[ "$output" != *"FOUNDRY_BASE"* ]]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/review" ]
+}
+
+@test "review: a commit force-pushed off the review branch fails at stage=clone" {
+    add_review_branch feat/9-review
+    seed_git switch --quiet feat/9-review
+    seed_git commit --quiet --amend -m "rewritten"
+    seed_git push --quiet --force "$REMOTE" feat/9-review
+    "$REAL_GIT" -C "$REMOTE" gc --quiet --prune=now
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=the review commit $REVIEW_COMMIT (REVIEW_COMMIT) is not on the fetched branch"* ]]
+}
+
+@test "review: prepare without REVIEW_COMMIT writes no review packet and prints no review line" {
+    add_review_branch feat/9-review
+    unset REVIEW_BRANCH REVIEW_COMMIT
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/review" ]
+    [[ "$output" != *"FOUNDRY_REVIEW_"* ]]
+    ! bundle_heads | grep -q "refs/foundry/"
 }
 
 @test "a missing GIT_PAT stops prepare before any git transfer" {

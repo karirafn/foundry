@@ -9,13 +9,19 @@ namespace Foundry.Modules.Workers.Features.Publisher;
 
 /// <summary>
 /// Reads a Prepare run's exit: its single <c>FOUNDRY_BASE</c> stdout line on success, or the bootstrap-failure
-/// sentinel it prints on failure. The base comes only from this line, never from the Hand-off volume.
+/// sentinel it prints on failure. The base comes only from this line, never from the Hand-off volume. A review run's
+/// Prepare also prints its review packet facts on <c>FOUNDRY_REVIEW_PATH</c> and <c>FOUNDRY_REVIEW_PATCH_ID</c> lines.
 /// </summary>
 internal static partial class PrepareOutputParser
 {
     public const string MissingBaseMessage = "The Publisher finished without reporting the run's base.";
 
-    public static PrepareOutcome Parse(long exitCode, string? log, bool expectsRunBranch)
+    public const string MalformedReviewPacketMessage = "The Publisher reported a malformed review packet.";
+
+    private const string PathLinePrefix = "PATH ";
+    private const string PatchIdLinePrefix = "PATCH_ID ";
+
+    public static PrepareOutcome Parse(long exitCode, string? log, bool expectsRunBranch, bool expectsReviewPacket = false)
     {
         string text = log ?? string.Empty;
 
@@ -35,7 +41,18 @@ internal static partial class PrepareOutputParser
             return new PrepareOutcome.Failed(new FailureReason.ContainerError(MissingBaseMessage));
         }
 
-        return new PrepareOutcome.Prepared(runBase);
+        MatchCollection reviewLines = ReviewLinePattern().Matches(text);
+
+        if (!expectsReviewPacket)
+        {
+            return reviewLines.Count == 0
+                ? new PrepareOutcome.Prepared(runBase)
+                : new PrepareOutcome.Failed(new FailureReason.ContainerError(MalformedReviewPacketMessage));
+        }
+
+        return ReadReviewPacket(reviewLines) is { } reviewPacket
+            ? new PrepareOutcome.Prepared(runBase, reviewPacket)
+            : new PrepareOutcome.Failed(new FailureReason.ContainerError(MalformedReviewPacketMessage));
     }
 
     /// <summary>
@@ -87,12 +104,81 @@ internal static partial class PrepareOutputParser
             : null;
     }
 
+    /// <summary>
+    /// Reads every <c>FOUNDRY_REVIEW_*</c> line, or returns null when any is malformed: a line is never skipped, so a
+    /// packet that reached Foundry is the whole packet Prepare printed.
+    /// </summary>
+    private static ReviewPacketFacts? ReadReviewPacket(MatchCollection reviewLines)
+    {
+        List<ChangedPath> changedPaths = [];
+        PatchId? patchId = null;
+
+        foreach (Match line in reviewLines)
+        {
+            string body = line.Groups["body"].Value;
+
+            if (body.StartsWith(PathLinePrefix, StringComparison.Ordinal)
+                && ReadChangedPath(body[PathLinePrefix.Length..]) is { } changedPath)
+            {
+                changedPaths.Add(changedPath);
+            }
+            else if (body.StartsWith(PatchIdLinePrefix, StringComparison.Ordinal)
+                && patchId is null
+                && PatchId.TryFrom(body[PatchIdLinePrefix.Length..], out PatchId reported))
+            {
+                patchId = reported;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        // Prepare prints a patch-id only for a diff that changed something.
+        if (patchId is not null && changedPaths.Count == 0)
+        {
+            return null;
+        }
+
+        return new ReviewPacketFacts(changedPaths, patchId);
+    }
+
+    /// <summary>
+    /// Reads <c>&lt;status&gt;&lt;TAB&gt;&lt;path&gt;</c>. The path is everything after the first tab, so a path holding a tab or
+    /// spaces stays whole.
+    /// </summary>
+    private static ChangedPath? ReadChangedPath(string statusAndPath)
+    {
+        int tab = statusAndPath.IndexOf('\t', StringComparison.Ordinal);
+
+        if (tab != 1 || tab + 1 == statusAndPath.Length)
+        {
+            return null;
+        }
+
+        ChangeStatus? status = statusAndPath[0] switch
+        {
+            'A' => ChangeStatus.Added,
+            'M' => ChangeStatus.Modified,
+            'D' => ChangeStatus.Deleted,
+            _ => null,
+        };
+
+        return status is { } known ? new ChangedPath(known, statusAndPath[(tab + 1)..]) : null;
+    }
+
     // Anchored to the start of a line (after the optional Docker timestamp), like the bootstrap sentinel.
     [GeneratedRegex(
         @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?FOUNDRY_BASE (?<fields>[^\r\n]*?)\r?$",
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BaseLinePattern();
+
+    [GeneratedRegex(
+        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?FOUNDRY_REVIEW_(?<body>[^\r\n]*?)\r?$",
+        RegexOptions.ExplicitCapture | RegexOptions.Multiline,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ReviewLinePattern();
 
     [GeneratedRegex(
         @"^FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=(?:could not reach the repository: )?(?<detail>.*)$",

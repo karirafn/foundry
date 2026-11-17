@@ -8,6 +8,11 @@
 #             them to <handoff>/in/base.bundle, create <handoff>/out writable for the worker, then
 #             print the run's base on one stdout line:
 #               FOUNDRY_BASE default_branch=<name> default_sha=<sha> [branch_sha=<sha>]
+#             With REVIEW_BRANCH and REVIEW_COMMIT (a review run, ADR 0114) it also bundles the reviewed commit as
+#             refs/foundry/review, writes the review packet <handoff>/in/review/diff.patch (the commit's diff against
+#             its merge base with the default branch), and prints one line per changed path and the diff's patch-id:
+#               FOUNDRY_REVIEW_PATH <A|M|D><TAB><path as git prints it>
+#               FOUNDRY_REVIEW_PATCH_ID <id>      (absent when the diff is empty)
 #             An ls-remote that cannot reach the provider is retried after each of UNREACHABLE_RETRY_DELAYS,
 #             with one stderr line per retry. Every failure prints the bootstrap-failure sentinel on stderr:
 #               FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: <git's error>
@@ -22,6 +27,9 @@
 #   CLONE_URL   — the repository's https clone URL (required)
 #   GIT_PAT     — the provider token, delivered to git only through GIT_ASKPASS (required)
 #   RUN_BRANCH  — the run's branch (prepare: existing branches only; publish: required; probe: unused)
+# Prepare mode only, both or neither:
+#   REVIEW_BRANCH — the pull request's source branch, fetched so REVIEW_COMMIT is reachable
+#   REVIEW_COMMIT — the reviewed commit, 40 lowercase hex digits
 # Publish mode only:
 #   RUN_ID           — the worker run's id, [a-zA-Z0-9-]+ (names the side branch <branch>-run-<id>)
 #   BASE_DEFAULT_SHA — the default-branch head recorded at Prepare (D)
@@ -128,14 +136,17 @@ provider_git() {
     GIT_ASKPASS="$ASKPASS_FILE" git -C "$REPO_DIR" -c core.hooksPath=/dev/null -c credential.helper= "$@"
 }
 
-# ls_remote_heads — the remote's HEAD (and the run's branch, when set). ls-remote prints
+# ls_remote_heads — the remote's HEAD (and the run's and review branches, when set). ls-remote prints
 # "ref: refs/heads/<default><TAB>HEAD", then "<sha><TAB><ref>" lines.
 ls_remote_heads() {
+    set -- HEAD
     if [ -n "$run_branch" ]; then
-        provider_git ls-remote --symref "$auth_url" HEAD "refs/heads/$run_branch"
-    else
-        provider_git ls-remote --symref "$auth_url" HEAD
+        set -- "$@" "refs/heads/$run_branch"
     fi
+    if [ -n "$review_branch" ]; then
+        set -- "$@" "refs/heads/$review_branch"
+    fi
+    provider_git ls-remote --symref "$auth_url" "$@"
 }
 
 # list_remote_refs — sets $refs from ls_remote_heads. A provider that cannot be reached is retried after each of
@@ -166,9 +177,23 @@ prepare() {
     : "${CLONE_URL:?CLONE_URL is required}"
     : "${GIT_PAT:?GIT_PAT is required}"
     run_branch="${RUN_BRANCH:-}"
+    review_branch="${REVIEW_BRANCH:-}"
+    review_commit="${REVIEW_COMMIT:-}"
 
     if [ -n "$run_branch" ] && ! is_branch_name "$run_branch"; then
         fail "invalid RUN_BRANCH characters"
+    fi
+    if [ -n "$review_commit" ] && ! printf '%s' "$review_commit" | grep -Eqx '[0-9a-f]{40}'; then
+        fail "REVIEW_COMMIT must be a 40-hex commit SHA"
+    fi
+    if [ -n "$review_branch" ] && ! is_branch_name "$review_branch"; then
+        fail "invalid REVIEW_BRANCH characters"
+    fi
+    if [ -n "$review_commit" ] && [ -z "$review_branch" ]; then
+        fail "REVIEW_COMMIT needs REVIEW_BRANCH, the branch it is fetched from"
+    fi
+    if [ -n "$review_branch" ] && [ -z "$review_commit" ]; then
+        fail "REVIEW_BRANCH needs REVIEW_COMMIT, the commit to review"
     fi
 
     auth_url="$(make_clone_url "$CLONE_URL")" || fail "CLONE_URL must be an https:// URL"
@@ -209,6 +234,15 @@ prepare() {
         fi
     fi
 
+    # The review branch is fetched only to make the reviewed commit reachable; the bundle carries the commit
+    # itself, as refs/foundry/review, never the branch.
+    if [ -n "$review_branch" ]; then
+        if [ -z "$(remote_sha "refs/heads/$review_branch")" ]; then
+            fail "the review branch $review_branch (REVIEW_BRANCH) does not exist on the remote"
+        fi
+        refspecs="$refspecs +refs/heads/$review_branch:refs/foundry/review-branch"
+    fi
+
     # shellcheck disable=SC2086 # refspecs holds whitespace-free refspecs.
     provider_git fetch --quiet --no-tags "$auth_url" $refspecs 2> "$git_err" \
         || fail "fetching the repository failed: $(last_error)"
@@ -218,6 +252,11 @@ prepare() {
     branch_sha=""
     if [ -n "$run_branch" ]; then
         branch_sha="$(git -C "$REPO_DIR" rev-parse --verify "refs/heads/$run_branch^{commit}")"
+    fi
+
+    if [ -n "$review_commit" ]; then
+        prepare_review_commit
+        bundle_refs="$bundle_refs refs/foundry/review"
     fi
 
     # Written beside its final name and renamed, so a reader never sees a partial bundle. World-readable:
@@ -239,6 +278,62 @@ prepare() {
         printf 'FOUNDRY_BASE default_branch=%s default_sha=%s branch_sha=%s\n' "$default_branch" "$default_sha" "$branch_sha"
     else
         printf 'FOUNDRY_BASE default_branch=%s default_sha=%s\n' "$default_branch" "$default_sha"
+    fi
+
+    if [ -n "$review_commit" ]; then
+        write_review_packet
+    fi
+}
+
+# review_diff [option...] — the reviewed commit's diff against its merge base, as plain git output: no external
+# diff driver, no textconv, no colour, and no rename detection, so a rename is a deletion plus an addition and every
+# path has one status.
+review_diff() {
+    git -C "$REPO_DIR" diff --no-ext-diff --no-textconv --no-color --no-renames "$@" "$review_base" "$review_commit"
+}
+
+# prepare_review_commit — confirms the fetched history holds REVIEW_COMMIT, points refs/foundry/review at it, and
+# sets $review_base to its merge base with the default branch.
+prepare_review_commit() {
+    if ! git -C "$REPO_DIR" cat-file -e "$review_commit^{commit}" 2> /dev/null; then
+        fail "the review commit $review_commit (REVIEW_COMMIT) is not on the fetched branch $review_branch"
+    fi
+    git -C "$REPO_DIR" update-ref refs/foundry/review "$review_commit" 2> "$git_err" \
+        || fail "could not record the review commit: $(last_error)"
+    review_base="$(git -C "$REPO_DIR" merge-base "refs/heads/$default_branch" "$review_commit" 2> "$git_err")" \
+        || fail "the review commit $review_commit (REVIEW_COMMIT) shares no history with $default_branch"
+}
+
+# write_review_packet — writes in/review/diff.patch (world-readable, beside its final name and renamed, like the
+# base bundle), then prints the changed paths and the diff's patch-id.
+write_review_packet() {
+    { mkdir -p "$HANDOFF_DIR/in/review" && chmod 0755 "$HANDOFF_DIR/in/review"; } 2> "$git_err" \
+        || fail "could not create the review packet directory: $(last_error)"
+    patch_tmp="$HANDOFF_DIR/in/review/.diff.patch.tmp"
+    review_diff > "$patch_tmp" 2> "$git_err" \
+        || fail "writing the review diff failed: $(last_error)"
+    chmod 0644 "$patch_tmp"
+    mv -f "$patch_tmp" "$HANDOFF_DIR/in/review/diff.patch"
+
+    name_status="$(review_diff --name-status 2> "$git_err")" \
+        || fail "listing the review's changed paths failed: $(last_error)"
+    # A type change (file to symlink) changes the path's content, so it reports as M; with --no-renames and no copy
+    # detection git prints no status other than A, M, D and T.
+    if [ -n "$name_status" ]; then
+        printf '%s\n' "$name_status" | awk '{
+            tab = index($0, "\t")
+            status = substr($0, 1, tab - 1)
+            if (status == "T") { status = "M" }
+            printf "FOUNDRY_REVIEW_PATH %s\t%s\n", status, substr($0, tab + 1)
+        }'
+    fi
+
+    # -U0: the id must stay equal across a clean rebase that changes the context lines around a hunk.
+    review_diff -U0 > "$WORK_DIR/review.U0.patch" 2> "$git_err" \
+        || fail "computing the review patch-id failed: $(last_error)"
+    patch_id="$(git patch-id --stable < "$WORK_DIR/review.U0.patch" | awk '{ print $1; exit }')"
+    if [ -n "$patch_id" ]; then
+        printf 'FOUNDRY_REVIEW_PATCH_ID %s\n' "$patch_id"
     fi
 }
 
