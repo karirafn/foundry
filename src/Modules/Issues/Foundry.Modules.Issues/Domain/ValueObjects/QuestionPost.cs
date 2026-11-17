@@ -30,13 +30,19 @@ public abstract record QuestionPost
     /// </summary>
     public sealed record Failed(string Reason, DateTimeOffset? NextAttemptAt, int Attempts) : QuestionPost;
 
-    /// <summary>Whether the poll step should post now.</summary>
-    public bool IsDue(DateTimeOffset now) => this switch
+    /// <summary>
+    /// When the poll step should post: at once (<see cref="DateTimeOffset.MinValue"/>) while pending, at the retry time
+    /// after a transient failure, and never (<see langword="null"/>) once posted or after a permanent failure.
+    /// </summary>
+    public DateTimeOffset? DueAt => this switch
     {
-        Pending => true,
-        Failed { NextAttemptAt: DateTimeOffset nextAttemptAt } => nextAttemptAt <= now,
-        _ => false,
+        Pending => DateTimeOffset.MinValue,
+        Failed failed => failed.NextAttemptAt,
+        _ => null,
     };
+
+    /// <summary>Whether the poll step should post now.</summary>
+    public bool IsDue(DateTimeOffset now) => DueAt is { } dueAt && dueAt <= now;
 
     /// <summary>The status after a failed post: transient failures back off exponentially, capped at an hour.</summary>
     public Failed Fail(string reason, bool transient, DateTimeOffset now)

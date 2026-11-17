@@ -30,6 +30,19 @@ internal interface IIssueProvider
         int issueNumber,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Reads whether the issue is closed together with its body, in a single request, for the awaiting-input step,
+    /// which compares the body against its Issue Watch. Callers that need only the state keep
+    /// <see cref="IsIssueClosedAsync"/>, which downloads no body.
+    /// </summary>
+    /// <remarks>Providers without a status read keep this default, which fails with
+    /// <see cref="TrackerReadErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<IssueStatus>> GetIssueStatusAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<IssueStatus>.Fail(TrackerReadErrors.NotSupported()));
+
     Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
         RepositorySlug slug,
         string pullRequestUrl,

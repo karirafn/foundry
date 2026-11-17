@@ -84,6 +84,44 @@ public sealed class Clarifications
     }
 
     [Fact]
+    public void ARoundAnsweredByCommentsAndAnEdit_WritesTheEditAsItsKindAlone()
+    {
+        // Arrange
+        IReadOnlyList<Clarification> log =
+        [
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(
+                    new ClarificationInput([new InputPart.Comments("See the description."), new InputPart.DescriptionEdited()]),
+                    AskedAt.AddHours(1)),
+        ];
+
+        // Act
+        string json = Serialize(log);
+
+        // Assert
+        json.ShouldContain("""
+            "input":[{"kind":"comments","text":"See the description."},{"kind":"descriptionEdited"}]
+            """.Trim());
+    }
+
+    [Fact]
+    public void ARoundAnsweredByAnEdit_RoundTripsItsInput()
+    {
+        // Arrange
+        IReadOnlyList<Clarification> log =
+        [
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.DescriptionEdited()]), AskedAt.AddHours(1)),
+        ];
+
+        // Act
+        IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
+
+        // Assert
+        read.ShouldBe(log);
+    }
+
+    [Fact]
     public void AnOpenRound_WritesANullInput()
     {
         // Arrange

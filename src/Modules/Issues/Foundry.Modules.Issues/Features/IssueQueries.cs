@@ -241,12 +241,9 @@ internal sealed class IssueQueries(
                 i.Url.Value.ToString(),
                 i.LinkedPullRequestUrl,
                 i.Questions,
-                i.QuestionPost switch
-                {
-                    QuestionPost.Posted posted => new AwaitingInputPostState.Posted(posted.PostedAt),
-                    QuestionPost.Failed failed => new AwaitingInputPostState.Unposted(failed.NextAttemptAt),
-                    _ => new AwaitingInputPostState.Unposted(DateTimeOffset.MinValue),
-                }))
+                i.QuestionPost is QuestionPost.Posted posted
+                    ? new AwaitingInputPostState.Posted(posted.PostedAt)
+                    : new AwaitingInputPostState.Unposted(i.QuestionPost.DueAt)))
             .ToList();
     }
 

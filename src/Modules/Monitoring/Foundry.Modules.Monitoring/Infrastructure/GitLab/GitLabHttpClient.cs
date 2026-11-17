@@ -312,9 +312,44 @@ internal sealed partial class GitLabHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
+        Result<GitLabIssueStateDto> result = await ReadIssueAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+
+        return result.Match(
+            dto => Result<bool>.Ok(IsClosed(dto)),
+            Result<bool>.Fail);
+    }
+
+    /// <summary>
+    /// Reads the issue's state and description with the same <c>GET projects/:id/issues/:iid</c> request
+    /// <see cref="IsIssueClosedAsync"/> sends; a missing description is the empty string.
+    /// </summary>
+    public async Task<Result<IssueStatus>> GetIssueStatusAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        Result<GitLabIssueStateDto> result = await ReadIssueAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+
+        return result.Match(
+            dto => Result<IssueStatus>.Ok(new IssueStatus(IsClosed(dto), dto.Description ?? string.Empty)),
+            Result<IssueStatus>.Fail);
+    }
+
+    private static bool IsClosed(GitLabIssueStateDto dto) =>
+        string.Equals(dto.State, "closed", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<Result<GitLabIssueStateDto>> ReadIssueAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<GitLabIssueStateDto>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
@@ -328,16 +363,16 @@ internal sealed partial class GitLabHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+            return Result<GitLabIssueStateDto>.Fail(ErrorFromNonSuccess(response));
         }
 
         RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitLabIssueStateDto? dto = JsonSerializer.Deserialize<GitLabIssueStateDto>(body, JsonOptions);
+        GitLabIssueStateDto dto = JsonSerializer.Deserialize<GitLabIssueStateDto>(body, JsonOptions)
+            ?? new GitLabIssueStateDto(State: null, Description: null);
 
-        bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
-        return Result<bool>.Ok(isClosed);
+        return Result<GitLabIssueStateDto>.Ok(dto);
     }
 
     public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
@@ -1072,7 +1107,7 @@ internal sealed partial class GitLabHttpClient(
         string? State,
         int? ProjectId);
 
-    private sealed record GitLabIssueStateDto(string State);
+    private sealed record GitLabIssueStateDto(string? State, string? Description);
 
     private sealed record GitLabMergeRequestWithPipelineDto(
         string State,

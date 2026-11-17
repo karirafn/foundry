@@ -81,6 +81,23 @@ public sealed class ClarificationLog
     }
 
     [Fact]
+    public void WhenARoundWasAnsweredByAnEdit_SaysTheDescriptionWasEditedAfterTheCommentText()
+    {
+        // Arrange
+        Clarification answeredByEdit =
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(
+                    new ClarificationInput([new InputPart.Comments("See the description."), new InputPart.DescriptionEdited()]),
+                    AskedAt.AddHours(1));
+
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Fresh("feat/1-fix"), [answeredByEdit]);
+
+        // Assert
+        prompt.ShouldContain("See the description.\n\nThe issue description was edited after the question was posted.");
+    }
+
+    [Fact]
     public void WhenARoundIsUnanswered_SaysNoInputArrived()
     {
         // Act

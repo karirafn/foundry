@@ -14,7 +14,9 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// GitLab sets for every hook type (confidential variants share the kind of their public counterpart).
 /// <list type="table">
 /// <item><term><c>issue</c>, <c>work_item</c></term><description>issue listing — plus the dependency pass
-/// when the issue closing is a blocker of a tracked issue</description></item>
+/// when the issue closing is a blocker of a tracked issue; an <c>update</c> of an issue awaiting input on its own
+/// thread nudges its awaiting-input pass instead (GitLab sends <c>update</c> for label changes too, and the pass's
+/// body read decides)</description></item>
 /// <item><term><c>merge_request</c>, <c>note</c> (on a merge request)</term><description>review pass for
 /// the owning issue — the checks pass when that issue is checks-pending</description></item>
 /// <item><term><c>note</c> (on a merge request)</term><description>otherwise, awaiting-input pass for the
@@ -131,6 +133,11 @@ internal static partial class GitLabWebhookEventMapper
         if (MapBlockerClosed(repositoryId, tracked, iid, GetString(attributes, "action") == "close") is { } blockerClosed)
         {
             return blockerClosed;
+        }
+
+        if (MapIssueEdited(repositoryId, tracked, iid, GetString(attributes, "action") == "update") is { } edited)
+        {
+            return edited;
         }
 
         bool hasTriggerLabel = HasTriggerLabel(payload, "labels")

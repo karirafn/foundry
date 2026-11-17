@@ -26,6 +26,7 @@ internal static class AwaitingInputJsonConversion
     private const string PostedKind = "posted";
     private const string FailedKind = "failed";
     private const string CommentsKind = "comments";
+    private const string DescriptionEditedKind = "descriptionEdited";
 
     public static ValueConverter<ResumeTarget, string> ResumeTargetConverter { get; } = new(
         target => SerializeResumeTarget(target),
@@ -147,6 +148,7 @@ internal static class AwaitingInputJsonConversion
             input.Parts.Select(part => part switch
             {
                 InputPart.Comments comments => new InputPartDto(CommentsKind, comments.Text),
+                InputPart.DescriptionEdited => new InputPartDto(DescriptionEditedKind, Text: null),
                 _ => throw new UnreachableException($"Unknown InputPart variant: {part.GetType().Name}"),
             }).ToList(),
             (JsonSerializerOptions?)null);
@@ -163,6 +165,7 @@ internal static class AwaitingInputJsonConversion
     private static InputPart DeserializeInputPart(InputPartDto dto) => dto.Kind switch
     {
         CommentsKind => new InputPart.Comments(Required(dto.Text)),
+        DescriptionEditedKind => new InputPart.DescriptionEdited(),
         _ => throw new UnreachableException($"Unknown InputPart kind: '{dto.Kind}'"),
     };
 
@@ -199,7 +202,8 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("context")] string Context,
         [property: JsonPropertyName("recommendation")] string? Recommendation);
 
+    // A part without a payload is written as its kind alone.
     private sealed record InputPartDto(
         [property: JsonPropertyName("kind")] string Kind,
-        [property: JsonPropertyName("text")] string? Text);
+        [property: JsonPropertyName("text"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text);
 }

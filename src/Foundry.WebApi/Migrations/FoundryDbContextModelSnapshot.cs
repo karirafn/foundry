@@ -17,7 +17,7 @@ namespace Foundry.WebApi.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
             modelBuilder.Entity("Foundry.Modules.Credentials.Domain.Entities.ClaudeAccount", b =>
                 {
@@ -312,6 +312,33 @@ namespace Foundry.WebApi.Migrations
                         .HasDatabaseName("ix_credential_namespaces_host_value");
 
                     b.ToTable("credential_namespaces", (string)null);
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.IssueWatch", b =>
+                {
+                    b.Property<Guid>("MonitoredRepositoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monitored_repository_id");
+
+                    b.Property<int>("IssueNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("issue_number");
+
+                    b.Property<string>("BaselineBodyHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("baseline_body_hash");
+
+                    b.Property<string>("PendingBodyHash")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_body_hash");
+
+                    b.Property<DateTimeOffset?>("PendingBodySeenAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_body_first_seen_at");
+
+                    b.HasKey("MonitoredRepositoryId", "IssueNumber");
+
+                    b.ToTable("issue_watches", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", b =>
@@ -3348,6 +3375,15 @@ namespace Foundry.WebApi.Migrations
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Credential", null)
                         .WithMany("Namespaces")
                         .HasForeignKey("CredentialId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.IssueWatch", b =>
+                {
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
+                        .WithMany()
+                        .HasForeignKey("MonitoredRepositoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

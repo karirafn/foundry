@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Testing;
@@ -78,6 +79,28 @@ public sealed class HandleAsync : IAsyncDisposable
         queued.ShouldSatisfyAllConditions(
             () => queued.Trigger.ShouldBeOfType<RevisionTrigger.InputProvided>(),
             () => queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")));
+    }
+
+    [Fact]
+    public async Task WhenATriageRunAskedAndTheDescriptionWasEdited_ResumesToTriageWithADescriptionEditedPart()
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = new IssueBuilder()
+            .WithMonitoredRepositoryId(_repositoryId)
+            .WithIssueNumber(3)
+            .AwaitingInputFromTriage(IssueKind.Feature);
+        awaiting.RecordQuestionPosted(commentId: 1001, PostedAt, commentUrl: null);
+        Seed(awaiting);
+        ClarificationInput edited = new([new InputPart.DescriptionEdited()]);
+
+        // Act
+        await _sut.HandleAsync(
+            new AwaitingInputArrived(_repositoryId, 3, edited, PostedAt.AddMinutes(5)),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        TriageQueuedIssue queued = (await LoadAsync()).ShouldBeOfType<TriageQueuedIssue>();
+        queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(edited);
     }
 
     [Fact]
