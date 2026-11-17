@@ -44,7 +44,11 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
             }
 
             string? log = await runtime.GetAllLogsAsync(containerId, cancellationToken);
-            return PrepareOutputParser.Parse(exitCode.Value, log, expectsRunBranch: request.RunBranch is not null);
+            return PrepareOutputParser.Parse(
+                exitCode.Value,
+                log,
+                expectsRunBranch: request.RunBranch is not null,
+                expectsReviewPacket: request.Review is not null);
         }
         catch (DockerApiException ex)
         {
