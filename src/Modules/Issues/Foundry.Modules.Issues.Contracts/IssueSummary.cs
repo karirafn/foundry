@@ -13,6 +13,12 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <see cref="ChecksStep"/> or <see cref="MergingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
 /// </para>
 /// <para>
+/// <paramref name="RunKind"/> is the kind of worker run the issue runs next (#1059): one of <see cref="TriageRunKind"/>,
+/// <see cref="FreshRunKind"/>, <see cref="ContinuationRunKind"/>, <see cref="ReviewFixRunKind"/>,
+/// <see cref="ChecksFixRunKind"/>, <see cref="ConflictFixRunKind"/> or <see cref="InputResumeRunKind"/>, or
+/// <see langword="null"/> when the state has no run ahead.
+/// </para>
+/// <para>
 /// <paramref name="RepositoryId"/> is the monitored repository's id: the same id as <c>RepositorySummary.Id</c> and the
 /// repository settings route. <paramref name="WaitsOnBlockers"/> is true while the issue waits for its open blockers
 /// to close, and <paramref name="EnteredStateAt"/> is when it entered its current state (#892).
@@ -48,7 +54,8 @@ public sealed record IssueSummary(
     string? MergeSkippedReason = null,
     string? ProviderType = null,
     string? RevisionTriggerKind = null,
-    string? PublishPhase = null)
+    string? PublishPhase = null,
+    string? RunKind = null)
 {
     public const string PublishingPhase = "publishing";
     public const string RetryingPhase = "retrying";
@@ -57,6 +64,14 @@ public sealed record IssueSummary(
     public const string ImplementStage = "implement";
     public const string AwaitingReviewStage = "awaiting_review";
     public const string DoneStage = "done";
+
+    public const string TriageRunKind = "triage";
+    public const string FreshRunKind = "fresh";
+    public const string ContinuationRunKind = "continuation";
+    public const string ReviewFixRunKind = "review_fix";
+    public const string ChecksFixRunKind = "checks_fix";
+    public const string ConflictFixRunKind = "conflict_fix";
+    public const string InputResumeRunKind = "input_resume";
 
     public const string PublishingStep = "publishing";
     public const string PublishRetryingStep = "publish_retrying";

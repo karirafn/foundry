@@ -28,6 +28,7 @@ const mockSummary: IssueSummary = {
   awaitsDispatch: true,
   waitsOnBlockers: false,
   codeStep: null,
+  runKind: null,
   repositoryId: 'repo-1',
   enteredStateAt: '2026-01-01T00:00:00Z',
 };
@@ -1067,6 +1068,7 @@ describe('IssueService (band transitions)', () => {
     awaitsDispatch: true,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
   };
@@ -1084,6 +1086,7 @@ describe('IssueService (band transitions)', () => {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
   };
@@ -1250,6 +1253,7 @@ describe('IssueService (resolved paging)', () => {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
   };
@@ -1657,6 +1661,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
     awaitsDispatch: true,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
   };
@@ -1866,6 +1871,7 @@ describe('IssueService (queue-order reconcile)', () => {
     awaitsDispatch: true,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     repositoryEligibilityStatus: null,
@@ -1884,6 +1890,7 @@ describe('IssueService (queue-order reconcile)', () => {
     awaitsDispatch: true,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     repositoryEligibilityStatus: null,
@@ -2502,6 +2509,7 @@ describe('IssueService (nextUpAnnouncement)', () => {
     awaitsDispatch: true,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     repositoryEligibilityStatus: null,
@@ -2897,6 +2905,65 @@ describe('IssueService board placement (#851)', () => {
 
     // Assert
     expect(svc.issues()[0].codeStep).toBeNull();
+  });
+
+  it('passes a known run kind through from the issues response', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [{ ...placedItem, state: 'revision_queued', codeStep: null, runKind: 'checks_fix' }],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0].runKind).toBe('checks_fix');
+  });
+
+  it.each([
+    ['an unknown', { runKind: 'future_kind' }],
+    ['an absent', {}],
+  ])('narrows %s run kind in the issues response to null', (_case, wire) => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, ...wire }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].runKind).toBeNull();
+  });
+
+  it('passes a known run kind through from an IssueUpdated payload', () => {
+    // Arrange
+    const { svc, http, callbacks } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    callbacks['IssueUpdated']({ ...placedItem, runKind: 'input_resume' } as unknown as IssueSummary);
+
+    // Assert
+    expect(svc.issues()[0].runKind).toBe('input_resume');
+  });
+
+  it.each([
+    ['an unknown', { runKind: 'future_kind' }],
+    ['an absent', {}],
+  ])('narrows %s run kind in an IssueUpdated payload to null', (_case, wire) => {
+    // Arrange
+    const { svc, http, callbacks } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    callbacks['IssueUpdated']({ ...placedItem, ...wire } as unknown as IssueSummary);
+
+    // Assert
+    expect(svc.issues()[0].runKind).toBeNull();
   });
 
   it('narrows the placement of an IssueUpdated payload', () => {

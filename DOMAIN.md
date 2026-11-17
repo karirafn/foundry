@@ -428,6 +428,7 @@ The step Foundry's own code is running for the issue, with no worker involved �
 
 `triage_queued`: an issue waiting for a worker to triage it ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)). A [Queued Issue](#queued-issue) with `TierRank = 2`, between continuation and fresh. Display group: Queued, label "Triage queued".
 
+- [Run Kind](#run-kind): `Triage`, as for a `detected` issue.
 - **Ways in** — every new issue (`DetectedIssue.QueueTriage()`, on creation; an issue still `detected` from before triage existed is sent there by the dependency pass when it has no open blockers), a [TriageBlockedIssue](#triageblockedissue) whose blockers closed, input arriving on an `AwaitingInputIssue` with a `Retriage` [resume target](#awaitinginputissue), Retry triage from `TriageFailedIssue`, and [Re-triage](#re-triage) from `FreshQueued` or `Blocked`.
 - Triage waits for open blockers (ADR 0102): when the dependency pass or the claim-time re-check finds open blockers, `Block()` → `TriageBlockedIssue`. Re-triage or an answered question while blockers are open therefore lands here first and then moves to `TriageBlocked`. The dependency pass keeps blockers current in `TriageInProgress`, `TriageFailed` and `AwaitingInput` too, where they are only recorded. Revision, continuation and rebase-conflict runs never go through triage.
 - `Context` is `DispatchContext.Triage`, whose role maps to `WorkerRole.Triage`; `DispatchBranchName` is `null`, so no branch name is generated and the run gets none.
@@ -437,6 +438,7 @@ The step Foundry's own code is running for the issue, with no worker involved �
 
 `triage_blocked`: an issue that hasn't been triaged and has open blockers, or one a triage run found blocked ([ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md), [ADR 0103](docs/adr/0103-triage-defers-on-open-dependencies-by-linking-blockers.md)). When its blockers close, it moves to `TriageQueued`. A [Blocked Issue](#blocked-issue) has already been triaged or skipped triage, and moves to `FreshQueued`. Display group: Queued, label "Triage blocked".
 
+- [Run Kind](#run-kind): `Triage`.
 - Carries `WorkerRunId`: the triage run whose verdict named the blockers; `null` when the issue waits on blockers found before triage.
 - Not a [Queued Issue](#queued-issue): it is never a dispatch candidate and holds no worker slot. Triage waits so the run judges the issue against the code its blockers wrote, not code that doesn't exist yet.
 - **Ways in** — the dependency pass applying open blockers to a `DetectedIssue` (`BlockTriage()`) or a `TriageQueuedIssue` (`Block()`), or the claim-time re-check finding them on a `TriageQueuedIssue`. Raises `IssueTriageBlocked`.
@@ -674,6 +676,18 @@ Four variants:
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
 Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0051](docs/adr/0051-dispatch-context-union-and-typed-dispatch-seam.md)).
 
+## Run Kind
+
+The kind of worker run an issue is running, or will run when it's next dispatched (#1059). It is declared by the issue state (`Issue.RunKind`, `null` for states with no run ahead) and shown as the board's lead tag on Pipeline and Blocked rows. Values are `Triage`, `Fresh`, `Continuation`, `ReviewFix`, `ChecksFix`, `ConflictFix` and `InputResume`; the last four split a `Revision` by its [Revision Trigger](#revision-trigger) (`ReviewFeedback`, `FailedChecks`, `RebaseConflict`, `InputProvided`). Run Kind is related to [Dispatch Context](#dispatch-context) but is not the same thing. Dispatch Context is the payload handed to the worker and exists only on queued states. Run Kind is a flat display fact that also covers in-flight and blocked states. It always implies the [Worker Role](#worker-role): `Triage` → triage, everything else → implement.
+
+- `detected`, `triage_queued`, `triage_blocked` → `Triage`.
+- `queued`, `blocked` → `Fresh`.
+- `continuation_queued` → `Continuation`.
+- `revision_queued` → `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`, by its trigger.
+- Every other state → `null`. The in-flight states (`triage_in_progress`, `in_progress`, `revision_in_progress`) are `null` for now, so worker cards keep the role tag.
+
+Served on `IssueSummary.RunKind` as `triage | fresh | continuation | review_fix | checks_fix | conflict_fix | input_resume`, or null. The board labels them `triage`, `implement`, `continue`, `review fix`, `checks fix`, `conflict` and `resume`; screen readers hear "Run: <label>". A Pipeline or Blocked issue whose run kind is null or unknown to the dashboard is left unplaced rather than tagged with a guess.
+
 ## Tracker Context
 
 The issues Foundry reads from the provider at dispatch, alongside the issue's own content.
@@ -876,7 +890,7 @@ When a blocker's state is missing or unrecognized, it is treated as still blocki
 ## Blocked Issue
 
 A lifecycle state for a triaged issue that has unresolved dependencies (an untriaged one waits as a [TriageBlockedIssue](#triageblockedissue)).
-A triaged issue (a ready verdict or Skip triage) with open blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
+A triaged issue (a ready verdict or Skip triage) with open blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`. Its [Run Kind](#run-kind) is `Fresh`.
 A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue` — whether the blockers are found by the dependency pass or by the claim-time re-check (see Issue Dependency).
 A `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
 When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass, without being triaged again. [Re-triage](#re-triage) sends it back to triage, where it waits as a `TriageBlockedIssue` while its blockers are open and is triaged once they close.
@@ -956,7 +970,7 @@ Hard-deleted when the provider-side issue is closed or loses its trigger label (
 The first-time dispatch tier — the lowest-priority of the four queued variants (`TierRank = 3`).
 An issue reaches this state from four paths: a ready triage verdict or Skip triage with no open blockers, an unblocked `BlockedIssue` (all blockers resolved; it is not triaged again), or a retried `FailedIssue` / `UnchangedIssue`.
 `DispatchBranchName` is generated fresh from the kind classification, number, and title (`BranchName.Generate(KindClassification, IssueNumber, Title)`; an `Unclassified` issue gets `feat/`).
-`Context` is `DispatchContext.Fresh(branchName)` — instructs the worker to start a new implementation on a new branch.
+`Context` is `DispatchContext.Fresh(branchName)` — instructs the worker to start a new implementation on a new branch. Its [Run Kind](#run-kind) is `Fresh`.
 Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `BlockedIssue` (blockers detected); `Retriage()` → `TriageQueuedIssue` ([Re-triage](#re-triage)).
 
 ## Revision Queued Issue
@@ -965,6 +979,7 @@ A lifecycle state for an issue queued for revision after receiving review feedba
 Carries `BranchName`, `PullRequestUrl`, and `ReviewComments` (`IReadOnlyList<ReviewComment>`) — all non-nullable.
 Created from `ReviewIssue.Revise()` when the monitoring service detects actionable review feedback.
 Claimed with priority over regular `FreshQueuedIssue` to minimize open issue count.
+Its [Run Kind](#run-kind) follows its trigger: `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`.
 Transitions: `Claim()` → `RevisionInProgressIssue`.
 
 ## Revision In-Progress Issue
@@ -1009,6 +1024,7 @@ Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (res
 A lifecycle state for an issue queued for continuation from an existing branch with prior work.
 Carries `BranchName` and `FailureReason` — both non-nullable. `FailureReason` is copied from the originating `ContinuableFailedIssue` and truncated to 500 characters by the aggregate.
 Created from `ContinuableFailedIssue.Retry()`.
+Its [Run Kind](#run-kind) is `Continuation`.
 Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant; the continuation context lives in the dispatch payload).
 
 ## Continuation Context

@@ -10,7 +10,7 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
+import { RunKindTagComponent } from '../../../shared/components/run-kind-tag/run-kind-tag';
 import { BoardBandComponent } from '../board-band/board-band';
 import { BoardRowComponent } from '../board-row/board-row';
 import { ItemView } from '../board-state.service';
@@ -22,7 +22,7 @@ export const PIPELINE_PREVIEW = 10;
 /** Every issue waiting for dispatch, as one list in global dispatch order. */
 @Component({
   selector: 'fd-pipeline-band',
-  imports: [BoardBandComponent, BoardRowComponent, RoleTagComponent],
+  imports: [BoardBandComponent, BoardRowComponent, RunKindTagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pipeline-band.html',
   styleUrl: './pipeline-band.scss',

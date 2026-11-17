@@ -125,6 +125,12 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// <summary>The step Foundry's own code is running for the issue, or <see langword="null"/> when none is.</summary>
     public abstract IssueCodeStep? CodeStep { get; }
 
+    /// <summary>
+    /// The kind of worker run the issue will run when it is next dispatched, or <see langword="null"/> when the state
+    /// has no run ahead (in-flight states also return <see langword="null"/> for now).
+    /// </summary>
+    public abstract RunKind? RunKind { get; }
+
     private protected static string? NullIfEmpty(string value) =>
         string.IsNullOrEmpty(value) ? null : value;
 

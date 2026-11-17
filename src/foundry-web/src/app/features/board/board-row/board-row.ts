@@ -13,7 +13,7 @@ import { CardPhase } from '../board-state.service';
 import { IssueRefComponent } from '../issue-ref/issue-ref';
 
 /**
- * A compact one-line issue row: a projected `[rowLead]` (position and role, or a step chip), the
+ * A compact one-line issue row: a projected `[rowLead]` (position and run kind, or a step chip), the
  * repository and number, the title as the row's one button, and a projected `[rowMarker]`. Used by
  * the Pipeline, Blocked and step rows.
  */

@@ -2,6 +2,7 @@ import type { IssueState } from '../../shared/utils/issue-state';
 export type { IssueState } from '../../shared/utils/issue-state';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
 import type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-kind';
+import type { RunKind } from '../../shared/utils/run-kind';
 import type { TokenTotal } from '../workers/run-totals.model';
 
 export interface RunStats {
@@ -64,6 +65,11 @@ export interface IssueSummary {
   /** True while the issue waits for its open blockers to close (#892). */
   waitsOnBlockers: boolean;
   codeStep: CodeStep | null;
+  /**
+   * The kind of run that runs (or runs next) for the issue; null when the server sent a kind this
+   * dashboard does not know.
+   */
+  runKind: RunKind | null;
   /** The monitored repository the issue belongs to: the id the repository list and settings route use. */
   repositoryId: string;
   /** When the issue entered its current state (ISO 8601). */
@@ -89,6 +95,7 @@ export interface FailingCheck {
 }
 
 export type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-kind';
+export type { RunKind } from '../../shared/utils/run-kind';
 
 export interface InputQuestion {
   question: string;

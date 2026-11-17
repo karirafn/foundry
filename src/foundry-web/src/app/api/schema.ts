@@ -1323,6 +1323,7 @@ export interface components {
             providerType?: null | string;
             revisionTriggerKind?: null | string;
             publishPhase?: null | string;
+            runKind?: null | string;
         };
         MergeWaitDetails: {
             /** Format: int32 */

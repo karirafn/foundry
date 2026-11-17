@@ -23,6 +23,7 @@ function queued(overrides: Partial<IssueSummary> = {}): IssueSummary {
     awaitsDispatch: true,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,

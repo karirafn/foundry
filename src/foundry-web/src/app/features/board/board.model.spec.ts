@@ -28,6 +28,7 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -40,6 +41,7 @@ function queued(id: string, overrides: Partial<IssueSummary> = {}): IssueSummary
     state: 'queued',
     stage: 'implement',
     awaitsDispatch: true,
+    runKind: 'fresh',
     ...overrides,
   });
 }
@@ -305,31 +307,67 @@ describe('buildBoardBands', () => {
     ]);
   });
 
-  it('gives a pipeline row its next role', () => {
+  it("gives a pipeline row the server's run kind", () => {
     // Act
     const bands = buildBoardBands(
-      [queued('t', { stage: 'triage', state: 'triage_queued' })],
-      ['t'],
+      [queued('r', { state: 'revision_queued', runKind: 'checks_fix' })],
+      ['r'],
       [],
     );
 
     // Assert
-    expect(bands.pipeline[0].role).toBe('triage');
+    expect(bands.pipeline[0].runKind).toBe('checks_fix');
+  });
+
+  it('leaves a pipeline issue without a known run kind unplaced', () => {
+    // Arrange
+    const issue = queued('q', { runKind: null });
+
+    // Act
+    const bands = buildBoardBands([issue], ['q'], []);
+
+    // Assert
+    expect(bands.pipeline).toEqual([]);
+    expect(bands.unplaced).toEqual([issue]);
+  });
+
+  it('leaves a blocked issue without a known run kind unplaced', () => {
+    // Arrange
+    const issue = queued('b', { state: 'blocked', waitsOnBlockers: true, runKind: null });
+
+    // Act
+    const bands = buildBoardBands([issue], [], []);
+
+    // Assert
+    expect(bands.blocked).toEqual([]);
+    expect(bands.unplaced).toEqual([issue]);
+  });
+
+  it('still places a worker whose run kind is null', () => {
+    // Arrange
+    const issue = buildIssue({ id: 'w', state: 'in_progress', runKind: null });
+
+    // Act
+    const bands = buildBoardBands([issue], [], []);
+
+    // Assert
+    expect(bands.workers.map((w) => w.issue.id)).toEqual(['w']);
+    expect(bands.unplaced).toEqual([]);
   });
 
   it('lists blocked issues in server order', () => {
     // Arrange
     const issues = [
-      queued('b2', { state: 'blocked', waitsOnBlockers: true }),
-      queued('b1', { state: 'triage_blocked', stage: 'triage', waitsOnBlockers: true }),
+      queued('b2', { state: 'blocked', waitsOnBlockers: true, runKind: 'fresh' }),
+      queued('b1', { state: 'triage_blocked', stage: 'triage', waitsOnBlockers: true, runKind: 'triage' }),
     ];
 
     // Act
     const bands = buildBoardBands(issues, [], []);
 
     // Assert
-    expect(bands.blocked.map((b) => [b.issue.id, b.role])).toEqual([
-      ['b2', 'implement'],
+    expect(bands.blocked.map((b) => [b.issue.id, b.runKind])).toEqual([
+      ['b2', 'fresh'],
       ['b1', 'triage'],
     ]);
   });

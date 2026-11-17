@@ -1,0 +1,5 @@
+@use '../../../../styles/tag' as *;
+
+.run-kind-tag {
+  @include mono-tag;
+}

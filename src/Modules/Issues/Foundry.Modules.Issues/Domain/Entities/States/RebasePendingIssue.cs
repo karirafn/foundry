@@ -25,6 +25,8 @@ public sealed class RebasePendingIssue : Issue
 
     public override IssueCodeStep? CodeStep => IssueCodeStep.Rebasing;
 
+    public override RunKind? RunKind => null;
+
     /// <summary>
     /// Maximum number of consecutive <see cref="RevisionTrigger.RebaseConflict"/> revisions Foundry dispatches before a
     /// further conflict fails open to checks-pending with <see cref="RebaseOutcome.Conflict"/>.

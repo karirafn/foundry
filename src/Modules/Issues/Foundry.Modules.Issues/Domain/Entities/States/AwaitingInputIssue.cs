@@ -58,6 +58,8 @@ public sealed class AwaitingInputIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override RunKind? RunKind => null;
+
     /// <summary>The questions waiting for input: the open round of the clarification log.</summary>
     public IReadOnlyList<InputQuestion> Questions => OpenClarification?.Questions ?? [];
 
