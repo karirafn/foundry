@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Rebase;
+using Foundry.Modules.Monitoring.Features.TriageFailed;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
@@ -215,6 +216,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
         MergeStep? mergeStep = scope.ServiceProvider.GetService<MergeStep>();
         AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
+        TriageFailedEditStep? triageFailedEditStep = scope.ServiceProvider.GetService<TriageFailedEditStep>();
 
         int pollIntervalSeconds = await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
         TimeSpan pollInterval = TimeSpan.FromSeconds(pollIntervalSeconds);
@@ -295,6 +297,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             if (awaitingInputStep is not null)
             {
                 await awaitingInputStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
+            }
+
+            // The scheduled poll alone watches failed triages for an edit (issue #773): an edit there is not urgent, so no
+            // webhook nudges this pass and a settled edit waits for the next poll.
+            if (triageFailedEditStep is not null)
+            {
+                await triageFailedEditStep.RunAsync(repo, resolvedProvider.Provider, now, cancellationToken);
             }
 
             if (pollResult is Result<PollChanges>.Failure pollFailure)

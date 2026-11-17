@@ -336,6 +336,13 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pending_body_first_seen_at");
 
+                    b.Property<string>("Wait")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("wait");
+
                     b.HasKey("MonitoredRepositoryId", "IssueNumber");
 
                     b.ToTable("issue_watches", (string)null);

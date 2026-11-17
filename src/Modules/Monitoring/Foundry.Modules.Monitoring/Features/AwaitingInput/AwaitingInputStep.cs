@@ -100,14 +100,19 @@ internal sealed class AwaitingInputStep(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Removes the watches of issues that are no longer awaiting input (a full pass sees every waiting issue).</summary>
+    /// <summary>
+    /// Removes the awaiting-input watches of issues that are no longer awaiting input (a full pass sees every waiting
+    /// issue). A failed triage's watch belongs to the failed-triage pass, which removes it.
+    /// </summary>
     private void ForgetWatchesOfIssuesNoLongerWaiting(
         Dictionary<int, IssueWatch> watches,
         IReadOnlyList<AwaitingInputIssueInfo> waiting)
     {
         HashSet<int> waitingNumbers = [.. waiting.Select(info => info.IssueNumber)];
 
-        foreach (IssueWatch stale in watches.Values.Where(watch => !waitingNumbers.Contains(watch.IssueNumber)).ToList())
+        foreach (IssueWatch stale in watches.Values
+            .Where(watch => watch.Wait is WatchedWait.AwaitingInput && !waitingNumbers.Contains(watch.IssueNumber))
+            .ToList())
         {
             dbContext.Set<IssueWatch>().Remove(stale);
             watches.Remove(stale.IssueNumber);
@@ -116,21 +121,21 @@ internal sealed class AwaitingInputStep(
 
     /// <summary>
     /// The issue's watch. A wait posted before watches existed has none: it starts one without a baseline, so the
-    /// first successful body read becomes the baseline rather than a change.
+    /// first successful body read becomes the baseline rather than a change. A watch left from a failed triage the
+    /// failed-triage pass has not removed yet is replaced the same way: its baseline predates the question.
     /// </summary>
     private IssueWatch WatchOf(
         MonitoredRepository repository,
         AwaitingInputIssueInfo info,
         Dictionary<int, IssueWatch> watches)
     {
-        if (watches.TryGetValue(info.IssueNumber, out IssueWatch? existing))
+        if (watches.TryGetValue(info.IssueNumber, out IssueWatch? existing) && existing.Wait is WatchedWait.AwaitingInput)
         {
             return existing;
         }
 
         IssueWatch started = IssueWatch.Start(repository.Id, info.IssueNumber, baselineBodyHash: null);
-        dbContext.Set<IssueWatch>().Add(started);
-        watches[info.IssueNumber] = started;
+        ReplaceWatch(watches, started);
         return started;
     }
 

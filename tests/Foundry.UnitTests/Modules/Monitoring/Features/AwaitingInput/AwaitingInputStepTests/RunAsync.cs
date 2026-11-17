@@ -134,6 +134,13 @@ public sealed class RunAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
     }
 
+    private void SeedFailedTriageWatch(int issueNumber, string baselineBody)
+    {
+        _dbContext.Set<IssueWatch>().Add(IssueWatch.StartForFailedTriage(_repository.Id, issueNumber, IssueBodyHash.Of(baselineBody)));
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+    }
+
     private IssueWatch? LoadWatch()
     {
         _dbContext.ChangeTracker.Clear();
@@ -688,6 +695,37 @@ public sealed class RunAsync : IAsyncDisposable
 
         // Assert
         LoadWatch().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAFullPassRuns_KeepsTheWatchOfAFailedTriage()
+    {
+        // Arrange
+        SeedFailedTriageWatch(issueNumber: 99, baselineBody: "Failed triage.");
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().Wait.ShouldBe(WatchedWait.TriageFailed);
+    }
+
+    [Fact]
+    public async Task WhenAPostedWaitFindsAFailedTriagesWatch_ReplacesItWithItsOwnWithoutCountingTheBodyAsInput()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedFailedTriageWatch(issueNumber: 1, baselineBody: "An older body.");
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.ShouldSatisfyAllConditions(
+            () => watch.Wait.ShouldBe(WatchedWait.AwaitingInput),
+            () => watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of(_provider.IssueBody)),
+            () => watch.PendingBodyChange.ShouldBeNull());
     }
 
     private sealed class ScriptedProvider : IIssueProvider
