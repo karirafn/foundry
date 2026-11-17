@@ -1,4 +1,4 @@
-import { accountOptionLabel } from './account-label.util';
+import { accountOptionLabel, resolveHost, sortNamespaces } from './account-label.util';
 import { AccountSummary } from './accounts/account.model';
 
 function makeAccount(overrides: Partial<AccountSummary> = {}): AccountSummary {
@@ -117,5 +117,44 @@ describe('accountOptionLabel', () => {
 
     // Assert
     expect(result).toBe('My GitHub — team (gitlab.example.com)');
+  });
+});
+
+describe('resolveHost', () => {
+  it('should keep the port of a self-hosted base URL', () => {
+    // Act
+    const host = resolveHost('https://gitlab.example.com:8443/');
+
+    // Assert
+    expect(host).toBe('gitlab.example.com:8443');
+  });
+
+  it('should return a base URL it cannot parse as-is', () => {
+    // Act
+    const host = resolveHost('not a url');
+
+    // Assert
+    expect(host).toBe('not a url');
+  });
+});
+
+describe('sortNamespaces', () => {
+  it('should sort namespaces alphabetically', () => {
+    // Act
+    const sorted = sortNamespaces(['octo-org', 'acme/web', 'acme']);
+
+    // Assert
+    expect(sorted).toEqual(['acme', 'acme/web', 'octo-org']);
+  });
+
+  it('should leave its input array unchanged', () => {
+    // Arrange
+    const namespaces = ['octo-org', 'acme'];
+
+    // Act
+    sortNamespaces(namespaces);
+
+    // Assert
+    expect(namespaces).toEqual(['octo-org', 'acme']);
   });
 });

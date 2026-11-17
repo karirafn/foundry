@@ -4,7 +4,7 @@ import { AccountSummary } from '../account.model';
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
-  name: 'my-github',
+  name: 'acme-bot',
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
@@ -16,9 +16,9 @@ const MOCK_ACCOUNT: AccountSummary = {
 
 const MOCK_ACCOUNT_2: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000002',
-  name: 'work-gitlab',
+  name: 'octo-org',
   providerType: 'GitLab',
-  baseUrl: 'https://gitlab.com',
+  baseUrl: 'https://gitlab.example.com/',
   hasToken: false,
   tokenStatus: 'absent',
   branchRulesTokenStatus: 'absent',
@@ -27,51 +27,23 @@ const MOCK_ACCOUNT_2: AccountSummary = {
 };
 
 const MOCK_ACCOUNT_UNREADABLE: AccountSummary = {
+  ...MOCK_ACCOUNT,
   id: '00000000-0000-0000-0000-000000000005',
   name: 'broken-gitlab',
   providerType: 'GitLab',
-  baseUrl: 'https://gitlab.company.com',
-  hasToken: true,
+  baseUrl: 'https://gitlab.example.com',
   tokenStatus: 'unreadable',
-  branchRulesTokenStatus: 'absent',
-  tokenInvalidSince: null,
-  namespaces: [],
 };
 
 const MOCK_ACCOUNT_INVALID: AccountSummary = {
+  ...MOCK_ACCOUNT,
   id: '00000000-0000-0000-0000-000000000006',
   name: 'rejected-github',
-  providerType: 'GitHub',
-  baseUrl: 'https://github.com',
-  hasToken: true,
   tokenStatus: 'invalid',
-  branchRulesTokenStatus: 'absent',
   tokenInvalidSince: '2026-11-12T15:04:05Z',
-  namespaces: [],
-};
-const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
-  id: '00000000-0000-0000-0000-000000000003',
-  name: 'api-github',
-  providerType: 'github',
-  baseUrl: 'https://github.com',
-  hasToken: true,
-  tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
-  tokenInvalidSince: null,
-  namespaces: [],
 };
 
-const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
-  id: '00000000-0000-0000-0000-000000000004',
-  name: 'api-gitlab',
-  providerType: 'gitlab',
-  baseUrl: 'https://gitlab.com',
-  hasToken: true,
-  tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
-  tokenInvalidSince: null,
-  namespaces: [],
-};
+const FIVE_NAMESPACES = ['octo-org', 'acme/web', 'acme', 'acme/platform', 'zeta'];
 
 function setup(overrides: {
   accounts?: AccountSummary[];
@@ -88,6 +60,10 @@ function setup(overrides: {
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
 
+function text(el: Element | null | undefined): string | undefined {
+  return el?.textContent?.replace(/\s+/g, ' ').trim();
+}
+
 describe('AccountListComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -95,484 +71,345 @@ describe('AccountListComponent', () => {
     }).compileComponents();
   });
 
-  // Cycle 1: empty state renders when no accounts
-  it('should render the empty state when there are no accounts', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [] });
-
-    // Assert
-    const emptyState = el.querySelector('[role="status"]');
-    expect(emptyState).toBeTruthy();
-    expect(emptyState?.textContent).toContain('No accounts configured');
-  });
-
-  // Cycle 2: empty state includes subtitle and add button
-  it('should render the empty state description and Add Account button', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [] });
-
-    // Assert
-    const description = el.querySelector('.account-list__empty-description');
-    expect(description?.textContent).toContain('Add your first provider account to start monitoring repositories');
-    const addBtn = el.querySelector('.account-list__add-btn');
-    expect(addBtn?.textContent?.trim()).toContain('Add Account');
-  });
-
-  // Cycle 3: populated state shows list
-  it('should render a list when accounts are provided', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const list = el.querySelector('[role="list"]');
-    expect(list).toBeTruthy();
-    const items = el.querySelectorAll('[role="listitem"]');
-    expect(items.length).toBe(1);
-  });
-
-  // Cycle 4: account row shows provider badge, name, base URL
-  it('should render account name and base URL in each row', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const name = el.querySelector('.account-list__name');
-    expect(name?.textContent?.trim()).toBe('my-github');
-    const url = el.querySelector('.account-list__url');
-    expect(url?.textContent?.trim()).toBe('https://github.com');
-  });
-
-  // Cycle 5: provider icon renders with correct accessible label
-  it('should render fd-provider-icon with aria-label="GitHub" for GitHub accounts', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const icon = el.querySelector('fd-provider-icon');
-    expect(icon).toBeTruthy();
-    expect(icon?.getAttribute('aria-label')).toBe('GitHub');
-  });
-
-  it('should render fd-provider-icon with aria-label="GitLab" for GitLab accounts', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
-
-    // Assert
-    const icon = el.querySelector('fd-provider-icon');
-    expect(icon).toBeTruthy();
-    expect(icon?.getAttribute('aria-label')).toBe('GitLab');
-  });
-
-  it('should not render the old provider-badge element', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const badge = el.querySelector('.account-list__provider-badge');
-    expect(badge).toBeFalsy();
-  });
-
-  // Cycle 6: token status indicator — three states
-  it('should show "Configured" label and present dot for accounts with tokenStatus present', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const tokenLabel = el.querySelector('.account-list__token-label');
-    expect(tokenLabel?.textContent?.trim()).toBe('Configured');
-    const dot = el.querySelector('.account-list__token-dot');
-    expect(dot?.classList.contains('account-list__token-dot--present')).toBe(true);
-  });
-
-  it('should not have role="status" on per-row token label spans', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert — token labels are plain spans, not live regions
-    const tokenLabel = el.querySelector('.account-list__token-label');
-    expect(tokenLabel?.getAttribute('role')).toBeNull();
-  });
-
-  it('should wrap the metadata strip in role="group" with an account-scoped aria-label', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const group = el.querySelector('.account-list__strip');
-    expect(group?.getAttribute('role')).toBe('group');
-    expect(group?.getAttribute('aria-label')).toBe('Details for my-github');
-  });
-
-  it('should show "Not configured" label and absent dot for accounts with tokenStatus absent', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
-
-    // Assert
-    const tokenLabel = el.querySelector('.account-list__token-label');
-    expect(tokenLabel?.textContent?.trim()).toBe('Not configured');
-    const dot = el.querySelector('.account-list__token-dot');
-    expect(dot?.classList.contains('account-list__token-dot--absent')).toBe(true);
-  });
-
-  it('should render the warning line for an unreadable token', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
-
-    // Assert
-    const warningLine = el.querySelector('.account-list__token-warning');
-    expect(warningLine).toBeTruthy();
-    const reason = el.querySelector('.account-list__token-reason');
-    expect(reason).toBeTruthy();
-    expect(reason?.textContent).toContain('Token unreadable');
-  });
-
-  it('should include the warning icon svg for an unreadable token', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
-
-    // Assert
-    const reason = el.querySelector('.account-list__token-reason');
-    const svg = reason?.querySelector('svg');
-    expect(svg).toBeTruthy();
-  });
-
-  it('should not render a token dot for an unreadable token', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
-
-    // Assert
-    const dot = el.querySelector('.account-list__token-dot');
-    expect(dot).toBeNull();
-  });
-
-  it('should wrap the unreadable warning line in role="group" with an account-scoped aria-label', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
-
-    // Assert
-    const warningGroup = el.querySelector('.account-list__token-warning');
-    expect(warningGroup?.getAttribute('role')).toBe('group');
-    expect(warningGroup?.getAttribute('aria-label')).toBe('Token status for broken-gitlab');
-  });
-
-  it('should render the Re-enter token button for accounts with tokenStatus unreadable', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
-
-    // Assert
-    const btn = el.querySelector('.account-list__reenter-btn');
-    expect(btn).toBeTruthy();
-    expect(btn?.textContent?.trim()).toBe('Re-enter token');
-  });
-
-  it('should not render the Re-enter token button for accounts with tokenStatus present', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const btn = el.querySelector('.account-list__reenter-btn');
-    expect(btn).toBeNull();
-  });
-
-  it('should not render the Re-enter token button for accounts with tokenStatus absent', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
-
-    // Assert
-    const btn = el.querySelector('.account-list__reenter-btn');
-    expect(btn).toBeNull();
-  });
-
-  it('should emit edit with the account when Re-enter token is clicked on an unreadable row', () => {
-    // Arrange
-    const { el, component } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
-    let emittedAccount: AccountSummary | undefined;
-    component.edit.subscribe((a: AccountSummary) => { emittedAccount = a; });
-
-    // Act
-    const btn = el.querySelector('.account-list__reenter-btn') as HTMLButtonElement;
-    btn.click();
-
-    // Assert
-    expect(emittedAccount).toEqual(MOCK_ACCOUNT_UNREADABLE);
-  });
-
-  describe('invalid token', () => {
-    it('should render the warning line reading "Token invalid" without a token dot', () => {
-      // Arrange / Act
-      const { el } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
+  describe('states', () => {
+    it('should render the empty state when there are no accounts', () => {
+      // Act
+      const { el } = setup({ accounts: [] });
 
       // Assert
-      const group = el.querySelector('.account-list__token-warning');
-      expect(group?.getAttribute('role')).toBe('group');
-      expect(group?.getAttribute('aria-label')).toBe('Token status for rejected-github');
-      expect(el.querySelector('.account-list__token-reason-text')?.textContent?.trim()).toBe('Token invalid');
-      expect(el.querySelector('.account-list__token-reason svg')).toBeTruthy();
-      expect(el.querySelector('.account-list__token-dot')).toBeNull();
+      const emptyState = el.querySelector('[role="status"]');
+      expect(emptyState?.textContent).toContain('No accounts configured');
+      expect(text(el.querySelector('.account-list__empty-description')))
+        .toBe('Add your first provider account to start monitoring repositories.');
     });
 
-    it('should render the "Enter new token" button with an account-scoped aria-label', () => {
-      // Arrange / Act
-      const { el } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
+    it('should render no button in the empty state', () => {
+      // Act
+      const { el } = setup({ accounts: [] });
 
       // Assert
-      const btn = el.querySelector('.account-list__reenter-btn');
-      expect(btn?.textContent?.trim()).toBe('Enter new token');
-      expect(btn?.getAttribute('aria-label')).toBe('Enter new token for rejected-github');
+      expect(el.querySelector('.account-list__empty button')).toBeNull();
     });
 
-    it('should emit edit with the account when "Enter new token" is clicked', () => {
+    it('should render a loading status while loading', () => {
+      // Act
+      const { el } = setup({ loading: true });
+
+      // Assert
+      expect(el.querySelector('.account-list__loading[role="status"]')).toBeTruthy();
+      expect(el.querySelector('.account-list__list')).toBeNull();
+    });
+
+    it('should show an error message when error is set', () => {
+      // Act
+      const { el } = setup({ error: 'Failed to load accounts' });
+
+      // Assert
+      expect(el.querySelector('[role="alert"]')?.textContent).toContain('Failed to load accounts');
+    });
+
+    it('should emit retry when retry button is clicked on error state', () => {
       // Arrange
-      const { el, component } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
-      let emittedAccount: AccountSummary | undefined;
-      component.edit.subscribe((a: AccountSummary) => { emittedAccount = a; });
+      const { el, component } = setup({ error: 'Failed to load accounts' });
+      let emitted = false;
+      component.retry.subscribe(() => { emitted = true; });
 
       // Act
-      (el.querySelector('.account-list__reenter-btn') as HTMLButtonElement).click();
+      (el.querySelector('.account-list__retry-btn') as HTMLButtonElement).click();
 
       // Assert
-      expect(emittedAccount).toEqual(MOCK_ACCOUNT_INVALID);
+      expect(emitted).toBe(true);
     });
   });
-  // Cycle 7: edit and delete action icon buttons with aria-labels (rendered via fd-row-actions)
-  it('should render edit and delete icon buttons with accessible labels', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
 
-    // Assert
-    const editBtn = el.querySelector('[aria-label="Edit account my-github"]');
-    expect(editBtn).toBeTruthy();
-    const deleteBtn = el.querySelector('[aria-label="Delete account my-github"]');
-    expect(deleteBtn).toBeTruthy();
-  });
+  describe('list', () => {
+    it('should render a labelled list with a row for each account', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2] });
 
-  // Cycle 8: populated state shows Add Account button in header
-  it('should render Add Account button in header when accounts exist', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
-
-    // Assert
-    const headerAddBtn = el.querySelector('.account-list__header .account-list__add-btn');
-    expect(headerAddBtn).toBeTruthy();
-    expect(headerAddBtn?.textContent?.trim()).toContain('Add Account');
-  });
-
-  // Cycle 9: multiple accounts rendered
-  it('should render a row for each account', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2] });
-
-    // Assert
-    const items = el.querySelectorAll('[role="listitem"]');
-    expect(items.length).toBe(2);
-  });
-
-  // Cycle 10: add event emitted when Add Account clicked (empty state)
-  it('should emit add event when Add Account is clicked in empty state', () => {
-    // Arrange
-    const { el, component } = setup({ accounts: [] });
-    let emitted = false;
-    component.add.subscribe(() => { emitted = true; });
-
-    // Act
-    const addBtn = el.querySelector('.account-list__add-btn') as HTMLButtonElement;
-    addBtn.click();
-
-    // Assert
-    expect(emitted).toBe(true);
-  });
-
-  // Cycle 11: edit event emitted
-  it('should emit the account when edit is clicked', () => {
-    // Arrange
-    const { el, component } = setup({ accounts: [MOCK_ACCOUNT] });
-    let emittedAccount: AccountSummary | undefined;
-    component.edit.subscribe((a: AccountSummary) => { emittedAccount = a; });
-
-    // Act
-    const editBtn = el.querySelector('[aria-label="Edit account my-github"]') as HTMLButtonElement;
-    editBtn.click();
-
-    // Assert
-    expect(emittedAccount).toEqual(MOCK_ACCOUNT);
-  });
-
-  // Cycle 12: delete event emitted
-  it('should emit the account when delete is clicked', () => {
-    // Arrange
-    const { el, component } = setup({ accounts: [MOCK_ACCOUNT] });
-    let emittedAccount: AccountSummary | undefined;
-    component.delete.subscribe((a: AccountSummary) => { emittedAccount = a; });
-
-    // Act
-    const deleteBtn = el.querySelector('[aria-label="Delete account my-github"]') as HTMLButtonElement;
-    deleteBtn.click();
-
-    // Assert
-    expect(emittedAccount).toEqual(MOCK_ACCOUNT);
-  });
-
-  // Cycle 13: retry event emitted on error
-  it('should show an error message when error is set', () => {
-    // Arrange / Act
-    const { el } = setup({ error: 'Failed to load accounts' });
-
-    // Assert
-    const errorEl = el.querySelector('[role="alert"]');
-    expect(errorEl).toBeTruthy();
-    expect(errorEl?.textContent).toContain('Failed to load accounts');
-  });
-
-  it('should emit retry when retry button is clicked on error state', () => {
-    // Arrange
-    const { el, component } = setup({ error: 'Failed to load accounts' });
-    let emitted = false;
-    component.retry.subscribe(() => { emitted = true; });
-
-    // Act
-    const retryBtn = el.querySelector('.account-list__retry-btn') as HTMLButtonElement;
-    retryBtn.click();
-
-    // Assert
-    expect(emitted).toBe(true);
-  });
-
-  // Cycle 14: lowercase providerType from API renders correct icon and aria-label
-  it('should render fd-provider-icon with aria-label="GitHub" for lowercase github providerType', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITHUB] });
-
-    // Assert
-    const icon = el.querySelector('fd-provider-icon');
-    expect(icon?.getAttribute('aria-label')).toBe('GitHub');
-  });
-
-  it('should render fd-provider-icon with aria-label="GitLab" for lowercase gitlab providerType', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT_LOWERCASE_GITLAB] });
-
-    // Assert
-    const icon = el.querySelector('fd-provider-icon');
-    expect(icon?.getAttribute('aria-label')).toBe('GitLab');
-  });
-
-  // Cycle 15: namespace chips — zero claims renders nothing
-  it('should not render any namespace chips when account has no namespaces', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT] }); // namespaces: []
-
-    // Assert
-    const chips = el.querySelectorAll('.account-list__namespace');
-    expect(chips.length).toBe(0);
-  });
-
-  // Cycle 16: namespace chips — one namespace renders one chip
-  it('should render one namespace chip for each claimed namespace', () => {
-    // Arrange
-    const account = { ...MOCK_ACCOUNT, namespaces: ['myorg'] };
-
-    // Act
-    const { el } = setup({ accounts: [account] });
-
-    // Assert
-    const chips = el.querySelectorAll('.account-list__namespace');
-    expect(chips.length).toBe(1);
-    expect(chips[0].textContent?.trim()).toBe('myorg');
-  });
-
-  // Cycle 17: namespace chips — up to 4 visible, overflow chip for remainder
-  it('should show at most 4 namespace chips and a +N overflow chip for more than 4 namespaces', () => {
-    // Arrange
-    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5'] };
-
-    // Act
-    const { el } = setup({ accounts: [account] });
-
-    // Assert
-    const chips = el.querySelectorAll('.account-list__namespace');
-    expect(chips.length).toBe(4);
-
-    const overflow = el.querySelector('.account-list__namespace--overflow');
-    expect(overflow).toBeTruthy();
-    expect(overflow?.textContent?.trim()).toBe('+1');
-  });
-
-  // Cycle 18: overflow chip aria-label lists hidden namespaces
-  it('should set aria-label on the overflow chip listing the hidden namespaces', () => {
-    // Arrange
-    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'] };
-
-    // Act
-    const { el } = setup({ accounts: [account] });
-
-    // Assert
-    const overflow = el.querySelector('.account-list__namespace--overflow') as HTMLElement;
-    expect(overflow?.getAttribute('aria-label')).toBe('2 more namespaces: ns5, ns6');
-  });
-
-  // Cycle 18b: overflow chip uses fdTooltip (not native title) for sighted hover
-  it('should have fdTooltip (not title) on the overflow chip', () => {
-    // Arrange
-    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'] };
-
-    // Act
-    const { el } = setup({ accounts: [account] });
-
-    // Assert
-    const overflow = el.querySelector('.account-list__namespace--overflow') as HTMLElement;
-    expect(overflow?.hasAttribute('title')).toBe(false);
-  });
-
-  // Cycle 19: exactly 4 namespaces — no overflow chip
-  it('should not render an overflow chip when there are exactly 4 namespaces', () => {
-    // Arrange
-    const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4'] };
-
-    // Act
-    const { el } = setup({ accounts: [account] });
-
-    // Assert
-    const chips = el.querySelectorAll('.account-list__namespace');
-    expect(chips.length).toBe(4);
-    const overflow = el.querySelector('.account-list__namespace--overflow');
-    expect(overflow).toBeNull();
-  });
-
-  // Cycle 20: deletingAccountId null — no row is busy
-  it('should set deleteBusy false on all rows when deletingAccountId is null', () => {
-    // Arrange / Act
-    const { el } = setup({ accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2], deletingAccountId: null });
-
-    // Assert
-    const spinners = el.querySelectorAll('fd-spinner');
-    expect(spinners.length).toBe(0);
-    const deleteButtons = el.querySelectorAll('.row-actions__delete-btn');
-    expect(deleteButtons.length).toBe(2);
-    // Both delete buttons show idle label (trash icon, no spinner)
-    const btn1 = el.querySelector('[aria-label="Delete account my-github"]');
-    expect(btn1).toBeTruthy();
-    const btn2 = el.querySelector('[aria-label="Delete account work-gitlab"]');
-    expect(btn2).toBeTruthy();
-  });
-
-  // Cycle 21: deletingAccountId matches one row — only that row is busy
-  it('should set deleteBusy true only on the matching row and show busy deleteLabel', () => {
-    // Arrange / Act
-    const { el } = setup({
-      accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2],
-      deletingAccountId: MOCK_ACCOUNT.id,
+      // Assert
+      const list = el.querySelector('ul[role="list"]');
+      expect(list?.getAttribute('aria-label')).toBe('Accounts');
+      expect(el.querySelectorAll('li[role="listitem"]').length).toBe(2);
     });
 
-    // Assert — busy row renders a spinner and has the busy aria-label
-    const busyBtn = el.querySelector('[aria-label="Deleting account my-github…"]');
-    expect(busyBtn).toBeTruthy();
-    const spinnerInBusyRow = busyBtn?.querySelector('fd-spinner');
-    expect(spinnerInBusyRow).toBeTruthy();
+    it.each([
+      ['GitHub', 'GitHub'],
+      ['GitLab', 'GitLab'],
+      ['github', 'GitHub'],
+      ['gitlab', 'GitLab'],
+    ])('should render the provider icon for providerType %s', (providerType, label) => {
+      // Act
+      const { el } = setup({ accounts: [{ ...MOCK_ACCOUNT, providerType }] });
 
-    // Assert — idle row keeps idle label with no spinner
-    const idleBtn = el.querySelector('[aria-label="Delete account work-gitlab"]');
-    expect(idleBtn).toBeTruthy();
-    const spinnerInIdleRow = idleBtn?.querySelector('fd-spinner');
-    expect(spinnerInIdleRow).toBeFalsy();
+      // Assert
+      expect(el.querySelector('fd-provider-icon')?.getAttribute('aria-label')).toBe(label);
+    });
+
+    it('should render the account name', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+      // Assert
+      expect(text(el.querySelector('.account-list__name'))).toBe('acme-bot');
+    });
+  });
+
+  describe('meta line', () => {
+    it('should show the host only when the account has no namespaces', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
+
+      // Assert
+      expect(text(el.querySelector('.account-list__host'))).toBe('gitlab.example.com');
+      expect(el.querySelector('.account-list__namespace-text')).toBeNull();
+      expect(el.querySelector('.account-list__more-btn')).toBeNull();
+    });
+
+    it('should list up to three namespaces alphabetically with no more button', () => {
+      // Act
+      const { el } = setup({ accounts: [{ ...MOCK_ACCOUNT, namespaces: ['octo-org', 'acme', 'acme/web'] }] });
+
+      // Assert
+      expect(text(el.querySelector('.account-list__namespace-text'))).toBe('acme, acme/web, octo-org');
+      expect(el.querySelector('.account-list__more-btn')).toBeNull();
+    });
+
+    it('should show the first three namespaces and a collapsed more button beyond three', () => {
+      // Act
+      const { el } = setup({ accounts: [{ ...MOCK_ACCOUNT, namespaces: FIVE_NAMESPACES }] });
+
+      // Assert
+      expect(text(el.querySelector('.account-list__namespace-text'))).toBe('acme, acme/platform, acme/web');
+      const more = el.querySelector('.account-list__more-btn');
+      expect(text(more)).toBe('+2 more');
+      expect(more?.getAttribute('aria-expanded')).toBe('false');
+      expect(more?.getAttribute('aria-controls')).toBe(`account-namespaces-${MOCK_ACCOUNT.id}`);
+      expect(more?.getAttribute('aria-label')).toBe('+2 more namespaces for acme-bot');
+      expect(el.querySelector(`#account-namespaces-${MOCK_ACCOUNT.id}`)).toBeTruthy();
+    });
+
+    it('should show every namespace when the more button is activated', () => {
+      // Arrange
+      const { el, fixture } = setup({ accounts: [{ ...MOCK_ACCOUNT, namespaces: FIVE_NAMESPACES }] });
+
+      // Act
+      (el.querySelector('.account-list__more-btn') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(text(el.querySelector('.account-list__namespace-text')))
+        .toBe('acme, acme/platform, acme/web, octo-org, zeta');
+      const more = el.querySelector('.account-list__more-btn');
+      expect(text(more)).toBe('Show fewer');
+      expect(more?.getAttribute('aria-expanded')).toBe('true');
+      expect(more?.getAttribute('aria-label')).toBe('Show fewer namespaces for acme-bot');
+    });
+
+    it('should collapse again when Show fewer is activated', () => {
+      // Arrange
+      const { el, fixture } = setup({ accounts: [{ ...MOCK_ACCOUNT, namespaces: FIVE_NAMESPACES }] });
+      const more = el.querySelector('.account-list__more-btn') as HTMLButtonElement;
+      more.click();
+      fixture.detectChanges();
+
+      // Act
+      more.click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(text(el.querySelector('.account-list__namespace-text'))).toBe('acme, acme/platform, acme/web');
+      expect(more.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('should expand only the row whose more button was activated', () => {
+      // Arrange
+      const { el, fixture } = setup({
+        accounts: [
+          { ...MOCK_ACCOUNT, namespaces: FIVE_NAMESPACES },
+          { ...MOCK_ACCOUNT_2, namespaces: FIVE_NAMESPACES },
+        ],
+      });
+      const buttons = el.querySelectorAll<HTMLButtonElement>('.account-list__more-btn');
+
+      // Act
+      buttons[0].click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(buttons[0].getAttribute('aria-expanded')).toBe('true');
+      expect(buttons[1].getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('should keep a row expanded when the same account is reloaded', () => {
+      // Arrange
+      const { el, fixture } = setup({ accounts: [{ ...MOCK_ACCOUNT, namespaces: FIVE_NAMESPACES }] });
+      (el.querySelector('.account-list__more-btn') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      // Act
+      fixture.componentRef.setInput('accounts', [{ ...MOCK_ACCOUNT, namespaces: [...FIVE_NAMESPACES] }]);
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('.account-list__more-btn')?.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('should forget the expansion of an account that left the list', () => {
+      // Arrange
+      const expandable = { ...MOCK_ACCOUNT, namespaces: FIVE_NAMESPACES };
+      const { el, fixture } = setup({ accounts: [expandable, MOCK_ACCOUNT_2] });
+      (el.querySelector('.account-list__more-btn') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      fixture.componentRef.setInput('accounts', [MOCK_ACCOUNT_2]);
+      fixture.detectChanges();
+
+      // Act
+      fixture.componentRef.setInput('accounts', [expandable, MOCK_ACCOUNT_2]);
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('.account-list__more-btn')?.getAttribute('aria-expanded')).toBe('false');
+    });
+  });
+
+  describe('token status', () => {
+    it('should show no status tag and no problem block for a present token', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+      // Assert
+      expect(el.querySelector('.account-list__status')).toBeNull();
+      expect(el.querySelector('.account-list__problem')).toBeNull();
+    });
+
+    it('should show a neutral Not configured tag and no problem block for an absent token', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
+
+      // Assert
+      const tag = el.querySelector('.account-list__status--side.account-list__status--neutral');
+      expect(text(tag)).toBe('Not configured');
+      expect(el.querySelector('.account-list__problem')).toBeNull();
+    });
+
+    it('should show a warning tag and problem block for an unreadable token', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+      // Assert
+      expect(text(el.querySelector('.account-list__status--side.account-list__status--warning'))).toBe('Token unreadable');
+      const problem = el.querySelector('.account-list__problem--warning');
+      expect(problem?.getAttribute('role')).toBe('group');
+      expect(problem?.getAttribute('aria-label')).toBe('Token status for broken-gitlab');
+      expect(text(problem?.querySelector('.account-list__problem-text')))
+        .toBe("The account token can't be decrypted. Re-enter it on the account to resume.");
+      const button = problem?.querySelector('.account-list__problem-btn');
+      expect(text(button)).toBe('Re-enter token');
+      expect(button?.getAttribute('aria-label')).toBe('Re-enter token for broken-gitlab');
+    });
+
+    it('should show an error tag and problem block for an invalid token', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT_INVALID] });
+
+      // Assert
+      expect(text(el.querySelector('.account-list__status--side.account-list__status--error'))).toBe('Token invalid');
+      const problem = el.querySelector('.account-list__problem--error');
+      expect(text(problem?.querySelector('.account-list__problem-text')))
+        .toBe('The provider rejected the account token. Enter a new token on the account to resume.');
+      const button = problem?.querySelector('.account-list__problem-btn');
+      expect(text(button)).toBe('Enter new token');
+      expect(button?.getAttribute('aria-label')).toBe('Enter new token for rejected-github');
+    });
+
+    it.each([MOCK_ACCOUNT_UNREADABLE, MOCK_ACCOUNT_INVALID])(
+      'should emit edit when the problem button is clicked for $tokenStatus',
+      account => {
+        // Arrange
+        const { el, component } = setup({ accounts: [account] });
+        let emitted: AccountSummary | undefined;
+        component.edit.subscribe((a: AccountSummary) => { emitted = a; });
+
+        // Act
+        (el.querySelector('.account-list__problem-btn') as HTMLButtonElement).click();
+
+        // Assert
+        expect(emitted).toEqual(account);
+      },
+    );
+  });
+
+  describe('edit and delete', () => {
+    it('should emit the account when edit is clicked', () => {
+      // Arrange
+      const { el, component } = setup({ accounts: [MOCK_ACCOUNT] });
+      let emitted: AccountSummary | undefined;
+      component.edit.subscribe((a: AccountSummary) => { emitted = a; });
+
+      // Act
+      const editBtn = el.querySelector('.account-list__edit-btn') as HTMLButtonElement;
+      editBtn.click();
+
+      // Assert
+      expect(editBtn.getAttribute('aria-label')).toBe('Edit account acme-bot');
+      expect(emitted).toEqual(MOCK_ACCOUNT);
+    });
+
+    it('should emit the account when delete is clicked', () => {
+      // Arrange
+      const { el, component } = setup({ accounts: [MOCK_ACCOUNT] });
+      let emitted: AccountSummary | undefined;
+      component.delete.subscribe((a: AccountSummary) => { emitted = a; });
+
+      // Act
+      const deleteBtn = el.querySelector('.account-list__delete-btn') as HTMLButtonElement;
+      deleteBtn.click();
+
+      // Assert
+      expect(deleteBtn.getAttribute('aria-label')).toBe('Delete account acme-bot');
+      expect(emitted).toEqual(MOCK_ACCOUNT);
+    });
+
+    it('should leave every row idle when deletingAccountId is null', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2], deletingAccountId: null });
+
+      // Assert
+      expect(el.querySelectorAll('fd-spinner').length).toBe(0);
+      const deleteButtons = Array.from(el.querySelectorAll<HTMLButtonElement>('.account-list__delete-btn'));
+      expect(deleteButtons.map(b => b.disabled)).toEqual([false, false]);
+      expect(el.querySelectorAll('.account-list__edit-btn[aria-disabled]').length).toBe(0);
+    });
+
+    it('should mark only the deleting row busy', () => {
+      // Act
+      const { el } = setup({ accounts: [MOCK_ACCOUNT, MOCK_ACCOUNT_2], deletingAccountId: MOCK_ACCOUNT.id });
+
+      // Assert
+      const [busyRow, idleRow] = Array.from(el.querySelectorAll('.account-list__row'));
+      const busyDelete = busyRow.querySelector('.account-list__delete-btn') as HTMLButtonElement;
+      expect(busyDelete.disabled).toBe(true);
+      expect(busyDelete.getAttribute('aria-label')).toBe('Deleting account acme-bot…');
+      expect(busyDelete.querySelector('fd-spinner')).toBeTruthy();
+      expect(busyRow.querySelector('.account-list__edit-btn')?.getAttribute('aria-disabled')).toBe('true');
+      const idleDelete = idleRow.querySelector('.account-list__delete-btn') as HTMLButtonElement;
+      expect(idleDelete.disabled).toBe(false);
+      expect(idleDelete.getAttribute('aria-label')).toBe('Delete account octo-org');
+      expect(idleDelete.querySelector('fd-spinner')).toBeNull();
+    });
+
+    it('should not emit edit when the busy row is edited', () => {
+      // Arrange
+      const { el, component } = setup({ accounts: [MOCK_ACCOUNT], deletingAccountId: MOCK_ACCOUNT.id });
+      let emitted = false;
+      component.edit.subscribe(() => { emitted = true; });
+
+      // Act
+      (el.querySelector('.account-list__edit-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(emitted).toBe(false);
+    });
   });
 });

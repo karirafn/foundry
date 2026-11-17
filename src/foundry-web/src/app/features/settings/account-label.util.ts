@@ -2,7 +2,7 @@ import { AccountSummary } from './accounts/account.model';
 
 const MAX_VISIBLE_NAMESPACES = 4;
 
-function resolveHost(baseUrl: string): string {
+export function resolveHost(baseUrl: string): string {
   try {
     return new URL(baseUrl).host;
   } catch {
@@ -10,9 +10,13 @@ function resolveHost(baseUrl: string): string {
   }
 }
 
+export function sortNamespaces(namespaces: readonly string[]): string[] {
+  return [...namespaces].sort((a, b) => a.localeCompare(b));
+}
+
 export function accountOptionLabel(account: AccountSummary): string {
   const host = resolveHost(account.baseUrl);
-  const sorted = [...account.namespaces].sort((a, b) => a.localeCompare(b));
+  const sorted = sortNamespaces(account.namespaces);
 
   if (sorted.length === 0) {
     return `${account.name} (${host})`;

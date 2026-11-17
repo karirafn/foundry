@@ -1,15 +1,42 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
-import { AccountSummary, TokenStatus, resolveTokenStatus } from '../account.model';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  InputSignal,
+  OutputEmitterRef,
+  Signal,
+  computed,
+  WritableSignal,
+  input,
+  linkedSignal,
+  output,
+} from '@angular/core';
+import {
+  AccountProblem,
+  AccountStatusTag,
+  AccountSummary,
+  accountProblem,
+  accountStatusTag,
+} from '../account.model';
+import { resolveHost, sortNamespaces } from '../../account-label.util';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
-import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
-import { TooltipDirective } from '../../../../shared/directives/tooltip/tooltip.directive';
+import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
-const MAX_VISIBLE_NAMESPACES = 4;
+const VISIBLE_NAMESPACE_COUNT = 3;
+
+interface AccountRowView {
+  readonly account: AccountSummary;
+  readonly host: string;
+  readonly namespaces: readonly string[];
+  readonly visibleNamespaces: readonly string[];
+  readonly hiddenCount: number;
+  readonly status: AccountStatusTag | null;
+  readonly problem: AccountProblem | null;
+}
 
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ProviderIconComponent, RowActionsComponent, TooltipDirective],
+  imports: [ProviderIconComponent, SpinnerComponent],
   template: `
     @if (error()) {
       <div class="account-list__error" role="alert">
@@ -34,112 +61,101 @@ const MAX_VISIBLE_NAMESPACES = 4;
         <p class="account-list__empty-description">
           Add your first provider account to start monitoring repositories.
         </p>
-        <button
-          class="account-list__add-btn"
-          type="button"
-          (click)="add.emit()"
-        >+ Add Account</button>
       </div>
     }
 
     @if (!loading() && !error() && accounts().length > 0) {
-      <div class="account-list__header">
-        <span></span>
-        <button
-          class="account-list__add-btn"
-          type="button"
-          (click)="add.emit()"
-        >+ Add Account</button>
-      </div>
-      <ul class="account-list__list" role="list">
-        @for (account of accounts(); track account.id) {
-          @let visibleNs = account.namespaces.slice(0, MAX_VISIBLE_NAMESPACES);
-          @let overflowNs = account.namespaces.slice(MAX_VISIBLE_NAMESPACES);
-          @let overflowLabel = overflowNs.length + ' more namespace' + (overflowNs.length === 1 ? '' : 's') + ': ' + overflowNs.join(', ');
-          @let status = statusOf(account);
-          <li class="account-list__item" role="listitem">
+      <ul class="account-list__list" role="list" aria-label="Accounts">
+        @for (row of _rows(); track row.account.id) {
+          @let expanded = _isExpanded(row.account.id);
+          @let busy = deletingAccountId() === row.account.id;
+          <li class="account-list__row" role="listitem">
+            <fd-provider-icon class="account-list__provider" [providerType]="row.account.providerType" />
 
-            <!-- TIER 1 — title row -->
-            <div class="account-list__line1">
-              <fd-provider-icon [providerType]="account.providerType" class="account-list__provider" />
-              <span class="account-list__name">{{ account.name }}</span>
-              <fd-row-actions
-                class="account-list__actions"
-                [editLabel]="'Edit account ' + account.name"
-                [deleteBusy]="deletingAccountId() === account.id"
-                [deleteLabel]="deletingAccountId() === account.id ? ('Deleting account ' + account.name + '…') : ('Delete account ' + account.name)"
-                (edit)="edit.emit(account)"
-                (delete)="delete.emit(account)"
-              />
-            </div>
-
-            <!-- TIER 2 — metadata strip: token state (present/absent) + base URL + namespace chips -->
-            <div class="account-list__strip"
-                 role="group"
-                 [attr.aria-label]="'Details for ' + account.name">
-              @switch (status) {
-                @case ('present') {
-                  <div class="account-list__token-state">
-                    <span class="account-list__token-dot account-list__token-dot--present" aria-hidden="true"></span>
-                    <span class="account-list__token-label account-list__token-label--present">Configured</span>
-                  </div>
+            <div class="account-list__main">
+              <div class="account-list__title-line">
+                <span class="account-list__name">{{ row.account.name }}</span>
+                @if (row.status; as status) {
+                  <span class="account-list__status account-list__status--inline account-list__status--{{ status.tone }}">{{ status.label }}</span>
                 }
-                @case ('absent') {
-                  <div class="account-list__token-state">
-                    <span class="account-list__token-dot account-list__token-dot--absent" aria-hidden="true"></span>
-                    <span class="account-list__token-label account-list__token-label--absent">Not configured</span>
-                  </div>
-                }
-                @case ('unreadable') {
-                  <!-- rendered as a warning line below the strip -->
-                }
-                @case ('invalid') {
-                  <!-- rendered as a warning line below the strip -->
-                }
-              }
-              <span class="account-list__url">{{ account.baseUrl }}</span>
-              @if (account.namespaces.length > 0) {
-                @for (ns of visibleNs; track ns) {
-                  <span class="account-list__namespace">{{ ns }}</span>
-                }
-                @if (overflowNs.length > 0) {
-                  <span
-                    class="account-list__namespace--overflow"
-                    role="img"
-                    tabindex="0"
-                    [attr.aria-label]="overflowLabel"
-                    [fdTooltip]="overflowLabel"
-                  >+{{ overflowNs.length }}</span>
-                }
-              }
-            </div>
-
-            <!-- TIER 3 — warning line (unreadable or invalid) -->
-            @if (status === 'unreadable' || status === 'invalid') {
-              <div class="account-list__token-warning"
-                   role="group"
-                   [attr.aria-label]="'Token status for ' + account.name">
-                <div class="account-list__token-reason">
-                  <svg width="16" height="16" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                       stroke-linejoin="round" aria-hidden="true">
-                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  @if (status === 'invalid') {
-                    <span class="account-list__token-reason-text">Token invalid</span>
-                    <button type="button"
-                            class="account-list__reenter-btn"
-                            [attr.aria-label]="'Enter new token for ' + account.name"
-                            (click)="edit.emit(account)">Enter new token</button>
-                  } @else {
-                    <span class="account-list__token-reason-text">Token unreadable</span>
-                    <button type="button"
-                            class="account-list__reenter-btn"
-                            [attr.aria-label]="'Re-enter token for ' + account.name"
-                            (click)="edit.emit(account)">Re-enter token</button>
+              </div>
+              <p class="account-list__meta">
+                <span class="account-list__namespaces" [id]="'account-namespaces-' + row.account.id">
+                  <span class="account-list__host">{{ row.host }}</span>
+                  @if (row.namespaces.length > 0) {
+                    <span class="account-list__namespace-text">{{ (expanded ? row.namespaces : row.visibleNamespaces).join(', ') }}</span>
                   }
+                </span>
+                @if (row.hiddenCount > 0) {
+                  <button
+                    type="button"
+                    class="account-list__more-btn"
+                    [attr.aria-expanded]="expanded"
+                    [attr.aria-controls]="'account-namespaces-' + row.account.id"
+                    [attr.aria-label]="expanded
+                      ? 'Show fewer namespaces for ' + row.account.name
+                      : '+' + row.hiddenCount + ' more namespaces for ' + row.account.name"
+                    (click)="_toggleNamespaces(row.account.id)"
+                  >{{ expanded ? 'Show fewer' : '+' + row.hiddenCount + ' more' }}</button>
+                }
+              </p>
+            </div>
+
+            <div class="account-list__side">
+              @if (row.status; as status) {
+                <span class="account-list__status account-list__status--side account-list__status--{{ status.tone }}">{{ status.label }}</span>
+              }
+              <button
+                type="button"
+                class="account-list__icon-btn account-list__edit-btn"
+                [attr.aria-label]="'Edit account ' + row.account.name"
+                [attr.title]="'Edit account ' + row.account.name"
+                [attr.aria-disabled]="busy ? 'true' : null"
+                (click)="_onEdit(row.account)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="account-list__icon-btn account-list__delete-btn"
+                [attr.aria-label]="busy ? 'Deleting account ' + row.account.name + '…' : 'Delete account ' + row.account.name"
+                [attr.title]="busy ? 'Deleting account ' + row.account.name + '…' : 'Delete account ' + row.account.name"
+                [disabled]="busy"
+                (click)="_onDelete(row.account)"
+              >
+                @if (busy) {
+                  <fd-spinner />
+                } @else {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                }
+              </button>
+            </div>
+
+            @if (row.problem; as problem) {
+              <div
+                class="account-list__problem account-list__problem--{{ problem.tone }}"
+                role="group"
+                [attr.aria-label]="'Token status for ' + row.account.name"
+              >
+                <p class="account-list__problem-text">{{ problem.message }}</p>
+                <div class="account-list__problem-actions">
+                  <button
+                    type="button"
+                    class="account-list__btn account-list__btn--primary account-list__problem-btn"
+                    [attr.aria-label]="problem.actionLabel + ' for ' + row.account.name"
+                    (click)="edit.emit(row.account)"
+                  >{{ problem.actionLabel }}</button>
                 </div>
               </div>
             }
@@ -156,14 +172,60 @@ export class AccountListComponent {
   readonly error: InputSignal<string | null> = input<string | null>(null);
   readonly deletingAccountId: InputSignal<string | null> = input<string | null>(null);
 
-  readonly add: OutputEmitterRef<void> = output<void>();
   readonly edit: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly delete: OutputEmitterRef<AccountSummary> = output<AccountSummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
 
-  protected readonly MAX_VISIBLE_NAMESPACES = MAX_VISIBLE_NAMESPACES;
+  protected readonly _rows: Signal<AccountRowView[]> = computed(() =>
+    this.accounts().map(account => {
+      const namespaces = sortNamespaces(account.namespaces);
+      return {
+        account,
+        host: resolveHost(account.baseUrl),
+        namespaces,
+        visibleNamespaces: namespaces.slice(0, VISIBLE_NAMESPACE_COUNT),
+        hiddenCount: Math.max(0, namespaces.length - VISIBLE_NAMESPACE_COUNT),
+        status: accountStatusTag(account),
+        problem: accountProblem(account),
+      };
+    }),
+  );
 
-  protected statusOf(account: AccountSummary): TokenStatus {
-    return resolveTokenStatus(account);
+  // Keyed by account id: a reload of the same account keeps its expansion, and an account
+  // that leaves the list drops its entry.
+  private readonly _expandedIds: WritableSignal<ReadonlySet<string>> = linkedSignal<AccountSummary[], ReadonlySet<string>>({
+    source: this.accounts,
+    computation: (accounts, previous) => {
+      const present = new Set(accounts.map(a => a.id));
+      return new Set([...(previous?.value ?? [])].filter(id => present.has(id)));
+    },
+  });
+
+  protected _isExpanded(id: string): boolean {
+    return this._expandedIds().has(id);
+  }
+
+  protected _toggleNamespaces(id: string): void {
+    const next = new Set(this._expandedIds());
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this._expandedIds.set(next);
+  }
+
+  protected _onEdit(account: AccountSummary): void {
+    if (this.deletingAccountId() === account.id) {
+      return;
+    }
+    this.edit.emit(account);
+  }
+
+  protected _onDelete(account: AccountSummary): void {
+    if (this.deletingAccountId() === account.id) {
+      return;
+    }
+    this.delete.emit(account);
   }
 }
