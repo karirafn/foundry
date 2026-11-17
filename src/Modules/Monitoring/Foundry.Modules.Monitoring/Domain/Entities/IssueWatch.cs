@@ -7,11 +7,14 @@ namespace Foundry.Modules.Monitoring.Domain.Entities;
 /// <summary>
 /// Monitoring's per-issue record of the provider state Foundry compares against while it waits on a person
 /// (ADR 0096), keyed by repository and issue number. It holds the issue-body baseline taken when the question was
-/// posted and a pending body change with the time Foundry first saw it. A pending change settles once it has stayed
-/// the same for the quiet period. The record is removed when the issue stops waiting.
+/// posted, or when a pass first saw a failed triage (issue #773), and a pending body change with the time Foundry
+/// first saw it. A pending change settles once it has stayed the same for the quiet period. The record is removed
+/// when the issue stops waiting.
 /// </summary>
 public sealed class IssueWatch
 {
+    private static readonly ReviewFeedback NoComments = new([], OmittedCommentCount: 0, NewestCommentAt: null);
+
     // Private parameterless constructor for EF Core materialization.
     private IssueWatch()
     {
@@ -20,6 +23,12 @@ public sealed class IssueWatch
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
     public int IssueNumber { get; private set; }
+
+    /// <summary>
+    /// The wait this watch belongs to. Each wait's pass keeps and removes only its own watches, so one pass never
+    /// drops a watch the other is still settling.
+    /// </summary>
+    public WatchedWait Wait { get; private set; }
 
     /// <summary>
     /// The body hash when the question was posted; <see langword="null"/> until a body read succeeds, and on a pull
@@ -48,8 +57,30 @@ public sealed class IssueWatch
         {
             MonitoredRepositoryId = repositoryId,
             IssueNumber = issueNumber,
+            Wait = WatchedWait.AwaitingInput,
             BaselineBodyHash = baselineBodyHash,
         };
+
+    /// <summary>
+    /// Starts watching a failed triage's issue body (issue #773) the first time a pass sees the issue
+    /// <c>triage_failed</c>. <paramref name="baselineBodyHash"/> is the body read in that pass: an edit made before it
+    /// is part of the baseline, not a change.
+    /// </summary>
+    public static IssueWatch StartForFailedTriage(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        IssueBodyHash baselineBodyHash)
+    {
+        ArgumentNullException.ThrowIfNull(baselineBodyHash);
+
+        return new()
+        {
+            MonitoredRepositoryId = repositoryId,
+            IssueNumber = issueNumber,
+            Wait = WatchedWait.TriageFailed,
+            BaselineBodyHash = baselineBodyHash,
+        };
+    }
 
     /// <summary>
     /// Records the body read in this pass. The first successful read after a failed one becomes the baseline; a hash
@@ -121,10 +152,26 @@ public sealed class IssueWatch
             : new InputSettlement.NothingNew();
     }
 
+    /// <summary>
+    /// Decides whether a body change alone has settled, under the same quiet-period rule as <see cref="Settle"/>: a
+    /// failed triage asked no question, so no comment counts as input.
+    /// </summary>
+    internal InputSettlement SettleBodyChange(DateTimeOffset now) => Settle(NoComments, now);
+
     private static DateTimeOffset? Latest(DateTimeOffset? first, DateTimeOffset? second) =>
         first is null ? second
         : second is null ? first
         : first > second ? first : second;
+}
+
+/// <summary>The wait an <see cref="IssueWatch"/> belongs to.</summary>
+public enum WatchedWait
+{
+    /// <summary>An <c>awaiting_input</c> issue whose question was posted (ADR 0096).</summary>
+    AwaitingInput,
+
+    /// <summary>A <c>triage_failed</c> issue, which an edit sends back to triage (issue #773).</summary>
+    TriageFailed,
 }
 
 /// <summary>An issue body other than the baseline, with the time Foundry first saw it.</summary>

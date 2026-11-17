@@ -29,6 +29,7 @@ public static class IssuesModule
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IIssueQueries, IssueQueries>();
+        services.AddScoped<ITriageFailedIssueQueries, TriageFailedIssueQueries>();
         services.AddScoped<InFlightWorkerCountQuery>();
         services.AddScoped<DispatchCandidateSelector>();
         services.AddScoped<IssueClaimer>();
@@ -66,6 +67,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<MergeResolved, MergeResolvedHandler>();
         services.AddIntegrationEventHandler<MergeQueueChanged, MergeQueueChangedHandler>();
         services.AddIntegrationEventHandler<AwaitingInputArrived, AwaitingInputArrivedHandler>();
+        services.AddIntegrationEventHandler<TriageFailedIssueEdited, TriageFailedIssueEditedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();
         services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredHandler>();

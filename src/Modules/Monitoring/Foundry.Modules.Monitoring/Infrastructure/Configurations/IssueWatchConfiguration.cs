@@ -11,6 +11,8 @@ namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 internal sealed class IssueWatchConfiguration : IEntityTypeConfiguration<IssueWatch>
 {
+    private const int WaitMaxLength = 32;
+
     // EF Core never passes null to a converter, so both directions see a value.
     private static readonly ValueConverter<IssueBodyHash?, string?> BodyHashConverter = new(
         hash => hash!.Value,
@@ -28,6 +30,12 @@ internal sealed class IssueWatchConfiguration : IEntityTypeConfiguration<IssueWa
 
         builder.Property(w => w.IssueNumber)
             .HasColumnName("issue_number");
+
+        builder.Property(w => w.Wait)
+            .HasConversion<string>()
+            .HasMaxLength(WaitMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("wait");
 
         builder.Property(w => w.BaselineBodyHash)
             .HasConversion(BodyHashConverter)

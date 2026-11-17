@@ -85,6 +85,12 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
     }
 
     /// <summary>
+    /// Whether an issue edit Foundry first saw at <paramref name="editSeenAt"/> came after this failure, so it can send
+    /// the issue back to triage (issue #773). An earlier edit happened while the failed run was still triaging.
+    /// </summary>
+    public bool AcceptsEditSeenAt(DateTimeOffset editSeenAt) => editSeenAt >= FailedAt;
+
+    /// <summary>
     /// Skip triage: the issue goes through the dependency check without a readiness verdict, its kind left as it is.
     /// </summary>
     public Issue SkipTriage(DateTimeOffset transitionedAt) =>
