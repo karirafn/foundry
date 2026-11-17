@@ -719,7 +719,8 @@ internal sealed class IssueQueries(
                 posted.CommentUrl,
                 PostFailureReason: null,
                 NextPostAttemptAt: null,
-                ResumeTargetName(issue.ResumeTarget)),
+                ResumeTargetName(issue.ResumeTarget),
+                issue.Reminder is QuestionReminder.Sent sent ? sent.SentAt : null),
             QuestionPost.Failed failed => new AwaitingInputDetails(
                 issue.Questions,
                 "failed",
@@ -727,7 +728,8 @@ internal sealed class IssueQueries(
                 CommentUrl: null,
                 failed.Reason,
                 failed.NextAttemptAt,
-                ResumeTargetName(issue.ResumeTarget)),
+                ResumeTargetName(issue.ResumeTarget),
+                ReminderSentAt: null),
             _ => new AwaitingInputDetails(
                 issue.Questions,
                 "pending",
@@ -735,7 +737,8 @@ internal sealed class IssueQueries(
                 CommentUrl: null,
                 PostFailureReason: null,
                 NextPostAttemptAt: null,
-                ResumeTargetName(issue.ResumeTarget)),
+                ResumeTargetName(issue.ResumeTarget),
+                ReminderSentAt: null),
         };
 
     private static List<BlockerDetails> BlockersOf(Issue issue)

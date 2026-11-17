@@ -99,6 +99,7 @@ public sealed record MergeWaitDetails(int Position, int? WaitingForIssueNumber);
 /// <paramref name="PostFailureReason"/> and, for a transient failure, <paramref name="NextPostAttemptAt"/>).
 /// <paramref name="ResumeTarget"/> is where input sends the issue: <c>revision</c>, <c>continuation</c>, <c>fresh</c> or
 /// <c>retriage</c>.
+/// <paramref name="ReminderSentAt"/> is when the round's one reminder was posted, <see langword="null"/> until then.
 /// </summary>
 public sealed record AwaitingInputDetails(
     IReadOnlyList<InputQuestion> Questions,
@@ -107,7 +108,8 @@ public sealed record AwaitingInputDetails(
     string? CommentUrl,
     string? PostFailureReason,
     DateTimeOffset? NextPostAttemptAt,
-    string ResumeTarget);
+    string ResumeTarget,
+    DateTimeOffset? ReminderSentAt);
 
 /// <summary>
 /// An open issue blocking this one. <paramref name="Reason"/> is the triage verdict's reason for a blocker it named,

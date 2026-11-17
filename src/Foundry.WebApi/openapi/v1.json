@@ -3176,7 +3176,8 @@
           "commentUrl",
           "postFailureReason",
           "nextPostAttemptAt",
-          "resumeTarget"
+          "resumeTarget",
+          "reminderSentAt"
         ],
         "type": "object",
         "properties": {
@@ -3217,6 +3218,13 @@
           },
           "resumeTarget": {
             "type": "string"
+          },
+          "reminderSentAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
