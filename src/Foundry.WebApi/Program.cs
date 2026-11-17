@@ -60,9 +60,10 @@ if (!isDocGeneration)
 
 builder.Services.AddScoped<IntegrationEventCollector>();
 builder.Services.AddScoped<OutboxSaveChangesInterceptor>();
+string foundryConnectionString = builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db";
 builder.Services.AddDbContext<FoundryDbContext>((sp, options) =>
 {
-    options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db");
+    options.UseSqlite(foundryConnectionString);
     options.AddInterceptors(
         sp.GetRequiredService<OutboxSaveChangesInterceptor>());
 });
@@ -173,6 +174,8 @@ app.UseIngressPortGuard();
 if (!isDocGeneration)
 {
     app.Services.GetRequiredService<HandlerDedupIdentityRegistry>().Validate();
+
+    SqliteDataDirectory.EnsureExists(foundryConnectionString);
 
     await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
     FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
