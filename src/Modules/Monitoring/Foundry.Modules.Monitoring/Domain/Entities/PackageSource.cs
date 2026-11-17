@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -139,7 +140,9 @@ internal sealed class PackageSource : AggregateRoot<PackageSourceId>
     /// <summary>
     /// Records the outcome of a probe with <paramref name="credential"/>, replacing the previous one. A probe with a
     /// registered credential that has since been replaced or removed is dropped: the probe the change started records
-    /// the verdict that stands.
+    /// the verdict that stands. Raises <see cref="PackageSourceReadabilityChanged"/> when the verdict moves between
+    /// readable and not readable, compared with <see cref="VerdictFor"/>: Unchecked, or a probe with a replaced
+    /// credential, counts as not readable.
     /// </summary>
     public void RecordProbe(
         ProbeCredential credential,
@@ -154,6 +157,8 @@ internal sealed class PackageSource : AggregateRoot<PackageSourceId>
             return;
         }
 
+        bool wasReadable = VerdictFor(credential) is PackageSourceVerdict.Readable;
+
         PackageSourceProbe? probe = Find(credential);
         if (probe is null)
         {
@@ -162,6 +167,11 @@ internal sealed class PackageSource : AggregateRoot<PackageSourceId>
         }
 
         probe.Record(verdict, tokenVersion, checkedAt);
+
+        if (wasReadable != verdict is PackageSourceVerdict.Readable)
+        {
+            AddDomainEvent(new PackageSourceReadabilityChanged(Id, ServiceIndexUrl));
+        }
     }
 
     private PackageSourceProbe? Find(ProbeCredential credential) =>
