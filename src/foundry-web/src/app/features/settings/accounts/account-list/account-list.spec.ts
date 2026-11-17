@@ -12,6 +12,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -24,6 +25,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MOCK_ACCOUNT_UNREADABLE: AccountSummary = {

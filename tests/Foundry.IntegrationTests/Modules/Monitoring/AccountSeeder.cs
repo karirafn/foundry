@@ -24,7 +24,7 @@ internal static class AccountSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token, parsedBaseUrl, branchRulesToken);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()), parsedBaseUrl, branchRulesToken);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
@@ -42,7 +42,7 @@ internal static class AccountSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token, parsedBaseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()), parsedBaseUrl);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 

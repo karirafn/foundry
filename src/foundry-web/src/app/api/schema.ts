@@ -1087,6 +1087,7 @@ export interface components {
             branchRulesTokenStatus: string;
             /** Format: date-time */
             tokenInvalidSince: null | string;
+            tokenExpiry: components["schemas"]["TokenExpirySummary"];
         };
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -1505,6 +1506,11 @@ export interface components {
         TakeoverValidationResponse: {
             invalidNamespaces: string[];
         };
+        TokenExpirySummary: {
+            status: string;
+            /** Format: date-time */
+            expiresAt: null | string;
+        };
         TokenRequirements: {
             providerType: string;
             tokenTypeLabel: string;
@@ -1646,6 +1652,7 @@ export interface components {
             accountName: null | string;
             missingScopes: string[];
             detectedProvider: null | string;
+            tokenExpiry: components["schemas"]["TokenExpirySummary"];
         };
         WebhookRegistrationOutcome: {
             kind: string;

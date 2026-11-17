@@ -60,7 +60,7 @@ public abstract class RunPublishingCommandsTestBase : IAsyncDisposable
     protected async Task<MonitoredRepositoryId> SeedRepoAsync()
     {
         GitHubCredential credential = GitHubCredential.Create(
-            AccountName.Create("my-org").ValueOrThrow(), "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
+            AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         DbContext.Set<Credential>().Add(credential);
 

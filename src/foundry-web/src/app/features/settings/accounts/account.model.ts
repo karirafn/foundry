@@ -75,23 +75,66 @@ export function resolveBranchRulesTokenStatus(account: AccountSummary): TokenSta
   return 'absent';
 }
 
+type TokenExpiryWire = AccountSummary['tokenExpiry'];
+
+export type TokenExpiryStatus = 'notChecked' | 'unavailable' | 'never' | 'current' | 'expiringSoon' | 'expired';
+
+export type ResolvedTokenExpiry =
+  | { readonly status: 'notChecked' | 'unavailable' | 'never' }
+  | { readonly status: 'current' | 'expiringSoon' | 'expired'; readonly expiresAt: string };
+
+const NOT_CHECKED_EXPIRY: ResolvedTokenExpiry = { status: 'notChecked' };
+
+/**
+ * Narrows the wire token expiry. The server owns the status; this only guards the shape. A missing
+ * field (a response predating it), an unknown status, or a dated status with no date reads as notChecked.
+ */
+export function resolveTokenExpiry(raw: TokenExpiryWire | null | undefined): ResolvedTokenExpiry {
+  if (!raw) {
+    return NOT_CHECKED_EXPIRY;
+  }
+  switch (raw.status) {
+    case 'notChecked':
+    case 'unavailable':
+    case 'never':
+      return { status: raw.status };
+    case 'current':
+    case 'expiringSoon':
+    case 'expired':
+      return raw.expiresAt ? { status: raw.status, expiresAt: raw.expiresAt } : NOT_CHECKED_EXPIRY;
+    default:
+      return NOT_CHECKED_EXPIRY;
+  }
+}
+
+/** Whether the expiry warrants a warning: the token expires soon or its expiry date has passed. */
+export function isTokenExpiryWarning(expiry: ResolvedTokenExpiry): boolean {
+  return expiry.status === 'expiringSoon' || expiry.status === 'expired';
+}
+
 export type AccountStatusTone = 'neutral' | 'warning' | 'error';
 
 export type AccountStatusTag =
   | { readonly kind: 'not-configured'; readonly label: 'Not configured'; readonly tone: 'neutral' }
   | { readonly kind: 'token-unreadable'; readonly label: 'Token unreadable'; readonly tone: 'warning' }
-  | { readonly kind: 'token-invalid'; readonly label: 'Token invalid'; readonly tone: 'error' };
+  | { readonly kind: 'token-invalid'; readonly label: 'Token invalid'; readonly tone: 'error' }
+  | { readonly kind: 'token-expired'; readonly label: 'Token expired'; readonly tone: 'warning' }
+  | { readonly kind: 'token-expiring'; readonly label: 'Token expires soon'; readonly tone: 'warning' };
 
 export interface AccountProblem {
   readonly tone: Exclude<AccountStatusTone, 'neutral'>;
   readonly message: string;
   /** Visible button text; the button's aria-label is `${actionLabel} for ${account.name}`. */
   readonly actionLabel: string;
+  /** Set for an expiry problem; the row renders the expiry phrase before the message. */
+  readonly expiry?: ResolvedTokenExpiry;
 }
 
 const NOT_CONFIGURED_TAG: AccountStatusTag = { kind: 'not-configured', label: 'Not configured', tone: 'neutral' };
 const TOKEN_UNREADABLE_TAG: AccountStatusTag = { kind: 'token-unreadable', label: 'Token unreadable', tone: 'warning' };
 const TOKEN_INVALID_TAG: AccountStatusTag = { kind: 'token-invalid', label: 'Token invalid', tone: 'error' };
+const TOKEN_EXPIRED_TAG: AccountStatusTag = { kind: 'token-expired', label: 'Token expired', tone: 'warning' };
+const TOKEN_EXPIRING_TAG: AccountStatusTag = { kind: 'token-expiring', label: 'Token expires soon', tone: 'warning' };
 
 const TOKEN_UNREADABLE_PROBLEM: AccountProblem = {
   tone: 'warning',
@@ -104,14 +147,15 @@ const TOKEN_INVALID_PROBLEM: AccountProblem = {
   actionLabel: 'Enter new token',
 };
 
-// Both take the whole account, not its TokenStatus, so token expiry (#1040) can read from the same argument.
+// Both take the whole account, not its TokenStatus, because a present token also reads its expiry.
+// An invalid, unreadable or absent token shows no expiry: its date is stale or there is none.
 
 /** The one status tag an account row shows, or null when the token is healthy. */
 export function accountStatusTag(account: AccountSummary): AccountStatusTag | null {
   const status = resolveTokenStatus(account);
   switch (status) {
     case 'present':
-      return null;
+      return expiryStatusTag(resolveTokenExpiry(account.tokenExpiry));
     case 'absent':
       return NOT_CONFIGURED_TAG;
     case 'unreadable':
@@ -128,6 +172,7 @@ export function accountProblem(account: AccountSummary): AccountProblem | null {
   const status = resolveTokenStatus(account);
   switch (status) {
     case 'present':
+      return expiryProblem(resolveTokenExpiry(account.tokenExpiry), providerDisplayName(account.providerType));
     case 'absent':
       return null;
     case 'unreadable':
@@ -136,6 +181,38 @@ export function accountProblem(account: AccountSummary): AccountProblem | null {
       return TOKEN_INVALID_PROBLEM;
     default:
       return assertNever(status);
+  }
+}
+
+function expiryStatusTag(expiry: ResolvedTokenExpiry): AccountStatusTag | null {
+  switch (expiry.status) {
+    case 'expired':
+      return TOKEN_EXPIRED_TAG;
+    case 'expiringSoon':
+      return TOKEN_EXPIRING_TAG;
+    default:
+      return null;
+  }
+}
+
+function expiryProblem(expiry: ResolvedTokenExpiry, provider: string): AccountProblem | null {
+  switch (expiry.status) {
+    case 'expired':
+      return {
+        tone: 'warning',
+        expiry,
+        message: `${provider} can reject it at any time, which pauses monitoring.`,
+        actionLabel: 'Replace token',
+      };
+    case 'expiringSoon':
+      return {
+        tone: 'warning',
+        expiry,
+        message: 'Enter a replacement token before it expires.',
+        actionLabel: 'Replace token',
+      };
+    default:
+      return null;
   }
 }
 

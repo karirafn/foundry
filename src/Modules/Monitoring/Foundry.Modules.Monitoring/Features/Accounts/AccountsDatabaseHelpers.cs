@@ -47,9 +47,10 @@ internal static class AccountsDatabaseHelpers
 
     /// <summary>
     /// Projects a materialized <see cref="Credential"/> to its wire summary. Token values —
-    /// including the branch-rules token — are never included; only their statuses.
+    /// including the branch-rules token — are never included; only their statuses. The token expiry
+    /// is judged at <paramref name="now"/>.
     /// </summary>
-    internal static CredentialSummary ToSummary(Credential credential) =>
+    internal static CredentialSummary ToSummary(Credential credential, DateTimeOffset now) =>
         new(
             credential.Id.Value,
             credential.Name.Value,
@@ -62,7 +63,8 @@ internal static class AccountsDatabaseHelpers
             credential.TokenUsability is TokenUsability.Invalid
                 && credential.TokenValidity is TokenValidity.Invalid invalid
                     ? invalid.DetectedAt
-                    : null);
+                    : null,
+            TokenExpirySummaries.From(credential.TokenExpiry, now));
 
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,

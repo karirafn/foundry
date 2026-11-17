@@ -102,7 +102,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         CredentialId accountId = await SeedAccountAsync();
         await SeedRepoAsync("owner/repo");
         CountingIssueProvider provider = new() { ListingError = Unauthorized };
-        FakeAccountTokenValidator validator = new(TokenValidationOutcome.Authenticated("octocat"));
+        FakeAccountTokenValidator validator = new(TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()));
         MonitoringService sut = BuildService(BuildServiceProvider(provider, validator));
 
         // Act
@@ -119,7 +119,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         CredentialId accountId = await SeedAccountAsync();
         await SeedRepoAsync("owner/repo");
         CountingIssueProvider provider = new() { ListingError = Unauthorized };
-        FakeAccountTokenValidator validator = new(TokenValidationOutcome.ScopesUnverifiable("octocat"));
+        FakeAccountTokenValidator validator = new(TokenValidationOutcome.ScopesUnverifiable("octocat", new TokenExpiry.NotChecked()));
         MonitoringService sut = BuildService(BuildServiceProvider(provider, validator));
 
         // Act
@@ -193,7 +193,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         await SeedAccountAsync(invalidSince: Now.AddMinutes(-5));
         MonitoredRepositoryId repoId = await SeedRepoAsync("owner/repo");
         CountingIssueProvider provider = new();
-        FakeAccountTokenValidator validator = new(TokenValidationOutcome.Authenticated("octocat"));
+        FakeAccountTokenValidator validator = new(TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()));
         MonitoringService sut = BuildService(BuildServiceProvider(provider, validator));
 
         // Act
@@ -212,7 +212,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         CredentialId accountId = await SeedAccountAsync(invalidSince: Now - Credential.TokenRecheckCooldown);
         MonitoredRepositoryId repoId = await SeedRepoAsync("owner/repo");
         CountingIssueProvider provider = new();
-        FakeAccountTokenValidator validator = new(TokenValidationOutcome.Authenticated("octocat"));
+        FakeAccountTokenValidator validator = new(TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()));
         MonitoringService sut = BuildService(BuildServiceProvider(provider, validator));
 
         // Act
@@ -295,7 +295,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         {
             GitHubCredential account = (GitHubCredential)await db.Set<Credential>()
                 .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
-            account.Update(account.Name, string.Concat("ghp_", "rotated"), account.BaseUrl);
+            account.Update(account.Name, new IssuedToken(string.Concat("ghp_", "rotated"), new TokenExpiry.NotChecked()), account.BaseUrl);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -320,7 +320,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         await using FoundryDbContext db = CreateDbContext();
         GitHubCredential account = GitHubCredential.Create(
             AccountName.Create("my-org").ValueOrThrow(),
-            string.Concat("ghp_", "test_token"),
+            new IssuedToken(string.Concat("ghp_", "test_token"), new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         account.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
 

@@ -46,7 +46,7 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "glpat_mytoken", baseUrl);
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("glpat_mytoken", new TokenExpiry.NotChecked()), baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

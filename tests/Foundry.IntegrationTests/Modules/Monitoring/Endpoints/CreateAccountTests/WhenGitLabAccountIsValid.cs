@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -34,7 +35,9 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: ResolvedAccountName,
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {

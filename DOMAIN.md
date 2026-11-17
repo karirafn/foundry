@@ -281,6 +281,13 @@ While Invalid, `TokenUsability` is `Invalid`, so no regular provider call uses t
 **Recheck:** once per `Credential.TokenRecheckCooldown` (15 minutes) per account, the poll loop checks the stored token again. An authenticating outcome returns the account to `Valid` (`MarkTokenValid`) and the poll runs that cycle; `AuthenticationFailed` stamps `LastCheckedAt`; no verdict stamps nothing, so the recheck runs again next cycle. Only one check per interval reaches the provider, so a dead token cannot trip the provider's failed-login lockout for sibling accounts with the same login.
 **Rotation:** setting a new account token (account creation, or the update path with a token) returns the account to `Valid` at once and increments `Credential.TokenVersion`, the account's concurrency token. A verdict about a token that was replaced while it was being checked fails the version check and is dropped without retry; the next cycle tests the new token.
 
+### Token Expiry
+
+The account token's expiry as last read from the provider when the token was set. Modeled as `Credential.TokenExpiry`: `NotChecked` (Foundry has not read it), `Unavailable` (the provider reported none), `Never` (the token never expires) or `On(ExpiresAt)`. It changes only together with the token: `Credential.SetAccountToken` takes an `IssuedToken(Value, Expiry)`, so a token cannot be set without stating its expiry, and an account with no token is `NotChecked`. Persisted in `accounts.token_expiry_kind` / `token_expires_at`; accounts saved before tracking read as `NotChecked`.
+`TokenExpiry.StatusAt(now)` judges it: `Expired` once `now >= ExpiresAt`, `ExpiringSoon` within `TokenExpiry.WarningWindow` (14 days, inclusive), otherwise `Current`. The server computes the status; the client only renders it. Expiry never blocks saving.
+GitLab reads it from `expires_at` on `GET /personal_access_tokens/self` (a date maps to midnight UTC at its start, erring a day early; `null` is `Never`; a non-2xx response, as for group and project access tokens, is `Unavailable`). GitHub accounts store `NotChecked` until the expiry is read from GitHub.
+An [Invalid Token](#invalid-token), unreadable or absent token shows no expiry: the provider's verdict wins.
+
 ## Namespace Claim
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.

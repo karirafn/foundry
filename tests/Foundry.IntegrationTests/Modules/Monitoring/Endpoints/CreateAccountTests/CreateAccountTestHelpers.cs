@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
@@ -29,7 +30,9 @@ internal sealed class TokenKeyedValidateTokenStub(Dictionary<string, string> tok
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: accountName,
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }
@@ -121,7 +124,7 @@ internal static class CredentialSeeder
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), "ghp_seeded", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken("ghp_seeded", new TokenExpiry.NotChecked()), baseUrl);
         credential.SetNamespaces(namespaces.Select(n => Namespace.Create(n).ValueOrThrow()));
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);

@@ -18,11 +18,11 @@ public sealed class Update
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("original-name").ValueOrThrow(),
-            "original-token",
+            new IssuedToken("original-token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
-        credential.Update(AccountName.Create("updated-name").ValueOrThrow(), "new-token", BaseUrl.Create("https://github.example.com").ValueOrThrow());
+        credential.Update(AccountName.Create("updated-name").ValueOrThrow(), new IssuedToken("new-token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.example.com").ValueOrThrow());
 
         // Assert
         credential.ShouldSatisfyAllConditions(
@@ -38,7 +38,7 @@ public sealed class Update
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("my-account").ValueOrThrow(),
-            "existing-token",
+            new IssuedToken("existing-token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act

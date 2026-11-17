@@ -54,7 +54,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // seeding multiple accounts with the same base URL.
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(),
-            "TOKEN",
+            new IssuedToken("TOKEN", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 
@@ -77,7 +77,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // seeding multiple accounts with the same base URL.
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(),
-            "TOKEN",
+            new IssuedToken("TOKEN", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 

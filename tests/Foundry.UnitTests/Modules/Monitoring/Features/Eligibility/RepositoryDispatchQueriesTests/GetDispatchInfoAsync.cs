@@ -86,7 +86,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential invalidCredential = GitHubCredential.Create(
             AccountName.Create("my-org").ValueOrThrow(),
-            string.Concat("ghp_", "rejected"),
+            new IssuedToken(string.Concat("ghp_", "rejected"), new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         invalidCredential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
 
@@ -126,7 +126,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("owner").ValueOrThrow(),
-            AccountToken,
+            new IssuedToken(AccountToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             RulesToken);
 
@@ -159,7 +159,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
 
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("owner").ValueOrThrow(),
-            AccountToken,
+            new IssuedToken(AccountToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             ServerToken);
 

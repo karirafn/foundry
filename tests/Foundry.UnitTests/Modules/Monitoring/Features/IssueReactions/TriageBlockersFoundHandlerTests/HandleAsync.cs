@@ -167,7 +167,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task<TriageBlockersFound> SeedEventAsync(params TriageBlocker[] blockers)
     {
         GitHubCredential credential = GitHubCredential.Create(
-            AccountName.Create("my-org").ValueOrThrow(), "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
+            AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 

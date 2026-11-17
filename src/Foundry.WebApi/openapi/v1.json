@@ -3331,7 +3331,8 @@
           "tokenStatus",
           "namespaces",
           "branchRulesTokenStatus",
-          "tokenInvalidSince"
+          "tokenInvalidSince",
+          "tokenExpiry"
         ],
         "type": "object",
         "properties": {
@@ -3369,6 +3370,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "tokenExpiry": {
+            "$ref": "#/components/schemas/TokenExpirySummary"
           }
         }
       },
@@ -5177,6 +5181,25 @@
           }
         }
       },
+      "TokenExpirySummary": {
+        "required": [
+          "status",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "TokenRequirements": {
         "required": [
           "providerType",
@@ -5779,7 +5802,8 @@
           "kind",
           "accountName",
           "missingScopes",
-          "detectedProvider"
+          "detectedProvider",
+          "tokenExpiry"
         ],
         "type": "object",
         "properties": {
@@ -5803,6 +5827,9 @@
               "null",
               "string"
             ]
+          },
+          "tokenExpiry": {
+            "$ref": "#/components/schemas/TokenExpirySummary"
           }
         }
       },

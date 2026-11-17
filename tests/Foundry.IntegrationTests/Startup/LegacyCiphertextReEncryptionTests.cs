@@ -102,7 +102,7 @@ public sealed class LegacyCiphertextReEncryptionTests : IDisposable
 
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("legacy-account").ValueOrThrow(),
-            Token,
+            new IssuedToken(Token, new TokenExpiry.NotChecked()),
             BaseUrl.Create(GitHubUrl).ValueOrThrow(),
             BranchRulesToken);
         MonitoredRepository repository = new MonitoredRepositoryBuilder().Build();

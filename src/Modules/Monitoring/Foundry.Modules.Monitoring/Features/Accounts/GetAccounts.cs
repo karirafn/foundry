@@ -17,7 +17,7 @@ internal static class GetAccounts
 {
     internal sealed record Query : IQuery<IReadOnlyList<CredentialSummary>>;
 
-    internal sealed class Handler(DbContext dbContext, ILogger<Handler> logger)
+    internal sealed class Handler(DbContext dbContext, ILogger<Handler> logger, TimeProvider timeProvider)
         : IQueryHandler<Query, IReadOnlyList<CredentialSummary>>
     {
         public async Task<Result<IReadOnlyList<CredentialSummary>>> HandleAsync(
@@ -45,8 +45,9 @@ internal static class GetAccounts
                 }
             }
 
+            DateTimeOffset now = timeProvider.GetUtcNow();
             List<CredentialSummary> summaries = credentials
-                .Select(AccountsDatabaseHelpers.ToSummary)
+                .Select(credential => AccountsDatabaseHelpers.ToSummary(credential, now))
                 .ToList();
 
             return Result<IReadOnlyList<CredentialSummary>>.Ok(summaries);

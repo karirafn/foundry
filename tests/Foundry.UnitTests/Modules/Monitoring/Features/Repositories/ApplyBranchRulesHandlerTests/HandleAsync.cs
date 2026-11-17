@@ -56,7 +56,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task<Guid> SeedAccountAsync(string owner = "owner", string host = "https://github.com")
     {
         BaseUrl baseUrl = BaseUrl.Create(host).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create($"{owner}-account").ValueOrThrow(), "ghp_test", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create($"{owner}-account").ValueOrThrow(), new IssuedToken("ghp_test", new TokenExpiry.NotChecked()), baseUrl);
         credential.SetNamespaces([Namespace.Create(owner).ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

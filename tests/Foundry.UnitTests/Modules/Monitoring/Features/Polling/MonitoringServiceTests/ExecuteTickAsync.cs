@@ -124,7 +124,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         await using FoundryDbContext db = CreateDbContext();
 
         RepositorySlug repoSlug = ValidSlug(slug);
-        GitHubCredential account = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential account = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         account.SetNamespaces([Namespace.Create(repoSlug.Owner).ValueOrThrow()]);
         db.Set<Credential>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -147,7 +147,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         // The ICredentialResolver will be replaced in the service provider with a stub that
         // returns an Unreadable credential — the Unreadable state is only reachable at EF
         // materialization time (failed decryption) and cannot be written back to the store.
-        GitHubCredential account = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_placeholder", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential account = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_placeholder", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         account.SetNamespaces([Namespace.Create(repoSlug.Owner).ValueOrThrow()]);
         db.Set<Credential>().Add(account);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);

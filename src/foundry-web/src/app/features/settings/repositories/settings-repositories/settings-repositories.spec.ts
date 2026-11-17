@@ -18,6 +18,7 @@ const ACCOUNT_1: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const ACCOUNT_2: AccountSummary = {
@@ -30,6 +31,7 @@ const ACCOUNT_2: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const REPO_1: RepositorySummary = {

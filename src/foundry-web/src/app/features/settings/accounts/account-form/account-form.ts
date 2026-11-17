@@ -29,14 +29,18 @@ import {
   TokenValidationResult,
   TokenValidationKind,
   UpdateAccountRequest,
+  ResolvedTokenExpiry,
+  isTokenExpiryWarning,
   narrowTokenValidationKind,
   providerDisplayName,
+  resolveTokenExpiry,
   resolveBranchRulesTokenStatus,
   resolveTokenStatus,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
 import { AccountService } from '../account.service';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
+import { TokenExpiryComponent } from '../token-expiry/token-expiry';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
@@ -44,7 +48,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 @Component({
   selector: 'fd-account-form',
   standalone: true,
-  imports: [DatePipe, ProviderSelectorComponent, SpinnerComponent],
+  imports: [DatePipe, ProviderSelectorComponent, SpinnerComponent, TokenExpiryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="account-form" role="region" aria-label="Account form" [attr.aria-busy]="saving() ? 'true' : null">
@@ -182,6 +186,23 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
               Token on file — authenticated as {{ account()!.name }}
             </span>
           </div>
+          @if (_isTokenExpiryWarning(_storedExpiry())) {
+            <span id="account-form-token-expiry" class="account-form__validation-block">
+              <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+              <span class="account-form__validation-message account-form__validation-message--warning">
+                <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="_storedExpiry()" [providerName]="_storedProviderName()" />.
+                @if (_storedExpiry().status === 'expired') {
+                  {{ _storedProviderName() }} can reject it at any time, which pauses monitoring — enter a replacement token below.
+                } @else {
+                  Enter a replacement token below before it expires.
+                }
+              </span>
+            </span>
+          } @else {
+            <span id="account-form-token-expiry" class="account-form__field-hint">
+              <fd-token-expiry [expiry]="_storedExpiry()" [providerName]="_storedProviderName()" />
+            </span>
+          }
         }
       }
 
@@ -244,6 +265,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
             <span class="account-form__validation-message">Resolving identity…</span>
           </span>
         } @else if (_resultVisible() && validationResult(); as result) {
+          @let previewExpiry = _resolveTokenExpiry(result.tokenExpiry);
           @switch (_kindOf(result)) {
             @case ('authenticated') {
               @if (result.missingScopes.length === 0) {
@@ -253,6 +275,25 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                     Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span>
                   </span>
                 </span>
+                @if (previewExpiry.status === 'expiringSoon') {
+                  <span class="account-form__validation-block">
+                    <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                    <span class="account-form__validation-message account-form__validation-message--warning">
+                      <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — pick a longer-lived token to avoid replacing it again soon
+                    </span>
+                  </span>
+                } @else if (previewExpiry.status === 'expired') {
+                  <span class="account-form__validation-block">
+                    <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                    <span class="account-form__validation-message account-form__validation-message--warning">
+                      <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — {{ _provider() }} can reject it at any time; create a new token
+                    </span>
+                  </span>
+                } @else if (previewExpiry.status !== 'notChecked') {
+                  <span class="account-form__validation-block">
+                    <span class="account-form__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
+                  </span>
+                }
               } @else {
                 <span class="account-form__validation-block">
                   <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
@@ -269,6 +310,25 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                   <span class="sr-only">Warning: </span>Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
                 </span>
               </span>
+              @if (previewExpiry.status === 'expiringSoon') {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                  <span class="account-form__validation-message account-form__validation-message--warning">
+                    <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — pick a longer-lived token to avoid replacing it again soon
+                  </span>
+                </span>
+              } @else if (previewExpiry.status === 'expired') {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
+                  <span class="account-form__validation-message account-form__validation-message--warning">
+                    <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — {{ _provider() }} can reject it at any time; create a new token
+                  </span>
+                </span>
+              } @else if (previewExpiry.status !== 'notChecked') {
+                <span class="account-form__validation-block">
+                  <span class="account-form__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
+                </span>
+              }
             }
             @case ('authenticationFailed') {
               <span class="account-form__validation-block">
@@ -684,6 +744,15 @@ export class AccountFormComponent implements OnInit {
       : 'Transfer selected & add account';
   });
 
+  protected readonly _storedExpiry: Signal<ResolvedTokenExpiry> = computed(() =>
+    resolveTokenExpiry(this.account()?.tokenExpiry),
+  );
+  protected readonly _storedProviderName: Signal<string> = computed(() =>
+    providerDisplayName(this.account()?.providerType ?? null),
+  );
+  protected readonly _resolveTokenExpiry = resolveTokenExpiry;
+  protected readonly _isTokenExpiryWarning = isTokenExpiryWarning;
+
   protected readonly _tokenAriaDescribedBy: Signal<string> = computed(() => {
     const parts: string[] = ['account-token-validation', 'account-form-validation-error', 'account-token-error'];
     if (this._isEditMode()) {
@@ -694,6 +763,7 @@ export class AccountFormComponent implements OnInit {
       } else {
         parts.unshift('account-form-token-hint');
         if (this.account()?.hasToken) {
+          parts.unshift('account-form-token-expiry');
           parts.unshift('account-form-token-on-file');
         }
       }

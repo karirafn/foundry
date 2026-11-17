@@ -49,8 +49,8 @@ public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
         // Arrange — the (base_url, name) unique index was removed; same-identity credentials
         // with different namespace sets are now valid and must coexist.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential first = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_token_one", baseUrl);
-        GitHubCredential second = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_token_two", baseUrl);
+        GitHubCredential first = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken("ghp_token_one", new TokenExpiry.NotChecked()), baseUrl);
+        GitHubCredential second = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken("ghp_token_two", new TokenExpiry.NotChecked()), baseUrl);
 
         _dbContext.Set<Credential>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -74,8 +74,8 @@ public sealed class EnforcesUniqueBaseUrlName : IAsyncDisposable
         // Arrange
         BaseUrl githubUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         BaseUrl gitlabUrl = BaseUrl.Create("https://gitlab.com").ValueOrThrow();
-        GitHubCredential github = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_token", githubUrl);
-        GitLabCredential gitlab = GitLabCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "glpat_token", gitlabUrl);
+        GitHubCredential github = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), githubUrl);
+        GitLabCredential gitlab = GitLabCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken("glpat_token", new TokenExpiry.NotChecked()), gitlabUrl);
 
         _dbContext.Set<Credential>().Add(github);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

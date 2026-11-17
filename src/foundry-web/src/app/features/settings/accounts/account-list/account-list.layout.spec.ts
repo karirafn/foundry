@@ -13,6 +13,7 @@ const BASE: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MANY_NAMESPACES: string[] = [
@@ -30,6 +31,7 @@ const ACCOUNTS: AccountSummary[] = [
     providerType: 'GitLab',
     baseUrl: 'https://gitlab.example.com/',
     namespaces: MANY_NAMESPACES,
+    tokenExpiry: { status: 'unavailable', expiresAt: null },
   },
   {
     ...BASE,
@@ -43,6 +45,18 @@ const ACCOUNTS: AccountSummary[] = [
     ...BASE,
     id: 'account-3',
     tokenStatus: 'unreadable',
+  },
+  {
+    ...BASE,
+    id: 'account-4',
+    name: 'gitlab-release-automation-account',
+    providerType: 'GitLab',
+    tokenExpiry: { status: 'expiringSoon', expiresAt: '2026-12-28T00:00:00+00:00' },
+  },
+  {
+    ...BASE,
+    id: 'account-5',
+    tokenExpiry: { status: 'expired', expiresAt: '2026-09-30T00:00:00+00:00' },
   },
 ];
 
@@ -82,6 +96,8 @@ describe('account list layout', () => {
 
     // Assert
     expect(host.querySelector('.account-list__namespace-text')?.textContent).toContain('service-23');
+    expect(host.querySelectorAll('.account-list__expiry').length).toBe(1);
+    expect(host.querySelectorAll('.account-list__problem fd-token-expiry').length).toBe(2);
     expect(overflowing).toEqual([]);
     expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth);
   });

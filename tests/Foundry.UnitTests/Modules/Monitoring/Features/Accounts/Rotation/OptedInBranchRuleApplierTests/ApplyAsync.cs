@@ -68,7 +68,7 @@ public sealed class ApplyAsync : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("acct").ValueOrThrow(),
-            "ghp_account",
+            new IssuedToken("ghp_account", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             RulesToken);
         credential.SetNamespaces(namespaces.Select(n => Namespace.Create(n).ValueOrThrow()));

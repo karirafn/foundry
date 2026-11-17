@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
@@ -24,7 +26,9 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: "octocat",
             MissingScopes: ["repo"],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

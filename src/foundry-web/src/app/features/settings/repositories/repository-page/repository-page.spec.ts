@@ -20,6 +20,7 @@ const ACCOUNT_1: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const REPO_1: RepositorySummary = {

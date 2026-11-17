@@ -45,7 +45,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task<(Guid AccountId, Guid RepositoryId)> SeedRepositoryAsync()
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), "ghp_test", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken("ghp_test", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
 
         MonitoredRepository repo = new MonitoredRepositoryBuilder().Build();

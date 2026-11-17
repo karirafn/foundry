@@ -90,7 +90,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         IRepositoryEligibilityEvaluator eligibilityEvaluator = new RepositoryEligibilityEvaluator(

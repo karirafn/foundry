@@ -50,7 +50,7 @@ public sealed class ProbeSourceNowAsync : IAsyncDisposable
         new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), _broadcaster, NullLogger<PackageSourceProbing>.Instance);
 
     private static GitLabCredential Account(string name) =>
-        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), "account-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken("account-token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
     private async Task<MonitoredRepository> StoredRepositoryAsync(string slug, Credential account, params string[] sourceUrls)
     {

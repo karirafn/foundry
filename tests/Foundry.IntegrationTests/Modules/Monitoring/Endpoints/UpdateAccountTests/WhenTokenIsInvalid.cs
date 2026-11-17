@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -28,7 +29,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             Kind: ValidateToken.Kinds.AuthenticationFailed,
             AccountName: null,
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -74,7 +77,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: null,
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -111,7 +116,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: oversizedName,
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -147,7 +154,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: "valid-prefix\ninjected",
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {

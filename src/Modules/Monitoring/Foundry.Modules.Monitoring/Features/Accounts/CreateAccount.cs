@@ -130,7 +130,8 @@ internal static partial class CreateAccount
         INamespaceDeriver namespaceDeriver,
         RepositoryEligibilityDiffer differ,
         IGitHubWriteProber writeProber,
-        ProviderHostGuard hostGuard)
+        ProviderHostGuard hostGuard,
+        TimeProvider timeProvider)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -173,9 +174,10 @@ internal static partial class CreateAccount
 
             string accountName = identity.Name.Value;
 
+            IssuedToken issuedToken = new(command.Token, identity.TokenExpiry);
             Credential credential = isGitLab
-                ? GitLabCredential.Create(identity.Name, command.Token, baseUrl, command.BranchRulesToken)
-                : GitHubCredential.Create(identity.Name, command.Token, baseUrl, command.BranchRulesToken);
+                ? GitLabCredential.Create(identity.Name, issuedToken, baseUrl, command.BranchRulesToken)
+                : GitHubCredential.Create(identity.Name, issuedToken, baseUrl, command.BranchRulesToken);
 
             NamespaceDerivationOutcome derivationOutcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
             IReadOnlyCollection<Namespace> derivedNamespaces;
@@ -314,7 +316,7 @@ internal static partial class CreateAccount
                     priorStatusSnapshot,
                     cancellationToken);
 
-                CredentialSummary summaryAfterTakeover = AccountsDatabaseHelpers.ToSummary(credential);
+                CredentialSummary summaryAfterTakeover = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
 
                 return new Outcome.Created(new CredentialCreationResult(summaryAfterTakeover, affectedRepositories));
             }
@@ -333,7 +335,7 @@ internal static partial class CreateAccount
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential);
+            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));
         }

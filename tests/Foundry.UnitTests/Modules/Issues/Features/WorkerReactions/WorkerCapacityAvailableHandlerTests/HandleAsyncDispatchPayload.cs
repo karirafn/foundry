@@ -84,7 +84,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("Test Account").ValueOrThrow(),
-            token,
+            token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();

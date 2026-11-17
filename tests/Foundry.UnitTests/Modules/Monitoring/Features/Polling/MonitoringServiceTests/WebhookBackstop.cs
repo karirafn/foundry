@@ -521,8 +521,8 @@ public sealed class WebhookBackstop : IAsyncDisposable
         services.AddScoped<IIssueProviderFactory>(_ => factory ?? new FixedProviderFactory(provider));
 
         Credential credential = gitLab
-            ? GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), "glpat_test_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow())
-            : GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
+            ? GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), new IssuedToken("glpat_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow())
+            : GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
         services.AddScoped<ICredentialResolver>(_ => new StubCredentialResolverWithFixedCredential(credential));
         services.AddSingleton(new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance));
         services.AddScoped<PostedCommentRegistry>();

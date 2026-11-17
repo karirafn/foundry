@@ -99,7 +99,7 @@ public sealed class WhenAccountTokensChangeValidity : IAsyncDisposable
     private Task RecheckAuthenticatesAsync(CredentialId account) =>
         RunVerdictAsync(
             account,
-            TokenValidationOutcome.Authenticated("octocat"),
+            TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()),
             (verdicts, resolved, token) => verdicts.RecheckAsync(resolved, token, RecheckAt, TestContext.Current.CancellationToken));
 
     private async Task RunVerdictAsync(

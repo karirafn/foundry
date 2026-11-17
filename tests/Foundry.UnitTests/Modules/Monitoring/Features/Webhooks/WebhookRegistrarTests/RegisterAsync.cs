@@ -37,7 +37,7 @@ public sealed class RegisterAsync
         MonitoredRepository.Create(RepositorySlug.Create(slug).ValueOrThrow(), "github.com", null).ValueOrThrow();
 
     private static GitHubCredential GitHubAccount(string? serverToken = ServerToken) =>
-        GitHubCredential.Create(AccountName.Create("owner").ValueOrThrow(), WorkerToken, BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
+        GitHubCredential.Create(AccountName.Create("owner").ValueOrThrow(), new IssuedToken(WorkerToken, new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
 
     [Fact]
     public async Task WhenNotRegisteredAndTokenPresent_CreatesTheHookWithTheServerTokenAndBecomesPending()
@@ -69,7 +69,7 @@ public sealed class RegisterAsync
         WebhookRegistrar sut = BuildSut(factory);
         MonitoredRepository repository = NewRepository("group/project");
         GitLabCredential account = GitLabCredential.Create(
-            AccountName.Create("group").ValueOrThrow(), "glpat_worker", BaseUrl.Create("https://gitlab.com").ValueOrThrow(), "glpat_server");
+            AccountName.Create("group").ValueOrThrow(), new IssuedToken("glpat_worker", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow(), "glpat_server");
 
         // Act
         WebhookRegistrationOutcome outcome = await sut.RegisterAsync(repository, account, CancellationToken.None);
