@@ -2434,15 +2434,9 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
-<<<<<<< HEAD
-=======
-
         public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
-
             => Task.FromResult(TimeSpan.FromDays(3));
 
-
->>>>>>> b02b5a02 (feat(issues): awaiting-input reminder, continue without answer and retry post)
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
