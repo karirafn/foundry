@@ -75,6 +75,74 @@ export function resolveBranchRulesTokenStatus(account: AccountSummary): TokenSta
   return 'absent';
 }
 
+export type AccountStatusTone = 'neutral' | 'warning' | 'error';
+
+export type AccountStatusTag =
+  | { readonly kind: 'not-configured'; readonly label: 'Not configured'; readonly tone: 'neutral' }
+  | { readonly kind: 'token-unreadable'; readonly label: 'Token unreadable'; readonly tone: 'warning' }
+  | { readonly kind: 'token-invalid'; readonly label: 'Token invalid'; readonly tone: 'error' };
+
+export interface AccountProblem {
+  readonly tone: Exclude<AccountStatusTone, 'neutral'>;
+  readonly message: string;
+  /** Visible button text; the button's aria-label is `${actionLabel} for ${account.name}`. */
+  readonly actionLabel: string;
+}
+
+const NOT_CONFIGURED_TAG: AccountStatusTag = { kind: 'not-configured', label: 'Not configured', tone: 'neutral' };
+const TOKEN_UNREADABLE_TAG: AccountStatusTag = { kind: 'token-unreadable', label: 'Token unreadable', tone: 'warning' };
+const TOKEN_INVALID_TAG: AccountStatusTag = { kind: 'token-invalid', label: 'Token invalid', tone: 'error' };
+
+const TOKEN_UNREADABLE_PROBLEM: AccountProblem = {
+  tone: 'warning',
+  message: "The account token can't be decrypted. Re-enter it on the account to resume.",
+  actionLabel: 'Re-enter token',
+};
+const TOKEN_INVALID_PROBLEM: AccountProblem = {
+  tone: 'error',
+  message: 'The provider rejected the account token. Enter a new token on the account to resume.',
+  actionLabel: 'Enter new token',
+};
+
+// Both take the whole account, not its TokenStatus, so token expiry (#1040) can read from the same argument.
+
+/** The one status tag an account row shows, or null when the token is healthy. */
+export function accountStatusTag(account: AccountSummary): AccountStatusTag | null {
+  const status = resolveTokenStatus(account);
+  switch (status) {
+    case 'present':
+      return null;
+    case 'absent':
+      return NOT_CONFIGURED_TAG;
+    case 'unreadable':
+      return TOKEN_UNREADABLE_TAG;
+    case 'invalid':
+      return TOKEN_INVALID_TAG;
+    default:
+      return assertNever(status);
+  }
+}
+
+/** The problem block an account row shows, or null when no action is needed. */
+export function accountProblem(account: AccountSummary): AccountProblem | null {
+  const status = resolveTokenStatus(account);
+  switch (status) {
+    case 'present':
+    case 'absent':
+      return null;
+    case 'unreadable':
+      return TOKEN_UNREADABLE_PROBLEM;
+    case 'invalid':
+      return TOKEN_INVALID_PROBLEM;
+    default:
+      return assertNever(status);
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled token status: ${String(value)}`);
+}
+
 export function affectedStatusLabel(status: AffectedRepositoryStatus | string): string {
   switch (status) {
     case 'eligible':

@@ -15,10 +15,21 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
   template: `
     <div class="accounts-settings">
       <section class="accounts-settings__section">
-        <h2 class="accounts-settings__section-title" #sectionHeading tabindex="-1">Accounts</h2>
-        <p class="accounts-settings__section-description">
-          Manage provider accounts for repository monitoring.
-        </p>
+        <header class="accounts-settings__header">
+          <div class="accounts-settings__heading-group">
+            <h2 class="accounts-settings__section-title" #sectionHeading tabindex="-1">Accounts</h2>
+            <p class="accounts-settings__section-description">Provider accounts Foundry uses to read repositories and open pull requests.</p>
+          </div>
+          @if (_accountView().kind === 'list') {
+            <div class="accounts-settings__actions">
+              <button
+                type="button"
+                class="accounts-settings__btn accounts-settings__btn--primary"
+                (click)="onAddAccount()"
+              >Add account</button>
+            </div>
+          }
+        </header>
 
         @switch (_accountView().kind) {
           @case ('list') {
@@ -35,7 +46,6 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
               [loading]="accountService.loading()"
               [error]="_accountError()"
               [deletingAccountId]="accountService.deletingAccountId()"
-              (add)="onAddAccount()"
               (edit)="onEditAccount($event)"
               (delete)="onDeleteAccount($event)"
               (retry)="accountService.loadAccounts()"

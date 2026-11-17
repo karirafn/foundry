@@ -1,11 +1,15 @@
 @use '../../../../../styles/controls' as *;
-@use '../../../../../styles/list-card' as *;
+@use '../../../../../styles/settings-list' as *;
+
+:host {
+  @include settings-list-host(account-list);
+}
 
 .account-list {
   &__empty {
+    align-items: center;
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: var(--fd-spacing-sm);
     padding: var(--fd-spacing-2xl);
     text-align: center;
@@ -24,165 +28,145 @@
     margin: 0;
   }
 
-  &__header {
-    display: flex;
+  &__error {
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--fd-spacing-md);
-  }
-
-  &__add-btn {
-    align-items: center;
-    background: transparent;
-    border: 1px solid var(--fd-text-link);
+    background: var(--fd-bg-error-subtle);
+    border: 1px solid var(--fd-state-failed);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-link);
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 0.875rem;
-    font-weight: 500;
-    gap: var(--fd-spacing-xs);
-    min-height: 36px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
-
-    &:focus-visible {
-      @include focus-ring;
-    }
-  }
-
-  &__list {
+    color: var(--fd-state-failed);
     display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-sm);
-    list-style: none;
-    margin: 0;
-    padding: 0;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-md);
+    justify-content: space-between;
+    margin-block-end: var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
 
-  // ── Card frame (via mixin) ──────────────────────────────────────────────────
-
-  &__item {
-    @include list-card-frame;
-  }
-
-  // ── Line 1 — title row ──────────────────────────────────────────────────────
-
-  &__line1 {
-    @include list-card-title-row;
-  }
-
-  &__provider {
-    color: var(--fd-text-secondary);
-    flex-shrink: 0;
-  }
-
-  &__name {
-    @include list-card-title;
-
+  &__error-message {
     flex: 1;
   }
 
-  &__actions {
-    flex-shrink: 0;
-    display: flex;
-    gap: var(--fd-spacing-sm);
+  &__loading {
+    min-height: 2rem;
   }
 
-  // ── Line 2 — metadata strip ─────────────────────────────────────────────────
-
-  &__strip {
-    @include list-card-strip;
+  &__list {
+    @include settings-list-container;
   }
 
-  &__token-state {
-    align-items: center;
-    display: flex;
-    gap: var(--fd-spacing-xs);
-    white-space: nowrap;
+  &__row {
+    @include settings-list-row(20px minmax(0, 1fr) auto);
   }
 
-  &__token-dot {
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-    height: 8px;
-    width: 8px;
-
-    &--present {
-      background: var(--fd-text-completed);
-    }
-
-    &--absent {
-      background: transparent;
-      border: 1px solid var(--fd-text-warning);
-    }
+  &__provider {
+    grid-column: 1;
+    margin-block-start: 1px;
   }
 
-  &__token-label {
-    font-size: 0.8125rem;
-    white-space: nowrap;
-
-    &--present {
-      color: var(--fd-text-completed);
-    }
-
-    &--absent {
-      color: var(--fd-text-warning);
-    }
+  &__main {
+    @include settings-list-main(2);
   }
 
-  &__url {
-    color: var(--fd-text-secondary);
-    font-family: var(--fd-font-mono);
-    font-size: 0.75rem;
-    min-width: 0;
-    overflow-wrap: anywhere;
+  &__title-line {
+    @include settings-list-line;
   }
 
-  &__namespace,
-  &__namespace--overflow {
-    @include list-card-chip;
+  &__name {
+    @include settings-list-title;
 
-    font-family: var(--fd-font-mono);
+    font-weight: 600;
   }
 
-  // ── Tier 3 — unreadable warning line ───────────────────────────────────────
+  &__meta,
+  &__expiry {
+    @include settings-list-meta;
 
-  &__token-warning {
-    margin-block-start: var(--fd-spacing-xs);
+    margin: 0;
   }
 
-  &__token-reason {
-    @include list-card-warning;
-
-    // center the icon/text against the 44px inline Re-enter button; the fixed label never wraps
-    align-items: center;
+  &__host {
+    margin-inline-end: var(--fd-spacing-sm);
   }
 
-  &__reenter-btn {
-    background: transparent;
-    border: none;
-    color: var(--fd-text-warning);
+  &__more-btn {
+    background: none;
+    border: 0;
+    color: var(--fd-text-link);
     cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 500;
-    margin-inline-start: var(--fd-spacing-xs);
-    min-height: 44px;
-    padding-inline: var(--fd-spacing-xs);
-    text-decoration: underline;
+    font: inherit;
+    margin-inline-start: var(--fd-spacing-sm);
+    padding: 0;
     white-space: nowrap;
 
     &:hover {
-      text-decoration: none;
+      text-decoration: underline;
     }
 
     &:focus-visible {
       @include focus-ring;
     }
+
+    @media (any-pointer: coarse) {
+      min-height: 2.75rem;
+    }
+  }
+
+  &__side {
+    @include settings-list-side(3);
+  }
+
+  &__status {
+    @include settings-list-status;
+
+    &--warning {
+      @include settings-list-status-tone(var(--fd-text-warning), var(--fd-bg-warning-subtle));
+    }
+
+    &--error {
+      @include settings-list-status-tone(var(--fd-text-error), var(--fd-bg-error-subtle));
+    }
+  }
+
+  &__icon-btn {
+    @include settings-list-icon-button;
+  }
+
+  &__edit-btn {
+    @include settings-list-icon-button-tone(
+      var(--fd-text-link),
+      color-mix(in srgb, var(--fd-text-link) 10%, transparent)
+    );
+  }
+
+  &__delete-btn {
+    @include settings-list-icon-button-tone(var(--fd-text-error), var(--fd-bg-error-subtle));
+  }
+
+  &__problem {
+    @include settings-list-problem(2, var(--fd-border-warning));
+
+    &--error {
+      border-inline-start-color: var(--fd-text-error);
+    }
+  }
+
+  &__problem-text {
+    @include settings-list-problem-text;
+  }
+
+  &__problem-actions {
+    @include settings-list-actions;
+  }
+
+  // Retry shares the secondary button look, emitted once for both selectors.
+  &__btn,
+  &__retry-btn {
+    @include settings-list-button;
+  }
+
+  &__btn--primary {
+    @include settings-list-button-primary;
   }
 }
+
+@include settings-list-narrow-rows(account-list, account-list);

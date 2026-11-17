@@ -72,7 +72,38 @@ describe('SettingsAccountsComponent', () => {
     expect(accountList).toBeTruthy();
   });
 
-  it('should render fd-account-form without account input when Add Account is clicked', () => {
+  it('should describe the page in the header', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.accounts-settings__header h2')?.textContent?.trim()).toBe('Accounts');
+    expect(el.querySelector('.accounts-settings__section-description')?.textContent?.trim())
+      .toBe('Provider accounts Foundry uses to read repositories and open pull requests.');
+  });
+
+  it('should show the Add account button in the header in list view', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const addBtn = el.querySelector('.accounts-settings__header .accounts-settings__btn--primary');
+    expect(addBtn?.textContent?.trim()).toBe('Add account');
+  });
+
+  it('should hide the header actions in add view', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -86,6 +117,57 @@ describe('SettingsAccountsComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.accounts-settings__actions')).toBeNull();
+  });
+
+  it('should hide the header actions in edit view', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    const account = {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'acme-bot',
+      providerType: 'GitHub',
+      baseUrl: 'https://github.com',
+      hasToken: true,
+      tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
+      tokenInvalidSince: null,
+      namespaces: ['octo-org'],
+    };
+    flushAccounts(httpMock, [account]);
+    fixture.detectChanges();
+
+    // Act
+    fixture.componentInstance.onEditAccount(account);
+    fixture.detectChanges();
+    httpMock.match(req => req.url.includes('token-requirements')).forEach(r => r.flush({
+      providerType: 'github',
+      tokenTypeLabel: 'Personal Access Token',
+      scopes: ['repo'],
+      creationUrlTemplate: 'https://github.com/settings/tokens/new',
+    }));
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('fd-account-form')).toBeTruthy();
+    expect(el.querySelector('.accounts-settings__actions')).toBeNull();
+  });
+
+  it('should render fd-account-form without account input when Add account is clicked', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act
+    (el.querySelector('.accounts-settings__btn--primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    flushTokenRequirements(httpMock);
+
+    // Assert
     const form = el.querySelector('fd-account-form');
     expect(form).toBeTruthy();
     const accountList = el.querySelector('fd-account-list');
