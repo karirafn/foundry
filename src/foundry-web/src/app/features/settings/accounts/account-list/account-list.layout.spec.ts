@@ -13,6 +13,7 @@ const BASE: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MANY_NAMESPACES: string[] = [

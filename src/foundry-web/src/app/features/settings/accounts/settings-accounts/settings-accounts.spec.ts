@@ -134,6 +134,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: ['octo-org'],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     flushAccounts(httpMock, [account]);
     fixture.detectChanges();
@@ -226,6 +227,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -275,6 +277,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -359,6 +362,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -391,6 +395,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     }));
   });
 
@@ -447,6 +452,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -483,6 +489,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -516,6 +523,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -555,6 +563,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     document.body.appendChild(fixture.nativeElement);
@@ -597,6 +606,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -657,6 +667,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -689,6 +700,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -720,6 +732,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -752,6 +765,7 @@ describe('SettingsAccountsComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const { fixture, httpMock } = setup();
     fixture.detectChanges();

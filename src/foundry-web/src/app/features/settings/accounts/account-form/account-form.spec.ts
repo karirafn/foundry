@@ -15,6 +15,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -27,6 +28,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const VALID_RESULT: TokenValidationResult = {
@@ -34,6 +36,7 @@ const VALID_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const AUTH_FAIL_RESULT: TokenValidationResult = {
@@ -41,6 +44,7 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
@@ -48,6 +52,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   missingScopes: ['repo', 'workflow'],
   accountName: 'octocat',
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
@@ -55,6 +60,7 @@ const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
@@ -62,6 +68,7 @@ const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
@@ -69,6 +76,7 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: 'gitlab',
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const GITHUB_REQUIREMENTS: TokenRequirements = {
@@ -981,7 +989,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1075,7 +1083,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1178,6 +1186,7 @@ describe('AccountFormComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: [],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const gitlabRequirements: TokenRequirements = {
       ...GITLAB_REQUIREMENTS,
@@ -1783,6 +1792,7 @@ describe('AccountFormComponent', () => {
         missingScopes: [],
         accountName: null,
         detectedProvider: null,
+        tokenExpiry: { status: 'notChecked', expiresAt: null },
       },
     });
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -2024,6 +2034,7 @@ describe('AccountFormComponent', () => {
     branchRulesTokenStatus: 'absent',
     tokenInvalidSince: null,
     namespaces: [],
+    tokenExpiry: { status: 'notChecked', expiresAt: null },
   };
 
   // U-1: unreadable band renders as a plain div (not role="alert") referenced via aria-describedby

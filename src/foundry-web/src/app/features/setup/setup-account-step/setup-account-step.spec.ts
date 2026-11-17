@@ -26,6 +26,7 @@ const CREATED_ACCOUNT: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const CREATED_ACCOUNT_RESULT: CredentialCreationResult = {
@@ -38,6 +39,7 @@ const VALID_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const AUTH_FAIL_RESULT: TokenValidationResult = {
@@ -45,6 +47,7 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MISSING_SCOPES_RESULT: TokenValidationResult = {
@@ -52,6 +55,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   missingScopes: ['repo', 'workflow'],
   accountName: 'octocat',
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
@@ -59,6 +63,7 @@ const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
@@ -66,6 +71,7 @@ const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
@@ -73,6 +79,7 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: 'gitlab',
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 describe('SetupAccountStepComponent', () => {
@@ -1074,6 +1081,7 @@ describe('SetupAccountStepComponent', () => {
       missingScopes: [],
       accountName: null,
       detectedProvider: null,
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     httpMock.expectOne('/api/accounts/validate-token').flush(unknownResult);
     fixture.detectChanges();

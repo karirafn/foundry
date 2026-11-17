@@ -11,9 +11,17 @@ import {
   signal,
 } from '@angular/core';
 import { AccountService } from '../../settings/accounts/account.service';
-import { ProviderType, TokenValidationKind, TokenValidationResult, narrowTokenValidationKind, providerDisplayName } from '../../settings/accounts/account.model';
+import {
+  ProviderType,
+  TokenValidationKind,
+  TokenValidationResult,
+  narrowTokenValidationKind,
+  providerDisplayName,
+  resolveTokenExpiry,
+} from '../../settings/accounts/account.model';
 import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
 import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
+import { TokenExpiryComponent } from '../../settings/accounts/token-expiry/token-expiry';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const GITLAB_BASE_URL = 'https://gitlab.com';
@@ -21,7 +29,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
 @Component({
   selector: 'fd-setup-account-step',
   standalone: true,
-  imports: [ProviderSelectorComponent, SpinnerComponent],
+  imports: [ProviderSelectorComponent, SpinnerComponent, TokenExpiryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="setup-account-step" role="region" aria-label="Add account" [attr.aria-busy]="saving() ? 'true' : null">
@@ -104,6 +112,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
               <span class="setup-account-step__validation-message">Resolving identity…</span>
             </span>
           } @else if (_resultVisible() && _accountService.validationResult(); as result) {
+            @let previewExpiry = _resolveTokenExpiry(result.tokenExpiry);
             @switch (_kindOf(result)) {
               @case ('authenticated') {
                 @if (result.missingScopes.length === 0) {
@@ -113,6 +122,25 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                       Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span>
                     </span>
                   </span>
+                  @if (previewExpiry.status === 'expiringSoon') {
+                    <span class="setup-account-step__validation-block">
+                      <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                      <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                        <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — pick a longer-lived token to avoid replacing it again soon
+                      </span>
+                    </span>
+                  } @else if (previewExpiry.status === 'expired') {
+                    <span class="setup-account-step__validation-block">
+                      <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                      <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                        <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — {{ _provider() }} can reject it at any time; create a new token
+                      </span>
+                    </span>
+                  } @else if (previewExpiry.status !== 'notChecked') {
+                    <span class="setup-account-step__validation-block">
+                      <span class="setup-account-step__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
+                    </span>
+                  }
                 } @else {
                   <span class="setup-account-step__validation-block">
                     <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
@@ -129,6 +157,25 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                     <span class="sr-only">Warning: </span>Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
                   </span>
                 </span>
+                @if (previewExpiry.status === 'expiringSoon') {
+                  <span class="setup-account-step__validation-block">
+                    <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                    <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                      <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — pick a longer-lived token to avoid replacing it again soon
+                    </span>
+                  </span>
+                } @else if (previewExpiry.status === 'expired') {
+                  <span class="setup-account-step__validation-block">
+                    <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
+                    <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
+                      <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — {{ _provider() }} can reject it at any time; create a new token
+                    </span>
+                  </span>
+                } @else if (previewExpiry.status !== 'notChecked') {
+                  <span class="setup-account-step__validation-block">
+                    <span class="setup-account-step__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
+                  </span>
+                }
               }
               @case ('authenticationFailed') {
                 <span class="setup-account-step__validation-block">
@@ -209,6 +256,7 @@ export class SetupAccountStepComponent {
   readonly back: OutputEmitterRef<void> = output<void>();
 
   protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
+  protected readonly _resolveTokenExpiry = resolveTokenExpiry;
   protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
