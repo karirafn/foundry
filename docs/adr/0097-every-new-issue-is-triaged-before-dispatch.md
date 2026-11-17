@@ -4,6 +4,8 @@
 
 > **2026-11-12 — Amended:** the flow line in Decision gains a third route, added by [ADR 0103](0103-triage-defers-on-open-dependencies-by-linking-blockers.md): a `blocked` verdict moves the issue to `TriageBlockedIssue` and links the named blockers in the tracker.
 
+> **2026-11-17 — Amended:** the tier order in the "Triage is a worker like any other" clause is replaced by [ADR 0113](0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md): Revision 0, Review 1, Continuation 2, Triage 3, Fresh 4.
+
 ## Context
 
 Implement runs are expensive, and an issue that is too vague to implement wastes a whole run before anyone sees the gap. [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) names "is this issue described well enough to implement" as a judgment for Claude, and [ADR 0096](0096-awaiting-input-replies-detected-by-recorded-ids-and-branch-head.md) already gives Foundry a way to ask a person a question and resume work when they answer. The `triage` Worker Role needed a place in the issue lifecycle.
