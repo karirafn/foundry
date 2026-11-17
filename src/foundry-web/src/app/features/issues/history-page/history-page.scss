@@ -6,17 +6,6 @@
   padding: var(--fd-spacing-xl);
 }
 
-.history-page__header {
-  align-items: flex-start;
-  display: flex;
-  gap: var(--fd-spacing-md);
-  justify-content: space-between;
-
-  @media (max-width: 599px) {
-    flex-direction: column;
-  }
-}
-
 .history-page__heading {
   color: var(--fd-text-primary);
   font-size: 1.25rem;
@@ -32,15 +21,6 @@
   color: var(--fd-text-secondary);
   font-size: 0.875rem;
   margin: var(--fd-spacing-xs) 0 0;
-}
-
-.history-page__board-link {
-  color: var(--fd-text-link);
-  font-size: 0.875rem;
-
-  &:focus-visible {
-    @include focus-ring;
-  }
 }
 
 .history-page__stats {

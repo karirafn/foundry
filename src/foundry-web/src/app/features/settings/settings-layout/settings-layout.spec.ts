@@ -308,7 +308,7 @@ describe('SettingsLayoutComponent', () => {
     expect(el.querySelector('router-outlet')).toBeTruthy();
   });
 
-  it('should render a back link to issues', () => {
+  it('should leave the header without links, since the navbar links History', () => {
     // Arrange
     const { fixture, httpMock } = setup();
 
@@ -319,9 +319,9 @@ describe('SettingsLayoutComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const backLink = el.querySelector('.settings-layout__back-link');
-    expect(backLink).toBeTruthy();
-    expect(backLink?.textContent).toContain('Back to issues');
+    const header = el.querySelector('.settings-layout__header');
+    expect(header).toBeTruthy();
+    expect(header?.querySelector('a')).toBeNull();
   });
 
   it('should redirect from /settings to /settings/dispatch', async () => {
