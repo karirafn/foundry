@@ -26,6 +26,8 @@ public sealed class MergePendingIssue : Issue
 
     public override IssueCodeStep? CodeStep => IssueCodeStep.Merging;
 
+    public override RunKind? RunKind => null;
+
     // Private parameterless constructor for EF Core materialization.
     private MergePendingIssue()
     {

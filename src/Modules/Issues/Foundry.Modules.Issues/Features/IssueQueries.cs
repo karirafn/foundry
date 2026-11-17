@@ -448,7 +448,8 @@ internal sealed class IssueQueries(
             MergeSkippedReason: (mergeOutcome as MergeOutcome.Skipped)?.Reason,
             ProviderType: displayInfo?.ProviderType,
             RevisionTriggerKind: GetRevisionTriggerKind(issue),
-            PublishPhase: publishPhase);
+            PublishPhase: publishPhase,
+            RunKind: RunKindName(issue.RunKind));
     }
 
     private static string StageName(IssueStage stage) =>
@@ -459,6 +460,20 @@ internal sealed class IssueQueries(
             IssueStage.AwaitingReview => IssueSummary.AwaitingReviewStage,
             IssueStage.Done => IssueSummary.DoneStage,
             _ => throw new InvalidOperationException($"Unknown issue stage: {stage}"),
+        };
+
+    private static string? RunKindName(RunKind? runKind) =>
+        runKind switch
+        {
+            RunKind.Triage => IssueSummary.TriageRunKind,
+            RunKind.Fresh => IssueSummary.FreshRunKind,
+            RunKind.Continuation => IssueSummary.ContinuationRunKind,
+            RunKind.ReviewFix => IssueSummary.ReviewFixRunKind,
+            RunKind.ChecksFix => IssueSummary.ChecksFixRunKind,
+            RunKind.ConflictFix => IssueSummary.ConflictFixRunKind,
+            RunKind.InputResume => IssueSummary.InputResumeRunKind,
+            null => null,
+            _ => throw new InvalidOperationException($"Unknown run kind: {runKind}"),
         };
 
     // Publishing is a phase of the run, so a working issue's step comes from its run rather than its state.

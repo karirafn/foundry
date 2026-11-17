@@ -16,6 +16,8 @@ public sealed class BlockedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override RunKind? RunKind => ValueObjects.RunKind.Fresh;
+
     // Private parameterless constructor for EF Core materialization.
     private BlockedIssue()
     {

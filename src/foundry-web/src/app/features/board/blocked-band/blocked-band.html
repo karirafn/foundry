@@ -25,7 +25,7 @@
           (open)="open.emit({ id: item.issue.id, invoker: $event })"
         >
           <span rowLead></span>
-          <fd-role-tag rowLead [role]="item.role" />
+          <fd-run-kind-tag rowLead [kind]="item.runKind" />
         </fd-board-row>
       </li>
     }

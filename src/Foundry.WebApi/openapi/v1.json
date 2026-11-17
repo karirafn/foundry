@@ -4388,6 +4388,12 @@
               "null",
               "string"
             ]
+          },
+          "runKind": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

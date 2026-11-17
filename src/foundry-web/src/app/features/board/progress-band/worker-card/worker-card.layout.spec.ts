@@ -25,6 +25,7 @@ const ITEM: ItemView<WorkerItem> = {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T11:50:00Z',
   },

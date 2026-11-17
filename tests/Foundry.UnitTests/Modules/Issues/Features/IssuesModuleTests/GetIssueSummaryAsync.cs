@@ -687,6 +687,58 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         summary.RevisionTriggerKind.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData("review_feedback", "review_fix")]
+    [InlineData("failed_checks", "checks_fix")]
+    [InlineData("rebase_conflict", "conflict_fix")]
+    [InlineData("input_provided", "input_resume")]
+    public async Task WhenRevisionQueued_RunKindNamesTheTrigger(string triggerKind, string expectedRunKind)
+    {
+        // Arrange
+        Issue issue = BuildRevisionState(new IssueBuilder(), triggerKind, "revision_queued");
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().RunKind.ShouldBe(expectedRunKind);
+    }
+
+    [Theory]
+    [InlineData("detected", "triage")]
+    [InlineData("triage_queued", "triage")]
+    [InlineData("queued", "fresh")]
+    [InlineData("continuation_queued", "continuation")]
+    [InlineData("in_progress", null)]
+    [InlineData("review", null)]
+    public async Task WhenInState_SummaryCarriesTheRunKind(string state, string? expectedRunKind)
+    {
+        // Arrange
+        Issue issue = state switch
+        {
+            "detected" => new IssueBuilder().Detected(),
+            "triage_queued" => new IssueBuilder().TriageQueued(),
+            "queued" => new IssueBuilder().FreshQueued(),
+            "continuation_queued" => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow),
+            "in_progress" => new IssueBuilder().InProgress(),
+            _ => BuildState(new IssueBuilder(), state),
+        };
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe(state);
+        summary.RunKind.ShouldBe(expectedRunKind);
+    }
+
     private static Issue BuildRevisionState(IssueBuilder builder, string triggerKind, string state)
     {
         RevisionQueuedIssue queued = triggerKind switch

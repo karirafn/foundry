@@ -11,7 +11,9 @@ import {
   LIVE_STATES,
   PublishPhase,
   QUEUED_TIER_STATES,
+  RunKind,
 } from './issue.model';
+import { RUN_KIND_LABELS } from '../../shared/utils/run-kind';
 import type { TokenTotal } from '../workers/run-totals.model';
 import { RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 import { components } from '../../api/schema';
@@ -106,15 +108,24 @@ function toCodeStep(value: string | null | undefined): CodeStep | null {
   return value != null && CODE_STEPS.has(value) ? (value as CodeStep) : null;
 }
 
+const RUN_KINDS: ReadonlySet<string> = new Set<string>(Object.keys(RUN_KIND_LABELS));
+
+// Narrows the wire value to a known run kind; a kind this dashboard doesn't know reads as null, and
+// the board leaves that row out rather than guess its tag.
+function toRunKind(value: string | null | undefined): RunKind | null {
+  return value != null && RUN_KINDS.has(value) ? (value as RunKind) : null;
+}
+
 interface WirePlacement {
   stage?: string | null;
   needsAction?: boolean | null;
   awaitsDispatch?: boolean | null;
   waitsOnBlockers?: boolean | null;
   codeStep?: string | null;
+  runKind?: string | null;
 }
 
-type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'codeStep'>;
+type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'codeStep' | 'runKind'>;
 
 function toPlacement(wire: WirePlacement): Placement {
   return {
@@ -123,6 +134,7 @@ function toPlacement(wire: WirePlacement): Placement {
     awaitsDispatch: wire.awaitsDispatch === true,
     waitsOnBlockers: wire.waitsOnBlockers === true,
     codeStep: toCodeStep(wire.codeStep),
+    runKind: toRunKind(wire.runKind),
   };
 }
 

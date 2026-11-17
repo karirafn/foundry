@@ -49,7 +49,7 @@
               —
             }
           </span>
-          <fd-role-tag rowLead [role]="item.role" />
+          <fd-run-kind-tag rowLead [kind]="item.runKind" />
           <span rowMarker [class.pipeline-band__ineligible]="item.slot.kind === 'ineligible'">
             @switch (item.slot.kind) {
               @case ('detected') {
