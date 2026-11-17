@@ -7,9 +7,9 @@ namespace Foundry.Modules.Monitoring.Domain.Entities;
 /// <summary>
 /// Monitoring's per-issue record of the provider state Foundry compares against while it waits on a person
 /// (ADR 0096), keyed by repository and issue number. It holds the issue-body baseline taken when the question was
-/// posted, or when a pass first saw a failed triage (issue #773), and a pending body change with the time Foundry
-/// first saw it. A pending change settles once it has stayed the same for the quiet period. The record is removed
-/// when the issue stops waiting.
+/// posted, or when a pass first saw a failed triage (issue #773), and the resume branch's head baseline taken when the
+/// question was posted (issue #1035); for each, a pending change with the time Foundry first saw it. A pending change
+/// settles once it has stayed the same for the quiet period. The record is removed when the issue stops waiting.
 /// </summary>
 public sealed class IssueWatch
 {
@@ -46,19 +46,37 @@ public sealed class IssueWatch
     private DateTimeOffset? PendingBodySeenAt { get; set; }
 
     /// <summary>
-    /// Starts watching an issue whose question was just posted. <paramref name="baselineBodyHash"/> is the body read in
-    /// the same pass, or <see langword="null"/> when the read failed or the body is not watched.
+    /// The resume branch's head when the question was posted; <see langword="null"/> until a head read succeeds, and
+    /// when the wait has no branch (a fresh run or a re-triage).
+    /// </summary>
+    public BranchHead? BaselineHead { get; private set; }
+
+    /// <summary>A head other than the baseline, or <see langword="null"/> when there is none.</summary>
+    public PendingHeadChange? PendingHeadChange =>
+        PendingHeadSha is { } sha && PendingHeadSeenAt is { } seenAt ? new PendingHeadChange(sha, seenAt) : null;
+
+    // Stored as two columns that are set and cleared together; read through PendingHeadChange.
+    private string? PendingHeadSha { get; set; }
+
+    private DateTimeOffset? PendingHeadSeenAt { get; set; }
+
+    /// <summary>
+    /// Starts watching an issue whose question was just posted. <paramref name="baselineBodyHash"/> and
+    /// <paramref name="baselineHead"/> are the body and branch head read in the same pass, each <see langword="null"/>
+    /// when its read failed or it is not watched.
     /// </summary>
     public static IssueWatch Start(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
-        IssueBodyHash? baselineBodyHash) =>
+        IssueBodyHash? baselineBodyHash,
+        BranchHead? baselineHead) =>
         new()
         {
             MonitoredRepositoryId = repositoryId,
             IssueNumber = issueNumber,
             Wait = WatchedWait.AwaitingInput,
             BaselineBodyHash = baselineBodyHash,
+            BaselineHead = baselineHead,
         };
 
     /// <summary>
@@ -114,19 +132,54 @@ public sealed class IssueWatch
     }
 
     /// <summary>
+    /// Records the resume branch's head read in this pass, under the body's rules: the first successful read after a
+    /// failed one becomes the baseline; a head other than the baseline becomes the pending change, restarting its
+    /// first-seen time when it differs from the pending one; the baseline head again clears the pending change. A
+    /// branch deleted while waiting is not input: it records no change and clears a pending one.
+    /// </summary>
+    public void ObserveHead(BranchHead head, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(head);
+
+        if (BaselineHead is null)
+        {
+            BaselineHead = head;
+            return;
+        }
+
+        if (head == BaselineHead || head is not BranchHead.Present { Sha: var sha })
+        {
+            PendingHeadSha = null;
+            PendingHeadSeenAt = null;
+            return;
+        }
+
+        if (sha == PendingHeadSha)
+        {
+            return;
+        }
+
+        PendingHeadSha = sha;
+        PendingHeadSeenAt = now;
+    }
+
+    /// <summary>
     /// Decides whether the round's input has arrived from <paramref name="commentFeedback"/> (the settled comments and
-    /// the time held ones settle) and the pending body change. Nothing arrives while any input is inside the quiet
-    /// period; then everything arrives together: a <see cref="InputPart.Comments"/> part when comments settled, then a
-    /// <see cref="InputPart.DescriptionEdited"/> part when the body changed, at the newest input's time.
+    /// the time held ones settle) and the pending body and head changes. Nothing arrives while any input is inside
+    /// the quiet period; then everything arrives together: a <see cref="InputPart.Comments"/> part when comments
+    /// settled, then a <see cref="InputPart.DescriptionEdited"/> part when the body changed, then a
+    /// <see cref="InputPart.BranchUpdated"/> part from the baseline head when the branch moved, at the newest input's
+    /// time.
     /// </summary>
     internal InputSettlement Settle(ReviewFeedback commentFeedback, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(commentFeedback);
 
-        DateTimeOffset? bodySettlesAt = PendingBodySeenAt + ActionableFeedbackPolicy.QuietPeriod;
-        DateTimeOffset? bodyHeldUntil = bodySettlesAt > now ? bodySettlesAt : null;
+        DateTimeOffset? heldUntil = Latest(
+            commentFeedback.HeldBackUntil,
+            Latest(HeldUntil(PendingBodySeenAt, now), HeldUntil(PendingHeadSeenAt, now)));
 
-        if (Latest(commentFeedback.HeldBackUntil, bodyHeldUntil) is { } until)
+        if (heldUntil is { } until)
         {
             return new InputSettlement.Waiting(until);
         }
@@ -147,6 +200,13 @@ public sealed class IssueWatch
             arrivedAt = Latest(arrivedAt, seenAt);
         }
 
+        if (PendingHeadChange is { } headChange)
+        {
+            string? fromSha = BaselineHead is BranchHead.Present present ? present.Sha : null;
+            parts.Add(new InputPart.BranchUpdated(fromSha, headChange.Sha));
+            arrivedAt = Latest(arrivedAt, headChange.FirstSeenAt);
+        }
+
         return parts.Count > 0 && arrivedAt is { } at
             ? new InputSettlement.Settled(new ClarificationInput(parts), at)
             : new InputSettlement.NothingNew();
@@ -157,6 +217,10 @@ public sealed class IssueWatch
     /// failed triage asked no question, so no comment counts as input.
     /// </summary>
     internal InputSettlement SettleBodyChange(DateTimeOffset now) => Settle(NoComments, now);
+
+    // A change first seen at firstSeenAt is held until it has stayed the same for the quiet period.
+    private static DateTimeOffset? HeldUntil(DateTimeOffset? firstSeenAt, DateTimeOffset now) =>
+        firstSeenAt + ActionableFeedbackPolicy.QuietPeriod is { } settlesAt && settlesAt > now ? settlesAt : null;
 
     private static DateTimeOffset? Latest(DateTimeOffset? first, DateTimeOffset? second) =>
         first is null ? second
@@ -176,3 +240,6 @@ public enum WatchedWait
 
 /// <summary>An issue body other than the baseline, with the time Foundry first saw it.</summary>
 public sealed record PendingBodyChange(IssueBodyHash Hash, DateTimeOffset FirstSeenAt);
+
+/// <summary>A branch head other than the baseline, with the time Foundry first saw it.</summary>
+public sealed record PendingHeadChange(string Sha, DateTimeOffset FirstSeenAt);

@@ -85,7 +85,7 @@ public sealed class RunAsync : IAsyncDisposable
 
     private void SeedAwaitingInputWatch(int issueNumber)
     {
-        _dbContext.Set<IssueWatch>().Add(IssueWatch.Start(_repository.Id, issueNumber, IssueBodyHash.Of("Waiting.")));
+        _dbContext.Set<IssueWatch>().Add(IssueWatch.Start(_repository.Id, issueNumber, IssueBodyHash.Of("Waiting."), baselineHead: null));
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
     }
