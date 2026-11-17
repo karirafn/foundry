@@ -17,22 +17,31 @@ public sealed class InProgressIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
-    public override RunKind? RunKind => null;
+    public override RunKind? RunKind => Origin switch
+    {
+        ImplementRunOrigin.Fresh => ValueObjects.RunKind.Fresh,
+        ImplementRunOrigin.Continuation => ValueObjects.RunKind.Continuation,
+        _ => throw new InvalidOperationException($"Unknown implement run origin '{Origin}'."),
+    };
 
     // Private parameterless constructor for EF Core materialization.
     private InProgressIssue()
     {
     }
 
-    private InProgressIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
+    private InProgressIssue(IssueId id, ImplementRunOrigin origin, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
+        Origin = origin;
     }
 
     public WorkerRunId WorkerRunId { get; private set; }
 
+    /// <summary>Whether the run is a fresh run or continues a failed run's branch (#1060).</summary>
+    public ImplementRunOrigin Origin { get; private set; }
+
     internal static InProgressIssue FromQueued(FreshQueuedIssue queued, WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
-        InProgressIssue inProgress = new(queued.Id, claimedAt);
+        InProgressIssue inProgress = new(queued.Id, ImplementRunOrigin.Fresh, claimedAt);
         inProgress.CopySharedPropertiesFrom(queued);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
@@ -171,17 +180,23 @@ public sealed class InProgressIssue : Issue
         return diverged;
     }
 
-    internal static InProgressIssue FromPublishBlocked(PublishBlockedIssue source, DateTimeOffset transitionedAt)
+    internal static InProgressIssue FromPublishBlocked(
+        PublishBlockedIssue source,
+        ImplementRunOrigin origin,
+        DateTimeOffset transitionedAt)
     {
-        InProgressIssue inProgress = new(source.Id, transitionedAt);
+        InProgressIssue inProgress = new(source.Id, origin, transitionedAt);
         inProgress.CopySharedPropertiesFrom(source);
         inProgress.WorkerRunId = source.WorkerRunId;
         return inProgress;
     }
 
-    internal static InProgressIssue FromPublishFailed(PublishFailedIssue source, DateTimeOffset transitionedAt)
+    internal static InProgressIssue FromPublishFailed(
+        PublishFailedIssue source,
+        ImplementRunOrigin origin,
+        DateTimeOffset transitionedAt)
     {
-        InProgressIssue inProgress = new(source.Id, transitionedAt);
+        InProgressIssue inProgress = new(source.Id, origin, transitionedAt);
         inProgress.CopySharedPropertiesFrom(source);
         inProgress.WorkerRunId = source.WorkerRunId;
         return inProgress;
@@ -192,7 +207,7 @@ public sealed class InProgressIssue : Issue
         WorkerRunId workerRunId,
         DateTimeOffset claimedAt)
     {
-        InProgressIssue inProgress = new(source.Id, claimedAt);
+        InProgressIssue inProgress = new(source.Id, ImplementRunOrigin.Continuation, claimedAt);
         inProgress.CopySharedPropertiesFrom(source);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;

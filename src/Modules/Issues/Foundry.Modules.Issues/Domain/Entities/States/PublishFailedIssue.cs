@@ -57,6 +57,12 @@ public sealed class PublishFailedIssue : Issue
 
     public int RebaseConflictAttempts { get; private set; }
 
+    /// <summary>
+    /// Whether the implement run was fresh or a continuation (#1060), so it resumes as the same run kind;
+    /// <see langword="null"/> when the run was a revision.
+    /// </summary>
+    public ImplementRunOrigin? Origin { get; private set; }
+
     public bool IsRevision => Trigger is not null;
 
     public string FailureReason { get; private set; } = string.Empty;
@@ -73,6 +79,7 @@ public sealed class PublishFailedIssue : Issue
         publishFailed.CopySharedPropertiesFrom(source);
         publishFailed.WorkerRunId = source.WorkerRunId;
         publishFailed.BranchName = branchName;
+        publishFailed.Origin = source.Origin;
         publishFailed.FailureReason = failureReason;
         publishFailed.FailedAt = failedAt;
         return publishFailed;
@@ -110,7 +117,7 @@ public sealed class PublishFailedIssue : Issue
             return revision;
         }
 
-        InProgressIssue inProgress = InProgressIssue.FromPublishFailed(this, transitionedAt);
+        InProgressIssue inProgress = InProgressIssue.FromPublishFailed(this, ImplementOrigin(), transitionedAt);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
         return inProgress;
     }
@@ -153,4 +160,7 @@ public sealed class PublishFailedIssue : Issue
         AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
         return failed;
     }
+
+    private ImplementRunOrigin ImplementOrigin() =>
+        Origin ?? throw new InvalidOperationException($"Issue {Id} holds an implement run without its origin.");
 }

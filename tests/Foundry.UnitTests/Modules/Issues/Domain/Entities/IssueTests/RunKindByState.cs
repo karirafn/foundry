@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -14,8 +15,8 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.IssueTests;
 
 /// <summary>
 /// Every state type declares the run kind it runs next (#1059): triage before triage, fresh or continuation for an
-/// implement run, and a revision split by its trigger. States with no run ahead, and in-flight states for now, declare
-/// none.
+/// implement run, and a revision split by its trigger. In-flight states declare the run they are running (#1060), and
+/// states with no run ahead declare none.
 /// </summary>
 public sealed class RunKindByState
 {
@@ -36,8 +37,19 @@ public sealed class RunKindByState
             .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
             .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
         ["continuation_queued"] = () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow),
-        ["in_progress"] = () => new IssueBuilder().InProgress(),
-        ["revision_in_progress"] = () => new IssueBuilder().RevisionInProgress(),
+        ["in_progress (fresh)"] = () => new IssueBuilder().InProgress(),
+        ["in_progress (continuation)"] = () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
+        ["revision_in_progress (review feedback)"] = () => new IssueBuilder().RevisionInProgress(),
+        ["revision_in_progress (failed checks)"] = () => new IssueBuilder().ChecksPending()
+            .FixChecks([new FailingCheck("ci/build", "failure", null)], DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
+        ["revision_in_progress (rebase conflict)"] = () => new IssueBuilder().RebasePending()
+            .ResolveConflict(DateTimeOffset.UtcNow).Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
+        ["revision_in_progress (input provided)"] = () => ((RevisionQueuedIssue)new IssueBuilder()
+            .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
+            .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow))
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
         ["rebase_pending"] = () => new IssueBuilder().RebasePending(),
         ["checks_pending"] = () => new IssueBuilder().ChecksPending(),
         ["merge_pending"] = () => new IssueBuilder().MergePending(),
@@ -58,7 +70,7 @@ public sealed class RunKindByState
         ("detected", RunKind.Triage),
         ("triage_queued", RunKind.Triage),
         ("triage_blocked", RunKind.Triage),
-        ("triage_in_progress", null),
+        ("triage_in_progress", RunKind.Triage),
         ("triage_failed", null),
         ("queued", RunKind.Fresh),
         ("blocked", RunKind.Fresh),
@@ -67,8 +79,12 @@ public sealed class RunKindByState
         ("revision_queued (rebase conflict)", RunKind.ConflictFix),
         ("revision_queued (input provided)", RunKind.InputResume),
         ("continuation_queued", RunKind.Continuation),
-        ("in_progress", null),
-        ("revision_in_progress", null),
+        ("in_progress (fresh)", RunKind.Fresh),
+        ("in_progress (continuation)", RunKind.Continuation),
+        ("revision_in_progress (review feedback)", RunKind.ReviewFix),
+        ("revision_in_progress (failed checks)", RunKind.ChecksFix),
+        ("revision_in_progress (rebase conflict)", RunKind.ConflictFix),
+        ("revision_in_progress (input provided)", RunKind.InputResume),
         ("rebase_pending", null),
         ("checks_pending", null),
         ("merge_pending", null),

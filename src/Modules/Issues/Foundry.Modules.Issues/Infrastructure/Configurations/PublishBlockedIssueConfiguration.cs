@@ -16,6 +16,8 @@ public sealed class PublishBlockedIssueConfiguration : IEntityTypeConfiguration<
             .HasConversion(new StronglyTypedIdValueConverter<WorkerRunId>())
             .HasColumnName("worker_run_id");
 
+        ImplementRunOriginConversion.Configure(builder.Property(i => i.Origin));
+
         builder.Property(i => i.BranchName)
             .HasMaxLength(IssueColumnLimits.BranchNameMaxLength)
             .IsUnicode(false)
