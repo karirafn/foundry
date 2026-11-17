@@ -36,6 +36,11 @@ internal sealed class StubGlobalSettingsQueries(IReadOnlyList<string> allowedHos
         => Task.FromResult(30);
 
 
+    public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(TimeSpan.FromDays(3));
+
+
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
         => Task.FromResult(new DispatchPauseState(null, false, true, []));
 

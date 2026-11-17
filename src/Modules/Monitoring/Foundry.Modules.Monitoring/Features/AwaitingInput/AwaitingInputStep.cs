@@ -17,7 +17,8 @@ namespace Foundry.Modules.Monitoring.Features.AwaitingInput;
 /// The awaiting-input step (ADR 0096): for every awaiting-input issue it first applies the review pass's ways out (the
 /// issue closed, or its pull request closed without merging), then posts the questions while they are unposted, or
 /// once they are posted reads the question's thread and, on an issue-thread wait, the issue body, and lets the issue's
-/// <see cref="IssueWatch"/> decide whether the round's input has arrived. It runs on every scheduled poll and on
+/// <see cref="IssueWatch"/> decide whether the round's input has arrived. A posted question that has waited the reminder
+/// delay with no input gets one reminder in the same thread. It runs on every scheduled poll and on
 /// <see cref="NudgePass.AwaitingInput"/> nudges.
 /// </summary>
 internal sealed class AwaitingInputStep(
@@ -85,11 +86,24 @@ internal sealed class AwaitingInputStep(
 
                 case AwaitingInputPostState.Posted posted:
                     IssueWatch watch = WatchOf(repository, info, watches);
-                    if (await ReadInputAsync(repository, provider, info, posted.PostedAt, postedComments, watch, status, now, cancellationToken) is { } arrived)
+                    switch (await ReadInputAsync(repository, provider, info, posted.PostedAt, postedComments, watch, status, now, cancellationToken))
                     {
-                        events.Add(arrived);
-                        dbContext.Set<IssueWatch>().Remove(watch);
-                        watches.Remove(info.IssueNumber);
+                        case InputSettlement.Settled settled:
+                            events.Add(new AwaitingInputArrived(repository.Id, info.IssueNumber, settled.Input, settled.ArrivedAt));
+                            dbContext.Set<IssueWatch>().Remove(watch);
+                            watches.Remove(info.IssueNumber);
+                            break;
+
+                        case InputSettlement.Waiting waitingUntil:
+                            nudgeQueue.TryEnqueue(new Nudge(
+                                new NudgeKey(repository.Id, NudgePass.AwaitingInput, info.IssueNumber),
+                                waitingUntil.Until));
+                            break;
+
+                        // Only a wait with no input at all is reminded: input inside its quiet period is about to resume it.
+                        case InputSettlement.NothingNew when posted.ReminderDueAt is { } reminderDueAt && reminderDueAt <= now:
+                            await PostReminderAsync(repository, provider, info, posted, now, cancellationToken);
+                            break;
                     }
 
                     break;
@@ -186,14 +200,10 @@ internal sealed class AwaitingInputStep(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        CommentThread thread = info.PullRequestUrl is { } pullRequestUrl
-            ? new CommentThread.PullRequest(pullRequestUrl)
-            : new CommentThread.Issue(info.IssueNumber);
-
         Result<ProviderCommentId> result = await PostSafelyAsync(
             repository,
             provider,
-            thread,
+            ThreadOf(info),
             QuestionComment.Compose(info.Questions),
             cancellationToken);
 
@@ -237,6 +247,60 @@ internal sealed class AwaitingInputStep(
         }
     }
 
+    /// <summary>
+    /// Posts the round's one reminder in the question's thread. A posted reminder is saved at once with its
+    /// posted-comment registry entry, so it is never read as a reply and never posted twice; a failed one retries with
+    /// the question post's backoff.
+    /// </summary>
+    private async Task PostReminderAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        AwaitingInputIssueInfo info,
+        AwaitingInputPostState.Posted posted,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        Result<ProviderCommentId> result = await PostSafelyAsync(
+            repository,
+            provider,
+            ThreadOf(info),
+            QuestionComment.ComposeReminder(posted.CommentUrl),
+            cancellationToken);
+
+        switch (result)
+        {
+            case Result<ProviderCommentId>.Success success:
+                postedCommentRegistry.Record(repository.Id, success.Value, now);
+                await awaitingInputCommands.RecordReminderPostedAsync(info.IssueId, success.Value.Value, now, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                logger.LogInformation(
+                    "Posted the reminder of awaiting-input issue #{IssueNumber} in '{Slug}' as comment {CommentId}.",
+                    info.IssueNumber,
+                    repository.Slug,
+                    success.Value);
+                break;
+
+            case Result<ProviderCommentId>.Failure failure:
+                await awaitingInputCommands.RecordReminderPostFailedAsync(
+                    info.IssueId,
+                    failure.Error.Message,
+                    CommentPostErrors.IsTransient(failure.Error),
+                    now,
+                    cancellationToken);
+                logger.LogWarning(
+                    "Posting the reminder of awaiting-input issue #{IssueNumber} in '{Slug}' failed: {Error}",
+                    info.IssueNumber,
+                    repository.Slug,
+                    failure.Error.Message);
+                break;
+        }
+    }
+
+    private static CommentThread ThreadOf(AwaitingInputIssueInfo info) =>
+        info.PullRequestUrl is { } pullRequestUrl
+            ? new CommentThread.PullRequest(pullRequestUrl)
+            : new CommentThread.Issue(info.IssueNumber);
+
     private void ReplaceWatch(Dictionary<int, IssueWatch> watches, IssueWatch watch)
     {
         if (watches.Remove(watch.IssueNumber, out IssueWatch? previous))
@@ -272,10 +336,9 @@ internal sealed class AwaitingInputStep(
     /// <summary>
     /// Reads the question's thread after its post time (the eligible comments: not a bot, not system, not in a resolved
     /// thread, not in the posted-comment registry), records this pass's body on an issue-thread wait, and lets the watch
-    /// decide. Returns the input once all of it has outlasted the quiet period; input still inside it schedules one
-    /// follow-up nudge for when the last of it settles.
+    /// decide. Returns <see langword="null"/> when this pass can't tell (a read failed).
     /// </summary>
-    private async Task<AwaitingInputArrived?> ReadInputAsync(
+    private async Task<InputSettlement?> ReadInputAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
         AwaitingInputIssueInfo info,
@@ -315,19 +378,6 @@ internal sealed class AwaitingInputStep(
             return null;
         }
 
-        switch (watch.Settle(feedback, now))
-        {
-            case InputSettlement.Settled settled:
-                return new AwaitingInputArrived(repository.Id, info.IssueNumber, settled.Input, settled.ArrivedAt);
-
-            case InputSettlement.Waiting waitingUntil:
-                nudgeQueue.TryEnqueue(new Nudge(
-                    new NudgeKey(repository.Id, NudgePass.AwaitingInput, info.IssueNumber),
-                    waitingUntil.Until));
-                return null;
-
-            default:
-                return null;
-        }
+        return watch.Settle(feedback, now);
     }
 }

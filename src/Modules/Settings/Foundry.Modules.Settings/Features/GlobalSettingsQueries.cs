@@ -58,6 +58,16 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return value ?? GlobalSettings.DefaultPollIntervalSeconds;
     }
 
+    public async Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+    {
+        int? hours = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .Select(s => (int?)s.AwaitingInputReminderDelayHours)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return TimeSpan.FromHours(hours ?? GlobalSettings.DefaultAwaitingInputReminderDelayHours);
+    }
+
     public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
     {
         var row = await dbContext.Set<GlobalSettings>()

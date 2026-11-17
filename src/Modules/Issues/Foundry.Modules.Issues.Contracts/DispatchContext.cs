@@ -16,6 +16,12 @@ public abstract record DispatchContext
     /// <summary>The worker role the run is dispatched under; derived from the queued state's context variant.</summary>
     public abstract DispatchRole Role { get; }
 
+    /// <summary>
+    /// Whether the run resumes a clarification round an operator closed with Continue without answer (ADR 0096). Such a
+    /// run may not send the issue straight back to awaiting input: its <c>needs_input</c> verdict is refused.
+    /// </summary>
+    public bool ContinuedWithoutAnswer { get; init; }
+
     public sealed record Fresh(string BranchName) : DispatchContext
     {
         public override DispatchRole Role => DispatchRole.Implement;

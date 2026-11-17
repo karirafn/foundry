@@ -365,6 +365,11 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
             => Task.FromResult(30);
 
 
+        public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(TimeSpan.FromDays(3));
+
+
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(pauseState);
 

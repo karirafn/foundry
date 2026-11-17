@@ -27,6 +27,10 @@ public abstract record AwaitingInputPostState
     /// </summary>
     public sealed record Unposted(DateTimeOffset? DueAt) : AwaitingInputPostState;
 
-    /// <summary>Posted at <paramref name="PostedAt"/>, the cutoff replies are read after.</summary>
-    public sealed record Posted(DateTimeOffset PostedAt) : AwaitingInputPostState;
+    /// <summary>
+    /// Posted at <paramref name="PostedAt"/>, the cutoff replies are read after, as the comment at
+    /// <paramref name="CommentUrl"/> when its URL is known. The round's one reminder is due at
+    /// <paramref name="ReminderDueAt"/>; <see langword="null"/> once it is sent or after it failed permanently.
+    /// </summary>
+    public sealed record Posted(DateTimeOffset PostedAt, string? CommentUrl, DateTimeOffset? ReminderDueAt) : AwaitingInputPostState;
 }

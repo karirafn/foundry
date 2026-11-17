@@ -234,6 +234,13 @@ internal sealed class IssueQueries(
             .Where(i => i.MonitoredRepositoryId == repositoryId)
             .ToListAsync(cancellationToken);
 
+        if (issues.Count == 0)
+        {
+            return [];
+        }
+
+        TimeSpan reminderDelay = await globalSettingsQueries.GetAwaitingInputReminderDelayAsync(cancellationToken);
+
         return issues
             .Select(i => new AwaitingInputIssueInfo(
                 i.Id,
@@ -242,7 +249,10 @@ internal sealed class IssueQueries(
                 i.LinkedPullRequestUrl,
                 i.Questions,
                 i.QuestionPost is QuestionPost.Posted posted
-                    ? new AwaitingInputPostState.Posted(posted.PostedAt)
+                    ? new AwaitingInputPostState.Posted(
+                        posted.PostedAt,
+                        posted.CommentUrl,
+                        i.Reminder.DueAt(posted.PostedAt, reminderDelay))
                     : new AwaitingInputPostState.Unposted(i.QuestionPost.DueAt)))
             .ToList();
     }

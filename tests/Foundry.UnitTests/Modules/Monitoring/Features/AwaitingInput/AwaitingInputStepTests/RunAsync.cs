@@ -697,6 +697,7 @@ public sealed class RunAsync : IAsyncDisposable
         LoadWatch().ShouldBeNull();
     }
 
+<<<<<<< HEAD
     [Fact]
     public async Task WhenAFullPassRuns_KeepsTheWatchOfAFailedTriage()
     {
@@ -726,6 +727,165 @@ public sealed class RunAsync : IAsyncDisposable
             () => watch.Wait.ShouldBe(WatchedWait.AwaitingInput),
             () => watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of(_provider.IssueBody)),
             () => watch.PendingBodyChange.ShouldBeNull());
+=======
+    private static readonly DateTimeOffset ReminderDueAt = PostedAt.AddDays(3);
+
+    [Fact]
+    public async Task WhenTheReminderDelayHasPassedWithNoInput_PostsOneReminderInTheQuestionsThreadAndRegistersIt()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(1));
+
+        // Assert
+        QuestionReminder.Sent sent = LoadAwaiting().Reminder.ShouldBeOfType<QuestionReminder.Sent>();
+        sent.ShouldSatisfyAllConditions(
+            () => sent.CommentId.ShouldBe(777),
+            () => sent.SentAt.ShouldBe(ReminderDueAt.AddMinutes(1)),
+            () => _provider.PostedThreads.ShouldHaveSingleItem().ShouldBe(new CommentThread.PullRequest(PrUrl)),
+            () => _provider.PostedBodies.ShouldHaveSingleItem().ShouldContain("still waiting for input"),
+            () => _dbContext.Set<PostedComment>().ShouldHaveSingleItem().CommentId.Value.ShouldBe(777),
+            () => _dispatcher.Events.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenOnTheIssueThread_TheReminderGoesOnTheIssue()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        _provider.PostedThreads.ShouldHaveSingleItem().ShouldBe(new CommentThread.Issue(1));
+    }
+
+    [Fact]
+    public async Task WhenTheReminderWasSent_NoFurtherReminderIsPosted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddDays(7));
+
+        // Assert
+        _provider.PostedBodies.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenTheReminderDelayHasNotPassed_PostsNothing()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(-1));
+
+        // Assert
+        _provider.PostedThreads.ShouldBeEmpty();
+        LoadAwaiting().Reminder.ShouldBeOfType<QuestionReminder.Unsent>();
+    }
+
+    [Fact]
+    public async Task WhenInputArrivesOnceTheReminderIsDue_TheIssueResumesAndNoReminderIsPosted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres.").WithCreatedAt(PostedAt.AddMinutes(5)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        _provider.PostedThreads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAReplyIsStillInsideTheQuietPeriodOnceTheReminderIsDue_NoReminderIsPosted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithBody("Use Postgres.").WithCreatedAt(ReminderDueAt.AddSeconds(-30)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        _provider.PostedThreads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheReminderPostFailsTransiently_ItRetriesWithTheQuestionPostsBackoffAndRegistersNothing()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        _provider.PostResult = Result<ProviderCommentId>.Fail(CommentPostErrors.Transient("503"));
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        QuestionReminder.Failed failed = LoadAwaiting().Reminder.ShouldBeOfType<QuestionReminder.Failed>();
+        failed.ShouldSatisfyAllConditions(
+            () => failed.NextAttemptAt.ShouldBe(ReminderDueAt + QuestionPost.FirstRetryDelay),
+            () => _dbContext.Set<PostedComment>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenAReminderRetryIsNotDue_ReplyDetectionStillRuns()
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = Builder().AwaitingInputPosted(PostedAt, withPullRequest: false);
+        awaiting.RecordReminderPostFailed("503", transient: true, ReminderDueAt);
+        Seed(awaiting);
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres.").WithCreatedAt(ReminderDueAt.AddSeconds(10)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        _provider.PostedThreads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAReplyFollowsTheReminder_InputArrivesWithoutTheReminderComment()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+        await RunStepAtAsync(ReminderDueAt);
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(777).WithAuthorLogin("operator").WithBody("Reminder").WithCreatedAt(ReminderDueAt).Build(),
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres.").WithCreatedAt(ReminderDueAt.AddMinutes(1)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(10));
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input
+            .ShouldBe(ClarificationInput.FromComments("Use Postgres."));
+>>>>>>> 9fa1f3b1 (feat(issues): awaiting-input reminder, continue without answer and retry post)
     }
 
     private sealed class ScriptedProvider : IIssueProvider

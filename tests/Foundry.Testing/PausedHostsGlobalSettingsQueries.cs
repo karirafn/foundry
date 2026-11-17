@@ -25,6 +25,11 @@ public sealed class PausedHostsGlobalSettingsQueries(params PausedHost[] pausedH
         => Task.FromResult(0);
 
 
+    public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(TimeSpan.FromDays(3));
+
+
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
         => Task.FromResult(new DispatchPauseState(null, false, false, pausedHosts));
 

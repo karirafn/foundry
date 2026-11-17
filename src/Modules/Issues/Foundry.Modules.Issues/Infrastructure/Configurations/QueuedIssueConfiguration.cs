@@ -14,5 +14,8 @@ internal sealed class QueuedIssueConfiguration : IEntityTypeConfiguration<Queued
     public void Configure(EntityTypeBuilder<QueuedIssue> builder)
     {
         builder.HasBaseType<Issue>();
+
+        builder.Property(i => i.ContinuedWithoutAnswer)
+            .HasColumnName("continued_without_answer");
     }
 }

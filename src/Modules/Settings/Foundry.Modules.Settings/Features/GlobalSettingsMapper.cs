@@ -40,6 +40,7 @@ internal static class GlobalSettingsMapper
             settings.ClaudeCodeSettings.AdditionalDenyRules,
             [.. settings.HostPauses.Select(HostPauseMapper.ToPausedHost)],
             settings.WebhookPublicBaseUrl,
-            settings.BackstopIntervalMinutes);
+            settings.BackstopIntervalMinutes,
+            settings.AwaitingInputReminderDelayHours);
     }
 }

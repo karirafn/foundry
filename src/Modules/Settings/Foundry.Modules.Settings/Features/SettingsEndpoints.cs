@@ -1,3 +1,4 @@
+using Foundry.Modules.Settings.Features.AwaitingInput;
 using Foundry.Modules.Settings.Features.Dispatch;
 using Foundry.Modules.Settings.Features.ProviderHosts;
 using Foundry.Modules.Settings.Features.Webhooks;
@@ -28,6 +29,7 @@ internal static class SettingsEndpoints
         RetryImageBuild.Endpoint.Map(group);
         UpdateAllowedProviderHosts.Endpoint.Map(group);
         UpdateWebhookSettings.Endpoint.Map(group);
+        UpdateAwaitingInputSettings.Endpoint.Map(group);
 
         return routes;
     }

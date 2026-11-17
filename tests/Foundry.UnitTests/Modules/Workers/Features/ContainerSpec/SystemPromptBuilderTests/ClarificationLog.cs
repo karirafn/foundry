@@ -98,6 +98,21 @@ public sealed class ClarificationLog
     }
 
     [Fact]
+    public void WhenARoundWasContinuedWithoutAnswer_TellsTheRunToUseItsJudgment()
+    {
+        // Arrange
+        Clarification continued =
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3));
+
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Fresh("feat/1-fix"), [continued]);
+
+        // Assert
+        prompt.ShouldContain("No answer arrived; the operator chose to continue. Use your judgment.");
+    }
+
+    [Fact]
     public void WhenARoundIsUnanswered_SaysNoInputArrived()
     {
         // Act
