@@ -26,7 +26,7 @@ function buildIssue(id: string, title: string): IssueSummary {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
-    runKind: null,
+    runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T11:50:00Z',
   };
@@ -35,7 +35,7 @@ function buildIssue(id: string, title: string): IssueSummary {
 function worker(id: string, title: string): ItemView<WorkerItem> {
   return {
     band: 'workers',
-    role: 'implement',
+    runKind: 'fresh',
     issue: buildIssue(id, title),
     stage: 'implement',
     phase: 'live',
