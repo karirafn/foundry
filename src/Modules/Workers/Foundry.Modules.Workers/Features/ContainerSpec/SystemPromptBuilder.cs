@@ -1170,6 +1170,7 @@ internal static partial class SystemPromptBuilder
             string.Join("\n\n", input.Parts.Select(part => part switch
             {
                 InputPart.Comments comments => comments.Text,
+                InputPart.DescriptionEdited => "The issue description was edited after the question was posted.",
                 _ => throw new UnreachableException($"Unhandled InputPart variant: {part.GetType().Name}"),
             }));
     }

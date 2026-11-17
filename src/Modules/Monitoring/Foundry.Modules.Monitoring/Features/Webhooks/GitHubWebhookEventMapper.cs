@@ -13,7 +13,8 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// dropped without a provider call.
 /// <list type="table">
 /// <item><term><c>issues</c></term><description>issue listing — plus the dependency pass when the issue
-/// closing is a blocker of a tracked issue (GitHub sends no <c>issue_dependencies</c> delivery then)</description></item>
+/// closing is a blocker of a tracked issue (GitHub sends no <c>issue_dependencies</c> delivery then); an
+/// <c>edited</c> issue awaiting input on its own thread nudges its awaiting-input pass instead</description></item>
 /// <item><term><c>issue_dependencies</c></term><description>issue listing + dependency pass</description></item>
 /// <item><term><c>pull_request</c>, <c>pull_request_review</c>, <c>pull_request_review_comment</c>,
 /// <c>issue_comment</c> (on a PR)</term><description>review pass for the owning issue — the checks
@@ -104,6 +105,11 @@ internal static partial class GitHubWebhookEventMapper
         if (MapBlockerClosed(repositoryId, tracked, number, GetString(payload, "action") == "closed") is { } blockerClosed)
         {
             return blockerClosed;
+        }
+
+        if (MapIssueEdited(repositoryId, tracked, number, GetString(payload, "action") == "edited") is { } edited)
+        {
+            return edited;
         }
 
         bool isTracked = tracked.KnownIssueNumbers.Contains(number);

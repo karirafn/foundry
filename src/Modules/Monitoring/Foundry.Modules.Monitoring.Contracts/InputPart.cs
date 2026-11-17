@@ -8,6 +8,7 @@ namespace Foundry.Modules.Monitoring.Contracts;
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(Comments), "comments")]
+[JsonDerivedType(typeof(DescriptionEdited), "descriptionEdited")]
 public abstract record InputPart
 {
     private InputPart()
@@ -19,4 +20,7 @@ public abstract record InputPart
     {
         public string Text { get; } = Text ?? throw new ArgumentNullException(nameof(Text));
     }
+
+    /// <summary>The issue description was edited after the question was posted, and the edit settled.</summary>
+    public sealed record DescriptionEdited : InputPart;
 }

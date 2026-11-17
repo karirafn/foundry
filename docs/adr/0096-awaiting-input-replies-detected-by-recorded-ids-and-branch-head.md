@@ -1,5 +1,11 @@
 # Awaiting Input: Replies Detected by Recorded Comment IDs and Branch Head
 
+> **2026-11-17 — Amended:** three parts of the Decision are changed.
+>
+> - **Baselines are recorded when the question is posted, not at entry.** The issue-body hash (and, once branch pushes count, the head SHA) is taken in the pass that posts the question and kept on Monitoring's per-issue **Issue Watch** (`issue_watches`), saved with the question's `Posted` status. The Issues module has no body at entry, and an edit made before the question is posted would otherwise read as its answer. A body read that fails at post time leaves the baseline empty, and the next successful read fills it without counting as input.
+> - **Input is stored as typed parts.** A clarification round's input is a list of parts (`Comments`, `DescriptionEdited`, and the kinds that follow), not free text, so no consumer has to tell a status line from a comment. Every kind settles under one rule: nothing arrives while any input is inside the 2-minute quiet period, and then all of it arrives as one round.
+> - **The issue body is watched only on issue-thread waits** because, while a pull request is under review, ticking acceptance-criteria checkboxes edits the issue body and would restart revisions. This replaces the read-cost reason: the body now comes with the closed-state read the step already makes, so watching it costs no extra request.
+
 ## Context
 
 A worker run sometimes needs a person to answer a question before the work can continue, for example an unclear requirement, or a required change under a path workers are denied such as `.github/workflows/**`. Before this decision every "Needs attention" state meant that something finished or broke, and the run either guessed or failed. Under [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) the agent may only return a verdict; code has to own posting the question, recognising the answer, and resuming the work.

@@ -42,7 +42,8 @@ internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestU
 /// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
 /// issue is checks-pending; a finished checks delivery nudges the checks pass of its checks-pending
 /// owner, or else the review pass of its review owner whose checks verdict is not passed; a comment on an
-/// awaiting-input issue's question thread nudges its awaiting-input pass; an issue close of a blocker
+/// awaiting-input issue's question thread, or an edit of an issue whose question lives on its own thread, nudges its
+/// awaiting-input pass; an issue close of a blocker
 /// nudges the listing plus the dependency pass; anything else maps to <see langword="null"/>.
 /// </summary>
 internal static partial class WebhookRelevance
@@ -170,6 +171,18 @@ internal static partial class WebhookRelevance
         tracked.AwaitingInput.Any(w => w.IssueNumber == issueNumber && w.PullRequestUrl is null)
             ? new NudgeKey(repositoryId, NudgePass.AwaitingInput, issueNumber)
             : null;
+
+    /// <summary>
+    /// Maps an edit of an issue whose question lives on its own thread to that issue's awaiting-input pass: the
+    /// edited description may be the answer (ADR 0096). An edit of any other issue maps to <see langword="null"/>,
+    /// and the caller falls back to the listing nudge.
+    /// </summary>
+    internal static NudgeKey? MapIssueEdited(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber,
+        bool isEdit) =>
+        isEdit ? MapIssueComment(repositoryId, tracked, issueNumber) : null;
 
     /// <summary>
     /// Maps an issue close to the listing plus dependency pass when the closing issue blocks a tracked

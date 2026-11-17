@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
@@ -43,6 +44,49 @@ internal sealed partial class GitHubHttpClient
           }
         }
         """;
+
+    private const string IssueStatusQuery = """
+        query IssueStatus($owner: String!, $name: String!, $number: Int!) {
+          rateLimit { cost remaining }
+          repository(owner: $owner, name: $name) {
+            issue(number: $number) { state body }
+          }
+        }
+        """;
+
+    /// <summary>
+    /// Reads the issue's state and body in one GraphQL query, recording the headroom from <c>data.rateLimit</c>.
+    /// </summary>
+    public async Task<Result<IssueStatus>> GetIssueStatusAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<IssueStatus>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        object variables = new { owner = slug.Owner, name = slug.Name, number = issueNumber };
+        Result<IssueStatusData> result = await ExecuteGraphQlAsync<IssueStatusData>(
+            apiBaseUrl, IssueStatusQuery, variables, token, cancellationToken);
+
+        if (result is not Result<IssueStatusData>.Success success)
+        {
+            return Result<IssueStatus>.Fail(((Result<IssueStatusData>.Failure)result).Error);
+        }
+
+        if (success.Value.Repository?.Issue is not { } issue)
+        {
+            return Result<IssueStatus>.Fail(GitHubErrors.ProviderError("GraphQL response named no issue."));
+        }
+
+        return Result<IssueStatus>.Ok(new IssueStatus(
+            string.Equals(issue.State, "CLOSED", StringComparison.OrdinalIgnoreCase),
+            issue.Body ?? string.Empty));
+    }
 
     /// <summary>
     /// Reads the issues <paramref name="issueNumber"/> is blocked by, then the issues it blocks
@@ -227,6 +271,13 @@ internal sealed partial class GitHubHttpClient
     {
         GraphQlRateLimit? RateLimit { get; }
     }
+
+    private sealed record IssueStatusData(GraphQlRateLimit? RateLimit, IssueStatusRepository? Repository)
+        : IReportsRateLimit;
+
+    private sealed record IssueStatusRepository(IssueStatusNode? Issue);
+
+    private sealed record IssueStatusNode(string? State, string? Body);
 
     private sealed record OpenIssueIndexData(GraphQlRateLimit? RateLimit, OpenIssueIndexRepository? Repository)
         : IReportsRateLimit;

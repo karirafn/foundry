@@ -46,6 +46,29 @@ public sealed class Map
             .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
     }
 
+    [Theory]
+    [InlineData("issue")]
+    [InlineData("work_item")]
+    public void WhenAnIssueAwaitingInputOnItsOwnThreadIsUpdated_NudgesItsAwaitingInputPass(string objectKind)
+    {
+        MapEvent($$"""{"object_kind":"{{objectKind}}","object_attributes":{"iid":40,"action":"update"},"labels":[]}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+    }
+
+    [Fact]
+    public void WhenAnIssueAwaitingInputOnItsMergeRequestIsUpdated_NudgesIssueListing()
+    {
+        MapEvent("""{"object_kind":"issue","object_attributes":{"iid":50,"action":"update"},"labels":[]}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
+    [Fact]
+    public void WhenAnIssueAwaitingInputOnItsOwnThreadIsReopened_NudgesIssueListing()
+    {
+        MapEvent("""{"object_kind":"issue","object_attributes":{"iid":40,"action":"reopen"},"labels":[]}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
     [Fact]
     public void WhenConfidentialIssueEventForTrackedIssue_NudgesIssueListing()
     {

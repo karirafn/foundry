@@ -121,6 +121,27 @@ public sealed class Map
     }
 
     [Fact]
+    public void WhenAnIssueAwaitingInputOnItsOwnThreadIsEdited_NudgesItsAwaitingInputPass()
+    {
+        MapEvent("issues", """{"action":"edited","issue":{"number":40,"labels":[]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+    }
+
+    [Fact]
+    public void WhenAnIssueAwaitingInputOnItsPullRequestIsEdited_NudgesIssueListing()
+    {
+        MapEvent("issues", """{"action":"edited","issue":{"number":50,"labels":[]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
+    [Fact]
+    public void WhenAnIssueAwaitingInputOnItsOwnThreadIsLabeled_NudgesIssueListing()
+    {
+        MapEvent("issues", """{"action":"labeled","label":{"name":"bug"},"issue":{"number":40,"labels":[]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
+    [Fact]
     public void WhenIssueCommentOnAwaitingInputIssueWithoutPullRequest_NudgesAwaitingInputPass()
     {
         MapEvent("issue_comment", """{"action":"created","issue":{"number":40}}""")

@@ -29,8 +29,8 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Monitoring.Features.AwaitingInput.AwaitingInputStepTests;
 
 /// <summary>
-/// Tests for the awaiting-input step (ADR 0096): posting the questions, reading input on the question's thread, and
-/// the review pass's ways out.
+/// Tests for the awaiting-input step (ADR 0096): posting the questions, reading input on the question's thread and,
+/// on an issue-thread wait, the issue body through its Issue Watch, and the review pass's ways out.
 /// </summary>
 public sealed class RunAsync : IAsyncDisposable
 {
@@ -43,7 +43,7 @@ public sealed class RunAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher = new();
     private readonly WebhookNudgeQueue _nudgeQueue = new(NullLogger<WebhookNudgeQueue>.Instance);
-    private readonly FakeTimeProvider _timeProvider = new(PostedAt.AddHours(1));
+    private readonly MutableTimeProvider _timeProvider = new(PostedAt.AddHours(1));
     private readonly ScriptedProvider _provider = new();
     private readonly MonitoredRepository _repository;
 
@@ -116,6 +116,31 @@ public sealed class RunAsync : IAsyncDisposable
 
     private Task RunStepAsync() =>
         BuildSut().RunAsync(_repository, _provider, issueNumber: null, Now, TestContext.Current.CancellationToken);
+
+    private async Task RunStepAtAsync(DateTimeOffset at)
+    {
+        _timeProvider.Now = at;
+        await RunStepAsync();
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    private void SeedWatch(int issueNumber, string? baselineBody)
+    {
+        _dbContext.Set<IssueWatch>().Add(IssueWatch.Start(
+            _repository.Id,
+            issueNumber,
+            baselineBody is null ? null : IssueBodyHash.Of(baselineBody)));
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    private IssueWatch? LoadWatch()
+    {
+        _dbContext.ChangeTracker.Clear();
+        return _dbContext.Set<IssueWatch>().SingleOrDefault();
+    }
+
+    private Nudge? ReadNudge() => _nudgeQueue.Reader.TryRead(out Nudge nudge) ? nudge : null;
 
     private AwaitingInputIssue LoadAwaiting()
     {
@@ -333,9 +358,347 @@ public sealed class RunAsync : IAsyncDisposable
         _dispatcher.Events.ShouldHaveSingleItem().ShouldBeOfType<ProviderPullRequestClosed>();
     }
 
+    [Fact]
+    public async Task WhenAWaitIsChecked_ReadsTheIssueStatusOncePerIssue()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        _provider.IssueStatusReads.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenPostedOnTheIssue_StartsAWatchWithTheBodyReadInThatPass()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputWithoutPullRequest(branchHasCommits: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(556).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.ShouldSatisfyAllConditions(
+            () => watch.IssueNumber.ShouldBe(1),
+            () => watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of(_provider.IssueBody)),
+            () => watch.PendingBodyChange.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenPostedOnTheIssue_ReplacesAWatchLeftFromAnEarlierRound()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputWithoutPullRequest(branchHasCommits: false));
+        SeedWatch(issueNumber: 1, baselineBody: "An older description.");
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(556).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().BaselineBodyHash.ShouldBe(IssueBodyHash.Of(_provider.IssueBody));
+    }
+
+    [Fact]
+    public async Task WhenTheBodyReadFailedAtPost_PostsWithoutABaselineAndTheNextReadRecordsItWithoutInput()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputWithoutPullRequest(branchHasCommits: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(556).ValueOrThrow());
+        _provider.IssueStatusFails = true;
+        await RunStepAtAsync(Now);
+        LoadWatch().ShouldNotBeNull().BaselineBodyHash.ShouldBeNull();
+        _provider.IssueStatusFails = false;
+        _provider.IssueBody = "Edited before the read recovered.";
+
+        // Act
+        await RunStepAtAsync(Now.AddMinutes(5));
+
+        // Assert
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of("Edited before the read recovered."));
+        watch.PendingBodyChange.ShouldBeNull();
+        _dispatcher.Events.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheBodyChanges_RecordsItAsPendingAndNudgesWhenItSettles()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        _provider.IssueBody = "The fixed requirements.";
+
+        // Act
+        await RunStepAtAsync(Now);
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().PendingBodyChange
+            .ShouldBe(new PendingBodyChange(IssueBodyHash.Of("The fixed requirements."), Now));
+        _dispatcher.Events.ShouldBeEmpty();
+        Nudge nudge = ReadNudge().ShouldNotBeNull();
+        nudge.ShouldSatisfyAllConditions(
+            () => nudge.Key.ShouldBe(new NudgeKey(_repository.Id, NudgePass.AwaitingInput, 1)),
+            () => nudge.NotBefore.ShouldBe(Now + ActionableFeedbackPolicy.QuietPeriod));
+    }
+
+    [Fact]
+    public async Task WhenABodyChangeOutlastsTheQuietPeriod_InputArrivesAsADescriptionEditAndTheWatchIsDeleted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        _provider.IssueBody = "The fixed requirements.";
+        DateTimeOffset firstSeen = Now;
+        await RunStepAtAsync(firstSeen);
+
+        // Act
+        await RunStepAtAsync(firstSeen.AddMinutes(2));
+
+        // Assert
+        AwaitingInputArrived arrived = _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        arrived.ShouldSatisfyAllConditions(
+            () => arrived.Input.ShouldBe(new ClarificationInput([new InputPart.DescriptionEdited()])),
+            () => arrived.ArrivedAt.ShouldBe(firstSeen));
+        LoadWatch().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheBodyChangesAgain_TheQuietPeriodRestarts()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        DateTimeOffset start = Now;
+        _provider.IssueBody = "First edit.";
+        await RunStepAtAsync(start);
+        _provider.IssueBody = "Second edit.";
+        await RunStepAtAsync(start.AddMinutes(1));
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(2));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().PendingBodyChange
+            .ShouldBe(new PendingBodyChange(IssueBodyHash.Of("Second edit."), start.AddMinutes(1)));
+    }
+
+    [Fact]
+    public async Task WhenAnEditIsRevertedWithinTheQuietPeriod_NoInputArrives()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        string original = _provider.IssueBody;
+        SeedWatch(issueNumber: 1, baselineBody: original);
+        DateTimeOffset start = Now;
+        _provider.IssueBody = "A mistaken edit.";
+        await RunStepAtAsync(start);
+        _provider.IssueBody = original;
+        await RunStepAtAsync(start.AddMinutes(1));
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().PendingBodyChange.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenACommentAndAnEditSettle_ExactlyOneRoundArrivesWithBothParts()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        DateTimeOffset start = Now;
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithBody("See the edited description.").WithCreatedAt(start.AddSeconds(-30)).Build(),
+        ];
+        _provider.IssueBody = "The fixed requirements.";
+        await RunStepAtAsync(start);
+        _dispatcher.Events.ShouldBeEmpty();
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(2));
+
+        // Assert
+        AwaitingInputArrived arrived = _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        arrived.ShouldSatisfyAllConditions(
+            () => arrived.Input.ShouldBe(new ClarificationInput(
+                [new InputPart.Comments("See the edited description."), new InputPart.DescriptionEdited()])),
+            () => arrived.ArrivedAt.ShouldBe(start));
+    }
+
+    [Fact]
+    public async Task WhenTwoCommentsArriveAMinuteApart_NoInputArrivesUntilBothSettleThenBothArriveTogether()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        DateTimeOffset first = Now;
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithBody("Use Postgres.").WithCreatedAt(first).Build(),
+            new ProviderCommentBuilder().WithId(2003).WithBody("Actually, version 16.").WithCreatedAt(first.AddMinutes(1)).Build(),
+        ];
+        await RunStepAtAsync(first.AddMinutes(2.5));
+        _dispatcher.Events.ShouldBeEmpty();
+        ReadNudge().ShouldNotBeNull().NotBefore.ShouldBe(first.AddMinutes(3));
+
+        // Act
+        await RunStepAtAsync(first.AddMinutes(3));
+
+        // Assert
+        AwaitingInputArrived arrived = _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        arrived.Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.\n\nActually, version 16."));
+        arrived.ArrivedAt.ShouldBe(first.AddMinutes(1));
+    }
+
+    [Fact]
+    public async Task WhenTheQuestionIsOnAPullRequest_ABodyChangeIsNotWatched()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        SeedWatch(issueNumber: 1, baselineBody: null);
+        DateTimeOffset start = Now;
+        _provider.IssueBody = "Ticked an acceptance criterion.";
+        await RunStepAtAsync(start);
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.BaselineBodyHash.ShouldBeNull();
+        watch.PendingBodyChange.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenPostedOnAPullRequest_StartsAWatchWithoutABodyBaseline()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInput());
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(555).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().BaselineBodyHash.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAWaitPostedBeforeWatchesExisted_TheFirstReadBecomesTheBaselineAndCommentsStillArrive()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithBody("Use Postgres.").WithCreatedAt(PostedAt.AddMinutes(5)).Build(),
+        ];
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input
+            .ShouldBe(ClarificationInput.FromComments("Use Postgres."));
+    }
+
+    [Fact]
+    public async Task WhenAWaitPostedBeforeWatchesExistedHasNoInput_StartsAWatchWithTheBodyAsBaseline()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of(_provider.IssueBody));
+        watch.PendingBodyChange.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheBodyReadFailsWhileAChangeIsPending_NoInputArrives()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        DateTimeOffset start = Now;
+        _provider.IssueBody = "The fixed requirements.";
+        await RunStepAtAsync(start);
+        _provider.IssueStatusFails = true;
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(3));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().PendingBodyChange.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAFullPassRuns_DeletesTheWatchesOfIssuesNoLongerAwaitingInput()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        SeedWatch(issueNumber: 99, baselineBody: "Left over.");
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().IssueNumber.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenANudgedPassRuns_KeepsTheWatchesOfOtherIssues()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody);
+        SeedWatch(issueNumber: 99, baselineBody: "Another issue.");
+
+        // Act
+        await BuildSut().RunAsync(_repository, _provider, issueNumber: 1, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        _dbContext.Set<IssueWatch>().Count().ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenNoIssueIsAwaitingInput_AFullPassStillDeletesLeftoverWatches()
+    {
+        // Arrange
+        SeedWatch(issueNumber: 99, baselineBody: "Left over.");
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldBeNull();
+    }
+
     private sealed class ScriptedProvider : IIssueProvider
     {
         public bool IssueClosed { get; set; }
+
+        public string IssueBody { get; set; } = "The original description.";
+
+        public bool IssueStatusFails { get; set; }
+
+        public int IssueStatusReads { get; private set; }
 
         public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: null);
 
@@ -354,8 +717,17 @@ public sealed class RunAsync : IAsyncDisposable
 
         public DateTimeOffset? ReviewFeedbackSince { get; private set; }
 
+        // The step reads the closed state together with the body; a call here would be an extra request.
         public Task<Result<bool>> IsIssueClosedAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(IssueClosed));
+            => throw new NotSupportedException();
+
+        public Task<Result<IssueStatus>> GetIssueStatusAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
+        {
+            IssueStatusReads++;
+            return Task.FromResult(IssueStatusFails
+                ? Result<IssueStatus>.Fail(new Error("Test.Unavailable", "503"))
+                : Result<IssueStatus>.Ok(new IssueStatus(IssueClosed, IssueBody)));
+        }
 
         public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
             RepositorySlug slug,
@@ -425,6 +797,13 @@ public sealed class RunAsync : IAsyncDisposable
 
         public Task<Result<Checks>> GetChecksAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken)
             => throw new NotSupportedException();
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
