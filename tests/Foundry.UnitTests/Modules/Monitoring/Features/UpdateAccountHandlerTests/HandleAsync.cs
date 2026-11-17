@@ -100,13 +100,14 @@ public sealed class HandleAsync : IAsyncDisposable
             rotationService,
             branchRuleApplier,
             hostGuard ?? BuildPassingGuard(),
-            domainEventDispatcher ?? new NullDomainEventDispatcher());
+            domainEventDispatcher ?? new NullDomainEventDispatcher(),
+            TimeProvider.System);
     }
 
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(accountName).ValueOrThrow(), "ghp_original", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(accountName).ValueOrThrow(), new IssuedToken("ghp_original", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return credential;
@@ -222,7 +223,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("original-user").ValueOrThrow(), "ghp_original", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("original-user").ValueOrThrow(), new IssuedToken("ghp_original", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
 
@@ -257,12 +258,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // Then attempt to rotate second with a token resolving to "first-user" and deriving "first-user".
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential first = GitHubCredential.Create(AccountName.Create("first-user").ValueOrThrow(), "ghp_first", baseUrl);
+        GitHubCredential first = GitHubCredential.Create(AccountName.Create("first-user").ValueOrThrow(), new IssuedToken("ghp_first", new TokenExpiry.NotChecked()), baseUrl);
         Namespace firstNs = Namespace.Create("first-user").ValueOrThrow();
         first.SetNamespaces([firstNs]);
         _dbContext.Set<Credential>().Add(first);
 
-        GitHubCredential second = GitHubCredential.Create(AccountName.Create("second-user").ValueOrThrow(), "ghp_second", baseUrl);
+        GitHubCredential second = GitHubCredential.Create(AccountName.Create("second-user").ValueOrThrow(), new IssuedToken("ghp_second", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(second);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -300,7 +301,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Rotating with a token deriving the same namespace must succeed because the account
         // is excluded from the duplicate check (AC#3).
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("alice").ValueOrThrow(), "ghp_old", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("alice").ValueOrThrow(), new IssuedToken("ghp_old", new TokenExpiry.NotChecked()), baseUrl);
         Namespace aliceNs = Namespace.Create("alice").ValueOrThrow();
         credential.SetNamespaces([aliceNs]);
         _dbContext.Set<Credential>().Add(credential);
@@ -328,13 +329,13 @@ public sealed class HandleAsync : IAsyncDisposable
         // Never-steal semantics: the shared namespace is subtracted, not an error.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential first = GitHubCredential.Create(AccountName.Create("first-user").ValueOrThrow(), "ghp_first", baseUrl);
+        GitHubCredential first = GitHubCredential.Create(AccountName.Create("first-user").ValueOrThrow(), new IssuedToken("ghp_first", new TokenExpiry.NotChecked()), baseUrl);
         Namespace sharedNs = Namespace.Create("shared-org").ValueOrThrow();
         Namespace ownNs = Namespace.Create("second-org").ValueOrThrow();
         first.SetNamespaces([sharedNs]);
         _dbContext.Set<Credential>().Add(first);
 
-        GitHubCredential second = GitHubCredential.Create(AccountName.Create("second-user").ValueOrThrow(), "ghp_second", baseUrl);
+        GitHubCredential second = GitHubCredential.Create(AccountName.Create("second-user").ValueOrThrow(), new IssuedToken("ghp_second", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(second);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -373,11 +374,11 @@ public sealed class HandleAsync : IAsyncDisposable
         Namespace karirafnNs = Namespace.Create("karirafn").ValueOrThrow();
         Namespace kraftNs = Namespace.Create("Kraftlyftingasamband-Islands").ValueOrThrow();
 
-        GitHubCredential credentialA = GitHubCredential.Create(AccountName.Create("karirafn").ValueOrThrow(), "ghp_old_a", baseUrl);
+        GitHubCredential credentialA = GitHubCredential.Create(AccountName.Create("karirafn").ValueOrThrow(), new IssuedToken("ghp_old_a", new TokenExpiry.NotChecked()), baseUrl);
         credentialA.SetNamespaces([karirafnNs]);
         _dbContext.Set<Credential>().Add(credentialA);
 
-        GitHubCredential credentialB = GitHubCredential.Create(AccountName.Create("karirafn").ValueOrThrow(), "ghp_b", baseUrl);
+        GitHubCredential credentialB = GitHubCredential.Create(AccountName.Create("karirafn").ValueOrThrow(), new IssuedToken("ghp_b", new TokenExpiry.NotChecked()), baseUrl);
         credentialB.SetNamespaces([kraftNs]);
         _dbContext.Set<Credential>().Add(credentialB);
 
@@ -422,12 +423,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // but derives only "org-a" — already fully claimed by holder.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), new IssuedToken("ghp_holder", new TokenExpiry.NotChecked()), baseUrl);
         Namespace orgNs = Namespace.Create("org-a").ValueOrThrow();
         holder.SetNamespaces([orgNs]);
         _dbContext.Set<Credential>().Add(holder);
 
-        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), "ghp_subject", baseUrl);
+        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), new IssuedToken("ghp_subject", new TokenExpiry.NotChecked()), baseUrl);
         subject.SetNamespaces([]);
         _dbContext.Set<Credential>().Add(subject);
 
@@ -466,12 +467,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // Guard must NOT fire — "free-org" is available, so rotation can proceed and retain it.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), new IssuedToken("ghp_holder", new TokenExpiry.NotChecked()), baseUrl);
         Namespace claimedNs = Namespace.Create("claimed-org").ValueOrThrow();
         holder.SetNamespaces([claimedNs]);
         _dbContext.Set<Credential>().Add(holder);
 
-        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), "ghp_subject", baseUrl);
+        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), new IssuedToken("ghp_subject", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(subject);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -509,12 +510,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // The fully-claimed guard must NOT fire on an empty derived set.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
-        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), "ghp_holder", baseUrl);
+        GitHubCredential holder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), new IssuedToken("ghp_holder", new TokenExpiry.NotChecked()), baseUrl);
         Namespace holderNs = Namespace.Create("some-org").ValueOrThrow();
         holder.SetNamespaces([holderNs]);
         _dbContext.Set<Credential>().Add(holder);
 
-        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), "ghp_subject", baseUrl);
+        GitHubCredential subject = GitHubCredential.Create(AccountName.Create("subject-user").ValueOrThrow(), new IssuedToken("ghp_subject", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(subject);
 
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -1085,7 +1086,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 Kind: ValidateToken.Kinds.Authenticated,
                 AccountName: accountName,
                 MissingScopes: [],
-                DetectedProvider: null);
+                DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1105,7 +1108,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 Kind: kind,
                 AccountName: AccountName,
                 MissingScopes: MissingScopes,
-                DetectedProvider: DetectedProvider);
+                DetectedProvider: DetectedProvider,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1266,7 +1271,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 Kind: ValidateToken.Kinds.Authenticated,
                 AccountName: accountName,
                 MissingScopes: [],
-                DetectedProvider: null);
+                DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

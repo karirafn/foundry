@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+
 namespace Foundry.Modules.Monitoring.Infrastructure;
 
 internal abstract record TokenValidationOutcome
@@ -6,11 +8,12 @@ internal abstract record TokenValidationOutcome
 
     internal sealed record AuthenticatedOutcome(
         string AccountName,
-        IReadOnlyList<string> MissingScopes) : TokenValidationOutcome;
+        IReadOnlyList<string> MissingScopes,
+        TokenExpiry TokenExpiry) : TokenValidationOutcome;
 
     internal sealed record AuthenticationFailedOutcome : TokenValidationOutcome;
 
-    internal sealed record ScopesUnverifiableOutcome(string AccountName) : TokenValidationOutcome;
+    internal sealed record ScopesUnverifiableOutcome(string AccountName, TokenExpiry TokenExpiry) : TokenValidationOutcome;
 
     internal sealed record IdentityUnresolvedOutcome : TokenValidationOutcome;
 
@@ -18,14 +21,15 @@ internal abstract record TokenValidationOutcome
 
     internal static TokenValidationOutcome Authenticated(
         string accountName,
+        TokenExpiry tokenExpiry,
         IReadOnlyList<string>? missingScopes = null) =>
-        new AuthenticatedOutcome(accountName, missingScopes ?? []);
+        new AuthenticatedOutcome(accountName, missingScopes ?? [], tokenExpiry);
 
     internal static TokenValidationOutcome AuthenticationFailed() =>
         new AuthenticationFailedOutcome();
 
-    internal static TokenValidationOutcome ScopesUnverifiable(string accountName) =>
-        new ScopesUnverifiableOutcome(accountName);
+    internal static TokenValidationOutcome ScopesUnverifiable(string accountName, TokenExpiry tokenExpiry) =>
+        new ScopesUnverifiableOutcome(accountName, tokenExpiry);
 
     internal static TokenValidationOutcome IdentityUnresolved() =>
         new IdentityUnresolvedOutcome();

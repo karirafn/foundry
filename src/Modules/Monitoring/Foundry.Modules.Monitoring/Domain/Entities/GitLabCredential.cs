@@ -21,7 +21,7 @@ public sealed class GitLabCredential : Credential
 
     public static GitLabCredential Create(
         AccountName name,
-        string? token,
+        IssuedToken? token,
         BaseUrl baseUrl,
         string? branchRulesToken = null)
     {
@@ -62,7 +62,7 @@ public sealed class GitLabCredential : Credential
         return credential;
     }
 
-    public void Update(AccountName name, string? token, BaseUrl baseUrl)
+    public void Update(AccountName name, IssuedToken? token, BaseUrl baseUrl)
     {
         GuardAgainstQueryOrFragment(baseUrl);
 

@@ -68,7 +68,7 @@ public sealed class WhenGloballySaturated_ForecastsFinishingWorkersRepo : IAsync
 
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create(slug.Replace("/", "-", StringComparison.Ordinal)).ValueOrThrow(),
-            "TOKEN",
+            new IssuedToken("TOKEN", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 

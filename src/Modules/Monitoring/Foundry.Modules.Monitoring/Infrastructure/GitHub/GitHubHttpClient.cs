@@ -1002,16 +1002,19 @@ internal sealed partial class GitHubHttpClient(
             return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
         }
 
+        // GitHub expiry is not read yet (#1041).
+        TokenExpiry tokenExpiry = new TokenExpiry.NotChecked();
+
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
             return IsFineGrainedPat(token)
-                ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login))
-                : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login));
+                ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry))
+                : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login, tokenExpiry));
         }
 
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
 
-        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, missingScopes));
+        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry, missingScopes));
     }
 
     public async Task<Result<WritePermissionProbeResult>> ProbeContentsWriteAsync(

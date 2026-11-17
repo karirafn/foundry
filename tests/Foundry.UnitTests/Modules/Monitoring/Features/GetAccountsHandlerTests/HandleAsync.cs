@@ -41,16 +41,16 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private GetAccounts.Handler BuildHandler() => new(_dbContext, NullLogger<GetAccounts.Handler>.Instance);
+    private GetAccounts.Handler BuildHandler() => new(_dbContext, NullLogger<GetAccounts.Handler>.Instance, TimeProvider.System);
 
-    private GetAccounts.Handler BuildHandler(CapturingLogger<GetAccounts.Handler> logger) => new(_dbContext, logger);
+    private GetAccounts.Handler BuildHandler(CapturingLogger<GetAccounts.Handler> logger) => new(_dbContext, logger, TimeProvider.System);
 
     [Fact]
     public async Task WhenCredentialHasToken_ReturnsHasTokenTrue()
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -71,7 +71,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -204,7 +204,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -225,7 +225,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), baseUrl);
         credential.SetNamespaces([Namespace.Create("org-a").ValueOrThrow(), Namespace.Create("org-b").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

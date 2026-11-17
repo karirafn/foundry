@@ -260,6 +260,19 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("token_checked_at");
 
+                    b.Property<DateTimeOffset?>("_tokenExpiresAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_expires_at");
+
+                    b.Property<string>("_tokenExpiryKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("not_checked")
+                        .HasColumnName("token_expiry_kind");
+
                     b.Property<DateTimeOffset?>("_tokenInvalidSince")
                         .HasColumnType("TEXT")
                         .HasColumnName("token_invalid_since");

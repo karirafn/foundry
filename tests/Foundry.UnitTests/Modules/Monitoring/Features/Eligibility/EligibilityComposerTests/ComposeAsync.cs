@@ -28,7 +28,7 @@ public sealed class ComposeAsync
         EligibilityComposer composer = new(new StubProviderFactory(protectionResult));
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "ghp_token",
+            new IssuedToken("ghp_token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         return (composer, credential);

@@ -55,7 +55,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("My GitHub").ValueOrThrow(),
-            token,
+            token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         if (namespaces is not null)
@@ -74,7 +74,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("My GitLab").ValueOrThrow(),
-            token,
+            token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         if (namespaces is not null)

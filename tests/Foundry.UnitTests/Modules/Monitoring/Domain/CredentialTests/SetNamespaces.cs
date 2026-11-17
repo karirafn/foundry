@@ -12,7 +12,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.CredentialTests;
 public sealed class SetNamespaces
 {
     private static GitHubCredential CreateCredential() =>
-        GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_token", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
 
     private static Namespace Ns(string value) =>
         Namespace.Create(value).ValueOrThrow();

@@ -172,7 +172,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         CapturingDomainEventDispatcher dispatcher = new();
         AccountTokenVerdicts verdicts = new(
             recheckDb,
-            new FixedTokenValidator(TokenValidationOutcome.Authenticated("octocat", [])),
+            new FixedTokenValidator(TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked(), [])),
             dispatcher,
             NullLogger<AccountTokenVerdicts>.Instance);
 
@@ -246,7 +246,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
 
         (await LoadAsync(accountId)).TokenValidity.ShouldBe(new TokenValidity.Invalid(DetectedAt, RecheckAt));
         string rotatedToken = string.Concat("ghp_", "rotated");
-        rotating.Update(rotating.Name, rotatedToken, rotating.BaseUrl);
+        rotating.Update(rotating.Name, new IssuedToken(rotatedToken, new TokenExpiry.NotChecked()), rotating.BaseUrl);
 
         // Act
         await rotationDb.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -288,7 +288,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         }
 
         (await LoadAsync(accountId)).TokenValidity.ShouldBeOfType<TokenValidity.Invalid>();
-        rotating.Update(rotating.Name, string.Concat("ghp_", "rotated"), rotating.BaseUrl);
+        rotating.Update(rotating.Name, new IssuedToken(string.Concat("ghp_", "rotated"), new TokenExpiry.NotChecked()), rotating.BaseUrl);
         CredentialConfiguration.WriteTokenValidity(rotationDb.Entry<Credential>(rotating));
 
         // Act
@@ -320,7 +320,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         DbContext db = scope.ServiceProvider.GetRequiredService<DbContext>();
         GitHubCredential account = (GitHubCredential)await db.Set<Credential>()
             .SingleAsync(c => c.Id == id, TestContext.Current.CancellationToken);
-        account.Update(account.Name, token, account.BaseUrl);
+        account.Update(account.Name, new IssuedToken(token, new TokenExpiry.NotChecked()), account.BaseUrl);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 

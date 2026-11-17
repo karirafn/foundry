@@ -47,7 +47,7 @@ public sealed class ProbeNowAsync : IAsyncDisposable
         ProbeDueAsync.SlugCredentialResolver resolver = new();
         resolver.Accounts["group/app"] = GitLabCredential.Create(
             AccountName.Create("deploy-bot").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         MonitoredRepository repository = MonitoredRepository.Create(
             RepositorySlug.Create("group/app").ValueOrThrow(),

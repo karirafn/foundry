@@ -46,7 +46,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_mytoken", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_mytoken", new TokenExpiry.NotChecked()), baseUrl);
 
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

@@ -85,7 +85,7 @@ public sealed class GetFailingJobLogAsyncGitLab : IAsyncDisposable
     public async Task WhenTheCheckCameFromTheFailedJobsRead_ReturnsThatJobsTrace()
     {
         // Arrange
-        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-gitlab").ValueOrThrow(), "glpat_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-gitlab").ValueOrThrow(), new IssuedToken("glpat_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("foo").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
         RepositorySlug slug = RepositorySlug.Create("foo/bar").ValueOrThrow();

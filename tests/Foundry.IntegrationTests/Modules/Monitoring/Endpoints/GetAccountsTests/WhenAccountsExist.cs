@@ -40,7 +40,7 @@ public sealed class WhenAccountsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token, parsedBaseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()), parsedBaseUrl);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

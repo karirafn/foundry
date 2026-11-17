@@ -51,7 +51,7 @@ public sealed class ProbeDueAsync : IAsyncDisposable
         new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), _broadcaster, NullLogger<PackageSourceProbing>.Instance);
 
     private static GitLabCredential Account(string name, string token = "unused-token") =>
-        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token, BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken(token, new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
     private MonitoredRepository Repository(string slug, Credential account, params string[] sourceUrls)
     {
@@ -210,7 +210,7 @@ public sealed class ProbeDueAsync : IAsyncDisposable
         MonitoredRepository repository = Repository("group/app", account, GroupSourceUrl);
         PackageSourceProbing sut = CreateSut();
         await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
-        account.Update(AccountName.Create("deploy-bot").ValueOrThrow(), "new-token", account.BaseUrl);
+        account.Update(AccountName.Create("deploy-bot").ValueOrThrow(), new IssuedToken("new-token", new TokenExpiry.NotChecked()), account.BaseUrl);
 
         // Act
         await sut.ProbeDueAsync([repository], Now + TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);

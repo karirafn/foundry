@@ -44,7 +44,7 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("TOKEN", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 
         MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
