@@ -105,6 +105,8 @@ export interface GlobalSettingsResponse {
   webhookPublicBaseUrl?: string | null;
   /** Poll interval for repositories whose webhook is active. */
   backstopIntervalMinutes?: number;
+  /** Hours a posted question waits without input before its one reminder (ADR 0096). */
+  awaitingInputReminderDelayHours?: number;
 }
 
 export interface DispatchSettings {

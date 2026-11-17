@@ -30,6 +30,7 @@ const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_WEBHOOKS_ERROR = 'Failed to save webhook settings';
+const SAVE_AWAITING_INPUT_ERROR = 'Failed to save the awaiting-input reminder';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
 const SAVE_NESTED_DOCKER_ERROR = 'Failed to save the nested Docker setting';
 const SAVE_WORKER_ENVIRONMENT_ERROR = 'Failed to save worker environment';
@@ -125,6 +126,15 @@ export class SettingsService {
   /** Error code of the last failed webhook save — keys the error to its field (e.g. Settings.InvalidWebhookPublicBaseUrl). */
   private readonly _saveWebhooksErrorCodeSignal: WritableSignal<string | null> = signal(null);
   readonly saveWebhooksErrorCode: Signal<string | null> = this._saveWebhooksErrorCodeSignal.asReadonly();
+
+  private readonly _savingAwaitingInputSignal: WritableSignal<boolean> = signal(false);
+  readonly savingAwaitingInput: Signal<boolean> = this._savingAwaitingInputSignal.asReadonly();
+
+  private readonly _saveAwaitingInputSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveAwaitingInputSuccess: Signal<boolean> = this._saveAwaitingInputSuccessSignal.asReadonly();
+
+  private readonly _saveAwaitingInputErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveAwaitingInputError: Signal<string | null> = this._saveAwaitingInputErrorSignal.asReadonly();
 
   private readonly _workerImageFlagsSignal: WritableSignal<WorkerImageFlags | null> = signal(null);
   readonly workerImageFlags: Signal<WorkerImageFlags | null> = this._workerImageFlagsSignal.asReadonly();
@@ -458,6 +468,26 @@ export class SettingsService {
         this._saveWebhooksErrorSignal.set(extractErrorMessage(err) ?? SAVE_WEBHOOKS_ERROR);
         this._saveWebhooksErrorCodeSignal.set(extractErrorCode(err));
         this._savingWebhooksSignal.set(false);
+      },
+    });
+  }
+
+  /** Saves how long a posted question waits without input before Foundry posts its one reminder. */
+  updateAwaitingInputSettings(awaitingInputReminderDelayHours: number): void {
+    this._saveAwaitingInputErrorSignal.set(null);
+    this._saveAwaitingInputSuccessSignal.set(false);
+    this._savingAwaitingInputSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/awaiting-input', { awaitingInputReminderDelayHours }).subscribe({
+      next: (response) => {
+        this._settingsSignal.set(response);
+        this._savingAwaitingInputSignal.set(false);
+        this._saveAwaitingInputSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveAwaitingInputErrorSignal.set(extractErrorMessage(err) ?? SAVE_AWAITING_INPUT_ERROR);
+        this._savingAwaitingInputSignal.set(false);
       },
     });
   }

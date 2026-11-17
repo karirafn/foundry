@@ -2655,6 +2655,22 @@ describe('IssueService (triage actions)', () => {
         'Only queued or blocked issues can be re-triaged. It may have been dispatched already.',
       generic: 'Failed to re-triage the issue.',
     },
+    {
+      action: 'continue_without_answer' as const,
+      call: (svc: IssueService, id: string) => svc.continueWithoutAnswer(id),
+      path: 'continue-without-answer',
+      success: 'Continuing without an answer. Issue status is updating.',
+      conflict: 'This issue is no longer awaiting input.',
+      generic: 'Failed to continue without an answer.',
+    },
+    {
+      action: 'retry_post' as const,
+      call: (svc: IssueService, id: string) => svc.retryQuestionPost(id),
+      path: 'retry-post',
+      success: 'Posting the questions again. Issue status is updating.',
+      conflict: 'Only a question whose post failed can be posted again. It may have been posted already.',
+      generic: 'Failed to retry posting the questions.',
+    },
   ];
 
   for (const c of cases) {
@@ -2664,7 +2680,7 @@ describe('IssueService (triage actions)', () => {
         c.call(service, 'abc123');
 
         // Assert
-        expect(service.triageActionPending()).toBe(c.action);
+        expect(service.issueActionPending()).toBe(c.action);
         const req = httpMock.expectOne(`/api/issues/abc123/${c.path}`);
         expect(req.request.method).toBe('POST');
         req.flush({});
@@ -2679,9 +2695,9 @@ describe('IssueService (triage actions)', () => {
         httpMock.expectOne(`/api/issues/abc123/${c.path}`).flush({});
 
         // Assert
-        expect(service.triageActionPending()).toBeNull();
-        expect(service.triageActionSuccess()).toBe(c.success);
-        expect(service.triageActionError()).toBeNull();
+        expect(service.issueActionPending()).toBeNull();
+        expect(service.issueActionSuccess()).toBe(c.success);
+        expect(service.issueActionError()).toBeNull();
         const reload = httpMock.expectOne('/api/issues/abc123');
         expect(reload.request.method).toBe('GET');
         reload.flush({ ...mockSummary });
@@ -2697,9 +2713,9 @@ describe('IssueService (triage actions)', () => {
           .flush('Conflict', { status: 409, statusText: 'Conflict' });
 
         // Assert
-        expect(service.triageActionPending()).toBeNull();
-        expect(service.triageActionError()).toBe(c.conflict);
-        expect(service.triageActionSuccess()).toBeNull();
+        expect(service.issueActionPending()).toBeNull();
+        expect(service.issueActionError()).toBe(c.conflict);
+        expect(service.issueActionSuccess()).toBeNull();
         httpMock.expectNone('/api/issues/abc123');
       });
 
@@ -2713,8 +2729,8 @@ describe('IssueService (triage actions)', () => {
           .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
         // Assert
-        expect(service.triageActionPending()).toBeNull();
-        expect(service.triageActionError()).toBe(c.generic);
+        expect(service.issueActionPending()).toBeNull();
+        expect(service.issueActionError()).toBe(c.generic);
       });
 
       it('clears an earlier error and success message when started again', () => {
@@ -2728,8 +2744,8 @@ describe('IssueService (triage actions)', () => {
         c.call(service, 'abc123');
 
         // Assert
-        expect(service.triageActionError()).toBeNull();
-        expect(service.triageActionSuccess()).toBeNull();
+        expect(service.issueActionError()).toBeNull();
+        expect(service.issueActionSuccess()).toBeNull();
         httpMock.expectOne(`/api/issues/abc123/${c.path}`).flush({});
         httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
       });
@@ -2760,9 +2776,9 @@ describe('IssueService (triage actions)', () => {
     service.selectIssue('abc123');
 
     // Assert
-    expect(service.triageActionPending()).toBeNull();
-    expect(service.triageActionError()).toBeNull();
-    expect(service.triageActionSuccess()).toBeNull();
+    expect(service.issueActionPending()).toBeNull();
+    expect(service.issueActionError()).toBeNull();
+    expect(service.issueActionSuccess()).toBeNull();
     httpMock.match('/api/issues/abc123/retriage');
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
@@ -2777,7 +2793,7 @@ describe('IssueService (triage actions)', () => {
     service.selectIssue('abc123');
 
     // Assert
-    expect(service.triageActionSuccess()).toBeNull();
+    expect(service.issueActionSuccess()).toBeNull();
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
 });

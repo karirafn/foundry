@@ -89,6 +89,24 @@
             (click)="confirmRetriageOpen.set(true)"
           >{{ triagePending() === 'retriage' ? 'Re-triaging…' : 'Re-triage' }}</button>
         }
+        @case ('retry_post') {
+          <button
+            type="button"
+            [class]="buttonClass(action, first)"
+            [disabled]="triagePending() !== null"
+            [attr.aria-label]="'Retry posting the questions for issue #' + d.issueNumber"
+            (click)="retryQuestionPost()"
+          >{{ triagePending() === 'retry_post' ? 'Retrying post…' : 'Retry post' }}</button>
+        }
+        @case ('continue_without_answer') {
+          <button
+            type="button"
+            [class]="buttonClass(action, first)"
+            [disabled]="triagePending() !== null"
+            [attr.aria-label]="'Continue issue #' + d.issueNumber + ' without an answer'"
+            (click)="confirmContinueWithoutAnswerOpen.set(true)"
+          >{{ triagePending() === 'continue_without_answer' ? 'Continuing…' : 'Continue without answer' }}</button>
+        }
       }
     }
   </div>
@@ -205,13 +223,26 @@
   />
 }
 
+@if (offers('continue_without_answer')) {
+  <fd-confirm-dialog
+    [open]="confirmContinueWithoutAnswerOpen()"
+    [title]="'Continue #' + d.issueNumber + ' without an answer?'"
+    [message]="continueWithoutAnswerMessage()"
+    confirmLabel="Continue without answer"
+    cancelLabel="Keep waiting"
+    [destructive]="false"
+    (confirmed)="confirmContinueWithoutAnswer()"
+    (dismissed)="confirmContinueWithoutAnswerOpen.set(false)"
+  />
+}
+
 <!-- Outside the action rows: a successful action reloads the detail into a state without its
      button, and the announcement must survive that. -->
 <span class="pane-actions__success pane-actions__success--retry sr-only" aria-live="polite" aria-atomic="true">{{
   issueService.retrySuccess() ?? ''
 }}</span>
 <span class="pane-actions__success pane-actions__success--triage sr-only" aria-live="polite" aria-atomic="true">{{
-  issueService.triageActionSuccess() ?? ''
+  issueService.issueActionSuccess() ?? ''
 }}</span>
 <span class="pane-actions__success pane-actions__success--publish-retry sr-only" aria-live="polite" aria-atomic="true">{{
   publishRetrySuccess() ?? ''

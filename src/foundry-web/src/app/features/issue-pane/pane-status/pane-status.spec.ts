@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { IssueDetail, IssueStateDetails, IssueSummary } from '../../issues/issue.model';
-import { IssueService, TriageAction } from '../../issues/issue.service';
+import { IssueService, IssueAction } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { PaneStatusComponent } from './pane-status';
@@ -104,9 +104,9 @@ function setup(detail: IssueDetail | null, options: { run?: WorkerRunDetail | nu
     retrying: signal(false),
     retryError: signal<string | null>(null),
     retrySuccess: signal<string | null>(null),
-    triageActionPending: signal<TriageAction | null>(null),
-    triageActionError: signal<string | null>(null),
-    triageActionSuccess: signal<string | null>(null),
+    issueActionPending: signal<IssueAction | null>(null),
+    issueActionError: signal<string | null>(null),
+    issueActionSuccess: signal<string | null>(null),
     retryIssue: vi.fn(),
     retryIssueFresh: vi.fn(),
     retryTriage: vi.fn(),

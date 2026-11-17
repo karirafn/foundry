@@ -377,6 +377,7 @@ describe('buildFacts', () => {
             commentUrl: null,
             postFailureReason: null,
             nextPostAttemptAt: null,
+            reminderSentAt: null,
             resumeTarget: 'retriage',
           },
         }),
