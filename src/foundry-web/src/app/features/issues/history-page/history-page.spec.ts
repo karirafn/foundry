@@ -144,14 +144,14 @@ describe('HistoryPageComponent', () => {
       );
     });
 
-    it('links back to the Board', async () => {
+    it('leaves the header without links, since the navbar links the Board', async () => {
       // Act
       const { el } = await openWith([]);
 
       // Assert
-      const link = el.querySelector<HTMLAnchorElement>('.history-page__board-link')!;
-      expect(link.textContent?.trim()).toBe('Board');
-      expect(link.getAttribute('href')).toBe('/');
+      const header = el.querySelector('.history-page__header');
+      expect(header).not.toBeNull();
+      expect(header?.querySelector('a')).toBeNull();
     });
 
     it('shows the run statistics with their time range', async () => {
