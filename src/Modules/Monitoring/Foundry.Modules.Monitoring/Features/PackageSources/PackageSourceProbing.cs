@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Shared;
@@ -13,14 +14,16 @@ namespace Foundry.Modules.Monitoring.Features.PackageSources;
 /// Probes the Package Sources repositories declare and records each verdict on its <see cref="PackageSource"/>.
 /// Runs outside the repository poll: a source declared by many repositories is probed once per credential. One pass
 /// runs at a time (<see cref="PackageSourceProbeGate"/>). Open Settings pages are told to read the list again after a
-/// pass that changed a verdict, and after every probe a credential change started.
+/// pass that changed a verdict, and after every probe a credential change started. The domain events of saved
+/// verdicts are dispatched once the pass has left the gate, so the repositories declaring a source whose readability
+/// changed are re-evaluated (<see cref="PackageSourceReadabilityChanged"/>).
 /// </summary>
 internal sealed class PackageSourceProbing(
     DbContext dbContext,
     ICredentialResolver credentialResolver,
     IPackageSourceProber prober,
     PackageSourceProbeGate gate,
-    ISystemNotificationBroadcaster broadcaster,
+    PackageSourceVerdictPublisher publisher,
     ILogger<PackageSourceProbing> logger)
 {
     /// <summary>
@@ -32,16 +35,13 @@ internal sealed class PackageSourceProbing(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        bool changed;
+        ProbePass pass;
         using (await gate.EnterAsync(cancellationToken))
         {
-            changed = await ProbeAsync(repositories, sourceUrl: null, now, ignoreCadence: false, cancellationToken);
+            pass = await ProbeAsync(repositories, sourceUrl: null, now, ignoreCadence: false, cancellationToken);
         }
 
-        if (changed)
-        {
-            await NotifyAsync(cancellationToken);
-        }
+        await publisher.PublishAsync(pass.CommittedEvents, notifySettings: pass.Changed, cancellationToken);
     }
 
     /// <summary>Probes every source <paramref name="repository"/> declares now, whatever its cadence says.</summary>
@@ -50,28 +50,27 @@ internal sealed class PackageSourceProbing(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        bool changed;
+        ProbePass pass;
         using (await gate.EnterAsync(cancellationToken))
         {
-            changed = await ProbeAsync([repository], sourceUrl: null, now, ignoreCadence: true, cancellationToken);
+            pass = await ProbeAsync([repository], sourceUrl: null, now, ignoreCadence: true, cancellationToken);
         }
 
-        if (changed)
-        {
-            await NotifyAsync(cancellationToken);
-        }
+        await publisher.PublishAsync(pass.CommittedEvents, notifySettings: pass.Changed, cancellationToken);
     }
 
     /// <summary>
     /// Probes the source <paramref name="id"/> now with every credential its active declaring repositories read it
     /// with (just the registered credential, when there is one), then tells open Settings pages to read the list
-    /// again, whether or not a verdict changed.
+    /// again, whether or not a verdict changed. The declaring repositories are re-evaluated even when no verdict
+    /// changed readability: registering or removing a credential changes which verdict applies to them.
     /// </summary>
     public async Task ProbeSourceNowAsync(
         PackageSourceId id,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        List<IDomainEvent> committedEvents = [];
         using (await gate.EnterAsync(cancellationToken))
         {
             PackageSource? source = await dbContext.Set<PackageSource>()
@@ -83,15 +82,21 @@ internal sealed class PackageSourceProbing(
                     .Where(r => r.IsActive)
                     .ToListAsync(cancellationToken);
 
-                await ProbeAsync(repositories, source.ServiceIndexUrl, now, ignoreCadence: true, cancellationToken);
+                ProbePass pass = await ProbeAsync(repositories, source.ServiceIndexUrl, now, ignoreCadence: true, cancellationToken);
+                committedEvents.AddRange(pass.CommittedEvents);
+
+                if (!committedEvents.OfType<PackageSourceReadabilityChanged>().Any(e => e.PackageSourceId == source.Id))
+                {
+                    committedEvents.Add(new PackageSourceReadabilityChanged(source.Id, source.ServiceIndexUrl));
+                }
             }
         }
 
-        await NotifyAsync(cancellationToken);
+        await publisher.PublishAsync(committedEvents, notifySettings: true, cancellationToken);
     }
 
-    /// <summary>Probes the targets; true when any verdict differs from the one stored before.</summary>
-    private async Task<bool> ProbeAsync(
+    /// <summary>Probes the targets; the pass records whether any verdict differs from the one stored before.</summary>
+    private async Task<ProbePass> ProbeAsync(
         IReadOnlyCollection<MonitoredRepository> repositories,
         Uri? sourceUrl,
         DateTimeOffset now,
@@ -110,6 +115,7 @@ internal sealed class PackageSourceProbing(
         }
 
         bool changed = false;
+        List<IDomainEvent> committedEvents = [];
 
         foreach (ProbeTarget target in targets)
         {
@@ -143,13 +149,23 @@ internal sealed class PackageSourceProbing(
                     unreadable.Reason);
             }
 
-            if (await SaveAsync(target.Source.ServiceIndexUrl, cancellationToken) && before != target.Source.VerdictFor(read.Credential))
+            if (!await SaveAsync(target.Source.ServiceIndexUrl, cancellationToken))
+            {
+                // Another probe's verdict stands, so this probe's change is not announced.
+                target.Source.ClearDomainEvents();
+                continue;
+            }
+
+            committedEvents.AddRange(target.Source.DomainEvents);
+            target.Source.ClearDomainEvents();
+
+            if (before != target.Source.VerdictFor(read.Credential))
             {
                 changed = true;
             }
         }
 
-        return changed;
+        return new ProbePass(changed, committedEvents);
     }
 
     /// <summary>
@@ -239,20 +255,8 @@ internal sealed class PackageSourceProbing(
         }
     }
 
-    private async Task NotifyAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await broadcaster.SendAsync(
-                new SystemNotification(PackageSourceNotification.Category, IsActive: false, Message: string.Empty),
-                cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // The verdicts are committed; an open page still refetches on reconnect or after its pending-check exit.
-            logger.LogWarning(ex, "Could not broadcast the package source notification.");
-        }
-    }
-
     private sealed record ProbeTarget(PackageSource Source, SourceReadCredential Read);
+
+    /// <summary>What a pass committed: whether any verdict changed, and the domain events of its saved verdicts.</summary>
+    private sealed record ProbePass(bool Changed, IReadOnlyList<IDomainEvent> CommittedEvents);
 }

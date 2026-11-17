@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
@@ -9,12 +10,14 @@ using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -170,7 +173,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
             prober,
             new PackageSourceProbeGate(),
-            new CapturingSystemNotificationBroadcaster(),
+            new PackageSourceVerdictPublisher(new NullDomainEventDispatcher(), new CapturingSystemNotificationBroadcaster(), NullLogger<PackageSourceVerdictPublisher>.Instance),
             NullLogger<PackageSourceProbing>.Instance);
         await probing.ProbeDueAsync([repository], DateTimeOffset.UtcNow, TestContext.Current.CancellationToken);
         ProbeCountingEvaluator evaluator = new(prober);
@@ -188,6 +191,107 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         evaluator.ProbesSeenWhenEvaluated.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenTheProbeMakesASharedSourceReadable_AnotherDeclaringRepositoryIsEligibleToo()
+    {
+        // Arrange — A and B both read S with the same account and are Ineligible only because S was unreadable
+        const string sourceUrl = "https://github.com/api/packages/index.json";
+        (Guid accountId, Guid repositoryId) = await SeedAsync();
+        Credential account = await _dbContext.Set<Credential>()
+            .SingleAsync(c => c.Id == CredentialId.From(accountId), TestContext.Current.CancellationToken);
+        MonitoredRepository first = await _dbContext.Set<MonitoredRepository>()
+            .SingleAsync(r => r.Id == MonitoredRepositoryId.From(repositoryId), TestContext.Current.CancellationToken);
+        MonitoredRepository second = MonitoredRepository.Create(
+            RepositorySlug.Create("owner/lib").ValueOrThrow(),
+            "github.com",
+            pollInterval: null).ValueOrThrow();
+        second.SetPosition(first.Position + 1);
+        _dbContext.Add(second);
+        foreach (MonitoredRepository repository in new[] { first, second })
+        {
+            repository.RecordRootListing(
+                new RootNuGetConfig.Declared("sha", "<configuration />", [DeclaredPackageSource.Create("feed", sourceUrl).ValueOrThrow()]),
+                listingETag: null);
+            repository.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.PackageSourceUnreachable(new Uri(sourceUrl))]));
+        }
+
+        PackageSource source = PackageSource.Create(new Uri(sourceUrl));
+        source.RecordProbe(
+            new ProbeCredential.Account(account.Id),
+            account.TokenVersion,
+            new PackageSourceVerdict.Unreadable(401, "service index returned 401"),
+            DateTimeOffset.UtcNow.AddMinutes(-20));
+        source.ClearDomainEvents();
+        _dbContext.Add(source);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        StoredVerdictEvaluator evaluator = new(new PackageSourceVerdicts(_dbContext), account.Id);
+        ServiceCollection services = new();
+        services.AddSingleton<IDomainEventHandler<PackageSourceReadabilityChanged>>(
+            new PackageSourceReadabilityChangedHandler(_dbContext, evaluator));
+        await using ServiceProvider provider = services.BuildServiceProvider();
+        PackageSourceProbing probing = new(
+            _dbContext,
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            new ProbeDueAsync.RecordingProber(),
+            new PackageSourceProbeGate(),
+            new PackageSourceVerdictPublisher(
+                new DomainEventDispatcher(provider),
+                new CapturingSystemNotificationBroadcaster(),
+                NullLogger<PackageSourceVerdictPublisher>.Instance),
+            NullLogger<PackageSourceProbing>.Instance);
+        RecheckRepositoryEligibility.Handler handler = new(
+            _dbContext,
+            evaluator,
+            new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()),
+            new StubGlobalSettingsQueries([]),
+            NullLogger<RecheckRepositoryEligibility.Handler>.Instance,
+            webhookIngress: null,
+            packageSourceProbing: probing);
+
+        // Act
+        await handler.HandleAsync(new RecheckRepositoryEligibility.Command(accountId, repositoryId), TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext reader = new(new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options);
+        MonitoredRepository storedSecond = await reader.Set<MonitoredRepository>()
+            .SingleAsync(r => r.Id == second.Id, TestContext.Current.CancellationToken);
+        storedSecond.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+    }
+
+    /// <summary>Composes eligibility from the stored package source verdicts alone, as the real evaluator's last step does.</summary>
+    private sealed class StoredVerdictEvaluator(IPackageSourceVerdicts verdicts, CredentialId accountId) : IRepositoryEligibilityEvaluator
+    {
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            DateTimeOffset now,
+            CancellationToken cancellationToken) =>
+            EvaluateBranchRulesAndStoreAsync(repo, cancellationToken);
+
+        public async Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            List<EligibilityViolation> violations = [];
+            foreach (DeclaredPackageSource declared in repo.DeclaredPackageSources)
+            {
+                PackageSourceVerdict verdict = await verdicts.VerdictForAsync(
+                    declared.ServiceIndexUrl,
+                    new ProbeCredential.Account(accountId),
+                    cancellationToken);
+                if (verdict is not PackageSourceVerdict.Readable)
+                {
+                    violations.Add(EligibilityViolation.PackageSourceUnreachable(declared.ServiceIndexUrl));
+                }
+            }
+
+            repo.SetEligibility(violations.Count == 0
+                ? new RepositoryEligibility.Eligible()
+                : new RepositoryEligibility.Ineligible(violations));
+        }
     }
 
     private sealed class ProbeCountingEvaluator(ProbeDueAsync.RecordingProber prober) : IRepositoryEligibilityEvaluator

@@ -61,7 +61,7 @@ public sealed class ProbeNowAsync : IAsyncDisposable
             resolver,
             prober,
             new PackageSourceProbeGate(),
-            new CapturingSystemNotificationBroadcaster(),
+            new PackageSourceVerdictPublisher(new NullDomainEventDispatcher(), new CapturingSystemNotificationBroadcaster(), NullLogger<PackageSourceVerdictPublisher>.Instance),
             NullLogger<PackageSourceProbing>.Instance);
         await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
 

@@ -79,7 +79,9 @@ public static class MonitoringModule
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddTransient<IPackageSourceProber, PackageSourceProber>();
         services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
+        services.AddScoped<PackageSourceVerdictPublisher>();
         services.AddScoped<PackageSourceProbing>();
+        services.AddDomainEventHandler<PackageSourceReadabilityChanged, PackageSourceReadabilityChangedHandler>();
         services.TryAddSingleton<PackageSourceProbeGate>();
         services.TryAddSingleton<PackageSourceProbeRequests>();
         services.AddHostedService<PackageSourceProbeService>();
