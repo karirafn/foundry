@@ -26,6 +26,7 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
 {
     private static readonly DateTimeOffset DetectedAt = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset RecheckAt = DetectedAt + Credential.TokenRecheckCooldown;
+    private static readonly DateTimeOffset OldTokenExpiresAt = new(2027, 2, 1, 0, 0, 0, TimeSpan.Zero);
 
     private readonly FoundryWebAppFactory _factory;
 
@@ -297,6 +298,93 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         // Assert
         (await LoadAsync(accountId)).TokenValidity.ShouldBeOfType<TokenValidity.Valid>();
     }
+
+    [Fact]
+    public async Task WhenRotationCommitsBeforeExpiryReadingSaves_ReadingIsDropped()
+    {
+        // Arrange — the new token's expiry is not read yet, so only the version pin can drop the old reading.
+        CredentialId accountId = await SeedValidAccountAsync();
+        using IServiceScope backfillScope = _factory.Services.CreateScope();
+        DbContext backfillDb = backfillScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await backfillDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        await RotateAsync(accountId, string.Concat("ghp_", "rotated"));
+        AccountTokenVerdicts verdicts = new(
+            backfillDb,
+            new FixedTokenValidator(TokenValidationOutcome.IdentityUnresolved()),
+            new NullDomainEventDispatcher(),
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        bool saved = await verdicts.RecordTokenExpiryAsync(
+            resolved,
+            new TokenExpiry.On(OldTokenExpiresAt),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        saved.ShouldBeFalse();
+        (await LoadAsync(accountId)).TokenExpiry.ShouldBe(new TokenExpiry.NotChecked());
+    }
+
+    [Fact]
+    public async Task WhenRotationStoredTheNewTokensExpiry_AccountKeepsIt()
+    {
+        // Arrange
+        CredentialId accountId = await SeedValidAccountAsync();
+        using IServiceScope backfillScope = _factory.Services.CreateScope();
+        DbContext backfillDb = backfillScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await backfillDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        TokenExpiry newTokenExpiry = new TokenExpiry.On(OldTokenExpiresAt.AddDays(90));
+        await RotateAsync(accountId, string.Concat("ghp_", "rotated"), newTokenExpiry);
+        AccountTokenVerdicts verdicts = new(
+            backfillDb,
+            new FixedTokenValidator(TokenValidationOutcome.IdentityUnresolved()),
+            new NullDomainEventDispatcher(),
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        await verdicts.RecordTokenExpiryAsync(
+            resolved,
+            new TokenExpiry.On(OldTokenExpiresAt),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(accountId)).TokenExpiry.ShouldBe(newTokenExpiry);
+    }
+
+    [Fact]
+    public async Task WhenTokenIsUnchanged_ExpiryReadingIsSaved()
+    {
+        // Arrange
+        CredentialId accountId = await SeedValidAccountAsync();
+        using IServiceScope backfillScope = _factory.Services.CreateScope();
+        DbContext backfillDb = backfillScope.ServiceProvider.GetRequiredService<DbContext>();
+        Credential resolved = await backfillDb.Set<Credential>()
+            .AsNoTracking()
+            .SingleAsync(c => c.Id == accountId, TestContext.Current.CancellationToken);
+        AccountTokenVerdicts verdicts = new(
+            backfillDb,
+            new FixedTokenValidator(TokenValidationOutcome.IdentityUnresolved()),
+            new NullDomainEventDispatcher(),
+            NullLogger<AccountTokenVerdicts>.Instance);
+
+        // Act
+        bool saved = await verdicts.RecordTokenExpiryAsync(
+            resolved,
+            new TokenExpiry.On(OldTokenExpiresAt),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        saved.ShouldBeTrue();
+        Credential stored = await LoadAsync(accountId);
+        stored.ShouldSatisfyAllConditions(
+            () => stored.TokenExpiry.ShouldBe(new TokenExpiry.On(OldTokenExpiresAt)),
+            () => stored.TokenVersion.ShouldBe(resolved.TokenVersion));
+    }
+
     private async Task<CredentialId> SeedValidAccountAsync()
     {
         Guid id = await AccountSeeder.SeedGitHubAccountAsync(_factory, token: string.Concat("ghp_", "original"));
@@ -314,13 +402,13 @@ public sealed class WhenTokenVerdictRacesRotation : IAsyncDisposable
         return id;
     }
 
-    private async Task RotateAsync(CredentialId id, string token)
+    private async Task RotateAsync(CredentialId id, string token, TokenExpiry? expiry = null)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext db = scope.ServiceProvider.GetRequiredService<DbContext>();
         GitHubCredential account = (GitHubCredential)await db.Set<Credential>()
             .SingleAsync(c => c.Id == id, TestContext.Current.CancellationToken);
-        account.Update(account.Name, new IssuedToken(token, new TokenExpiry.NotChecked()), account.BaseUrl);
+        account.Update(account.Name, new IssuedToken(token, expiry ?? new TokenExpiry.NotChecked()), account.BaseUrl);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 

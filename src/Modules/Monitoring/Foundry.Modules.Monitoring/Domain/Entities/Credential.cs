@@ -112,6 +112,23 @@ public abstract class Credential : AggregateRoot<CredentialId>
     }
 
     /// <summary>
+    /// Records the expiry read for the current token of an account saved before token expiry was tracked.
+    /// It fills in only an expiry that is still <see cref="TokenExpiry.NotChecked"/>: a known expiry was
+    /// read with its token and cannot change without the token changing.
+    /// </summary>
+    public void RecordTokenExpiry(TokenExpiry expiry)
+    {
+        ArgumentNullException.ThrowIfNull(expiry);
+
+        if (TokenExpiry is not TokenExpiry.NotChecked)
+        {
+            return;
+        }
+
+        TokenExpiry = expiry;
+    }
+
+    /// <summary>
     /// Sets a new account token and its expiry. The provider has not refused a new token, so the
     /// account becomes Valid.
     /// </summary>
