@@ -668,6 +668,54 @@ internal sealed partial class GitLabHttpClient(
     }
 
     /// <summary>
+    /// Reads where <paramref name="branchName"/> points with <c>GET projects/:id/repository/branches/:branch</c>,
+    /// returning <c>commit.id</c>. GitLab answers 404 for a missing branch, which is <see cref="BranchHead.Absent"/>;
+    /// any other non-success response fails.
+    /// </summary>
+    public async Task<Result<BranchHead>> GetBranchHeadAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<BranchHead>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/repository/branches/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            RecordRestHeadroom(response);
+            return Result<BranchHead>.Ok(new BranchHead.Absent());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<BranchHead>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? sha = JsonSerializer.Deserialize<GitLabBranchDto>(body, JsonOptions)?.Commit?.Id;
+
+        return !string.IsNullOrWhiteSpace(sha)
+            ? Result<BranchHead>.Ok(new BranchHead.Present(sha))
+            : Result<BranchHead>.Fail(GitLabErrors.ProviderError("GitLab returned a branch without a commit id."));
+    }
+
+    /// <summary>
     /// Deletes <paramref name="branchName"/> from the project. Returns <c>true</c> when the branch
     /// was deleted and <c>false</c> when it was already absent (404), so a repeated discard is
     /// idempotent.
@@ -1146,6 +1194,10 @@ internal sealed partial class GitLabHttpClient(
         int? ProjectId);
 
     private sealed record GitLabIssueStateDto(string? State, string? Description);
+
+    private sealed record GitLabBranchDto(GitLabBranchCommitDto? Commit);
+
+    private sealed record GitLabBranchCommitDto(string? Id);
 
     private sealed record GitLabMergeRequestWithPipelineDto(
         string State,
