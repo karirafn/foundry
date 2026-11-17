@@ -437,7 +437,7 @@ public sealed class RepositoryRoles
     }
 
     [Fact]
-    public void TheFramingFile_HoldsOnlyTheFramingLine()
+    public void TheFramingFile_OpensWithTheFramingLine()
     {
         // Arrange
         WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
@@ -446,8 +446,24 @@ public sealed class RepositoryRoles
         string framing = catalog.Principles.Framing;
 
         // Assert
-        framing.ShouldBe(
-            "Engineering principles. The repository's own style, testing and design conventions win where they differ; the safety rules above always apply.");
+        framing.ShouldStartWith(
+            "Engineering principles. The repository's own style, testing and design conventions win where they differ; the safety rules above always apply.\n");
+    }
+
+    [Fact]
+    public void TheFramingFile_SaysPrivatePackageSourcesRestoreThroughFoundry()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Act
+        string framing = catalog.Principles.Framing;
+
+        // Assert
+        framing.ShouldSatisfyAllConditions(
+            () => framing.ShouldContain("Private package sources restore through Foundry"),
+            () => framing.ShouldContain("never edit `nuget.config` to fix a restore failure"),
+            () => framing.ShouldContain("`dotnet tool restore` from a private package source is not supported in this worker"));
     }
 
     [Fact]

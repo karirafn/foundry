@@ -98,6 +98,49 @@ prepare_csharp_lsp() {
 # bootstrap-failure sentinel (stage=role) and returns non-zero, so a run never
 # starts without the instructions Foundry dispatched it with.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# prepare_package_sources
+#
+# Workers hold no package credential, so a repository's private Package Sources
+# restore through Foundry's Package Source Proxy (ADR 0112).  When Foundry passes
+# FOUNDRY_NUGET_CONFIG (the generated nuget.config, base64-encoded), it is written
+# to ~/.foundry/nuget.config (0600; /home/node is a writable volume, ADR 0088)
+# and RestoreConfigFile is exported with that path.  The tracked nuget.config is
+# left alone.
+#
+# Runs before prepare_csharp_lsp, so the C# LSP pre-restore uses it too.  A value
+# that does not decode prints one warning and the run continues without the
+# redirect; this never fails the bootstrap.
+# ---------------------------------------------------------------------------
+prepare_package_sources() {
+    if [[ -z "${FOUNDRY_NUGET_CONFIG+set}" ]]; then
+        return 0
+    fi
+
+    # The config carries the run's Run Source Token, so the variable never
+    # outlives this step, whatever becomes of it.
+    local encoded="$FOUNDRY_NUGET_CONFIG"
+    unset FOUNDRY_NUGET_CONFIG
+
+    local dir="$HOME/.foundry"
+    local file="$dir/nuget.config"
+    if [[ -z "$encoded" ]] \
+        || ! (umask 077 && mkdir -p "$dir" && printf '%s' "$encoded" | base64 -d > "$file.partial" 2> /dev/null) \
+        || [[ ! -s "$file.partial" ]] \
+        || ! chmod 0600 "$file.partial" \
+        || ! mv -f "$file.partial" "$file"; then
+        rm -f "$file.partial"
+        echo "Package sources: FOUNDRY_NUGET_CONFIG unreadable" >&2
+        return 0
+    fi
+
+    # MSBuild reads environment variables as properties, so every restore, build,
+    # test and add package in this run reads this config instead of the
+    # repository's own.
+    export RestoreConfigFile="$file"
+    echo "Package sources: restoring through Foundry" >&2
+}
+
 prepare_role_plugins() {
     local roles_dir="$1"
     local role="$2"
@@ -510,6 +553,8 @@ unset _cred_dir
 # sets none, and any that leaked into the environment is dropped here so neither
 # claude nor a repository build script it starts can push or call the provider.
 unset GH_TOKEN GITLAB_TOKEN GIT_PAT
+
+prepare_package_sources
 
 # Resolve the run's role plugins before any clone work so a role this image
 # does not carry fails fast at stage=role.  The roles directory is baked into the
