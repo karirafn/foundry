@@ -109,6 +109,7 @@ setup() {
     # The operator switch (ADR 0110); tests that need the nested daemon set it themselves.
     unset FOUNDRY_NESTED_DOCKER
     export WORKER_CAPABILITY="full"
+    unset REVIEW_COMMIT
 
     # The suite also runs inside a live worker, whose /workspace is the agent's own
     # checkout (and whose image restores any solution found there).  Redirect the
@@ -3777,4 +3778,146 @@ EOF
     [ ! -e "$HOME/.foundry/nuget.config" ]
     grep -qx 'RestoreConfigFile=unset' "$BATS_TEST_TMPDIR/claude_env"
     grep -qx 'FOUNDRY_NUGET_CONFIG=unset' "$BATS_TEST_TMPDIR/claude_env"
+}
+
+# ---------------------------------------------------------------------------
+# Review checkout tests (ADR 0114)
+#
+# A review run (REVIEW_COMMIT, restricted only) checks the reviewed commit out
+# detached from the base bundle's refs/foundry/review and lets claude read the
+# review packet in /handoff/in/review, and nothing else on the Hand-off volume.
+# ---------------------------------------------------------------------------
+
+# make_review_bundle — writes the base bundle the Publisher writes for a review:
+# HEAD and "main", plus refs/foundry/review at a commit on a side branch the bundle
+# does not carry.  Exports REVIEW_COMMIT.
+make_review_bundle() {
+    local seed="$BATS_TEST_TMPDIR/seed"
+    command git init --quiet -b main "$seed"
+    command git -C "$seed" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m base
+    command git -C "$seed" switch --quiet -c feat/2-reviewed
+    command git -C "$seed" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m reviewed
+    command git -C "$seed" switch --quiet main
+    command git -C "$seed" update-ref refs/foundry/review feat/2-reviewed
+    command git -C "$seed" bundle create "$FOUNDRY_HANDOFF_DIR/in/base.bundle" HEAD refs/heads/main refs/foundry/review > /dev/null 2>&1
+    REVIEW_COMMIT="$(seed_sha feat/2-reviewed)"
+    export REVIEW_COMMIT
+}
+
+prepare_review_test() {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    /bin/mkdir -p "$FOUNDRY_HANDOFF_DIR/out" "$FOUNDRY_HANDOFF_DIR/in/review"
+}
+
+@test "review: a restricted run checks the reviewed commit out detached" {
+    prepare_review_test
+    make_review_bundle
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git rev-parse HEAD)" = "$REVIEW_COMMIT" ]
+    ! workspace_git symbolic-ref --quiet HEAD
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "review: the checkout runs git checkout --detach on the reviewed commit after the clone" {
+    prepare_review_test
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+    make_fake_git_record_args
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local clone_line checkout_line
+    clone_line="$(grep -n '^clone ' "$BATS_TEST_TMPDIR/git_args" | cut -d: -f1)"
+    checkout_line="$(grep -nx "checkout --quiet --detach $REVIEW_COMMIT" "$BATS_TEST_TMPDIR/git_args" | cut -d: -f1)"
+    [ -n "$checkout_line" ]
+    [ "$checkout_line" -gt "$clone_line" ]
+    ! grep -q '^switch ' "$BATS_TEST_TMPDIR/git_args"
+}
+
+@test "review: both claude invocations get --add-dir on the review packet only" {
+    prepare_review_test
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+    make_fake_git
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    [[ "$(sed -n 1p "$BATS_TEST_TMPDIR/claude_args")" == *"--add-dir $FOUNDRY_HANDOFF_DIR/in/review"* ]]
+    [[ "$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")" == *"--add-dir $FOUNDRY_HANDOFF_DIR/in/review"* ]]
+    [ "$(grep -o -- '--add-dir [^ ]*' "$BATS_TEST_TMPDIR/claude_args" | sort -u)" = "--add-dir $FOUNDRY_HANDOFF_DIR/in/review" ]
+}
+
+@test "review: a review run reaches claude with no branch and writes no run bundle" {
+    prepare_review_test
+    export BRANCH_NAME="feat/2-leaked"
+    make_review_bundle
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(sort -u "$BATS_TEST_TMPDIR/claude_env")" = "GH_TOKEN=unset GITLAB_TOKEN=unset GIT_PAT=unset BRANCH_NAME=unset" ]
+    [ ! -e "$(run_bundle)" ]
+}
+
+@test "review: a run without REVIEW_COMMIT passes no --add-dir and checks out no commit" {
+    prepare_review_test
+    make_fake_git_record_args
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    ! grep -q -- '--add-dir' "$BATS_TEST_TMPDIR/claude_args"
+    ! grep -q '^checkout ' "$BATS_TEST_TMPDIR/git_args"
+}
+
+@test "review: REVIEW_COMMIT on a full run fails bootstrap at stage=role before cloning" {
+    set_required_env
+    export WORKER_CAPABILITY="full"
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+    make_fake_git_record_args
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role detail=REVIEW_COMMIT is a read-only input and needs WORKER_CAPABILITY=restricted"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "review: a REVIEW_COMMIT that is not a 40-hex SHA fails bootstrap at stage=role before cloning" {
+    prepare_review_test
+    export REVIEW_COMMIT="HEAD~1"
+    make_fake_git_record_args
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role detail=REVIEW_COMMIT is not a 40-hex commit SHA"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "review: a reviewed commit missing from the bundle fails bootstrap at stage=review" {
+    prepare_review_test
+    make_base_bundle
+    export REVIEW_COMMIT="0123456789abcdef0123456789abcdef01234567"
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=review"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }

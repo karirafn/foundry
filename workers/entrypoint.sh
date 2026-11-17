@@ -275,6 +275,41 @@ prepare_capability_profile() {
 }
 
 # ---------------------------------------------------------------------------
+# prepare_review_inputs <capability> <review_dir>
+#
+# A review run (ADR 0114) sets REVIEW_COMMIT: the commit to check out detached
+# from the base bundle's refs/foundry/review.  Records in REVIEW_CLAUDE_ARGS,
+# which both claude invocations expand verbatim, --add-dir <review_dir> so the
+# restricted run can Read the review packet, and only that directory of the
+# Hand-off volume; without REVIEW_COMMIT the array is empty.
+#
+# Fails closed (stage=role, non-zero): the reviewed commit is a read-only input,
+# so it never combines with the full capability, and it must be a full SHA.
+# ---------------------------------------------------------------------------
+prepare_review_inputs() {
+    local capability="$1"
+    local review_dir="$2"
+    REVIEW_CLAUDE_ARGS=()
+
+    if [[ -z "${REVIEW_COMMIT:-}" ]]; then
+        return 0
+    fi
+    if [[ "$capability" != "restricted" ]]; then
+        echo "ERROR: REVIEW_COMMIT is set on a $capability run; a review commit is read-only and needs WORKER_CAPABILITY=restricted." >&2
+        fail_bootstrap "role" "REVIEW_COMMIT is a read-only input and needs WORKER_CAPABILITY=restricted"
+        return 1
+    fi
+    if [[ ! "$REVIEW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+        echo "ERROR: REVIEW_COMMIT '$REVIEW_COMMIT' is not a 40-hex commit SHA." >&2
+        fail_bootstrap "role" "REVIEW_COMMIT is not a 40-hex commit SHA"
+        return 1
+    fi
+
+    REVIEW_CLAUDE_ARGS=(--add-dir "$review_dir")
+    echo "Review commit: $REVIEW_COMMIT" >&2
+}
+
+# ---------------------------------------------------------------------------
 # clear_docker_environment
 #
 # Unsets DOCKER_HOST and every TESTCONTAINERS_* variable, swept by prefix so newly
@@ -588,6 +623,7 @@ unset sys_prompt_bytes
 # redirects the volume's mount point for the bats suite.
 readonly HANDOFF_DIR="${FOUNDRY_HANDOFF_DIR:-/handoff}"
 readonly BASE_BUNDLE="$HANDOFF_DIR/in/base.bundle"
+prepare_review_inputs "$WORKER_CAPABILITY" "$HANDOFF_DIR/in/review" || exit 1
 
 # Arm the bootstrap ERR trap before the first bootstrap step.
 # Each step updates BOOTSTRAP_STAGE so the trap reports the correct stage.
@@ -611,6 +647,16 @@ git -C "$WORKSPACE_DIR" remote set-url origin "$CLONE_URL"
 git -C "$WORKSPACE_DIR" remote set-head origin "$DEFAULT_BRANCH"
 
 cd "$WORKSPACE_DIR"
+
+# A review run reads the reviewed commit, never a branch: the bundle carries it
+# only as refs/foundry/review, which a clone does not copy, so it is fetched
+# from the bundle before the detached checkout.  BRANCH_NAME is unset for a
+# restricted run, so the branch step below does nothing.
+if [[ -n "${REVIEW_COMMIT:-}" ]]; then
+    BOOTSTRAP_STAGE="review"
+    git fetch --quiet "$BASE_BUNDLE" refs/foundry/review
+    git checkout --quiet --detach "$REVIEW_COMMIT"
+fi
 
 BOOTSTRAP_STAGE="branch"
 if [[ -n "${BRANCH_NAME:-}" ]]; then
@@ -1039,6 +1085,7 @@ trap on_sigterm TERM
 run_claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
     "${CAPABILITY_CLAUDE_ARGS[@]}" \
+    "${REVIEW_CLAUDE_ARGS[@]}" \
     --output-format stream-json \
     --verbose \
     --max-turns "$CLAUDE_MAX_TURNS" \
@@ -1057,6 +1104,7 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     # reason, so the resume's result event carries the role's verdict too.
     run_claude -c -p "$WORKER_PROMPT" \
         "${CAPABILITY_CLAUDE_ARGS[@]}" \
+        "${REVIEW_CLAUDE_ARGS[@]}" \
         --output-format stream-json \
         --verbose \
         --max-turns "$CLAUDE_MAX_TURNS" \
