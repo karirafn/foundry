@@ -697,7 +697,6 @@ public sealed class RunAsync : IAsyncDisposable
         LoadWatch().ShouldBeNull();
     }
 
-<<<<<<< HEAD
     [Fact]
     public async Task WhenAFullPassRuns_KeepsTheWatchOfAFailedTriage()
     {
@@ -727,7 +726,8 @@ public sealed class RunAsync : IAsyncDisposable
             () => watch.Wait.ShouldBe(WatchedWait.AwaitingInput),
             () => watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of(_provider.IssueBody)),
             () => watch.PendingBodyChange.ShouldBeNull());
-=======
+    }
+
     private static readonly DateTimeOffset ReminderDueAt = PostedAt.AddDays(3);
 
     [Fact]
@@ -885,7 +885,6 @@ public sealed class RunAsync : IAsyncDisposable
         // Assert
         _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input
             .ShouldBe(ClarificationInput.FromComments("Use Postgres."));
->>>>>>> 9fa1f3b1 (feat(issues): awaiting-input reminder, continue without answer and retry post)
     }
 
     private sealed class ScriptedProvider : IIssueProvider
