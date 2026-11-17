@@ -158,6 +158,46 @@ public sealed class Clarifications
     }
 
     [Fact]
+    public void ARoundAnsweredByAPush_WritesItsShas()
+    {
+        // Arrange
+        IReadOnlyList<Clarification> log =
+        [
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.BranchUpdated("aaa111", "bbb222")]), AskedAt.AddHours(1)),
+        ];
+
+        // Act
+        string json = Serialize(log);
+
+        // Assert
+        json.ShouldContain("""
+            "input":[{"kind":"branchUpdated","fromSha":"aaa111","toSha":"bbb222"}]
+            """.Trim());
+    }
+
+    [Theory]
+    [InlineData("aaa111")]
+    [InlineData(null)]
+    public void ARoundAnsweredByAPush_RoundTripsItsInput(string? fromSha)
+    {
+        // Arrange
+        IReadOnlyList<Clarification> log =
+        [
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(
+                    new ClarificationInput([new InputPart.Comments("Pushed it."), new InputPart.BranchUpdated(fromSha, "bbb222")]),
+                    AskedAt.AddHours(1)),
+        ];
+
+        // Act
+        IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
+
+        // Assert
+        read.ShouldBe(log);
+    }
+
+    [Fact]
     public void AnOpenRound_WritesANullInput()
     {
         // Arrange

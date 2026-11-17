@@ -35,6 +35,17 @@ public sealed class AwaitingInputIssue : Issue
     public override string? LinkedPullRequestUrl =>
         ResumeTarget is ResumeTarget.Revision revision ? revision.PullRequestUrl : null;
 
+    /// <summary>
+    /// The branch the work resumes on, whose head counts as input while the issue waits: set for a revision or a
+    /// continuation, <see langword="null"/> when nothing was pushed or triage asked.
+    /// </summary>
+    public string? ResumeBranchName => ResumeTarget switch
+    {
+        ResumeTarget.Revision revision => revision.BranchName,
+        ResumeTarget.Continuation continuation => continuation.BranchName,
+        _ => null,
+    };
+
     // The stage is the one the answer resumes: a re-triage waits in Triage, every other target in Implement.
     public override IssueStage Stage =>
         ResumeTarget is ResumeTarget.Retriage ? IssueStage.Triage : IssueStage.Implement;

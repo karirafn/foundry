@@ -45,6 +45,7 @@ public sealed class LoadTrackingContextAsync
             issueNumber,
             $"https://github.com/owner/repo/issues/{issueNumber}",
             pullRequestUrl,
+            BranchName: null,
             [new InputQuestion("Which?", "Context.", null)],
             new AwaitingInputPostState.Posted(DateTimeOffset.UnixEpoch, CommentUrl: null, ReminderDueAt: null));
 
