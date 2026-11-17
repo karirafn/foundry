@@ -1,0 +1,238 @@
+// Mixin-only: this file emits no CSS by itself. Each settings list or page @includes what it needs,
+// so only the rules it uses land in its compiled stylesheet and its style budget.
+@use 'controls' as *;
+
+/// List width at or below which rows tighten and the status tag moves onto the title line.
+$settings-list-narrow-width: 32.5rem;
+
+/// :host of a list or page component that lays out by its own width.
+@mixin settings-list-host($container) {
+  container-name: $container;
+  container-type: inline-size;
+  display: block;
+}
+
+/// Wraps @content in the narrow container query. Include it at the top level of a component stylesheet.
+@mixin settings-list-when-narrow($container) {
+  @container #{$container} (max-width: #{$settings-list-narrow-width}) {
+    @content;
+  }
+}
+
+/// Narrow rows: tighter padding, status tag on the title line. Include at top level; @content adds list-specific rules.
+@mixin settings-list-narrow-rows($container, $block) {
+  @include settings-list-when-narrow($container) {
+    .#{$block}__row { padding: var(--fd-spacing-sm); }
+    .#{$block}__status--side { display: none; }
+    .#{$block}__status--inline { display: inline-flex; }
+    @content;
+  }
+}
+
+/// Page header: heading group left, actions right; the actions wrap below the heading when narrow.
+@mixin settings-list-header {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-md) var(--fd-spacing-lg);
+  justify-content: space-between;
+  margin-block-end: var(--fd-spacing-lg);
+}
+
+@mixin settings-list-heading-group {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/// A wrapping row of buttons (header actions, problem-block actions).
+@mixin settings-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-sm);
+}
+
+/// Secondary text button; 44px tall under a coarse pointer.
+@mixin settings-list-button {
+  background: var(--fd-border-muted);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  min-height: 2rem;
+  padding: 0 var(--fd-spacing-md);
+  white-space: nowrap;
+
+  &:hover:not(:disabled) { border-color: var(--fd-border-control); }
+  &:disabled { cursor: not-allowed; opacity: 0.6; }
+  &:focus-visible { @include focus-ring; }
+
+  @media (any-pointer: coarse) { min-height: 2.75rem; }
+}
+
+/// Primary modifier; include alongside settings-list-button.
+@mixin settings-list-button-primary {
+  background: var(--fd-text-link);
+  border-color: var(--fd-text-link);
+  color: var(--fd-bg-page);
+
+  &:hover:not(:disabled) { border-color: var(--fd-text-link); filter: brightness(1.1); }
+}
+
+/// The one bordered list; rows are separated by hairlines, not gaps.
+@mixin settings-list-container {
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-md);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/// A list row laid out on the given grid columns.
+@mixin settings-list-row($columns) {
+  align-items: start;
+  column-gap: var(--fd-spacing-sm);
+  display: grid;
+  grid-template-columns: $columns;
+  padding: var(--fd-spacing-md);
+  transition: background-color 0.12s ease;
+
+  & + & { border-block-start: 1px solid var(--fd-border-muted); }
+  &:first-child { border-top-left-radius: var(--fd-radius-md); border-top-right-radius: var(--fd-radius-md); }
+  &:last-child { border-bottom-left-radius: var(--fd-radius-md); border-bottom-right-radius: var(--fd-radius-md); }
+  &:hover { background: var(--fd-bg-card-hover); }
+}
+
+/// Main column: title line above the meta line.
+@mixin settings-list-main($column) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+  grid-column: $column;
+  min-width: 0;
+}
+
+/// Side column: status tag and icon buttons.
+@mixin settings-list-side($column) {
+  align-items: center;
+  display: flex;
+  gap: var(--fd-spacing-xs);
+  grid-column: $column;
+  min-height: 1.4rem;
+}
+
+/// A wrapping line of inline items (title line, meta line).
+@mixin settings-list-line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  margin: 0;
+}
+
+/// Row title text (repository slug, account name), UI sans.
+@mixin settings-list-title {
+  color: var(--fd-text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.4rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/// Muted meta text under the title.
+@mixin settings-list-meta {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/// Muted pill for a non-default setting.
+@mixin settings-list-tag {
+  background: var(--fd-border-muted);
+  border-radius: 999px;
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+/// Dot-and-label status pill. Emits the neutral tone and the hidden --inline copy; add other tones with settings-list-status-tone.
+@mixin settings-list-status {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 500;
+  gap: 5px;
+  line-height: 1;
+  padding: 4px 8px;
+  white-space: nowrap;
+
+  &::before { background: currentColor; border-radius: 50%; content: ''; height: 6px; width: 6px; }
+
+  &--neutral {
+    background: var(--fd-border-muted);
+    color: var(--fd-text-secondary);
+
+    &::before { background: var(--fd-text-tertiary); }
+  }
+
+  &--inline { display: none; }
+}
+
+@mixin settings-list-status-tone($text, $fill) {
+  background: $fill;
+  color: $text;
+}
+
+/// Problem block under a row, spanning main and side, with a coloured leading rule.
+/// $start-column is the main column; the block runs from there to the last grid line.
+@mixin settings-list-problem($start-column, $rule) {
+  border-inline-start: 2px solid $rule;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  grid-column: #{$start-column} / -1;
+  grid-row: 2;
+  margin-block-start: var(--fd-spacing-sm);
+  min-width: 0;
+  padding: 2px 0 2px var(--fd-spacing-sm);
+}
+
+/// Problem-block body text.
+@mixin settings-list-problem-text {
+  color: var(--fd-text-primary);
+  font-size: 0.8125rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/// Muted icon button; 44px square under a coarse pointer. Add its hover colour with settings-list-icon-button-tone.
+@mixin settings-list-icon-button {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+
+  svg { height: 15px; width: 15px; }
+  &:disabled, &[aria-disabled='true'] { cursor: not-allowed; opacity: 0.5; }
+  &:focus-visible { @include focus-ring; }
+
+  @media (any-pointer: coarse) { height: 2.75rem; width: 2.75rem; }
+}
+
+@mixin settings-list-icon-button-tone($color, $fill) {
+  &:not(:disabled):not([aria-disabled='true']):hover,
+  &:focus-visible { background: $fill; color: $color; }
+}

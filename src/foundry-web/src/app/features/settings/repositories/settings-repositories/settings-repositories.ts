@@ -11,6 +11,7 @@ import {
   Injector,
   ViewChild,
   ElementRef,
+  viewChild,
   afterNextRender,
   runInInjectionContext,
 } from '@angular/core';
@@ -35,10 +36,39 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
   template: `
     <div class="repositories-settings">
       <section class="repositories-settings__section">
-        <h2 class="repositories-settings__section-title" #sectionHeading tabindex="-1">Repositories</h2>
-        <p class="repositories-settings__section-description">
-          Manage repositories to monitor for issues.
-        </p>
+        <header class="repositories-settings__header">
+          <div class="repositories-settings__heading-group">
+            <h2 class="repositories-settings__section-title" #sectionHeading tabindex="-1">Repositories</h2>
+            <p class="repositories-settings__section-description">Foundry claims issues from the top repository first.</p>
+          </div>
+          @if (_repositoryView().kind === 'list') {
+            <div class="repositories-settings__actions">
+              @if (_reordering()) {
+                <button
+                  #doneButton
+                  type="button"
+                  class="repositories-settings__btn repositories-settings__btn--primary"
+                  aria-describedby="repository-reorder-hint"
+                  (click)="onDoneReordering()"
+                >Done</button>
+              } @else {
+                @if (_canReorder()) {
+                  <button
+                    #reorderButton
+                    type="button"
+                    class="repositories-settings__btn"
+                    (click)="onStartReordering()"
+                  >Reorder</button>
+                }
+                <button
+                  type="button"
+                  class="repositories-settings__btn repositories-settings__btn--primary"
+                  (click)="onAdd()"
+                >Add repository</button>
+              }
+            </div>
+          }
+        </header>
 
         @switch (_repositoryView().kind) {
           @case ('list') {
@@ -46,7 +76,7 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
               [repositories]="repositoryService.repositories()"
               [loading]="repositoryService.loading()"
               [error]="repositoryService.loadError()"
-              (add)="onAdd()"
+              [reordering]="_reordering()"
               (delete)="onDelete($event)"
               (retry)="reloadRepositories()"
             />
@@ -109,6 +139,17 @@ export class SettingsRepositoriesComponent implements OnInit {
   );
   private readonly _lastLoadedAccountIdsKey: WritableSignal<string> = signal('');
 
+  private readonly _reorderRequested: WritableSignal<boolean> = signal(false);
+  protected readonly _canReorder: Signal<boolean> = computed(() =>
+    this._repositoryView().kind === 'list'
+    && !this.repositoryService.loading()
+    && this.repositoryService.loadError() === null
+    && this.repositoryService.repositories().length >= 2);
+  // Leaves reorder mode by itself when the list drops below two rows, fails to load, or switches view.
+  protected readonly _reordering: Signal<boolean> = computed(() => this._reorderRequested() && this._canReorder());
+  private readonly _doneButton = viewChild<ElementRef<HTMLButtonElement>>('doneButton');
+  private readonly _reorderButton = viewChild<ElementRef<HTMLButtonElement>>('reorderButton');
+
   constructor() {
     effect(() => {
       const key = this._accountIdsKey();
@@ -129,7 +170,18 @@ export class SettingsRepositoriesComponent implements OnInit {
     this.repositoryService.loadAllRepositories(accountIds);
   }
 
+  onStartReordering(): void {
+    this._reorderRequested.set(true);
+    this._focusAfterRender(() => this._doneButton()?.nativeElement);
+  }
+
+  onDoneReordering(): void {
+    this._reorderRequested.set(false);
+    this._focusAfterRender(() => this._reorderButton()?.nativeElement);
+  }
+
   onAdd(): void {
+    this._reorderRequested.set(false);
     this._addOutcome.set(null);
     this._repositoryView.set({ kind: 'add' });
   }
@@ -183,11 +235,16 @@ export class SettingsRepositoriesComponent implements OnInit {
   }
 
   private _returnToList(): void {
+    this._reorderRequested.set(false);
     this._addOutcome.set(null);
     this._repositoryView.set({ kind: 'list' });
+    this._focusAfterRender(() => this._sectionHeading?.nativeElement);
+  }
+
+  private _focusAfterRender(target: () => HTMLElement | undefined): void {
     runInInjectionContext(this._injector, () => {
       afterNextRender(() => {
-        this._sectionHeading?.nativeElement.focus();
+        target()?.focus();
       });
     });
   }

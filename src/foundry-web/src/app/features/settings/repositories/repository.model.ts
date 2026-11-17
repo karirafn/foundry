@@ -220,3 +220,100 @@ export interface UpdateRepositoryRequest {
   /** Whether Foundry merges the pull request it opened once every check passes. Server default: false. Omitted leaves the setting unchanged. */
   mergeWhenChecksPass?: boolean;
 }
+
+export type RepositoryStatusTone = 'ineligible' | 'warning' | 'neutral';
+
+export type RepositoryStatusTag =
+  | { kind: 'ineligible'; label: 'Ineligible'; tone: 'ineligible' }
+  | { kind: 'unverified'; label: 'Unverified'; tone: 'warning' }
+  | { kind: 'webhook-silent'; label: 'Webhook silent'; tone: 'warning' }
+  | { kind: 'webhook-pending'; label: 'Webhook pending'; tone: 'neutral' }
+  | { kind: 'no-webhook'; label: 'No webhook'; tone: 'neutral' };
+
+const INELIGIBLE_TAG: RepositoryStatusTag = { kind: 'ineligible', label: 'Ineligible', tone: 'ineligible' };
+const UNVERIFIED_TAG: RepositoryStatusTag = { kind: 'unverified', label: 'Unverified', tone: 'warning' };
+const WEBHOOK_SILENT_TAG: RepositoryStatusTag = { kind: 'webhook-silent', label: 'Webhook silent', tone: 'warning' };
+const WEBHOOK_PENDING_TAG: RepositoryStatusTag = { kind: 'webhook-pending', label: 'Webhook pending', tone: 'neutral' };
+const NO_WEBHOOK_TAG: RepositoryStatusTag = { kind: 'no-webhook', label: 'No webhook', tone: 'neutral' };
+
+/** The one status tag a repository row shows, or null when nothing needs attention. */
+export function repositoryStatusTag(
+  repo: Pick<RepositorySummary, 'eligibility' | 'isActive' | 'webhookStatus'>,
+): RepositoryStatusTag | null {
+  if (repo.eligibility?.status === 'ineligible') {
+    return INELIGIBLE_TAG;
+  }
+  if (repo.eligibility?.status === 'unreachable') {
+    return UNVERIFIED_TAG;
+  }
+  // A paused repository is not polled, so its webhook health is not actionable.
+  if (!repo.isActive) {
+    return null;
+  }
+  switch (repo.webhookStatus) {
+    case 'silent':
+      return WEBHOOK_SILENT_TAG;
+    case 'pending':
+      return WEBHOOK_PENDING_TAG;
+    case 'not-registered':
+      return NO_WEBHOOK_TAG;
+    default:
+      return null;
+  }
+}
+
+/** Splits a slug into its namespace (trailing `/` included, `''` when none) and its name. */
+export function splitRepositorySlug(slug: string): { namespace: string; name: string } {
+  const nameStart = slug.lastIndexOf('/') + 1;
+  return { namespace: slug.slice(0, nameStart), name: slug.slice(nameStart) };
+}
+
+/** 30 → "30s", 300 → "5m". */
+export function formatPollInterval(seconds: number): string {
+  return seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`;
+}
+
+function lastPolledPhrase(lastPolledAt: string | null, now: number): string {
+  if (lastPolledAt === null) {
+    return 'never polled';
+  }
+  const minutes = Math.floor((now - new Date(lastPolledAt).getTime()) / 60_000);
+  if (minutes < 1) {
+    return 'last polled just now';
+  }
+  if (minutes < 60) {
+    return `last polled ${minutes}m ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `last polled ${hours}h ago`;
+  }
+  return `last polled ${Math.floor(hours / 24)}d ago`;
+}
+
+/** How the repository receives issue updates, as one muted line. */
+export function repositoryUpdatesLine(repo: RepositorySummary, now: number): string {
+  if (!repo.isActive) {
+    return `Paused, ${lastPolledPhrase(repo.lastPolledAt, now)}`;
+  }
+  // Webhook passes do not stamp lastPolledAt, so a time here would mislead.
+  if (repo.webhookStatus === 'active') {
+    return 'Updates by webhook';
+  }
+  return `Polls every ${formatPollInterval(repo.effectivePollIntervalSeconds)}, ${lastPolledPhrase(repo.lastPolledAt, now)}`;
+}
+
+/** Muted tags for the settings that differ from their defaults. */
+export function repositorySettingTags(repo: RepositorySummary): string[] {
+  const tags: string[] = [];
+  if (repo.maxConcurrentWorkers !== 1) {
+    tags.push(`${repo.maxConcurrentWorkers} workers`);
+  }
+  if (repo.mergeWhenChecksPass) {
+    tags.push('Merges on pass');
+  }
+  if (!repo.rebaseAfterRun) {
+    tags.push('No rebase');
+  }
+  return tags;
+}

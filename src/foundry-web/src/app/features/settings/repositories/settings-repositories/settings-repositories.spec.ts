@@ -394,4 +394,119 @@ describe('SettingsRepositoriesComponent', () => {
     const deleteError = el.querySelector('.repositories-settings__delete-error');
     expect(deleteError?.textContent).toContain('Repository is in use.');
   });
+  describe('header and reorder mode', () => {
+    function loadedWith(repos: RepositorySummary[]) {
+      const ctx = setup();
+      ctx.fixture.detectChanges();
+      flushAccounts(ctx.httpMock, [ACCOUNT_1]);
+      ctx.fixture.detectChanges();
+      flushRepositories(ctx.httpMock, ACCOUNT_1.id, repos);
+      ctx.fixture.detectChanges();
+      return { ...ctx, el: ctx.fixture.nativeElement as HTMLElement };
+    }
+
+    function headerButtons(el: HTMLElement): string[] {
+      return Array.from(el.querySelectorAll('.repositories-settings__actions button')).map(b => b.textContent?.trim() ?? '');
+    }
+
+    function headerButton(el: HTMLElement, label: string): HTMLButtonElement {
+      const button = Array.from(el.querySelectorAll<HTMLButtonElement>('.repositories-settings__actions button'))
+        .find(b => b.textContent?.trim() === label);
+      if (!button) {
+        throw new Error(`No header button ${label}`);
+      }
+      return button;
+    }
+
+    it('describes the priority order', () => {
+      // Act
+      const { el } = loadedWith([REPO_1]);
+
+      // Assert
+      expect(el.querySelector('.repositories-settings__section-description')?.textContent?.trim())
+        .toBe('Foundry claims issues from the top repository first.');
+    });
+
+    it.each([
+      [0, [] as RepositorySummary[]],
+      [1, [REPO_1]],
+    ])('shows only Add repository with %i repositories', (_count, repos) => {
+      // Act
+      const { el } = loadedWith(repos);
+
+      // Assert
+      expect(headerButtons(el)).toEqual(['Add repository']);
+    });
+
+    it('shows Reorder and Add repository with 2 repositories', () => {
+      // Act
+      const { el } = loadedWith([REPO_1, REPO_2]);
+
+      // Assert
+      expect(headerButtons(el)).toEqual(['Reorder', 'Add repository']);
+    });
+
+    it('opens the add form from the header Add repository button', () => {
+      // Arrange
+      const { el, fixture } = loadedWith([REPO_1]);
+
+      // Act
+      headerButton(el, 'Add repository').click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('fd-repository-form')).toBeTruthy();
+      expect(el.querySelector('fd-repository-list')).toBeNull();
+      expect(el.querySelector('.repositories-settings__actions')).toBeNull();
+    });
+
+    it('enters reorder mode on Reorder, showing only Done and focusing it', async () => {
+      // Arrange
+      const { el, fixture } = loadedWith([REPO_1, REPO_2]);
+
+      // Act
+      headerButton(el, 'Reorder').click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      expect(headerButtons(el)).toEqual(['Done']);
+      expect(el.querySelectorAll('.repository-list__rank--button').length).toBe(2);
+      expect(document.activeElement?.textContent?.trim()).toBe('Done');
+    });
+
+    it('leaves reorder mode on Done, restoring the buttons and focusing Reorder', async () => {
+      // Arrange
+      const { el, fixture } = loadedWith([REPO_1, REPO_2]);
+      headerButton(el, 'Reorder').click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Act
+      headerButton(el, 'Done').click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      expect(headerButtons(el)).toEqual(['Reorder', 'Add repository']);
+      expect(el.querySelector('.repository-list__rank--button')).toBeNull();
+      expect(document.activeElement?.textContent?.trim()).toBe('Reorder');
+    });
+
+    it('leaves reorder mode by itself when the list drops below two repositories', () => {
+      // Arrange
+      const { el, fixture, httpMock } = loadedWith([REPO_1, REPO_2]);
+      headerButton(el, 'Reorder').click();
+      fixture.detectChanges();
+
+      // Act
+      fixture.componentInstance.reloadRepositories();
+      flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
+      fixture.detectChanges();
+
+      // Assert
+      expect(headerButtons(el)).not.toContain('Done');
+      expect(el.querySelector('.repository-list__rank--button')).toBeNull();
+    });
+  });
 });

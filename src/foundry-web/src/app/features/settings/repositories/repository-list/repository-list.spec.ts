@@ -167,11 +167,13 @@ function setup(overrides: {
   repositories?: RepositorySummary[];
   loading?: boolean;
   error?: string | null;
+  reordering?: boolean;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryListComponent);
   fixture.componentRef.setInput('repositories', overrides.repositories ?? []);
   fixture.componentRef.setInput('loading', overrides.loading ?? false);
   fixture.componentRef.setInput('error', overrides.error ?? null);
+  fixture.componentRef.setInput('reordering', overrides.reordering ?? false);
   fixture.detectChanges();
   return {
     fixture,
@@ -212,19 +214,6 @@ describe('RepositoryListComponent', () => {
     const emptyState = el.querySelector('.repository-list__empty');
     expect(emptyState).toBeTruthy();
     expect(emptyState?.textContent).toContain('No repositories monitored');
-  });
-
-  it('should render the empty state description and Add Repository button', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [] });
-
-    // Assert
-    const description = el.querySelector('.repository-list__empty-description');
-    expect(description?.textContent).toContain('Add your first repository to start monitoring for issues');
-    const addBtn = el.querySelector('.repository-list__add-btn');
-    expect(addBtn?.textContent?.trim()).toContain('Add Repository');
   });
 
   it('should render loading state with accessible role and label', () => {
@@ -298,7 +287,7 @@ describe('RepositoryListComponent', () => {
     expect(retryBtn?.textContent?.trim()).toBe('Retry');
   });
 
-  // ─── Two-tier layout ─────────────────────────────────────────────────────────
+  // ─── Rows ──────────────────────────────────────────────────────────────────
 
   it('should render a list when repositories are provided', () => {
     // Arrange
@@ -311,29 +300,6 @@ describe('RepositoryListComponent', () => {
     expect(list).toBeTruthy();
     const items = el.querySelectorAll('[role="listitem"]');
     expect(items.length).toBe(1);
-  });
-
-  it('should render line 1 (repository-list__line1) and line 2 (repository-list__strip) in each card', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const item = el.querySelector('[role="listitem"]');
-    expect(item?.querySelector('.repository-list__line1')).toBeTruthy();
-    expect(item?.querySelector('.repository-list__strip')).toBeTruthy();
-  });
-
-  it('should render fd-provider-icon inside line 1', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const line1 = el.querySelector('.repository-list__line1');
-    expect(line1?.querySelector('fd-provider-icon')).toBeTruthy();
   });
 
   // ─── Slug as <a routerLink> ──────────────────────────────────────────────────
@@ -350,74 +316,7 @@ describe('RepositoryListComponent', () => {
     expect(slugLink?.getAttribute('href')).toBe(`/settings/repositories/${MOCK_REPO.id}`);
   });
 
-  it('should render full slug text in the link (un-truncated)', () => {
-    // Arrange
-    const longSlugRepo: RepositorySummary = {
-      ...MOCK_REPO,
-      slug: 'efla/databridge/some-long-project-name',
-    };
-
-    // Act
-    const { el } = setup({ repositories: [longSlugRepo] });
-
-    // Assert
-    const slugLink = el.querySelector('.repository-list__slug');
-    // The full slug text must be present. Normalize whitespace because the @for template
-    // may add spaces around text nodes; <wbr> elements are zero-width and excluded from textContent.
-    const slugText = slugLink?.textContent?.replace(/\s+/g, '') ?? '';
-    expect(slugText).toContain('efla/databridge/some-long-project-name');
-  });
-
-  it('should render <wbr> elements between slug segments to allow wrapping at "/"', () => {
-    // Arrange
-    const multiSegmentRepo: RepositorySummary = {
-      ...MOCK_REPO,
-      slug: 'my-org/my-repo',
-    };
-
-    // Act
-    const { el } = setup({ repositories: [multiSegmentRepo] });
-
-    // Assert
-    const slugLink = el.querySelector('.repository-list__slug');
-    const wbrElements = slugLink?.querySelectorAll('wbr');
-    // A two-segment slug has one "/" so one <wbr> element should be present
-    expect(wbrElements?.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should not render a pencil edit button in the card', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const editBtn = el.querySelector('[aria-label="Edit repository my-org/my-repo"]');
-    expect(editBtn).toBeFalsy();
-  });
-
-  it('should not render fd-row-actions (replaced by fd-delete-button)', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    expect(el.querySelector('fd-row-actions')).toBeFalsy();
-  });
-
-  // ─── Delete via fd-delete-button ─────────────────────────────────────────────
-
-  it('should render fd-delete-button in line 1 with an aria-label containing the slug', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const deleteBtn = el.querySelector('[aria-label="Delete repository my-org/my-repo"]');
-    expect(deleteBtn).toBeTruthy();
-  });
+  // ─── Delete ────────────────────────────────────────────────────────────────
 
   it('should emit delete event when the delete button is clicked', () => {
     // Arrange
@@ -433,318 +332,7 @@ describe('RepositoryListComponent', () => {
     expect(emittedRepo).toEqual(MOCK_REPO);
   });
 
-  // ─── Reorder controls — only with >1 repo ────────────────────────────────────
-
-  it('should render drag handle and move buttons for each item when multiple repositories exist', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
-
-    // Assert
-    const handles = el.querySelectorAll('.repository-list__drag-handle');
-    expect(handles.length).toBe(2);
-    expect(el.querySelectorAll('.repository-list__move-up-btn').length).toBe(2);
-    expect(el.querySelectorAll('.repository-list__move-down-btn').length).toBe(2);
-  });
-
-  it('should NOT render reorder controls when only one repository exists', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    expect(el.querySelector('.repository-list__drag-handle')).toBeFalsy();
-    expect(el.querySelector('.repository-list__move-up-btn')).toBeFalsy();
-    expect(el.querySelector('.repository-list__move-down-btn')).toBeFalsy();
-    expect(el.querySelector('.repository-list__reorder-group')).toBeFalsy();
-  });
-
-  it('should NOT render priority helper text when only one repository exists', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    expect(el.querySelector('.repository-list__priority-hint')).toBeFalsy();
-  });
-
-  it('should render priority helper text when there are multiple repositories', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
-
-    // Assert
-    const helper = el.querySelector('.repository-list__priority-hint');
-    expect(helper).toBeTruthy();
-    expect(helper?.textContent).toContain('priority');
-    expect(helper?.textContent).toContain('top');
-    expect(helper?.textContent).toContain('first');
-  });
-
-  it('should render reorder-group inside line 1 when multiple repos exist', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
-
-    // Assert
-    const line1 = el.querySelector('.repository-list__line1');
-    expect(line1?.querySelector('.repository-list__reorder-group')).toBeTruthy();
-  });
-
-  // ─── Metadata strip order ─────────────────────────────────────────────────────
-
-  it('should render state dot and label in the strip', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const strip = el.querySelector('.repository-list__strip');
-    expect(strip?.querySelector('.repository-list__state-dot--active')).toBeTruthy();
-    const stateLabel = strip?.querySelector('.repository-list__state-label');
-    expect(stateLabel?.textContent?.trim()).toBe('Polling');
-  });
-
-  it('should render "Paused" state label for inactive repository in the strip', () => {
-    // Arrange
-    const paused = { ...MOCK_REPO, isActive: false };
-
-    // Act
-    const { el } = setup({ repositories: [paused] });
-
-    // Assert
-    const strip = el.querySelector('.repository-list__strip');
-    const stateLabel = strip?.querySelector('.repository-list__state-label');
-    expect(stateLabel?.textContent?.trim()).toBe('Paused');
-    expect(strip?.querySelector('.repository-list__state-dot--paused')).toBeTruthy();
-  });
-
-  it('should render the via accountName in the strip', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const via = el.querySelector('.repository-list__via');
-    expect(via?.textContent?.trim()).toContain('my-github');
-  });
-
-  it('should render fd-repository-eligibility badge in the strip when eligibility is non-null', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const strip = el.querySelector('.repository-list__strip');
-    expect(strip?.querySelector('fd-repository-eligibility')).toBeTruthy();
-  });
-
-  it('should not render fd-repository-eligibility badge when eligibility is null', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_NULL_ELIGIBILITY] });
-
-    // Assert
-    expect(el.querySelector('fd-repository-eligibility')).toBeFalsy();
-  });
-
-  // ─── Interval chip — own value vs default marker ──────────────────────────────
-
-  it('should render the interval chip with the effective poll interval value in minutes', () => {
-    // Arrange — MOCK_REPO has effectivePollIntervalSeconds=300 (5m), pollIntervalIsDefault=false
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--interval');
-    expect(chip?.textContent?.trim().replace(/\s+/g, ' ')).toContain('5m');
-  });
-
-  it('should not render a "default" marker on the interval chip when pollIntervalIsDefault is false', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const defaultMarker = el.querySelector('.repository-list__chip-default');
-    expect(defaultMarker).toBeFalsy();
-  });
-
-  it('should render a "default" marker on the interval chip when pollIntervalIsDefault is true', () => {
-    // Arrange — MOCK_REPO_2 has pollIntervalIsDefault=true, effectivePollIntervalSeconds=1800
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_2] });
-
-    // Assert
-    const defaultMarker = el.querySelector('.repository-list__chip-default');
-    expect(defaultMarker).toBeTruthy();
-    expect(defaultMarker?.textContent?.trim()).toContain('default');
-  });
-
-  it('should render the inherited global interval value when pollIntervalIsDefault is true', () => {
-    // Arrange — MOCK_REPO_2: effectivePollIntervalSeconds=1800 (30m), pollIntervalIsDefault=true
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_2] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--interval');
-    expect(chip?.textContent?.trim().replace(/\s+/g, ' ')).toContain('30m');
-  });
-
-  it('should render interval chip with aria-label containing full meaning', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--interval');
-    const ariaLabel = chip?.getAttribute('aria-label') ?? '';
-    expect(ariaLabel).toContain('Polls every');
-    expect(ariaLabel).toContain('5 minute');
-  });
-
-  it('should include "(default)" in the interval chip aria-label when pollIntervalIsDefault is true', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_2] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--interval');
-    expect(chip?.getAttribute('aria-label')).toContain('(default)');
-  });
-
-  // ─── Last-polled chip ─────────────────────────────────────────────────────────
-
-  it('should render "never" text in the last-polled chip when lastPolledAt is null', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_NULL_ELIGIBILITY] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--last-polled');
-    expect(chip?.textContent?.trim().toLowerCase()).toContain('never');
-  });
-
-  it('should render the last-polled chip with aria-label "Never polled" when lastPolledAt is null', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_NULL_ELIGIBILITY] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--last-polled');
-    expect(chip?.getAttribute('aria-label')).toBe('Never polled');
-  });
-
-  it('should render the last-polled chip with aria-label containing "Last polled" when lastPolledAt is set', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--last-polled');
-    expect(chip?.getAttribute('aria-label')).toContain('Last polled');
-  });
-
-  // ─── Max-workers chip ─────────────────────────────────────────────────────────
-
-  it('should render the max-workers chip with the workers count and aria-label', () => {
-    // Arrange — MOCK_REPO has maxConcurrentWorkers=2
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--max-workers');
-    expect(chip?.textContent?.trim()).toContain('2');
-    expect(chip?.getAttribute('aria-label')).toBe('Max 2 concurrent workers');
-  });
-
-  // ─── Merge-when-checks-pass chip (ADR 0105) ───────────────────────────────────
-
-  it('should render the merge chip when the repository merges on pass', () => {
-    // Act
-    const { el } = setup({ repositories: [{ ...MOCK_REPO, mergeWhenChecksPass: true }] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--merge');
-    expect(chip?.textContent?.trim()).toBe('Merges on pass');
-    expect(chip?.getAttribute('role')).toBe('img');
-    expect(chip?.getAttribute('tabindex')).toBe('0');
-    expect(chip?.getAttribute('aria-label')).toBe('Foundry merges its PR when checks pass');
-    expect(chip?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
-  });
-
-  it('should name a merge request in the merge chip for GitLab', () => {
-    // Act
-    const { el } = setup({ repositories: [{ ...MOCK_REPO, providerType: 'gitlab', mergeWhenChecksPass: true }] });
-
-    // Assert
-    expect(el.querySelector('.repository-list__chip--merge')?.getAttribute('aria-label'))
-      .toBe('Foundry merges its MR when checks pass');
-  });
-
-  it('should not render the merge chip when the repository does not merge on pass', () => {
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    expect(el.querySelector('.repository-list__chip--merge')).toBeNull();
-  });
-
-  // ─── Keyboard-focusable metadata chips ───────────────────────────────────────
-
-  it('should have tabindex="0" on the interval chip so keyboard users can trigger the tooltip', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--interval');
-    expect(chip?.getAttribute('tabindex')).toBe('0');
-  });
-
-  it('should have tabindex="0" on the last-polled chip', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--last-polled');
-    expect(chip?.getAttribute('tabindex')).toBe('0');
-  });
-
-  it('should have tabindex="0" on the max-workers chip', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const chip = el.querySelector('.repository-list__chip--max-workers');
-    expect(chip?.getAttribute('tabindex')).toBe('0');
-  });
-
-  // ─── No old elements (chevron, toggle, eligibility-details, old __metadata) ─────
+  // ─── No old elements (chevron, toggle, eligibility-details, old __metadata) ───
 
   it('should not render fd-repository-eligibility-details component in the card', () => {
     // Arrange
@@ -767,16 +355,6 @@ describe('RepositoryListComponent', () => {
     expect(el.querySelector('.repository-list__toggle-chevron')).toBeFalsy();
   });
 
-  it('should not render the old __metadata element', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    expect(el.querySelector('.repository-list__metadata')).toBeFalsy();
-  });
-
   it('should not render a title attribute on the slug anchor', () => {
     // Arrange
 
@@ -797,7 +375,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
 
     // Assert
-    const reasons = el.querySelector('.repository-list__reasons');
+    const reasons = el.querySelector('.repository-list__problem');
     expect(reasons).toBeTruthy();
     // No expand state needed — always visible
     expect(reasons?.getAttribute('hidden')).toBeNull();
@@ -810,7 +388,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
 
     // Assert
-    const warningLines = el.querySelectorAll('.repository-list__reason');
+    const warningLines = el.querySelectorAll('.repository-list__problem-list li');
     expect(warningLines.length).toBeGreaterThanOrEqual(1);
     expect(warningLines[0]?.textContent).toContain('Allow direct pushes is enabled');
   });
@@ -822,7 +400,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_MULTI_VIOLATIONS] });
 
     // Assert
-    const warningLines = el.querySelectorAll('.repository-list__reason');
+    const warningLines = el.querySelectorAll('.repository-list__problem-list li');
     expect(warningLines.length).toBe(2);
     expect(warningLines[0]?.textContent).toContain('Allow direct pushes is enabled');
     expect(warningLines[1]?.textContent).toContain('No pull request reviews are required');
@@ -839,7 +417,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO] });
 
     // Assert
-    expect(el.querySelector('.repository-list__reasons')).toBeFalsy();
+    expect(el.querySelector('.repository-list__problem')).toBeFalsy();
   });
 
   it('should not render reasons block when eligibility is null', () => {
@@ -849,7 +427,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_NULL_ELIGIBILITY] });
 
     // Assert
-    expect(el.querySelector('.repository-list__reasons')).toBeFalsy();
+    expect(el.querySelector('.repository-list__problem')).toBeFalsy();
   });
 
   // ─── Inline eligibility — unreachable ────────────────────────────────────────
@@ -861,7 +439,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_UNREACHABLE] });
 
     // Assert
-    const reason = el.querySelector('.repository-list__reason');
+    const reason = el.querySelector('.repository-list__problem-list li');
     expect(reason?.textContent).toContain('branch-protection settings');
   });
 
@@ -873,7 +451,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [neverProbed] });
 
     // Assert
-    const reason = el.querySelector('.repository-list__reason');
+    const reason = el.querySelector('.repository-list__problem-list li');
     expect(reason?.textContent).toContain('Eligibility has not been checked yet');
   });
 
@@ -884,11 +462,11 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_RATE_LIMITED] });
 
     // Assert
-    const reason = el.querySelector('.repository-list__reason');
+    const reason = el.querySelector('.repository-list__problem-list li');
     expect(reason?.textContent).toContain('rate limit');
   });
 
-  // ─── Re-check button — rate-limited disabled ──────────────────────────────────
+  // ─── Re-check button — rate-limited disabled ───────────────────────────────
 
   it('should disable the Re-check button when the repo is rate-limited', () => {
     // Arrange
@@ -925,7 +503,7 @@ describe('RepositoryListComponent', () => {
     expect(recheckBtn?.disabled).toBe(false);
   });
 
-  // ─── Re-check flow ────────────────────────────────────────────────────────────
+  // ─── Re-check flow ─────────────────────────────────────────────────────────
 
   it('should call recheckEligibility when Re-check is clicked', () => {
     // Arrange
@@ -975,7 +553,7 @@ describe('RepositoryListComponent', () => {
     fixture.detectChanges();
 
     // Assert — error renders in an alert line
-    const errorLine = el.querySelector('.repository-list__reason--error');
+    const errorLine = el.querySelector('.repository-list__problem-error');
     expect(errorLine).toBeTruthy();
     expect(errorLine?.textContent).toContain('Re-check failed');
     expect(errorLine?.getAttribute('role')).toBe('alert');
@@ -999,11 +577,11 @@ describe('RepositoryListComponent', () => {
     fixture.detectChanges();
 
     // Assert — reasons block gone (repo now eligible)
-    expect(el.querySelector('.repository-list__reasons')).toBeFalsy();
-    expect(el.querySelector('.repository-list__reason')).toBeFalsy();
+    expect(el.querySelector('.repository-list__problem')).toBeFalsy();
+    expect(el.querySelector('.repository-list__problem-list li')).toBeFalsy();
   });
 
-  // ─── Live-region announcements ────────────────────────────────────────────────
+  // ─── Live-region announcements ─────────────────────────────────────────────
 
   it('should render a persistent sr-only live region with aria-live="polite" and start empty', () => {
     // Arrange
@@ -1077,7 +655,7 @@ describe('RepositoryListComponent', () => {
 
   it('should announce the new position in the live region after a move succeeds', () => {
     // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Act
     const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
@@ -1090,60 +668,11 @@ describe('RepositoryListComponent', () => {
     expect(liveRegion?.textContent?.trim()).toContain(MOCK_REPO.slug);
   });
 
-  // ─── Paused state — secondary colour, no opacity on text ─────────────────────
-
-  it('should add repository-list__item--paused class to the card when the repo is not active', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_PAUSED] });
-
-    // Assert
-    const item = el.querySelector('[role="listitem"]');
-    expect(item?.classList.contains('repository-list__item--paused')).toBe(true);
-  });
-
-  it('should NOT add repository-list__item--paused class when the repo is active', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const item = el.querySelector('[role="listitem"]');
-    expect(item?.classList.contains('repository-list__item--paused')).toBe(false);
-  });
-
-  it('should add the secondary-colour class to the slug when the repo is paused', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_PAUSED] });
-
-    // Assert
-    const slug = el.querySelector('.repository-list__slug');
-    // The paused modifier is on the parent item; slug picks it up via CSS class or parent context
-    // Verify the parent item carries the paused class (CSS handles the colour)
-    const item = el.querySelector('[role="listitem"]');
-    expect(item?.classList.contains('repository-list__item--paused')).toBe(true);
-  });
-
-  it('should not have an opacity style on the slug element when the repo is paused', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO_PAUSED] });
-
-    // Assert — opacity must not be set inline; WCAG contrast requirement
-    const slug = el.querySelector('.repository-list__slug') as HTMLElement;
-    expect(slug?.style.opacity).toBe('');
-  });
-
   // ─── Reorder operations (preserved) ──────────────────────────────────────────
 
   it('should call moveRepository with index + 1 when move-down is clicked for the first item', () => {
     // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Act
     const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
@@ -1159,7 +688,7 @@ describe('RepositoryListComponent', () => {
 
   it('should call moveRepository with index - 1 when move-up is clicked for the second item', () => {
     // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Act
     const moveUpBtn = el.querySelectorAll('.repository-list__move-up-btn')[1] as HTMLButtonElement;
@@ -1175,7 +704,7 @@ describe('RepositoryListComponent', () => {
 
   it('should display a visible move error message when the PATCH fails', () => {
     // Arrange
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Act
     const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
@@ -1195,7 +724,7 @@ describe('RepositoryListComponent', () => {
   it('should restore focus to a control within the moved item after a successful move-down', async () => {
     // Arrange
     vi.useFakeTimers();
-    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
     const moveDownBtn = el.querySelectorAll('.repository-list__move-down-btn')[0] as HTMLButtonElement;
     moveDownBtn.focus();
 
@@ -1212,35 +741,7 @@ describe('RepositoryListComponent', () => {
     vi.useRealTimers();
   });
 
-  // ─── Empty + header add button ─────────────────────────────────────────────────
-
-  it('should emit add event when Add Repository is clicked in empty state', () => {
-    // Arrange
-    const { el, component } = setup({ repositories: [] });
-    let emitted = false;
-    component.add.subscribe(() => { emitted = true; });
-
-    // Act
-    const addBtn = el.querySelector('.repository-list__add-btn') as HTMLButtonElement;
-    addBtn.click();
-
-    // Assert
-    expect(emitted).toBe(true);
-  });
-
-  it('should emit add event when Add Repository is clicked in header', () => {
-    // Arrange
-    const { el, component } = setup({ repositories: [MOCK_REPO] });
-    let emitted = false;
-    component.add.subscribe(() => { emitted = true; });
-
-    // Act
-    const addBtn = el.querySelector('.repository-list__header .repository-list__add-btn') as HTMLButtonElement;
-    addBtn.click();
-
-    // Assert
-    expect(emitted).toBe(true);
-  });
+  // ─── Retry ─────────────────────────────────────────────────────────────────
 
   it('should emit retry when retry button is clicked in error state', () => {
     // Arrange
@@ -1256,36 +757,24 @@ describe('RepositoryListComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // ─── a11y / accessibility ─────────────────────────────────────────────────────
+  // ─── a11y / accessibility ──────────────────────────────────────────────────
 
   it('should give the drop list an accessible name via aria-label', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Assert
     const list = el.querySelector('[role="list"]');
     expect(list?.getAttribute('aria-label')).toBeTruthy();
   });
 
-  it('should set the drag handle aria-label to include keyboard instruction for reordering', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
-
-    // Assert
-    const handle = el.querySelector('.repository-list__drag-handle') as HTMLElement;
-    expect(handle?.getAttribute('aria-label')).toContain(`Reorder ${MOCK_REPO.slug}`);
-    expect(handle?.getAttribute('aria-label')).toContain('arrow keys');
-  });
-
   it('should have no disabled attribute on enabled move-up and move-down buttons', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2] });
+    const { el } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Assert
     const moveUpBtns = el.querySelectorAll('.repository-list__move-up-btn');
@@ -1303,7 +792,7 @@ describe('RepositoryListComponent', () => {
     const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
 
     // Assert
-    const reasons = el.querySelector('.repository-list__reasons');
+    const reasons = el.querySelector('.repository-list__problem');
     expect(reasons?.getAttribute('role')).toBe('group');
     expect(reasons?.getAttribute('aria-label')).toContain(MOCK_REPO_INELIGIBLE.slug);
   });
@@ -1331,21 +820,6 @@ describe('RepositoryListComponent', () => {
     expect(icon?.getAttribute('aria-label')).toBe('GitLab');
   });
 
-  it('should have role="img" on the interval, last-polled, and max-workers chips', () => {
-    // Arrange
-
-    // Act
-    const { el } = setup({ repositories: [MOCK_REPO] });
-
-    // Assert
-    const intervalChip = el.querySelector('.repository-list__chip--interval');
-    const lastPolledChip = el.querySelector('.repository-list__chip--last-polled');
-    const maxWorkersChip = el.querySelector('.repository-list__chip--max-workers');
-    expect(intervalChip?.getAttribute('role')).toBe('img');
-    expect(lastPolledChip?.getAttribute('role')).toBe('img');
-    expect(maxWorkersChip?.getAttribute('role')).toBe('img');
-  });
-
   it('should render a row for each repository', () => {
     // Arrange
 
@@ -1357,7 +831,7 @@ describe('RepositoryListComponent', () => {
     expect(items.length).toBe(2);
   });
 
-  // ─── Apply branch rules ───────────────────────────────────────────────────────
+  // ─── Apply branch rules ────────────────────────────────────────────────────
 
   describe('apply branch rules', () => {
     const BRANCH_RULES_REPO: RepositorySummary = {
@@ -1470,8 +944,9 @@ describe('RepositoryListComponent', () => {
       const outcome = el.querySelector('fd-repository-add-outcome');
       expect(outcome).toBeTruthy();
       expect(outcome?.querySelector('[data-row="branch-rules"]')?.textContent).toContain('Applied');
-      expect(el.querySelector('.repository-list__reasons')).toBeFalsy();
+      expect(el.querySelector('.repository-list__problem-list')).toBeFalsy();
       expect(el.querySelector('.repository-list__apply-rules-btn')).toBeFalsy();
+      expect(el.querySelector('.repository-list__problem')?.classList).toContain('repository-list__problem--neutral');
     });
 
     it('should hide the outcome when dismissed', () => {
@@ -1499,7 +974,7 @@ describe('RepositoryListComponent', () => {
       fixture.detectChanges();
 
       // Assert
-      const errorLine = el.querySelector('.repository-list__reason--error');
+      const errorLine = el.querySelector('.repository-list__problem-error');
       expect(errorLine?.textContent).toContain('Applying branch rules failed');
       expect(errorLine?.getAttribute('role')).toBe('alert');
       expect((el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).disabled).toBe(false);
@@ -1525,7 +1000,7 @@ describe('RepositoryListComponent', () => {
       const { el } = setup({ repositories: [WITH_SOURCE_VIOLATION] });
 
       // Assert
-      const links = el.querySelectorAll<HTMLAnchorElement>('.repository-list__package-source-link');
+      const links = el.querySelectorAll<HTMLAnchorElement>('.repository-list__problem-link');
       expect(links.length).toBe(1);
       const link = links[0];
       expect(link.textContent?.trim()).toBe('View package source');
@@ -1533,7 +1008,7 @@ describe('RepositoryListComponent', () => {
       const href = new URL(link.getAttribute('href') ?? '', 'http://localhost');
       expect(href.pathname).toBe('/settings/package-sources');
       expect(href.searchParams.get('source')).toBe(SOURCE);
-      expect(link.closest('.repository-list__reason')?.textContent).toContain(`Foundry can't read the package source ${SOURCE}.`);
+      expect(link.closest('.repository-list__problem-list li')?.textContent).toContain(`Foundry can't read the package source ${SOURCE}.`);
     });
 
     it('adds no link to other violations', () => {
@@ -1541,7 +1016,265 @@ describe('RepositoryListComponent', () => {
       const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
 
       // Assert
-      expect(el.querySelector('.repository-list__package-source-link')).toBeNull();
+      expect(el.querySelector('.repository-list__problem-link')).toBeNull();
+    });
+  });
+  describe('redesigned row', () => {
+    const NOW = Date.parse('2026-06-14T12:00:00Z');
+    const BASE: RepositorySummary = {
+      ...MOCK_REPO,
+      id: '00000000-0000-0000-0000-000000000101',
+      slug: 'acme/platform/billing-api',
+      maxConcurrentWorkers: 1,
+      rebaseAfterRun: true,
+      mergeWhenChecksPass: false,
+      webhookStatus: 'not-configured',
+    };
+    const SECOND: RepositorySummary = { ...BASE, id: '00000000-0000-0000-0000-000000000102', slug: 'acme/web', position: 1 };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('renders the slug link text as the plain slug, with no whitespace', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__slug')?.textContent).toBe('acme/platform/billing-api');
+    });
+
+    it('splits the slug into a namespace and a name', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__slug-namespace')?.textContent).toBe('acme/platform/');
+      expect(el.querySelector('.repository-list__slug-name')?.textContent).toBe('billing-api');
+    });
+
+    it('reads "Updates by webhook" for an active webhook', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, webhookStatus: 'active' }] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__updates')?.textContent).toBe('Updates by webhook');
+    });
+
+    it('reads the poll interval and last poll for a polling repository', () => {
+      // Arrange
+      vi.useFakeTimers();
+      vi.setSystemTime(NOW);
+
+      // Act
+      const { el } = setup({
+        repositories: [{ ...BASE, effectivePollIntervalSeconds: 300, lastPolledAt: new Date(NOW - 8 * 60_000).toISOString() }],
+      });
+
+      // Assert
+      expect(el.querySelector('.repository-list__updates')?.textContent).toBe('Polls every 5m, last polled 8m ago');
+    });
+
+    it('renders no setting tags at the defaults', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE] });
+
+      // Assert
+      expect(el.querySelectorAll('.repository-list__tag').length).toBe(0);
+    });
+
+    it('renders a tag for each non-default setting', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, maxConcurrentWorkers: 3, mergeWhenChecksPass: true }] });
+
+      // Assert
+      const tags = Array.from(el.querySelectorAll('.repository-list__tag')).map(t => t.textContent?.trim());
+      expect(tags).toEqual(['3 workers', 'Merges on pass']);
+    });
+
+    it('shows the Ineligible status tag for an ineligible repository', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, eligibility: MOCK_REPO_INELIGIBLE.eligibility }] });
+
+      // Assert
+      const tag = el.querySelector('.repository-list__status--side.repository-list__status--ineligible');
+      expect(tag?.textContent?.trim()).toBe('Ineligible');
+    });
+
+    it('shows no status tag for a healthy repository with an active webhook', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, webhookStatus: 'active' }] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__status')).toBeNull();
+    });
+
+    it('shows no status tag for a paused repository with a silent webhook', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, isActive: false, webhookStatus: 'silent' }] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__status')).toBeNull();
+      expect(el.querySelector('.repository-list__updates')?.textContent?.startsWith('Paused,')).toBe(true);
+    });
+
+    it('renders no button in the empty state', () => {
+      // Act
+      const { el } = setup({ repositories: [] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__empty button')).toBeNull();
+    });
+
+    it('ranks the rows by number with a screen-reader priority prefix', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE, SECOND] });
+
+      // Assert
+      const ranks = Array.from(el.querySelectorAll('.repository-list__rank'));
+      expect(ranks.map(r => r.textContent?.replace('Priority', '').trim())).toEqual(['1', '2']);
+      expect(ranks[0].textContent).toContain('Priority');
+    });
+
+    it('renders a delete button and no keyboard reorder controls outside reorder mode', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE, SECOND] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__rank--button')).toBeNull();
+      expect(el.querySelector('.repository-list__move-up-btn')).toBeNull();
+      expect(el.querySelector('#repository-reorder-hint')).toBeNull();
+      const rank = el.querySelector('.repository-list__rank') as HTMLElement;
+      expect(rank.tagName).not.toBe('BUTTON');
+      expect(rank.hasAttribute('tabindex')).toBe(false);
+      expect(el.querySelector('.repository-list__delete-btn')).toBeTruthy();
+    });
+
+    it('renders the reorder hint and describes the list by it in reorder mode', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE, SECOND], reordering: true });
+
+      // Assert
+      expect(el.querySelector('#repository-reorder-hint')?.textContent?.trim()).toBe(
+        'Drag a row by its number, use the arrows, or focus a number and press the arrow keys. Home and End move to the top or bottom.',
+      );
+      expect(el.querySelector('.repository-list__list')?.getAttribute('aria-describedby')).toBe('repository-reorder-hint');
+    });
+
+    it('renders a labelled rank button per row in reorder mode', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE, SECOND], reordering: true });
+
+      // Assert
+      const labels = Array.from(el.querySelectorAll('.repository-list__rank--button')).map(b => b.getAttribute('aria-label'));
+      expect(labels).toEqual([
+        'Reorder acme/platform/billing-api, priority 1, use arrow keys to move',
+        'Reorder acme/web, priority 2, use arrow keys to move',
+      ]);
+    });
+
+    it('disables move up on the first row and move down on the last in reorder mode', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE, SECOND], reordering: true });
+
+      // Assert
+      const ups = el.querySelectorAll<HTMLButtonElement>('.repository-list__move-up-btn');
+      const downs = el.querySelectorAll<HTMLButtonElement>('.repository-list__move-down-btn');
+      expect([ups[0].disabled, ups[1].disabled]).toEqual([true, false]);
+      expect([downs[0].disabled, downs[1].disabled]).toEqual([false, true]);
+    });
+
+    it('hides the delete button in reorder mode', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE, SECOND], reordering: true });
+
+      // Assert
+      expect(el.querySelector('.repository-list__delete-btn')).toBeNull();
+    });
+
+    it('moves a row down when ArrowDown is pressed on its rank button', () => {
+      // Arrange
+      const { el, httpMock } = setup({ repositories: [BASE, SECOND], reordering: true });
+      const rank = el.querySelector('.repository-list__rank--button') as HTMLButtonElement;
+
+      // Act
+      rank.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+
+      // Assert
+      const req = httpMock.expectOne(`/api/repositories/${BASE.id}/position`);
+      expect(req.request.method).toBe('PATCH');
+      expect(req.request.body).toEqual({ position: 1 });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
+    it('renders a single repository as rank 1 without drag affordances', () => {
+      // Act
+      const { el } = setup({ repositories: [BASE] });
+
+      // Assert
+      const rank = el.querySelector('.repository-list__rank') as HTMLElement;
+      expect(rank.textContent).toContain('1');
+      expect(rank.classList).not.toContain('repository-list__rank--draggable');
+      expect(el.querySelector('.repository-list__grip')).toBeNull();
+      expect(el.querySelector('.repository-list__row')?.hasAttribute('aria-roledescription')).toBe(false);
+    });
+
+    it('gives the problem block the ineligible tone for an ineligible repository', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, eligibility: MOCK_REPO_INELIGIBLE.eligibility }] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__problem')?.classList).toContain('repository-list__problem--ineligible');
+    });
+
+    it('gives the problem block the warning tone for an unreachable repository', () => {
+      // Act
+      const { el } = setup({ repositories: [{ ...BASE, eligibility: MOCK_REPO_UNREACHABLE.eligibility }] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__problem')?.classList).toContain('repository-list__problem--warning');
+    });
+
+    it('links a package-source violation to its source with a serialized query', () => {
+      // Arrange
+      const url = 'https://pkgs.example.com/nuget/v3/index.json';
+      const repo: RepositorySummary = {
+        ...BASE,
+        eligibility: {
+          status: 'ineligible',
+          violations: [{ rule: `package-source-unreachable:${url}`, description: 'Foundry cannot read the package source.' }],
+          reason: null,
+        },
+      };
+
+      // Act
+      const { el, router } = setup({ repositories: [repo] });
+
+      // Assert
+      const link = el.querySelector('.repository-list__problem-list li a.repository-list__problem-link') as HTMLAnchorElement;
+      expect(link.textContent?.trim()).toBe('View package source');
+      expect(link.getAttribute('aria-label')).toBe(`View package source ${url} in Package sources settings`);
+      expect(link.getAttribute('href')).toBe(
+        router.serializeUrl(router.createUrlTree(['/settings/package-sources'], { queryParams: { source: url } })),
+      );
+    });
+
+    it('renders no package-source link for a branch-protection violation', () => {
+      // Arrange
+      const repo: RepositorySummary = {
+        ...BASE,
+        eligibility: {
+          status: 'ineligible',
+          violations: [{ rule: 'branch-protection:direct-pushes', description: 'Direct pushes are allowed.' }],
+          reason: null,
+        },
+      };
+
+      // Act
+      const { el } = setup({ repositories: [repo] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__problem-link')).toBeNull();
     });
   });
 });

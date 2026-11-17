@@ -1,3 +1,9 @@
+@use '../../../../../styles/settings-list' as *;
+
+:host {
+  @include settings-list-host(repositories-settings);
+}
+
 .repositories-settings {
   display: flex;
   flex-direction: column;
@@ -10,22 +16,48 @@
     padding: var(--fd-spacing-xl);
   }
 
+  &__header {
+    @include settings-list-header;
+  }
+
+  &__heading-group {
+    @include settings-list-heading-group;
+  }
+
   &__section-title {
+    color: var(--fd-text-primary);
     font-size: 1rem;
     font-weight: 600;
-    color: var(--fd-text-primary);
-    margin: 0 0 var(--fd-spacing-xs) 0;
+    margin: 0;
   }
 
   &__section-description {
     color: var(--fd-text-secondary);
     font-size: 0.875rem;
-    margin: 0 0 var(--fd-spacing-xl) 0;
+    margin: var(--fd-spacing-xs) 0 0;
+  }
+
+  &__actions {
+    @include settings-list-actions;
+  }
+
+  &__btn {
+    @include settings-list-button;
+  }
+
+  &__btn--primary {
+    @include settings-list-button-primary;
   }
 
   &__delete-error {
     color: var(--fd-state-failed);
     font-size: 0.875rem;
     margin-block-start: var(--fd-spacing-sm);
+  }
+}
+
+@include settings-list-when-narrow(repositories-settings) {
+  .repositories-settings__section {
+    padding: var(--fd-spacing-lg) var(--fd-spacing-md);
   }
 }

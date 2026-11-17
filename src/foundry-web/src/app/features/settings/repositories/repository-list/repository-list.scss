@@ -1,5 +1,9 @@
 @use '../../../../../styles/controls' as *;
-@use '../../../../../styles/list-card' as *;
+@use '../../../../../styles/settings-list' as *;
+
+:host {
+  @include settings-list-host(repository-list);
+}
 
 .repository-list {
   &__empty {
@@ -24,42 +28,26 @@
     margin: 0;
   }
 
-  &__error {
-    align-items: center;
+  &__error,
+  &__move-error {
     background: var(--fd-bg-error-subtle);
     border: 1px solid var(--fd-state-failed);
     border-radius: var(--fd-radius-sm);
     color: var(--fd-state-failed);
-    display: flex;
     font-size: 0.875rem;
+    margin-block-end: var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__error {
+    align-items: center;
+    display: flex;
     gap: var(--fd-spacing-md);
     justify-content: space-between;
-    margin-bottom: var(--fd-spacing-md);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
 
   &__error-message {
     flex: 1;
-  }
-
-  &__retry-btn {
-    background: transparent;
-    border: 1px solid var(--fd-state-failed);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-state-failed);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    min-height: 32px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
-
-    &:hover {
-      background: rgba(218, 54, 51, 0.1);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-state-failed);
-      outline-offset: 2px;
-    }
   }
 
   &__loading {
@@ -69,114 +57,125 @@
     padding: var(--fd-spacing-2xl);
   }
 
-  &__header {
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: var(--fd-spacing-md);
+  &__reorder-hint {
+    background: var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    margin: 0 0 var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
   }
 
-  &__add-btn {
-    align-items: center;
-    background: transparent;
-    border: 1px solid var(--fd-text-link);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-link);
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 0.875rem;
-    font-weight: 500;
-    gap: var(--fd-spacing-xs);
-    min-height: 36px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
-    transition: background 0.15s ease;
+  &__list {
+    @include settings-list-container;
+  }
 
-    &:hover {
-      background: var(--fd-bg-card-hover);
+  &__row {
+    @include settings-list-row(minmax(1.5rem, auto) 20px minmax(0, 1fr) auto);
+
+    &.cdk-drag-preview {
+      background: var(--fd-bg-card);
+      border: 1px solid var(--fd-text-link);
     }
+
+    &.cdk-drag-placeholder {
+      opacity: 0.4;
+    }
+
+    &.cdk-drag-animating,
+    .cdk-drop-list-dragging & {
+      transition: transform 0.25s ease;
+    }
+  }
+
+  &__rank {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    grid-column: 1;
+    line-height: 1.4rem;
+    position: relative;
+    text-align: end;
+  }
+
+  &__rank--draggable {
+    border-radius: var(--fd-radius-sm);
+    cursor: grab;
+    padding-inline: 2px;
+
+    @media (hover: hover) {
+      &:hover {
+        background: var(--fd-border-muted);
+        color: var(--fd-text-primary);
+
+        .repository-list__grip {
+          display: block;
+        }
+      }
+    }
+  }
+
+  &__grip {
+    color: var(--fd-text-tertiary);
+    display: none;
+    height: 14px;
+    position: absolute;
+    right: calc(100% + 1px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+  }
+
+  &__rank--button {
+    background: var(--fd-border-muted);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: grab;
+    font: inherit;
+    font-size: 0.8125rem;
+    min-width: 1.5rem;
+    padding: 0 2px;
+    text-align: center;
 
     &:focus-visible {
       @include focus-ring;
     }
-  }
 
-  &__list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-sm);
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  // ── Card frame (via mixin) ──────────────────────────────────────────────────
-
-  &__item {
-    @include list-card-frame;
-
-    &.cdk-drag-preview {
-      background: var(--fd-bg-page);
-      border: 1px solid var(--fd-text-link);
-      border-radius: var(--fd-radius-sm);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-      opacity: 0.95;
+    @media (any-pointer: coarse) {
+      height: 2.75rem;
+      min-width: 2.75rem;
     }
-
-    &.cdk-drag-placeholder {
-      background: var(--fd-bg-card-hover);
-      border: 1px dashed var(--fd-border-muted);
-      opacity: 0.5;
-
-      * {
-        visibility: hidden;
-      }
-    }
-
-    &.cdk-drag-animating {
-      transition: transform 0.25s ease;
-
-      @media (prefers-reduced-motion: reduce) {
-        transition: none;
-      }
-    }
-  }
-
-  // ── Line 1 — title row ──────────────────────────────────────────────────────
-
-  &__line1 {
-    @include list-card-title-row;
-  }
-
-  &__reorder-group {
-    align-items: center;
-    display: flex;
-    flex-shrink: 0;
-    gap: 0;
-  }
-
-  &__move-stack {
-    align-items: center;
-    display: flex;
-    flex-direction: column;
   }
 
   &__provider {
-    color: var(--fd-text-secondary);
-    flex-shrink: 0;
+    grid-column: 2;
+    margin-block-start: 1px;
   }
 
-  &__item--paused &__provider {
-    opacity: 0.4;
+  &__main {
+    @include settings-list-main(3);
+  }
+
+  &__side {
+    @include settings-list-side(4);
+  }
+
+  &__title-line {
+    @include settings-list-line;
+  }
+
+  &__meta {
+    @include settings-list-line;
+    @include settings-list-meta;
   }
 
   &__slug {
-    @include list-card-title;
+    @include settings-list-title;
 
-    color: inherit;
-    flex: 1;
     text-decoration: none;
 
-    &:hover {
+    &:hover .repository-list__slug-name {
       text-decoration: underline;
     }
 
@@ -185,94 +184,76 @@
     }
   }
 
-  // Paused: secondary colour on slug and strip text (no opacity on text — #292)
-  &__item--paused &__slug,
-  &__item--paused &__state-label,
-  &__item--paused &__via {
+  &__slug-namespace {
     color: var(--fd-text-secondary);
+    font-weight: 400;
   }
 
-  &__delete {
-    flex-shrink: 0;
+  &__slug-name {
+    font-weight: 600;
   }
 
-  // ── Line 2 — metadata strip ─────────────────────────────────────────────────
-
-  &__strip {
-    @include list-card-strip;
+  &__tag {
+    @include settings-list-tag;
   }
 
-  &__state {
-    align-items: center;
-    display: flex;
-    gap: var(--fd-spacing-xs);
-    white-space: nowrap;
-  }
+  &__status {
+    @include settings-list-status;
 
-  &__state-dot {
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-    height: 8px;
-    width: 8px;
-
-    &--active {
-      background: var(--fd-state-completed);
+    &--ineligible {
+      @include settings-list-status-tone(
+        var(--fd-text-ineligible),
+        color-mix(in srgb, var(--fd-state-ineligible) 16%, transparent)
+      );
     }
 
-    &--paused {
-      background: var(--fd-text-secondary);
+    &--warning {
+      @include settings-list-status-tone(var(--fd-text-warning), var(--fd-bg-warning-subtle));
     }
   }
 
-  &__state-label {
+  &__icon-btn {
+    @include settings-list-icon-button;
+  }
+
+  &__delete-btn {
+    @include settings-list-icon-button-tone(var(--fd-text-error), var(--fd-bg-error-subtle));
+  }
+
+  &__move-btn {
+    @include settings-list-icon-button-tone(var(--fd-text-primary), var(--fd-border-muted));
+
     color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
+
+    &:disabled {
+      opacity: 0.3;
+    }
   }
 
-  &__state:has(.repository-list__state-dot--active) &__state-label {
-    color: var(--fd-state-completed);
+  &__problem {
+    @include settings-list-problem(3, var(--fd-border-default));
+
+    &--ineligible {
+      border-inline-start-color: var(--fd-text-ineligible);
+    }
+
+    &--warning {
+      border-inline-start-color: var(--fd-border-warning);
+    }
   }
 
-  &__chip {
-    @include list-card-chip;
+  &__problem-list {
+    @include settings-list-problem-text;
+
+    display: grid;
+    gap: 2px;
+    list-style: none;
+    padding: 0;
   }
 
-  &__chip-default {
-    color: var(--fd-text-tertiary);
-    font-size: 0.6875rem;
-    margin-inline-start: 0.25rem;
-  }
-
-  &__via {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-    white-space: nowrap;
-  }
-
-  &__eligibility {
-    flex-shrink: 0;
-  }
-
-  // ── Inline eligibility reasons ──────────────────────────────────────────────
-
-  &__reasons {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-xs);
-    margin-block-start: var(--fd-spacing-xs);
-  }
-
-  &__reason {
-    @include list-card-warning;
-  }
-
-  &__package-source-link {
-    color: var(--fd-text-warning);
-    font-size: 0.75rem;
+  &__problem-link {
+    color: var(--fd-text-link);
     font-weight: 500;
-    text-decoration: underline;
-    white-space: nowrap;
 
     &:hover {
       text-decoration: none;
@@ -283,163 +264,39 @@
     }
   }
 
-  &__reason--error {
+  &__problem-error {
     color: var(--fd-text-error);
     font-size: 0.8125rem;
-    line-height: 1.4;
+    margin: 0;
   }
 
-  &__reason-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--fd-spacing-xs);
-    margin-block-start: var(--fd-spacing-xs);
+  &__problem-actions {
+    @include settings-list-actions;
   }
-
-  &__recheck-btn,
-  &__apply-rules-btn,
-  &__apply-rules-dismiss {
-    background: transparent;
-    border: 1px solid var(--fd-border-control);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-primary);
-    cursor: pointer;
-    font-size: 0.8125rem;
-    min-height: 44px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
-    white-space: nowrap;
-
-    &:hover:not([disabled]) {
-      background: var(--fd-bg-card-hover);
-    }
-
-    &[disabled] {
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    &:focus-visible {
-      @include focus-ring;
-    }
-  }
-
-  &__apply-rules-btn {
-    font-weight: 500;
-  }
-
-  // ── Apply branch rules progress / outcome ───────────────────────────────────
 
   &__apply-rules {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
     gap: var(--fd-spacing-xs);
-    margin-block-start: var(--fd-spacing-sm);
-  }
+    justify-items: start;
 
-  &__apply-rules > fd-repository-add-progress,
-  &__apply-rules > fd-repository-add-outcome {
-    align-self: stretch;
-  }
-
-  // ── Reorder controls ────────────────────────────────────────────────────────
-
-  &__drag-handle {
-    align-items: center;
-    background: transparent;
-    border: none;
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-tertiary);
-    cursor: grab;
-    display: inline-flex;
-    flex-shrink: 0;
-    justify-content: center;
-    min-height: 36px;
-    min-width: 36px;
-    padding: var(--fd-spacing-xs) 2px;
-    touch-action: none;
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
-      color: var(--fd-text-secondary);
-    }
-
-    &:focus-visible {
-      @include focus-ring;
-    }
-
-    &:active {
-      cursor: grabbing;
+    > fd-repository-add-progress,
+    > fd-repository-add-outcome {
+      justify-self: stretch;
     }
   }
 
-  &__move-up-btn,
-  &__move-down-btn {
-    align-items: center;
-    background: transparent;
-    border: none;
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 0.5625rem;
-    justify-content: center;
-    min-height: 24px;
-    min-width: 24px;
-    padding: 1px 2px;
-
-    &:hover:not([disabled]) {
-      background: var(--fd-bg-card-hover);
-    }
-
-    &:focus-visible {
-      @include focus-ring;
-    }
-
-    &[disabled] {
-      color: var(--fd-text-tertiary);
-      cursor: default;
-      opacity: 0.4;
-    }
+  &__btn,
+  &__retry-btn {
+    @include settings-list-button;
   }
 
-  &__priority-hint {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-    margin-block-end: var(--fd-spacing-sm);
-    margin-block-start: 0;
-  }
-
-  &__move-error {
-    align-items: center;
-    background: var(--fd-bg-error-subtle);
-    border: 1px solid var(--fd-state-failed);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-state-failed);
-    font-size: 0.875rem;
-    margin-bottom: var(--fd-spacing-sm);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-  }
-
-  &__list.cdk-drop-list-dragging &__item:not(.cdk-drag-placeholder) {
-    transition: transform 0.25s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
+  &__btn--primary {
+    @include settings-list-button-primary;
   }
 }
 
-@media (any-pointer: coarse) {
-  .repository-list {
-    &__move-up-btn,
-    &__move-down-btn,
-    &__drag-handle,
-    &__recheck-btn,
-    &__apply-rules-btn,
-    &__apply-rules-dismiss {
-      min-height: 2.75rem;
-      min-width: 2.75rem;
-    }
+@include settings-list-narrow-rows(repository-list, repository-list) {
+  .repository-list__row {
+    grid-template-columns: minmax(1.25rem, auto) 20px minmax(0, 1fr) auto;
   }
 }
