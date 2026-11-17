@@ -104,6 +104,29 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheTokenHasAnExpiry_StoresItAndReturnsItInTheSummary()
+    {
+        // Arrange
+        DateTimeOffset expiresAt = DateTimeOffset.UtcNow.AddDays(10);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()),
+            validateToken: new ExpiringValidateTokenHandler(new TokenExpiry.On(expiresAt)));
+        CreateAccount.Command command = new("gitlab", "https://gitlab.com", "glpat_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        Credential? stored = await _dbContext.Set<Credential>().AsNoTracking().FirstOrDefaultAsync(
+            c => c.Id == CredentialId.From(created.Value.Credential.Id),
+            TestContext.Current.CancellationToken);
+        created.ShouldSatisfyAllConditions(
+            () => created.Value.Credential.TokenExpiry.ShouldBe(new TokenExpirySummary("expiringSoon", expiresAt)),
+            () => stored.ShouldNotBeNull().TokenExpiry.ShouldBe(new TokenExpiry.On(expiresAt)));
+    }
+
+    [Fact]
     public async Task WhenGitLabDeriverReturnsUnavailable_SetsEmptyNamespaces()
     {
         // Arrange — GitLab skips the write probe entirely; unavailable derivation still creates the credential
@@ -869,6 +892,24 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
         created.Value.Credential.TokenStatus.ShouldBe("present");
+    }
+
+    private sealed class ExpiringValidateTokenHandler(TokenExpiry expiry)
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken)
+        {
+            ValidateToken.Response response = new(
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: "alice",
+                MissingScopes: [],
+                DetectedProvider: null,
+                Expiry: expiry,
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
+            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
+        }
     }
 
     private sealed class StubValidateTokenHandler
