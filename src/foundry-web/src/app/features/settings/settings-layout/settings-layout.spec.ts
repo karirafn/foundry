@@ -111,7 +111,7 @@ describe('SettingsLayoutComponent', () => {
     expect(heading?.textContent?.trim()).toBe('Settings');
   });
 
-  it('should render sidebar nav with all 8 links in order', () => {
+  it('should render sidebar nav with all 9 links in order', () => {
     // Arrange
     const { fixture, httpMock } = setup();
 
@@ -132,6 +132,7 @@ describe('SettingsLayoutComponent', () => {
       'Worker roles',
       'Provider hosts',
       'Accounts',
+      'Package sources',
       'Repositories',
     ]);
   });

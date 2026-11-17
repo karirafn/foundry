@@ -101,7 +101,15 @@ internal static class ProxyPackageSourceRequest
                 return;
             }
 
-            UpstreamCredential? credential = await CredentialForAsync(repository, source.ServiceIndexUrl, cancellationToken);
+            SourceReadCredential readCredential = await CredentialForAsync(source, repository, cancellationToken);
+            if (readCredential is not SourceReadCredential.Send { Upstream: var credential })
+            {
+                // The operator chose this credential; falling back would send one they did not.
+                logger.LogWarning("Package source {Url} has a registered credential that cannot be used.", source.ServiceIndexUrl);
+                await BadGatewayAsync(response, $"The registered credential for the package source {source.ServiceIndexUrl} cannot be used; replace it in Settings.", cancellationToken);
+                return;
+            }
+
 
             Result<HttpResponseMessage> sent = await upstreamClient.SendAsync(
                 source.ServiceIndexUrl,
@@ -133,20 +141,23 @@ internal static class ProxyPackageSourceRequest
             await RelayAsync(upstream, proxied, upstreamMethod, response, cancellationToken);
         }
 
-        private async Task<UpstreamCredential?> CredentialForAsync(
+        /// <summary>The credential the probe uses for <paramref name="repository"/>: the registered one first, then its account.</summary>
+        private async Task<SourceReadCredential> CredentialForAsync(
+            PackageSource source,
             MonitoredRepository repository,
-            Uri sourceUrl,
             CancellationToken cancellationToken)
         {
-            if (!PackageSourceAccess.UsesAccount(sourceUrl, repository.Host))
+            if (PackageSourceAccess.RegisteredFor(source) is { } registered)
             {
-                return null;
+                return registered;
             }
 
-            Credential? account = await credentialResolver.ResolveAsync(repository.Host, repository.Slug, cancellationToken);
-            return account?.TokenUsability is TokenUsability.Usable usable
-                ? new UpstreamCredential(account.Name.Value, usable.Token)
+            Credential? account = PackageSourceAccess.UsesAccount(source.ServiceIndexUrl, repository.Host)
+                ? await credentialResolver.ResolveAsync(repository.Host, repository.Slug, cancellationToken)
                 : null;
+            return account?.TokenUsability is TokenUsability.Usable usable
+                ? PackageSourceAccess.Resolve(source, source.ServiceIndexUrl, repository.Host, account, usable.Token)
+                : new SourceReadCredential.Send(new ProbeCredential.Anonymous(), Version: 0, Upstream: null);
         }
 
         private static async Task RelayAsync(

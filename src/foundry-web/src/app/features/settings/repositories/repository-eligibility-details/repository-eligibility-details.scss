@@ -63,6 +63,19 @@
     }
   }
 
+  &__package-source-link {
+    color: var(--fd-text-link);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
   &__explanation {
     color: var(--fd-text-secondary);
     font-size: 0.75rem;

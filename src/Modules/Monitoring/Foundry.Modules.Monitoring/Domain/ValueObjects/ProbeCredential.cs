@@ -10,8 +10,18 @@ internal abstract record ProbeCredential
 {
     private const string AnonymousKey = "anonymous";
     private const string AccountKeyPrefix = "account:";
+    private const string RegisteredKey = "registered";
 
     private ProbeCredential() { }
+
+    /// <summary>
+    /// The Package Source Credential registered for the source. It takes precedence over the account and anonymous
+    /// credentials for every repository that declares the source, whatever the source's host.
+    /// </summary>
+    internal sealed record Registered : ProbeCredential
+    {
+        public override string Key => RegisteredKey;
+    }
 
     /// <summary>No credential: the source's host is not the repository's provider host.</summary>
     internal sealed record Anonymous : ProbeCredential

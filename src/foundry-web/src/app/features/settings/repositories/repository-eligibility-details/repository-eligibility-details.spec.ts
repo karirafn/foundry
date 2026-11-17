@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { RepositoryEligibilityDetailsComponent } from './repository-eligibility-details';
+import { provideRouter } from '@angular/router';
 import { EligibilityReason, EligibilityViolation } from '../repository.model';
 
 const VIOLATIONS: EligibilityViolation[] = [
@@ -32,6 +33,7 @@ describe('RepositoryEligibilityDetailsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [RepositoryEligibilityDetailsComponent],
+      providers: [provideRouter([])],
     }).compileComponents();
   });
 
@@ -322,5 +324,38 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(heading?.textContent?.trim()).toBe('Branch protection could not be verified');
     const explanation = el.querySelector('.repository-eligibility-details__explanation');
     expect(explanation?.textContent).toContain('branch-protection settings');
+  });
+
+  describe('package source link', () => {
+    const SOURCE = 'https://gitlab.example.com/api/v4/groups/42/-/packages/nuget/index.json';
+
+    it('links an unreachable package source violation to its card in Package sources settings', () => {
+      // Arrange
+      const violations: EligibilityViolation[] = [
+        ...VIOLATIONS,
+        { rule: `package-source-unreachable:${SOURCE}`, description: `Foundry can't read the package source ${SOURCE}.` },
+      ];
+
+      // Act
+      const { el } = setup({ status: 'ineligible', violations });
+
+      // Assert
+      const links = el.querySelectorAll<HTMLAnchorElement>('.repository-eligibility-details__package-source-link');
+      expect(links.length).toBe(1);
+      expect(links[0].textContent?.trim()).toBe('View package source');
+      expect(links[0].getAttribute('aria-label')).toBe(`View package source ${SOURCE} in Package sources settings`);
+      const href = new URL(links[0].getAttribute('href') ?? '', 'http://localhost');
+      expect(href.pathname).toBe('/settings/package-sources');
+      expect(href.searchParams.get('source')).toBe(SOURCE);
+      expect(links[0].closest('li')?.textContent).toContain(`Foundry can't read the package source ${SOURCE}.`);
+    });
+
+    it('adds no link to other violations', () => {
+      // Arrange / Act
+      const { el } = setup({ status: 'ineligible', violations: VIOLATIONS });
+
+      // Assert
+      expect(el.querySelector('.repository-eligibility-details__package-source-link')).toBeNull();
+    });
   });
 });

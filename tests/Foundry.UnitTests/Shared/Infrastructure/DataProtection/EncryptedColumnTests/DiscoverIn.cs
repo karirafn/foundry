@@ -38,6 +38,7 @@ public sealed class DiscoverIn
                 ("accounts", "token", "id"),
                 ("claude_account", "api_key", "id"),
                 ("monitored_repositories", "webhook_secret", "id"),
+                ("package_sources", "credential_token", "id"),
             ]);
     }
 

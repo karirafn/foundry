@@ -56,7 +56,13 @@ public sealed class ProbeNowAsync : IAsyncDisposable
         repository.RecordRootListing(
             new RootNuGetConfig.Declared("sha", "<configuration />", [DeclaredPackageSource.Create("gitlab", GroupSourceUrl).ValueOrThrow()]),
             listingETag: null);
-        PackageSourceProbing sut = new(_dbContext, resolver, prober, NullLogger<PackageSourceProbing>.Instance);
+        PackageSourceProbing sut = new(
+            _dbContext,
+            resolver,
+            prober,
+            new PackageSourceProbeGate(),
+            new CapturingSystemNotificationBroadcaster(),
+            NullLogger<PackageSourceProbing>.Instance);
         await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
 
         // Act

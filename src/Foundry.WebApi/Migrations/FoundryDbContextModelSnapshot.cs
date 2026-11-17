@@ -469,12 +469,33 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<int>("CredentialVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("credential_version");
+
                     b.Property<string>("ServiceIndexUrl")
                         .IsRequired()
                         .HasMaxLength(2000)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("url");
+
+                    b.Property<string>("_credentialToken")
+                        .HasMaxLength(8000)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_token");
+
+                    b.Property<DateTimeOffset?>("_credentialUpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_updated_at");
+
+                    b.Property<string>("_credentialUsername")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("credential_username");
 
                     b.HasKey("Id");
 

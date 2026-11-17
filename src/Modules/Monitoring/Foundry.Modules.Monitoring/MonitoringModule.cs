@@ -79,6 +79,11 @@ public static class MonitoringModule
         services.AddTransient<IPackageSourceProber, PackageSourceProber>();
         services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
         services.AddScoped<PackageSourceProbing>();
+        services.TryAddSingleton<PackageSourceProbeGate>();
+        services.TryAddSingleton<PackageSourceProbeRequests>();
+        services.AddHostedService<PackageSourceProbeService>();
+        services.AddScoped<GetPackageSources.Handler>();
+        services.AddScoped<PackageSourceCredentialCommands.Handler>();
         services.AddHttpClient<GitLabHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
 
@@ -175,6 +180,7 @@ public static class MonitoringModule
         app.MapProviderEndpoints();
         app.MapRateBudgetEndpoints();
         app.MapRepositoryEndpoints();
+        app.MapPackageSourceEndpoints();
         ReceiveGitHubWebhook.Endpoint.Map(app);
         ReceiveGitLabWebhook.Endpoint.Map(app);
         ProxyPackageSourceRequest.Endpoint.Map(app);

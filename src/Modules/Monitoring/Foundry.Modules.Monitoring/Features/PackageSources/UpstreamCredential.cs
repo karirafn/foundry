@@ -8,8 +8,9 @@ internal sealed class UpstreamCredential
 {
     public UpstreamCredential(string username, string token)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(username);
-        ArgumentException.ThrowIfNullOrWhiteSpace(token);
+        // Empty is refused; whitespace is kept, because a registered credential is sent exactly as the operator gave it.
+        ArgumentException.ThrowIfNullOrEmpty(username);
+        ArgumentException.ThrowIfNullOrEmpty(token);
         Username = username;
         Token = token;
     }

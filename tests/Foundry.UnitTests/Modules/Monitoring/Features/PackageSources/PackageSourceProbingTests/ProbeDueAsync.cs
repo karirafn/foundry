@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
@@ -27,6 +28,7 @@ public sealed class ProbeDueAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly RecordingProber _prober = new();
     private readonly SlugCredentialResolver _resolver = new();
+    private readonly CapturingSystemNotificationBroadcaster _broadcaster = new();
 
     public ProbeDueAsync()
     {
@@ -46,7 +48,7 @@ public sealed class ProbeDueAsync : IAsyncDisposable
         new(new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options);
 
     private PackageSourceProbing CreateSut() =>
-        new(_dbContext, _resolver, _prober, NullLogger<PackageSourceProbing>.Instance);
+        new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), _broadcaster, NullLogger<PackageSourceProbing>.Instance);
 
     private static GitLabCredential Account(string name, string token = "unused-token") =>
         GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token, BaseUrl.Create("https://gitlab.com").ValueOrThrow());
@@ -240,6 +242,66 @@ public sealed class ProbeDueAsync : IAsyncDisposable
 
         // Assert
         _prober.Probes.Select(p => p.Url.AbsoluteUri).ShouldBe([GroupSourceUrl, ThirdPartySourceUrl]);
+    }
+
+    [Fact]
+    public async Task WhenASourceHasARegisteredCredential_ProbesWithItInsteadOfTheAccount()
+    {
+        // Arrange
+        MonitoredRepository repository = Repository("group/app", Account("deploy-bot"), GroupSourceUrl);
+        PackageSource source = PackageSource.Create(new Uri(GroupSourceUrl));
+        source.SetCredential("ci-reader", "registered-token", Now);
+        _dbContext.Add(source);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        await CreateSut().ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _prober.Probes.ShouldHaveSingleItem().Credential.ShouldNotBeNull().Username.ShouldBe("ci-reader");
+    }
+
+    [Fact]
+    public async Task WhenAVerdictChanges_SendsThePackageSourceNotification()
+    {
+        // Arrange
+        MonitoredRepository repository = Repository("group/app", Account("deploy-bot"), GroupSourceUrl);
+
+        // Act
+        await CreateSut().ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _broadcaster.SentNotifications.ShouldHaveSingleItem().Category.ShouldBe(PackageSourceNotification.Category);
+    }
+
+    [Fact]
+    public async Task WhenNoVerdictChanges_SendsNoNotification()
+    {
+        // Arrange
+        MonitoredRepository repository = Repository("group/app", Account("deploy-bot"), GroupSourceUrl);
+        PackageSourceProbing sut = CreateSut();
+        await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Act
+        await sut.ProbeDueAsync([repository], Now + TimeSpan.FromMinutes(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        _broadcaster.SentNotifications.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenTheAccountTokenIsInvalid_StillStoresTheSourceSoSettingsCanListIt()
+    {
+        // Arrange
+        GitLabCredential account = Account("deploy-bot");
+        account.MarkTokenInvalid(Now);
+        MonitoredRepository repository = Repository("group/app", account, GroupSourceUrl);
+
+        // Act
+        await CreateSut().ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await StoredSourceAsync(GroupSourceUrl)).Probes.ShouldBeEmpty();
     }
 
     [Fact]

@@ -267,6 +267,22 @@
     @include list-card-warning;
   }
 
+  &__package-source-link {
+    color: var(--fd-text-warning);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: underline;
+    white-space: nowrap;
+
+    &:hover {
+      text-decoration: none;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
   &__reason--error {
     color: var(--fd-text-error);
     font-size: 0.8125rem;

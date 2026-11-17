@@ -1505,4 +1505,43 @@ describe('RepositoryListComponent', () => {
       expect((el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).disabled).toBe(false);
     });
   });
+
+  describe('package source link', () => {
+    const SOURCE = 'https://gitlab.example.com/api/v4/groups/42/-/packages/nuget/index.json';
+    const WITH_SOURCE_VIOLATION: RepositorySummary = {
+      ...MOCK_REPO_INELIGIBLE,
+      eligibility: {
+        status: 'ineligible',
+        violations: [
+          { rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' },
+          { rule: `package-source-unreachable:${SOURCE}`, description: `Foundry can't read the package source ${SOURCE}.` },
+        ],
+        reason: null,
+      },
+    };
+
+    it('links an unreachable package source violation to its card in Package sources settings', () => {
+      // Arrange / Act
+      const { el } = setup({ repositories: [WITH_SOURCE_VIOLATION] });
+
+      // Assert
+      const links = el.querySelectorAll<HTMLAnchorElement>('.repository-list__package-source-link');
+      expect(links.length).toBe(1);
+      const link = links[0];
+      expect(link.textContent?.trim()).toBe('View package source');
+      expect(link.getAttribute('aria-label')).toBe(`View package source ${SOURCE} in Package sources settings`);
+      const href = new URL(link.getAttribute('href') ?? '', 'http://localhost');
+      expect(href.pathname).toBe('/settings/package-sources');
+      expect(href.searchParams.get('source')).toBe(SOURCE);
+      expect(link.closest('.repository-list__reason')?.textContent).toContain(`Foundry can't read the package source ${SOURCE}.`);
+    });
+
+    it('adds no link to other violations', () => {
+      // Arrange / Act
+      const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__package-source-link')).toBeNull();
+    });
+  });
 });

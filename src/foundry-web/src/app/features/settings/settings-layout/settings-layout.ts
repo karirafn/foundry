@@ -102,6 +102,13 @@ const HEADING_SELECTOR = 'h1, h2';
             >Accounts</a>
             <a
               class="settings-layout__nav-link"
+              routerLink="package-sources"
+              routerLinkActive="settings-layout__nav-link--active"
+              #packageSourcesLink="routerLinkActive"
+              [attr.aria-current]="packageSourcesLink.isActive ? 'page' : null"
+            >Package sources</a>
+            <a
+              class="settings-layout__nav-link"
               routerLink="repositories"
               routerLinkActive="settings-layout__nav-link--active"
               #repositoriesLink="routerLinkActive"

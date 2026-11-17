@@ -34,7 +34,10 @@ internal sealed class PackageSourceProbe
     /// <summary>The <see cref="ProbeCredential.Key"/> of the credential the probe used.</summary>
     public string CredentialKey { get; private set; } = string.Empty;
 
-    /// <summary>The account's <see cref="Credential.TokenVersion"/> the probe used (0 without a credential).</summary>
+    /// <summary>
+    /// The account's <see cref="Credential.TokenVersion"/> the probe used, the source's
+    /// <see cref="PackageSource.CredentialVersion"/> for a registered credential, or 0 without a credential.
+    /// </summary>
     public int TokenVersion { get; private set; }
 
     public DateTimeOffset CheckedAt { get; private set; }

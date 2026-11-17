@@ -202,13 +202,13 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         foreach (DeclaredPackageSource source in repo.DeclaredPackageSources)
         {
-            ProbeCredential probeCredential = PackageSourceAccess.ProbeCredentialFor(
+            ProbeCredential fallback = PackageSourceAccess.FallbackFor(
                 source.ServiceIndexUrl,
                 repo.Host,
                 account);
             PackageSourceVerdict verdict = await packageSourceVerdicts.VerdictForAsync(
                 source.ServiceIndexUrl,
-                probeCredential,
+                fallback,
                 cancellationToken);
 
             EligibilityViolation violation = EligibilityViolation.PackageSourceUnreachable(source.ServiceIndexUrl);
