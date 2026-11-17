@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -28,6 +29,7 @@ internal sealed partial class GitHubHttpClient(
     TimeProvider timeProvider) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
+    private const string TokenExpirationHeader = "github-authentication-token-expiration";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const string FineGrainedPatPrefix = "github_pat_";
     private const int MaxRepositoryPages = 5;
@@ -1002,8 +1004,7 @@ internal sealed partial class GitHubHttpClient(
             return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
         }
 
-        // GitHub expiry is not read yet (#1041).
-        TokenExpiry tokenExpiry = new TokenExpiry.NotChecked();
+        TokenExpiry tokenExpiry = ReadTokenExpiry(response, apiBaseUrl);
 
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
@@ -1539,6 +1540,35 @@ internal sealed partial class GitHubHttpClient(
 
         prNumber = 0;
         return false;
+    }
+
+    /// <summary>
+    /// Maps the undocumented <c>github-authentication-token-expiration</c> header (observed as
+    /// <c>2026-11-22 10:16:35 UTC</c>). A missing header is <see cref="TokenExpiry.Unavailable"/> rather than
+    /// <see cref="TokenExpiry.Never"/>: GitHub omitting it has not been observed to mean "never expires".
+    /// </summary>
+    private TokenExpiry ReadTokenExpiry(HttpResponseMessage response, Uri apiBaseUrl)
+    {
+        if (!response.Headers.TryGetValues(TokenExpirationHeader, out IEnumerable<string>? values))
+        {
+            return new TokenExpiry.Unavailable();
+        }
+
+        if (DateTimeOffset.TryParseExact(
+                values.FirstOrDefault(),
+                "yyyy-MM-dd HH:mm:ss 'UTC'",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out DateTimeOffset expiresAt))
+        {
+            return new TokenExpiry.On(expiresAt);
+        }
+
+        logger.LogWarning(
+            "GitHub token validation: the {Header} header is not a 'yyyy-MM-dd HH:mm:ss UTC' timestamp; expiry recorded as unavailable. Provider: github, Host: {Host}",
+            TokenExpirationHeader,
+            apiBaseUrl.Host);
+        return new TokenExpiry.Unavailable();
     }
 
     private GitHubUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
