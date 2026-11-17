@@ -87,7 +87,7 @@ public sealed class CredentialEndpoints : IAsyncDisposable
         HttpResponseMessage get = await _client.GetAsync(ListUri, TestContext.Current.CancellationToken);
         string body = await get.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         body.ShouldNotContain(Token);
-        JsonElement source = JsonDocument.Parse(body).RootElement.EnumerateArray().ShouldHaveSingleItem();
+        JsonElement source = JsonElement.Parse(body).EnumerateArray().ShouldHaveSingleItem();
         source.GetProperty("credential").GetProperty("username").GetString().ShouldBe("ci-reader");
         source.GetProperty("credential").TryGetProperty("token", out _).ShouldBeFalse();
         source.GetProperty("status").GetProperty("kind").GetString().ShouldBe("unchecked");
