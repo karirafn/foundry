@@ -341,6 +341,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("baseline_body_hash");
 
+                    b.Property<string>("BaselineHead")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("baseline_head");
+
                     b.Property<string>("PendingBodyHash")
                         .HasColumnType("TEXT")
                         .HasColumnName("pending_body_hash");
@@ -348,6 +352,14 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("PendingBodySeenAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("pending_body_first_seen_at");
+
+                    b.Property<DateTimeOffset?>("PendingHeadSeenAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_head_first_seen_at");
+
+                    b.Property<string>("PendingHeadSha")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_head_sha");
 
                     b.Property<string>("Wait")
                         .IsRequired()

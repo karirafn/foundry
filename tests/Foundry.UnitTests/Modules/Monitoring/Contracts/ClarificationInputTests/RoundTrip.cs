@@ -47,4 +47,23 @@ public sealed class RoundTrip
         json.ShouldContain("""{"kind":"descriptionEdited"}""");
         read.ShouldBe(arrived);
     }
+
+    [Fact]
+    public void AwaitingInputArrived_RoundTripsABranchUpdateWithItsShas()
+    {
+        // Arrange
+        AwaitingInputArrived arrived = new(
+            MonitoredRepositoryId.New(),
+            3,
+            new ClarificationInput([new InputPart.BranchUpdated("aaa111", "bbb222")]),
+            new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero));
+
+        // Act
+        string json = JsonSerializer.Serialize(arrived, OutboxSerializerOptions.Default);
+        AwaitingInputArrived? read = JsonSerializer.Deserialize<AwaitingInputArrived>(json, OutboxSerializerOptions.Default);
+
+        // Assert
+        json.ShouldContain("""{"kind":"branchUpdated","fromSha":"aaa111","toSha":"bbb222"}""");
+        read.ShouldBe(arrived);
+    }
 }

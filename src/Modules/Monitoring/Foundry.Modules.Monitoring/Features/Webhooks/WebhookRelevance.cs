@@ -33,17 +33,18 @@ internal sealed record WebhookTrackingContext(
 
 /// <summary>
 /// An awaiting-input issue and the thread its question lives on (ADR 0096): the pull request's thread when
-/// <paramref name="PullRequestUrl"/> is set, otherwise the issue's own thread.
+/// <paramref name="PullRequestUrl"/> is set, otherwise the issue's own thread. <paramref name="BranchName"/> is its
+/// resume target's branch, whose pushes count as input, or <see langword="null"/> when it has none.
 /// </summary>
-internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestUrl);
+internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestUrl, string? BranchName);
 
 /// <summary>
 /// Provider-neutral relevance rules shared by the webhook event mappers (ADR 0085): a pull/merge
 /// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
 /// issue is checks-pending; a finished checks delivery nudges the checks pass of its checks-pending
 /// owner, or else the review pass of its review owner whose checks verdict is not passed; a comment on an
-/// awaiting-input issue's question thread, or an edit of an issue whose question lives on its own thread, nudges its
-/// awaiting-input pass; an issue close of a blocker
+/// awaiting-input issue's question thread, an edit of an issue whose question lives on its own thread, or a push to an
+/// awaiting-input issue's resume branch nudges its awaiting-input pass; an issue close of a blocker
 /// nudges the listing plus the dependency pass; anything else maps to <see langword="null"/>.
 /// </summary>
 internal static partial class WebhookRelevance
@@ -53,6 +54,8 @@ internal static partial class WebhookRelevance
     /// (<c>GitHubHttpClient</c> <c>IssueListQuery</c>, <c>GitLabHttpClient</c> <c>labels=foundry</c>).
     /// </summary>
     internal const string TriggerLabel = "foundry";
+
+    private const string BranchRefPrefix = "refs/heads/";
 
     // Worker branches are "<prefix>/<issue-number>-<slug>" (or "<prefix>/<issue-number>").
     [GeneratedRegex(@"^[a-z][a-z0-9-]*/(?<number>\d{1,9})(?:-|$)", RegexOptions.CultureInvariant)]
@@ -183,6 +186,30 @@ internal static partial class WebhookRelevance
         int issueNumber,
         bool isEdit) =>
         isEdit ? MapIssueComment(repositoryId, tracked, issueNumber) : null;
+
+    /// <summary>
+    /// Maps a push to the awaiting-input pass of the issue whose resume branch it moved: a push while the issue waits
+    /// may be the answer (ADR 0096). GitHub and GitLab share the <c>ref</c> shape; a tag push, or a push to any other
+    /// branch, maps to <see langword="null"/>.
+    /// </summary>
+    internal static NudgeKey? MapPush(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        JsonElement payload)
+    {
+        if (GetString(payload, "ref") is not { } pushedRef
+            || !pushedRef.StartsWith(BranchRefPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string branch = pushedRef[BranchRefPrefix.Length..];
+
+        return tracked.AwaitingInput.FirstOrDefault(w => string.Equals(w.BranchName, branch, StringComparison.Ordinal))
+            is { } waiting
+            ? new NudgeKey(repositoryId, NudgePass.AwaitingInput, waiting.IssueNumber)
+            : null;
+    }
 
     /// <summary>
     /// Maps an issue close to the listing plus dependency pass when the closing issue blocks a tracked

@@ -1338,6 +1338,56 @@ internal sealed partial class GitHubHttpClient(
         return Result<bool>.Ok(true);
     }
 
+    /// <summary>
+    /// Reads where <paramref name="branchName"/> points with <c>GET repos/{owner}/{repo}/git/ref/heads/{branch}</c>
+    /// (the singular <c>ref</c>, which matches the ref exactly). GitHub answers 404 when the ref does not exist, which
+    /// is <see cref="BranchHead.Absent"/>; any other non-success response fails.
+    /// </summary>
+    public async Task<Result<BranchHead>> GetBranchHeadAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<BranchHead>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        // Encode each segment but keep the '/' separators: the git refs API addresses a ref by path.
+        string encodedBranch = string.Join('/', branchName.Split('/').Select(Uri.EscapeDataString));
+        string relativePath = $"repos/{owner}/{repo}/git/ref/heads/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.NotFound)
+        {
+            RecordRestHeadroom(response);
+            return Result<BranchHead>.Ok(new BranchHead.Absent());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<BranchHead>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? sha = JsonSerializer.Deserialize<GitHubRefDto>(body, JsonOptions)?.Object?.Sha;
+
+        return sha is not null && GitObjectIdRegex().IsMatch(sha)
+            ? Result<BranchHead>.Ok(new BranchHead.Present(sha))
+            : Result<BranchHead>.Fail(GitHubErrors.ProviderError("GitHub returned a branch ref without a commit SHA."));
+    }
+
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -1771,6 +1821,10 @@ internal sealed partial class GitHubHttpClient(
         IReadOnlyList<GitHubCommitRefDto> Commits);
 
     private sealed record GitHubCommitRefDto(string Sha);
+
+    private sealed record GitHubRefDto(GitHubRefObjectDto? Object);
+
+    private sealed record GitHubRefObjectDto(string? Sha);
 
     private sealed record GitHubPullRequestStateDto(
         string HtmlUrl,

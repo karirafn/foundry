@@ -5,12 +5,15 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <summary>
 /// What the awaiting-input poll step needs of one waiting issue (ADR 0096). The questions go on
 /// <paramref name="PullRequestUrl"/>'s thread when it is set, otherwise on the issue's own thread.
+/// <paramref name="BranchName"/> is the resume target's branch, whose head counts as input: set for a revision or a
+/// continuation, <see langword="null"/> for a fresh run or a re-triage, which have no branch.
 /// </summary>
 public sealed record AwaitingInputIssueInfo(
     IssueId IssueId,
     int IssueNumber,
     string IssueUrl,
     string? PullRequestUrl,
+    string? BranchName,
     IReadOnlyList<InputQuestion> Questions,
     AwaitingInputPostState PostState);
 

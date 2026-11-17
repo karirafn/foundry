@@ -21,7 +21,7 @@ public sealed class Settle
 
     private static IssueWatch WatchEditedAt(DateTimeOffset firstSeenAt)
     {
-        IssueWatch watch = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch watch = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
         watch.ObserveBody(Edited, firstSeenAt);
         return watch;
     }
@@ -33,7 +33,7 @@ public sealed class Settle
     public void WhenNothingArrived_ReturnsNothingNew()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
 
         // Act
         InputSettlement result = sut.Settle(NoComments, Now);
@@ -46,7 +46,7 @@ public sealed class Settle
     public void WhenOnlyCommentsSettled_ArrivesWithACommentsPartAtTheNewestComment()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
 
         // Act
         InputSettlement result = sut.Settle(Settled(Now.AddMinutes(-3), " first ", "second"), Now);
@@ -117,7 +117,7 @@ public sealed class Settle
     public void WhenOneCommentSettledAndAnotherIsHeld_NothingArrivesUntilTheHeldOneSettles()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
         ReviewFeedback feedback = Settled(Now.AddMinutes(-2), "first") with { HeldBackUntil = Now.AddMinutes(1) };
 
         // Act

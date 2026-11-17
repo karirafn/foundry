@@ -13,10 +13,23 @@ internal sealed class IssueWatchConfiguration : IEntityTypeConfiguration<IssueWa
 {
     private const int WaitMaxLength = 32;
 
+    // A git object id is hex, so the marker for a missing branch never collides with a stored SHA.
+    private const string AbsentHeadMarker = "absent";
+
     // EF Core never passes null to a converter, so both directions see a value.
     private static readonly ValueConverter<IssueBodyHash?, string?> BodyHashConverter = new(
         hash => hash!.Value,
         stored => IssueBodyHash.FromStored(stored!));
+
+    private static readonly ValueConverter<BranchHead?, string?> HeadConverter = new(
+        head => ToStored(head!),
+        stored => FromStored(stored!));
+
+    private static string ToStored(BranchHead head) =>
+        head is BranchHead.Present present ? present.Sha : AbsentHeadMarker;
+
+    private static BranchHead FromStored(string stored) =>
+        stored == AbsentHeadMarker ? new BranchHead.Absent() : new BranchHead.Present(stored);
 
     public void Configure(EntityTypeBuilder<IssueWatch> builder)
     {
@@ -49,6 +62,18 @@ internal sealed class IssueWatchConfiguration : IEntityTypeConfiguration<IssueWa
             .HasColumnName("pending_body_first_seen_at");
 
         builder.Ignore(w => w.PendingBodyChange);
+
+        builder.Property(w => w.BaselineHead)
+            .HasConversion(HeadConverter)
+            .HasColumnName("baseline_head");
+
+        builder.Property<string?>("PendingHeadSha")
+            .HasColumnName("pending_head_sha");
+
+        builder.Property<DateTimeOffset?>("PendingHeadSeenAt")
+            .HasColumnName("pending_head_first_seen_at");
+
+        builder.Ignore(w => w.PendingHeadChange);
 
         builder.HasOne<MonitoredRepository>()
             .WithMany()

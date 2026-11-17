@@ -26,7 +26,8 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// is awaiting input with no PR (its question lives on the issue thread)</description></item>
 /// <item><term><c>check_suite</c> (completed), <c>status</c></term><description>checks pass for the owning issue</description></item>
 /// <item><term><c>branch_protection_rule</c>, <c>repository_ruleset</c></term><description>branch-rules step</description></item>
-/// <item><term><c>push</c></term><description>no nudge — handled by <see cref="BranchPushPublisher"/></description></item>
+/// <item><term><c>push</c></term><description>awaiting-input pass for the awaiting-input issue whose resume branch
+/// it moved</description></item>
 /// <item><term><c>ping</c></term><description>none (health only)</description></item>
 /// </list>
 /// </summary>
@@ -35,12 +36,6 @@ internal static partial class GitHubWebhookEventMapper
     internal const string EventHeaderName = "X-GitHub-Event";
 
     internal const string PingEvent = "ping";
-
-    /// <summary>
-    /// A branch push. Not a nudge: <see cref="BranchPushPublisher"/> turns a push to a running worker branch
-    /// into <c>ProviderBranchPushed</c> so Workers refreshes the run commit count (issue #660).
-    /// </summary>
-    internal const string PushEvent = "push";
 
     /// <summary>The label that marks an issue for Foundry.</summary>
     internal const string TriggerLabel = WebhookRelevance.TriggerLabel;
@@ -58,7 +53,7 @@ internal static partial class GitHubWebhookEventMapper
         "status",
         "branch_protection_rule",
         "repository_ruleset",
-        PushEvent,
+        "push",
     ];
 
     [GeneratedRegex(@"/pull/(?<number>\d{1,9})/?$", RegexOptions.CultureInvariant)]
@@ -67,7 +62,7 @@ internal static partial class GitHubWebhookEventMapper
     /// <summary>Whether mapping <paramref name="eventName"/> needs the repository's tracked issues.</summary>
     public static bool NeedsTrackingContext(string eventName) =>
         eventName is "issues" or "issue_dependencies" or "pull_request" or "pull_request_review"
-            or "pull_request_review_comment" or "issue_comment" or "check_suite" or "status";
+            or "pull_request_review_comment" or "issue_comment" or "check_suite" or "status" or "push";
 
     /// <summary>
     /// Whether mapping <paramref name="eventName"/> needs the blockers of tracked issues — only an
@@ -91,6 +86,7 @@ internal static partial class GitHubWebhookEventMapper
             "check_suite" => MapCheckSuite(payload, repositoryId, tracked),
             "status" => MapStatus(payload, repositoryId, tracked),
             "branch_protection_rule" or "repository_ruleset" => new NudgeKey(repositoryId, NudgePass.BranchRules),
+            "push" => MapPush(repositoryId, tracked, payload),
             _ => null,
         };
     }

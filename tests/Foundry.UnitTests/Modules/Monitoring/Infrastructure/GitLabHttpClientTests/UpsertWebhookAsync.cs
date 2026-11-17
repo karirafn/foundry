@@ -72,7 +72,8 @@ public sealed class UpsertWebhookAsync
         root.GetProperty("url").GetString().ShouldBe(PayloadUrl);
         root.GetProperty("token").GetString().ShouldBe(Secret);
         root.GetProperty("enable_ssl_verification").GetBoolean().ShouldBeTrue();
-        root.GetProperty("push_events").GetBoolean().ShouldBeFalse();
+        root.GetProperty("push_events").GetBoolean().ShouldBeTrue();
+        root.GetProperty("tag_push_events").GetBoolean().ShouldBeFalse();
 
         string[] enabled = root.EnumerateObject()
             .Where(p => p.Name.EndsWith("_events", StringComparison.Ordinal) && p.Value.ValueKind == JsonValueKind.True)

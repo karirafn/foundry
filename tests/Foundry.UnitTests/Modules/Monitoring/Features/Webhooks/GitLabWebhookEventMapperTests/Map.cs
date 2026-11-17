@@ -16,8 +16,8 @@ public sealed class Map
     private static readonly DateTimeOffset At = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
 
     // Issue 10 is tracked and blocked by untracked issue 77; 20 is in review on MR 21;
-    // 30 is checks-pending on MR 31; 40 awaits input on its own thread; 50 awaits input on MR 51;
-    // 60 is in review with checks that are not passed on MR 61.
+    // 30 is checks-pending on MR 31; 40 awaits input on its own thread; 50 awaits input on MR 51 of branch
+    // feat/50-revise; 70 awaits input on its own thread with commits on feat/70-continue; 60 is in review with checks that are not passed on MR 61.
     private static readonly WebhookTrackingContext Tracked = new(
         new HashSet<int> { 10, 20, 30, 40, 50, 60 },
         [
@@ -27,8 +27,9 @@ public sealed class Map
         [new ChecksPendingIssueInfo(30, "https://gitlab.com/group/sub/project/-/merge_requests/31", At, At)],
         new HashSet<int> { 77 },
         [
-            new AwaitingInputThread(40, null),
-            new AwaitingInputThread(50, "https://gitlab.com/group/sub/project/-/merge_requests/51"),
+            new AwaitingInputThread(40, null, null),
+            new AwaitingInputThread(50, "https://gitlab.com/group/sub/project/-/merge_requests/51", "feat/50-revise"),
+            new AwaitingInputThread(70, null, "feat/70-continue"),
         ]);
 
     private static NudgeKey? MapEvent(string json)
@@ -259,12 +260,36 @@ public sealed class Map
     }
 
     [Theory]
-    [InlineData("push")]
     [InlineData("tag_push")]
     [InlineData("build")]
     public void WhenUnmappedKind_IsDropped(string objectKind)
     {
         MapEvent($$"""{"object_kind":"{{objectKind}}","ref":"refs/heads/feat/20-thing"}""")
             .ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("refs/heads/feat/50-revise", 50)]
+    [InlineData("refs/heads/feat/70-continue", 70)]
+    public void WhenPushMovesTheResumeBranchOfAnAwaitingInputIssue_NudgesItsAwaitingInputPass(string pushedRef, int issueNumber)
+    {
+        MapEvent($$"""{"object_kind":"push","event_name":"push","before":"95790bf891e76fee5e1747ab589903a6a1f80f22","after":"da1560886d4f094c3e6c9ef40349f7d38b5d27d7","ref":"{{pushedRef}}"}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, issueNumber));
+    }
+
+    [Theory]
+    [InlineData("refs/heads/main")]
+    [InlineData("refs/heads/feat/20-thing")]
+    [InlineData("refs/tags/feat/70-continue")]
+    public void WhenPushMovesNoAwaitingInputIssuesBranch_IsDropped(string pushedRef)
+    {
+        MapEvent($$"""{"object_kind":"push","event_name":"push","ref":"{{pushedRef}}"}""")
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public void NeedsTrackingContext_IsTrueForAPush()
+    {
+        GitLabWebhookEventMapper.NeedsTrackingContext("push").ShouldBeTrue();
     }
 }
