@@ -90,6 +90,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
             new StubIssueContentQueries(),
             new StubTrackerContextQueries(trackerContext),
             new CapturingSystemNotificationBroadcaster(),
+            new StubWorkerHostEntryResolver(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 

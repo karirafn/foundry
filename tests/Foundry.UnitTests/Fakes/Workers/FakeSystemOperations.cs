@@ -10,6 +10,23 @@ namespace Foundry.UnitTests.Fakes.Workers;
 internal sealed class FakeSystemOperations : ISystemOperations
 {
     private Func<CancellationToken, Task>? _pingBehavior;
+    private Func<Task<SystemInfoResponse>>? _systemInfoBehavior;
+
+    public int SystemInfoCalls { get; private set; }
+
+    /// <summary>Scripts <see cref="GetSystemInfoAsync"/> to report the given engine operating system.</summary>
+    public FakeSystemOperations WithOperatingSystem(string operatingSystem)
+    {
+        _systemInfoBehavior = () => Task.FromResult(new SystemInfoResponse { OperatingSystem = operatingSystem });
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="GetSystemInfoAsync"/> to throw an <see cref="HttpRequestException"/>.</summary>
+    public FakeSystemOperations WithFailedSystemInfo()
+    {
+        _systemInfoBehavior = () => Task.FromException<SystemInfoResponse>(new HttpRequestException("Connection refused"));
+        return this;
+    }
 
     /// <summary>Scripts <see cref="PingAsync"/> to complete successfully.</summary>
     public FakeSystemOperations WithSuccessfulPing()
@@ -53,7 +70,16 @@ internal sealed class FakeSystemOperations : ISystemOperations
         => throw new NotImplementedException();
 
     public Task<SystemInfoResponse> GetSystemInfoAsync(CancellationToken cancellationToken = default)
-        => throw new NotImplementedException();
+    {
+        if (_systemInfoBehavior is null)
+        {
+            throw new InvalidOperationException(
+                "No system info behavior scripted. Call WithOperatingSystem or WithFailedSystemInfo first.");
+        }
+
+        SystemInfoCalls++;
+        return _systemInfoBehavior();
+    }
 
     public Task<Stream> MonitorEventsAsync(
         ContainerEventsParameters parameters,

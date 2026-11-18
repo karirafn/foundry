@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Features.Activity;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.DockerAvailability;
@@ -62,6 +63,8 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<DockerAvailabilityChanged, DockerAvailabilityChangedBroadcastHandler>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IPublisher, DockerPublisher>();
+        services.AddSingleton<IFoundryHostSystem, FoundryHostSystem>();
+        services.AddSingleton<IWorkerHostEntryResolver, WorkerHostEntryResolver>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddWorkerVerdicts();
         services.AddSingleton<IProbeOutcomeClassifier, ProbeOutcomeClassifier>();

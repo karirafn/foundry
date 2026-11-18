@@ -81,7 +81,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IIssueContentQueries? issueContentQueries = null,
         ITrackerContextQueries? trackerContextQueries = null,
         IPublisher? publisher = null,
-        ISystemNotificationBroadcaster? broadcaster = null)
+        ISystemNotificationBroadcaster? broadcaster = null,
+        IWorkerHostEntryResolver? hostEntryResolver = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -97,6 +98,7 @@ public sealed class HandleAsync : IAsyncDisposable
             issueContentQueries ?? new StubIssueContentQueries(),
             trackerContextQueries ?? new StubTrackerContextQueries(),
             broadcaster ?? new CapturingSystemNotificationBroadcaster(),
+            hostEntryResolver ?? new StubWorkerHostEntryResolver(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -1976,21 +1978,23 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAFullRunIsDispatched_ItReachesTheHostThroughTheHostGateway()
+    public async Task WhenAFullRunIsDispatched_ItReachesTheHostThroughTheResolvedEntry()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            hostEntryResolver: new StubWorkerHostEntryResolver("host.docker.internal:172.20.5.9"));
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
 
         // Assert
-        orchestrator.LastSpec.ShouldNotBeNull().ExtraHosts.ShouldBe(["host.docker.internal:host-gateway"]);
+        orchestrator.LastSpec.ShouldNotBeNull().ExtraHosts.ShouldBe(["host.docker.internal:172.20.5.9"]);
     }
 
     [Fact]
-    public async Task WhenATriageRunIsDispatched_ItReachesTheHostThroughTheHostGateway()
+    public async Task WhenATriageRunIsDispatched_ItReachesTheHostThroughTheResolvedEntry()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-triage-host");
@@ -2006,7 +2010,10 @@ public sealed class HandleAsync : IAsyncDisposable
         {
             Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
         };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            roleCatalog: new StubWorkerRoleCatalogStore(catalog),
+            hostEntryResolver: new StubWorkerHostEntryResolver("host.docker.internal:172.20.5.9"));
 
         // Act
         await sut.HandleAsync(
@@ -2014,7 +2021,7 @@ public sealed class HandleAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        orchestrator.LastSpec.ShouldNotBeNull().ExtraHosts.ShouldBe(["host.docker.internal:host-gateway"]);
+        orchestrator.LastSpec.ShouldNotBeNull().ExtraHosts.ShouldBe(["host.docker.internal:172.20.5.9"]);
     }
 
     private static RepositoryDispatchInfo PackageSourceDispatchInfo() => new(

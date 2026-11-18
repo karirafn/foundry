@@ -118,6 +118,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             new StubIssueContentQueries(),
             new StubTrackerContextQueries(),
             new CapturingSystemNotificationBroadcaster(),
+            new StubWorkerHostEntryResolver(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 

@@ -72,6 +72,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             new StubIssueContentQueries(),
             new StubTrackerContextQueries(),
             new CapturingSystemNotificationBroadcaster(),
+            new StubWorkerHostEntryResolver(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
