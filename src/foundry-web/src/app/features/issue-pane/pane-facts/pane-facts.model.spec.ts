@@ -35,6 +35,7 @@ const baseDetail: IssueDetail = {
   stateDetails: null,
   kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
   triage: null,
+  clarifications: [],
 };
 
 function issue(state: string, overrides: Partial<IssueDetail> = {}): IssueDetail {
@@ -379,6 +380,7 @@ describe('buildFacts', () => {
             postFailureReason: null,
             nextPostAttemptAt: null,
             reminderSentAt: null,
+            reminderDueAt: null,
             resumeTarget: 'retriage',
           },
         }),

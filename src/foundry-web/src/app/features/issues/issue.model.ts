@@ -118,6 +118,31 @@ export interface AwaitingInputDetails {
   resumeTarget: ResumeTarget;
   /** When the round's one reminder was posted; null until then. */
   reminderSentAt: string | null;
+  /**
+   * When the reminder is due, computed by the server from the reminder delay setting; null while the
+   * questions are unposted, once the reminder is sent, and after its post failed permanently.
+   */
+  reminderDueAt: string | null;
+}
+
+/** One part of a clarification round's input (ADR 0096), discriminated by `kind`. */
+export type InputPart =
+  /** The settled comments' text. Untrusted: render it as text, never as HTML. */
+  | { kind: 'comments'; text: string }
+  | { kind: 'descriptionEdited' }
+  /**
+   * Someone moved the branch. `fromSha` is null when the branch did not exist when the question was
+   * posted; `compareUrl` is then the new head's commit page.
+   */
+  | { kind: 'branchUpdated'; fromSha: string | null; toSha: string; compareUrl: string | null }
+  | { kind: 'continuedWithoutAnswer' };
+
+/** One round of the issue's clarification log; `input` and `answeredAt` are null while it is open. */
+export interface Clarification {
+  questions: InputQuestion[];
+  input: InputPart[] | null;
+  askedAt: string;
+  answeredAt: string | null;
 }
 
 export type IssueKind = 'feature' | 'bug' | 'refactor' | 'documentation';
@@ -205,6 +230,8 @@ export interface IssueDetail extends IssueSummary {
   kind: IssueKindClassification;
   /** The latest triage verdict; null if the issue was never triaged. */
   triage: TriageVerdictDetails | null;
+  /** The clarification log, oldest round first; empty when no run asked. */
+  clarifications: Clarification[];
 }
 
 // Live states: a worker is running: implementing, revising or triaging.

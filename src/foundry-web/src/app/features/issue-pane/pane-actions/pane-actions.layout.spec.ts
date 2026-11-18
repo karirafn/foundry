@@ -28,6 +28,7 @@ const DETAIL: IssueDetail = {
   stateDetails: null,
   kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
   triage: null,
+  clarifications: [],
 };
 
 @Component({

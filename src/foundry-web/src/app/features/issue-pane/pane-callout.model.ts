@@ -338,50 +338,23 @@ function blockerNumbers(src: CalloutSource): string {
   return (src.details?.blockedBy ?? []).map((b) => `#${b.issueNumber}`).join(', ');
 }
 
+// The questions, the post status and the reminder are in the Clarifications section (#757); the callout
+// keeps its headline and the link to the posted question.
 function awaitingInputCallout(src: CalloutSource): Draft {
   const awaiting = src.details?.awaitingInput ?? null;
-  const fromTriage = awaiting?.resumeTarget === 'retriage';
-  const d = fromTriage
+  const d = awaiting?.resumeTarget === 'retriage'
     ? draft('warning', 'Triage needs more detail', [
       'The questions are posted on the issue; once a reply settles, Foundry triages again.',
     ])
     : draft('warning', 'Needs answers', [
       'Answer the questions on the issue. Once a reply settles, Foundry resumes the work.',
     ]);
-  if (awaiting === null) {
-    return d;
-  }
-  d.list = {
-    heading: fromTriage ? 'Questions from triage' : 'Open questions',
-    items: awaiting.questions.map((q) =>
-      item(q.question, { detail: q.context || null, recommendation: q.recommendation ?? null })),
-  };
-  switch (awaiting.postStatus) {
-    case 'posted':
-      d.notes.push(
-        awaiting.postedAt
-          ? `Posted ${medium(awaiting.postedAt)} — waiting for a reply.`
-          : 'Posted — waiting for a reply.',
-      );
-      if (awaiting.reminderSentAt) {
-        d.notes.push(`Reminder posted ${medium(awaiting.reminderSentAt)}.`);
-      }
-      if (awaiting.commentUrl) {
-        d.links.push({
-          label: 'View question',
-          href: awaiting.commentUrl,
-          ariaLabel: `View the questions on issue #${src.detail.issueNumber}`,
-        });
-      }
-      break;
-    case 'failed':
-      d.notes.push(
-        `Posting the questions failed: ${awaiting.postFailureReason ?? 'unknown reason'}.`
-          + (awaiting.nextPostAttemptAt ? ` Next attempt at ${medium(awaiting.nextPostAttemptAt)}.` : ''),
-      );
-      break;
-    default:
-      d.notes.push('Posting the questions…');
+  if (awaiting?.postStatus === 'posted' && awaiting.commentUrl) {
+    d.links.push({
+      label: 'View question',
+      href: awaiting.commentUrl,
+      ariaLabel: `View the questions on issue #${src.detail.issueNumber}`,
+    });
   }
   return d;
 }
