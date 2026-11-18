@@ -93,6 +93,9 @@ public sealed class HandleAsync
     private sealed class FixedCountQueries(int count) : IAccountTokenHealthQueries
     {
         public Task<int> CountInvalidAsync(CancellationToken cancellationToken) => Task.FromResult(count);
+
+        public Task<AccountTokenExpiryCounts> CountExpiryAsync(DateTimeOffset now, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The invalid-token broadcast never reads the expiry counts.");
     }
 
     private sealed class ThrowingBroadcaster : ISystemNotificationBroadcaster

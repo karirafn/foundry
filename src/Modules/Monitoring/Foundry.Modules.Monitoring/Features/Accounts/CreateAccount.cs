@@ -131,7 +131,8 @@ internal static partial class CreateAccount
         RepositoryEligibilityDiffer differ,
         IGitHubWriteProber writeProber,
         ProviderHostGuard hostGuard,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDomainEventDispatcher domainEventDispatcher)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -308,6 +309,7 @@ internal static partial class CreateAccount
                 dbContext.Set<Credential>().Add(credential);
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+                await DispatchDomainEventsAsync(credential, cancellationToken);
 
                 // After the transaction, re-evaluate repos under the transferred namespaces
                 // and return them as affected repositories.
@@ -335,9 +337,19 @@ internal static partial class CreateAccount
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
+            await DispatchDomainEventsAsync(credential, cancellationToken);
+
             CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));
+        }
+
+        // Runs only after the account is committed, so a handler that recounts accounts sees it.
+        private async Task DispatchDomainEventsAsync(Credential credential, CancellationToken cancellationToken)
+        {
+            IDomainEvent[] events = [.. credential.DomainEvents];
+            credential.ClearDomainEvents();
+            await domainEventDispatcher.DispatchAsync(events, cancellationToken);
         }
 
         private async Task<Outcome?> ProbeWriteAccessAsync(

@@ -110,6 +110,7 @@ public sealed class HandleAsync : IAsyncDisposable
         GitHubCredential credential = GitHubCredential.Create(AccountName.Create(accountName).ValueOrThrow(), new IssuedToken("ghp_original", new TokenExpiry.NotChecked()), baseUrl);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
+        credential.ClearDomainEvents();
         return credential;
     }
 
@@ -1212,12 +1213,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert — the dispatch saw the account already committed as Valid.
         dispatcher.ShouldSatisfyAllConditions(
-            () => dispatcher.Events.ShouldBe([new CredentialTokenRevalidated(credential.Id)]),
+            () => dispatcher.Events.ShouldBe([new CredentialTokenRevalidated(credential.Id), new CredentialTokenSet(credential.Id)]),
             () => dispatcher.InvalidCountsAtDispatch.ShouldBe([0]));
     }
 
     [Fact]
-    public async Task WhenValidAccountGetsNewToken_DispatchesNothing()
+    public async Task WhenValidAccountGetsNewToken_DispatchesOnlyCredentialTokenSet()
     {
         // Arrange
         GitHubCredential credential = await SeedCredentialAsync();
@@ -1229,7 +1230,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Events.ShouldBeEmpty();
+        dispatcher.Events.ShouldBe([new CredentialTokenSet(credential.Id)]);
     }
 
     /// <summary>Records each dispatched event and the committed count of Invalid accounts when it was dispatched.</summary>
