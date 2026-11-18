@@ -1,5 +1,7 @@
 # Branch Rules Written by a Separate Server-Side Token on Operator Action
 
+> **2026-11-18 — Amended:** the separate, optional branch-rules token clause in Decision is replaced by [ADR 0115](0115-one-account-token-verified-against-every-permission-foundry-uses.md); branch rules and webhooks use the account token. Context's claim that the account token is injected into every worker container drifted: [ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md) removed it from every worker. The operator-action trigger, additive writes and GET-confirmed outcome stay in force.
+
 ## Context
 
 A newly added repository is `Ineligible` until someone configures default-branch protection on the provider ([ADR 0013](0013-repository-level-eligibility.md)), so Foundry gains the ability to write those rules itself.
