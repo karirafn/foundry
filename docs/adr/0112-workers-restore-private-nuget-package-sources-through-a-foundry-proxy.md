@@ -1,5 +1,7 @@
 # Workers Restore Private NuGet Package Sources Through a Foundry Proxy
 
+> **2026-11-18 — Overridden in part:** the Decision clause "Workers reach it through an explicit `host.docker.internal:host-gateway` entry" no longer holds. The claim was false from the start for Docker Desktop with Foundry running in a WSL2 distro: Docker Desktop resolves `host-gateway` to its own address for the Windows host (`192.168.65.254`, plus an IPv6 `fdc4:…::254`), not to the distro where the WebApi listens, so every restore failed with NU1301 (#1122). The entry is now chosen on each dispatch: when the engine reports its operating system as `Docker Desktop` and Foundry runs in WSL (`/proc/sys/kernel/osrelease` contains `microsoft`), `host.docker.internal` maps to the IPv4 address of the interface carrying Foundry's host's default route; in every other setup, and when no such address is found (with a warning), it stays `host-gateway`. The proxy's host name, and so the generated `nuget.config`, is unchanged.
+
 ## Context
 
 Repositories that pull packages from a private NuGet package source declare it in `nuget.config` with credentials taken from environment variables (`%PACKAGE_REGISTRY_USERNAME%`, `%NUGET_FEED_TOKEN%`, …), which their CI supplies.

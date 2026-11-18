@@ -40,13 +40,10 @@ internal sealed class IssueClaimedHandler(
     IIssueContentQueries issueContentQueries,
     ITrackerContextQueries trackerContextQueries,
     ISystemNotificationBroadcaster broadcaster,
+    IWorkerHostEntryResolver hostEntryResolver,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private const string NuGetConfigVariable = "FOUNDRY_NUGET_CONFIG";
-
-    // Docker Desktop resolves host.docker.internal on its own; a Linux Docker Engine needs the entry to reach the
-    // Package Source Proxy on the host.
-    private const string WorkerHostGatewayEntry = "host.docker.internal:host-gateway";
 
     private static readonly Error EmptyGitPatError =
         new("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings.");
@@ -488,7 +485,10 @@ internal sealed class IssueClaimedHandler(
             CpuLimit = limits.CpuLimit,
             PidsLimit = limits.PidsLimit,
             VolumeMounts = volumeMounts,
-            ExtraHosts = [WorkerHostGatewayEntry],
+            // The worker reaches the Package Source Proxy at host.docker.internal. Docker Desktop maps that name to its own
+            // Windows-host address (192.168.65.254 and an IPv6 twin), not to the WSL2 distro Foundry may run in, so the
+            // resolver picks the entry per dispatch instead of always using host-gateway.
+            ExtraHosts = [await hostEntryResolver.ResolveAsync(cancellationToken)],
         });
 
         return nestedDocker

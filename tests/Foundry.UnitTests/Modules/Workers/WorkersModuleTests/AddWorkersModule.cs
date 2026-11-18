@@ -7,6 +7,7 @@ using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Features.Activity;
+using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -319,6 +320,21 @@ public sealed class AddWorkersModule
         // Assert
         ISystemOperations systemOperations = provider.GetRequiredService<ISystemOperations>();
         systemOperations.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersTheWorkerHostEntryResolver()
+    {
+        // Arrange
+        ServiceCollection services = new();
+        services.AddLogging();
+
+        // Act
+        services.AddWorkersModule();
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        provider.GetRequiredService<IWorkerHostEntryResolver>().ShouldBeOfType<WorkerHostEntryResolver>();
     }
 
     [Fact]
