@@ -45,6 +45,7 @@ public sealed partial class ResolveAsync
         return new WorkerOutcomeResolver(
             providerQueries,
             outputParser ?? new NullContainerOutputParser(),
+            [],
             prRetryDelay: TimeSpan.Zero,
             prRetryAttempts: 3);
     }

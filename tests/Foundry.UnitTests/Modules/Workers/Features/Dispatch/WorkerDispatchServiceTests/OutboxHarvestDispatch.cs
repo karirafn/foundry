@@ -94,6 +94,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
             sp.GetRequiredService<IPostExitProviderQueries>(),
             sp.GetRequiredService<IContainerOutputParser>(),
+            sp.GetServices<IVerdictOutcomeResolver>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());
@@ -282,6 +283,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
             sp.GetRequiredService<IPostExitProviderQueries>(),
             sp.GetRequiredService<IContainerOutputParser>(),
+            sp.GetServices<IVerdictOutcomeResolver>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());

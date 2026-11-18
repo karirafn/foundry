@@ -6,9 +6,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
-using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
-using Foundry.Shared.Infrastructure.Docker;
 
 namespace Foundry.Modules.Workers.Features.Outcome;
 
@@ -20,15 +18,13 @@ namespace Foundry.Modules.Workers.Features.Outcome;
 internal sealed class WorkerOutcomeResolver(
     IPostExitProviderQueries postExitProviderQueries,
     IContainerOutputParser containerOutputParser,
+    IEnumerable<IVerdictOutcomeResolver> verdictOutcomeResolvers,
     TimeSpan? prRetryDelay = null,
     int prRetryAttempts = WorkerOutcomeResolver.DefaultPrRetryAttempts)
 {
     private const int DefaultPrRetryAttempts = 3;
 
     private static readonly TimeSpan DefaultPrRetryDelay = TimeSpan.FromSeconds(10);
-
-    private const string HeuristicBootstrapDetail =
-        "stage=unknown (no result line; container terminated before producing output)";
 
     private const string MergedMissingUrlCode = "MergeRequest.MissingUrl";
 
@@ -40,6 +36,8 @@ internal sealed class WorkerOutcomeResolver(
 
     internal const string MissingBranchMessage = "Worker run has no branch to resolve its outcome from";
 
+    internal const string UnresolvableRoleMessagePrefix = "Worker role has no outcome resolver";
+
     internal const string ErrorResultMessage = "Worker reported an error";
 
     internal const int MaxErrorResultTextLength = 500;
@@ -50,12 +48,10 @@ internal sealed class WorkerOutcomeResolver(
 
     internal const string RemovedOutsideFoundryMessage = "Worker container was removed outside Foundry";
 
-    // SIGKILL (128 + 9) and SIGTERM (128 + 15): a docker kill/stop issued outside Foundry.
-    private const int SigKillExitCode = 137;
-
-    private const int SigTermExitCode = 143;
-
     private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
+
+    private readonly Dictionary<WorkerRole, IVerdictOutcomeResolver> _verdictOutcomeResolvers =
+        verdictOutcomeResolvers.ToDictionary(resolver => resolver.Role);
 
     /// <summary>
     /// Resolves the outcome of a run whose container is no longer running.
@@ -86,10 +82,10 @@ internal sealed class WorkerOutcomeResolver(
         RunVerdict? verdict,
         CancellationToken cancellationToken)
     {
-        // The outcome step dispatches by role: a triage run leaves no branch or merge request, only its verdict.
-        if (run.Role == WorkerRole.Triage)
+        // A restricted run leaves no branch or merge request, only its verdict: its role's resolver decides (ADR 0098).
+        if (run.Role.Capability == WorkerCapability.Restricted)
         {
-            return ResolveTriage(run, status, containerOutput);
+            return ResolveVerdictOnly(run, status, containerOutput);
         }
 
         if (run.BranchName is not { } branchName)
@@ -102,7 +98,7 @@ internal sealed class WorkerOutcomeResolver(
 
         BranchedRun branched = new(run, branchName);
         RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
-        bool succeeded = Succeeded(status, summary);
+        bool succeeded = RunFailureClassifier.Succeeded(status, summary);
 
         // A run started by Continue without answer may not ask again (ADR 0096): its verdict is refused and the facts decide.
         IReadOnlyList<RunVerdictQuestion>? askedQuestions =
@@ -132,7 +128,7 @@ internal sealed class WorkerOutcomeResolver(
             MergeRequestPresence.Open when succeeded => ResolveOpen(branched, mr, containerOutput, summary, askedQuestions),
             MergeRequestPresence.Open => new WorkerOutcome.ContinuableFailure(
                 branched.BranchName,
-                ClassifyFailure(status, containerOutput, summary, run.Role),
+                RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run.Role),
                 containerOutput,
                 summary),
             MergeRequestPresence.Closed => await ResolveClosedAsync(branched, containerOutput, summary, cancellationToken),
@@ -185,44 +181,25 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     /// <summary>
-    /// Resolves a triage run (ADR 0097) from its exit and its verdict alone: it has no branch, so the merge-request
-    /// lookup never runs. Only a run that exited 0 with a schema-valid verdict completes; a missing or invalid verdict
-    /// is a step failure (ADR 0094), and any other exit is classified as for every run.
+    /// Delegates a restricted run to the <see cref="IVerdictOutcomeResolver"/> registered for its role. A stored role
+    /// no longer in <see cref="WorkerRole.All"/> has none, so its run fails and ends rather than staying active.
     /// </summary>
-    private WorkerOutcome ResolveTriage(IResolvableRun run, WorkerStatus? status, string? containerOutput)
+    private WorkerOutcome ResolveVerdictOnly(IResolvableRun run, WorkerStatus? status, string? containerOutput)
     {
-        RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-        if (!Succeeded(status, summary))
+        if (_verdictOutcomeResolvers.TryGetValue(run.Role, out IVerdictOutcomeResolver? resolver))
         {
-            return new WorkerOutcome.Failure(ClassifyFailure(status, containerOutput, summary, run.Role), containerOutput, summary);
+            return resolver.Resolve(run, status, containerOutput);
         }
 
-        if (TryClassifyParseResult(containerOutputParser.Parse(containerOutput), run.Role) is { } classified)
+        if (WorkerRole.All.Contains(run.Role))
         {
-            return new WorkerOutcome.Failure(classified, containerOutput, summary);
+            throw new UnreachableException($"No {nameof(IVerdictOutcomeResolver)} is registered for role '{run.Role.Name}'.");
         }
 
-        if (containerOutputParser.ParseStructuredOutput(containerOutput) is not { } structuredOutput)
-        {
-            return new WorkerOutcome.Failure(
-                new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.MissingDetail),
-                containerOutput,
-                summary);
-        }
-
-        if (TriageVerdict.TryParse(structuredOutput) is not { } verdict)
-        {
-            return new WorkerOutcome.Failure(
-                new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.InvalidDetail),
-                containerOutput,
-                summary);
-        }
-
-        return verdict is TriageVerdict.Blocked blocked
-            && blocked.RejectionAgainst(run.SuppliedOpenIssueNumbers) is { } rejection
-                ? new WorkerOutcome.Failure(rejection, containerOutput, summary, RunVerdict.Invalid())
-                : new WorkerOutcome.TriageCompleted(verdict, containerOutput, summary);
+        return new WorkerOutcome.Failure(
+            new FailureReason.ContainerError($"{UnresolvableRoleMessagePrefix}: {run.Role.Name}"),
+            containerOutput,
+            containerOutputParser.ParseRunResultSummary(containerOutput));
     }
 
     private static WorkerOutcome ResolveMerged(
@@ -346,14 +323,14 @@ internal sealed class WorkerOutcomeResolver(
             hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
         }
 
-        if (Succeeded(status, summary))
+        if (RunFailureClassifier.Succeeded(status, summary))
         {
             return hasCommits
                 ? await RepollForMrAsync(run, containerOutput, summary, askedQuestions, cancellationToken)
                 : ResolveSucceededNoCommits(run, containerOutput, summary, askedQuestions);
         }
 
-        FailureReason failureReason = ClassifyFailure(status, containerOutput, summary, run.Role);
+        FailureReason failureReason = RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run.Role);
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
@@ -415,7 +392,7 @@ internal sealed class WorkerOutcomeResolver(
         IReadOnlyList<RunVerdictQuestion>? askedQuestions)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-        FailureReason? classified = TryClassifyParseResult(parseResult, run.Role);
+        FailureReason? classified = RunFailureClassifier.TryClassify(parseResult, run.Role);
 
         if (classified is not null)
         {
@@ -429,112 +406,6 @@ internal sealed class WorkerOutcomeResolver(
 
         // Exit 0 with no commits — the issue is unchanged (nothing to submit)
         return new WorkerOutcome.Unchanged(run.BranchName, containerOutput, summary);
-    }
-
-    /// <summary>
-    /// Whether the run succeeded: its container exited 0 and its result line does not report <c>is_error</c>.
-    /// The CLI can exit 0 while reporting <c>is_error</c> (e.g. an expired OAuth session); such a run did no work.
-    /// </summary>
-    private static bool Succeeded(WorkerStatus? status, RunResultSummary? summary)
-        => status?.ExitCode == 0 && summary is not { IsError: true };
-
-    /// <summary>
-    /// Classifies a run that did not succeed. A specific category from the output wins, so a usage, credit or auth
-    /// failure is never reported as a generic error.
-    /// </summary>
-    private FailureReason ClassifyFailure(
-        WorkerStatus? status,
-        string? containerOutput,
-        RunResultSummary? summary,
-        WorkerRole role)
-    {
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-
-        if (TryClassifyParseResult(parseResult, role) is { } classified)
-        {
-            return classified;
-        }
-
-        string? errorText = summary is { IsError: true } ? RedactedResultText(summary) : null;
-
-        if (status?.ExitCode == 0)
-        {
-            return new FailureReason.ContainerError(errorText is null ? ErrorResultMessage : $"{ErrorResultMessage}: {errorText}");
-        }
-
-        return parseResult switch
-        {
-            ContainerOutputParseResult.NoResultLine => ClassifyNoResultLine(status, agentStarted: false),
-            ContainerOutputParseResult.AgentStartedNoResultLine => ClassifyNoResultLine(status, agentStarted: true),
-            _ => new FailureReason.NonZeroExit(status?.ExitCode ?? -1, errorText),
-        };
-    }
-
-    /// <summary>
-    /// The result line's text made safe to persist as a failure reason: secrets redacted, one line, and bounded
-    /// by <see cref="MaxErrorResultTextLength"/>. <see langword="null"/> when the result line has no text.
-    /// </summary>
-    private static string? RedactedResultText(RunResultSummary summary)
-    {
-        string? resultText = summary.ResultText?.Trim();
-
-        if (string.IsNullOrEmpty(resultText))
-        {
-            return null;
-        }
-
-        string redacted = SecretRedactor.Redact(resultText).ReplaceLineEndings(" ");
-
-        return redacted.Length > MaxErrorResultTextLength ? redacted[..MaxErrorResultTextLength] : redacted;
-    }
-
-    /// <summary>
-    /// Maps a parse result that identifies a specific failure category to its
-    /// <see cref="FailureReason"/>; returns <see langword="null"/> when the parse carries no category.
-    /// Shared by the non-zero and the exit-0 paths so both classify a failure identically.
-    /// </summary>
-    private static FailureReason? TryClassifyParseResult(ContainerOutputParseResult parseResult, WorkerRole role)
-    {
-        return parseResult switch
-        {
-            ContainerOutputParseResult.WorkerBootstrapFailed bootstrapFailed =>
-                new FailureReason.WorkerBootstrapFailed(SecretRedactor.Redact(bootstrapFailed.Detail)),
-            ContainerOutputParseResult.UsageLimited usageLimited => new FailureReason.UsageLimited(usageLimited.ResetsAt),
-            ContainerOutputParseResult.CreditsExhausted => new FailureReason.CreditsExhausted(),
-            ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),
-            ContainerOutputParseResult.TransientApiError => new FailureReason.TransientApiError(),
-            ContainerOutputParseResult.ModelUnavailable => new FailureReason.ModelUnavailable(role.Name),
-            ContainerOutputParseResult.TurnLimitReached => new FailureReason.TurnLimitReached(),
-            _ => null,
-        };
-    }
-
-    /// <summary>
-    /// Classifies a run that ended without a result line. Containers killed or removed outside
-    /// Foundry are container errors. Otherwise a run whose agent started is a plain non-zero exit,
-    /// and one whose agent never started is a bootstrap failure.
-    /// </summary>
-    private static FailureReason ClassifyNoResultLine(WorkerStatus? status, bool agentStarted)
-    {
-        if (status is null)
-        {
-            return new FailureReason.ContainerError(RemovedOutsideFoundryMessage);
-        }
-
-        // OOM is checked first: the kernel's OOM kill also surfaces as exit 137.
-        if (status.OomKilled)
-        {
-            return new FailureReason.ContainerError(OutOfMemoryMessage);
-        }
-
-        if (status.ExitCode is SigKillExitCode or SigTermExitCode)
-        {
-            return new FailureReason.ContainerError(TerminatedOutsideFoundryMessage);
-        }
-
-        return agentStarted
-            ? new FailureReason.NonZeroExit(status.ExitCode ?? -1)
-            : new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail);
     }
 
     /// <summary>A run resolved through its branch: the implement paths, which look up its merge request and commits.</summary>

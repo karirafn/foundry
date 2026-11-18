@@ -144,6 +144,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
             sp.GetRequiredService<IPostExitProviderQueries>(),
             sp.GetRequiredService<IContainerOutputParser>(),
+            sp.GetServices<IVerdictOutcomeResolver>(),
             prRetryDelay: TimeSpan.Zero));
 
         services.AddScoped<ICredentialGate>(_ => credentialGate ?? new AlwaysCanDispatchCredentialGate());
