@@ -1,12 +1,10 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
-using Foundry.Modules.Issues.Features.Dependencies;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,9 +14,9 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// <summary>
 /// Selects the best <see cref="DispatchCandidate"/> from all claimable issues across eligible
 /// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
-/// memoization. Each <see cref="FreshQueuedIssue"/> and <see cref="TriageQueuedIssue"/> candidate's open blockers are re-read from the
-/// provider before it is selected; a candidate that gained a blocker is transitioned to <see cref="BlockedIssue"/> or
-/// <see cref="TriageBlockedIssue"/> and the next candidate in dispatch order is tried. Repositories on a paused provider host
+/// memoization. Each <see cref="FreshQueuedIssue"/> and <see cref="TriageQueuedIssue"/> candidate is re-checked by
+/// <see cref="ClaimTimeRecheck"/> before it is selected; a candidate that gained a blocker has left the queue, so the
+/// capacity-aware order is re-walked without it. Repositories on a paused provider host
 /// (<see cref="DispatchPauseState.PausedHosts"/>) are dropped before any candidate is considered.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
@@ -26,8 +24,7 @@ internal sealed class DispatchCandidateSelector(
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IRepositoryEligibilityQuery repositoryEligibilityQuery,
     InFlightWorkerCountQuery inFlightWorkerCountQuery,
-    IIssueBlockerQueries issueBlockerQueries,
-    IssueDependencyApplier dependencyApplier,
+    ClaimTimeRecheck claimTimeRecheck,
     IGlobalSettingsQueries settingsQueries,
     ILogger<DispatchCandidateSelector> logger)
 {
@@ -136,9 +133,9 @@ internal sealed class DispatchCandidateSelector(
                 // re-gated.
                 if (candidate is FreshQueuedIssue or TriageQueuedIssue)
                 {
-                    BlockerCheck check = await CheckBlockersAsync(candidate, cancellationToken);
+                    ClaimTimeRecheckOutcome check = await claimTimeRecheck.CheckAsync(candidate, cancellationToken);
 
-                    if (check == BlockerCheck.ReadFailed)
+                    if (check == ClaimTimeRecheckOutcome.ReadFailed)
                     {
                         // No state change on a failed read: the candidate stays queued and the
                         // next dispatch tick retries it.
@@ -147,7 +144,7 @@ internal sealed class DispatchCandidateSelector(
                         continue;
                     }
 
-                    if (check == BlockerCheck.Blocked)
+                    if (check == ClaimTimeRecheckOutcome.Blocked)
                     {
                         // The issue is now blocked and no longer holds a dispatch slot, so
                         // re-walk the capacity-aware order without it: the next same-repository
@@ -173,47 +170,6 @@ internal sealed class DispatchCandidateSelector(
         return new SelectionOutcome.AllCandidatesSkipped(unresolvable, blocked, blockerReadFailed);
     }
 
-    private async Task<BlockerCheck> CheckBlockersAsync(
-        QueuedIssue candidate,
-        CancellationToken cancellationToken)
-    {
-        Result<IReadOnlyList<int>> blockers = await issueBlockerQueries.GetOpenBlockersAsync(
-            candidate.MonitoredRepositoryId,
-            candidate.IssueNumber,
-            cancellationToken);
-
-        if (blockers is not Result<IReadOnlyList<int>>.Success blockersSuccess)
-        {
-            Error error = ((Result<IReadOnlyList<int>>.Failure)blockers).Error;
-            logger.LogWarning(
-                "Skipping issue #{IssueNumber} for this dispatch: its open blockers could not be read ({ErrorCode}).",
-                candidate.IssueNumber,
-                error.Code);
-            return BlockerCheck.ReadFailed;
-        }
-
-        if (blockersSuccess.Value.Count == 0)
-        {
-            return BlockerCheck.Clear;
-        }
-
-        // Transition to BlockedIssue or TriageBlockedIssue (committed) so the issue is not re-selected on the next tick
-        // or on redelivery of this capacity event.
-        await dependencyApplier.ApplyAsync(candidate, blockersSuccess.Value, cancellationToken);
-        logger.LogInformation(
-            "Issue #{IssueNumber} gained open blocker(s) {BlockedBy} since the last dependency pass; blocked instead of claimed.",
-            candidate.IssueNumber,
-            blockersSuccess.Value);
-        return BlockerCheck.Blocked;
-    }
-
     private static bool IsOnPausedHost(EligibleRepository repo, IReadOnlyList<PausedHost> pausedHosts) =>
         pausedHosts.Any(paused => string.Equals(paused.Host, repo.Host, StringComparison.OrdinalIgnoreCase));
-
-    private enum BlockerCheck
-    {
-        Clear,
-        Blocked,
-        ReadFailed,
-    }
 }

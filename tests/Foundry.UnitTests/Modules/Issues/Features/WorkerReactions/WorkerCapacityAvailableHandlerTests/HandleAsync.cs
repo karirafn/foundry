@@ -65,8 +65,10 @@ public sealed class HandleAsync : IAsyncDisposable
                 "github.com")),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            issueBlockerQueries ?? new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            ClaimTimeRecheckFactory.Create(
+                _dbContext,
+                issueBlockerQueries ?? new StubIssueBlockerQueries(),
+                _domainEventDispatcher),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 

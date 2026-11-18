@@ -59,8 +59,10 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             repositoryDispatchQueries,
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
+            ClaimTimeRecheckFactory.Create(
+                _dbContext,
+                new StubIssueBlockerQueries(),
+                new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher(), TimeProvider.System);

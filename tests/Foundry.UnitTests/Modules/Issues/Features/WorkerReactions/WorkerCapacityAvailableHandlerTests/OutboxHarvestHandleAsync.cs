@@ -102,8 +102,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "github.com")),
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext, new NullWorkerRunQueries()),
-            new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            ClaimTimeRecheckFactory.Create(
+                dbContext,
+                new StubIssueBlockerQueries(),
+                new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
@@ -157,8 +159,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "github.com")),
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext, new NullWorkerRunQueries()),
-            new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            ClaimTimeRecheckFactory.Create(
+                dbContext,
+                new StubIssueBlockerQueries(),
+                new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
@@ -212,8 +216,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "github.com")),
             new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext, new NullWorkerRunQueries()),
-            new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            ClaimTimeRecheckFactory.Create(
+                dbContext,
+                new StubIssueBlockerQueries(),
+                new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
@@ -263,8 +269,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new StubRepositoryDispatchQueries(null),
             new NoEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(dbContext, new NullWorkerRunQueries()),
-            new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            ClaimTimeRecheckFactory.Create(
+                dbContext,
+                new StubIssueBlockerQueries(),
+                new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
