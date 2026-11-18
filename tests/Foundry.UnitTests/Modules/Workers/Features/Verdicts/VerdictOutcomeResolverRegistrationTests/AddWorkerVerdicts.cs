@@ -1,5 +1,6 @@
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Verdicts;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,7 @@ public sealed class AddWorkerVerdicts
         ServiceCollection services = new();
         services.AddSingleton<ILogger<ContainerOutputParser>>(NullLogger<ContainerOutputParser>.Instance);
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
+        services.AddSingleton<IWorkerRoleCatalogStore, WorkerRoleCatalogStore>();
         services.AddWorkerVerdicts();
         using ServiceProvider provider = services.BuildServiceProvider();
 

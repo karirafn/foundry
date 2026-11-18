@@ -145,6 +145,18 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
         return completed;
     }
 
+    /// <summary>Completes a review run with its decided verdict (ADR 0113): it leaves no branch or merge request.</summary>
+    public CompletedRun CompleteReview(
+        ReviewDecision decision,
+        RunResultSummary? resultSummary = null,
+        RunVerdict? verdict = null,
+        string? containerOutput = null)
+    {
+        CompletedRun completed = CompletedRun.FromReview(this, decision, resultSummary, verdict, containerOutput);
+        AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, BranchName: null, PullRequestUrl: null));
+        return completed;
+    }
+
     public FailedRun Fail(
         FailureReason reason,
         BranchName? branchNameOrNull,

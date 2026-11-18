@@ -50,6 +50,12 @@ public sealed class CompletedRun : WorkerRun
     public RunResultSummary? ResultSummary { get; private set; }
 
     /// <summary>
+    /// The decided verdict of a review run (ADR 0113): the verdict, the outcome code derived from it, and the commit and
+    /// patch-id it judged. <see langword="null"/> for every other run.
+    /// </summary>
+    public ReviewDecision? ReviewDecision { get; private set; }
+
+    /// <summary>
     /// Carried over from <see cref="ActiveRun.CancelRequestedAt"/> so a run that resolved
     /// before a pending cancel took effect can be told apart.
     /// </summary>
@@ -119,6 +125,21 @@ public sealed class CompletedRun : WorkerRun
 
         completed.RecordVerdict(verdict);
         completed.CarryDispatchFactsFrom(active);
+        return completed;
+    }
+
+    /// <summary>Completes a review run with its decided verdict (ADR 0113): it leaves no branch or merge request.</summary>
+    internal static CompletedRun FromReview(
+        ActiveRun active,
+        ReviewDecision decision,
+        RunResultSummary? resultSummary,
+        RunVerdict? verdict,
+        string? containerOutput)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        CompletedRun completed = FromActive(active, 0, branchName: null, pullRequestUrl: null, resultSummary, verdict, containerOutput);
+        completed.ReviewDecision = decision;
         return completed;
     }
 }

@@ -991,6 +991,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("supplied_open_issue_numbers");
 
+                    b.Property<string>("SuppliedReviewFacts")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplied_review_facts");
+
                     b.Property<string>("Toolchain")
                         .HasColumnType("TEXT")
                         .HasColumnName("toolchain");
@@ -2910,6 +2915,11 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
+
+                    b.Property<string>("ReviewDecision")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("review_verdict");
 
                     b.ToTable(t =>
                         {

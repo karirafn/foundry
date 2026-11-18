@@ -50,6 +50,12 @@ public sealed record WorkerRunDetail(
     /// the container reported none, or for a run recorded before runs kept it.
     /// </summary>
     public IReadOnlyList<WorkerRunTool>? Toolchain { get; init; }
+
+    /// <summary>
+    /// A completed review run's stored verdict (ADR 0113) with the outcome code derived from it; <see langword="null"/>
+    /// for every other run.
+    /// </summary>
+    public WorkerRunReviewVerdict? ReviewVerdict { get; init; }
 }
 
 /// <summary>One tool a run's container reported, such as <c>csharp-ls</c> <c>0.28.0</c>.</summary>

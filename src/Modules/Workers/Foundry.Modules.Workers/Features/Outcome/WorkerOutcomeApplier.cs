@@ -14,6 +14,7 @@ using Foundry.Shared.Infrastructure;
 using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
 using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
 using WorkerCreditsExhaustedEvent = Foundry.Modules.Workers.Contracts.WorkerCreditsExhausted;
+using ReviewRunCompletedEvent = Foundry.Modules.Workers.Contracts.ReviewRunCompleted;
 using TriageRunCompletedEvent = Foundry.Modules.Workers.Contracts.TriageRunCompleted;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 
@@ -243,6 +244,29 @@ internal sealed class WorkerOutcomeApplier(
                 break;
             }
 
+            case WorkerOutcome.ReviewCompleted review:
+            {
+                // A review run publishes its decided verdict instead of WorkerRunCompleted: it has no branch or merge
+                // request, so it never reached a publishing state.
+                if (activeRun is not ActiveRun running)
+                {
+                    throw new UnreachableException($"A review run completes from a running run, not a {activeRun.GetType().Name}.");
+                }
+
+                CompletedRun reviewRun = running.CompleteReview(review.Decision, review.Summary, verdict, review.ContainerOutput);
+                await TryDispatchAsync(
+                    [ReviewRunCompletedOf(activeRun, review.Decision, timeProvider.GetUtcNow())],
+                    activeRun.Id,
+                    cancellationToken);
+                await dbContext.TransitionAsync(activeRun, reviewRun, alongside, domainEventDispatcher, cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} reviewed commit {ReviewedCommit}: {Outcome}.",
+                    activeRun.Id,
+                    review.Decision.ReviewedCommit.Value,
+                    review.Decision.Outcome);
+                break;
+            }
+
             case WorkerOutcome.ContinuableFailure continuable:
             {
                 FailedRun continuableFailed = activeRun.Fail(
@@ -300,6 +324,18 @@ internal sealed class WorkerOutcomeApplier(
                 unpublished.PublishedBranchCommitCount ?? 0,
                 unpublished.Divergence?.Reason)
             : null;
+
+    private static ReviewRunCompletedEvent ReviewRunCompletedOf(WorkerRun run, ReviewDecision decision, DateTimeOffset decidedAt) =>
+        new(
+            run.IssueId.Value,
+            run.Id,
+            decision.Outcome,
+            decision.ReviewedCommit.Value,
+            decision.PatchId?.Value,
+            [.. decision.Verdict.BlockingFindings],
+            [.. decision.Verdict.UnmetCriteria],
+            decision.Verdict.Tests.Assessment,
+            decidedAt);
 
     private static TriageResult ToTriageResult(TriageVerdict verdict) => verdict switch
     {

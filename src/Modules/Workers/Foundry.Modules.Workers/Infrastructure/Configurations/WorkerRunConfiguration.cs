@@ -186,6 +186,13 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasColumnType("TEXT")
             .HasColumnName("supplied_open_issue_numbers");
 
+        // Bounded by what Foundry computed at dispatch, never by anything the model returns.
+        builder.Property(r => r.SuppliedReviewFacts)
+            .HasConversion(ReviewFactsValueConverters.OptionalConverter, ReviewFactsValueConverters.OptionalComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("supplied_review_facts");
+
         builder.Property(r => r.Toolchain)
             .HasConversion(ToolchainValueConverters.OptionalConverter, ToolchainValueConverters.OptionalComparer)
             .HasColumnType("TEXT")
@@ -380,6 +387,12 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("container_output");
+
+        builder.Property(r => r.ReviewDecision)
+            .HasConversion(ReviewDecisionValueConverters.OptionalConverter, ReviewDecisionValueConverters.OptionalComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("review_verdict");
 
         builder.Property(r => r.CancelRequestedAt)
             .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);

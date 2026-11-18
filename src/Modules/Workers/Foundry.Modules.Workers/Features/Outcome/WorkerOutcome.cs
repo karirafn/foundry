@@ -80,6 +80,15 @@ internal abstract record WorkerOutcome
         RunResultSummary? Summary) : WorkerOutcome;
 
     /// <summary>
+    /// A review run exited 0 with a verdict that passed its checks against the run's facts (ADR 0113, ADR 0114). It
+    /// leaves no branch or merge request: the decided verdict is its whole outcome.
+    /// </summary>
+    internal sealed record ReviewCompleted(
+        ReviewDecision Decision,
+        string? ContainerOutput,
+        RunResultSummary? Summary) : WorkerOutcome;
+
+    /// <summary>
     /// A transient or unknown provider error; the caller should not transition state and may retry.
     /// </summary>
     internal sealed record Indeterminate(Error Error) : WorkerOutcome;

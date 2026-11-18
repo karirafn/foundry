@@ -5303,6 +5303,183 @@
           }
         }
       },
+      "ReviewCategory": {
+        "enum": [
+          "Correctness",
+          "Criteria",
+          "Tests",
+          "Security",
+          "Quality",
+          "Design",
+          "Conventions"
+        ]
+      },
+      "ReviewCriterionAnswer": {
+        "required": [
+          "id",
+          "status",
+          "evidence"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewCriterionStatus"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewCriterionStatus": {
+        "enum": [
+          "Met",
+          "Unmet",
+          "NotVerifiable"
+        ]
+      },
+      "ReviewDimension": {
+        "required": [
+          "category",
+          "status",
+          "note"
+        ],
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/ReviewCategory"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewDimensionStatus"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewDimensionStatus": {
+        "enum": [
+          "Clear",
+          "Findings",
+          "NotApplicable"
+        ]
+      },
+      "ReviewFinding": {
+        "required": [
+          "path",
+          "line",
+          "severity",
+          "category",
+          "rule",
+          "body"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/ReviewFindingSeverity"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ReviewCategory"
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewRule"
+              }
+            ]
+          },
+          "body": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewFindingSeverity": {
+        "enum": [
+          "Blocking",
+          "Advisory"
+        ]
+      },
+      "ReviewRule": {
+        "required": [
+          "principle",
+          "file",
+          "quote"
+        ],
+        "type": "object",
+        "properties": {
+          "principle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "file": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "quote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ReviewTests": {
+        "required": [
+          "assessment",
+          "reason",
+          "coveringTests"
+        ],
+        "type": "object",
+        "properties": {
+          "assessment": {
+            "$ref": "#/components/schemas/ReviewTestsAssessment"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "coveringTests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReviewTestsAssessment": {
+        "enum": [
+          "Adequate",
+          "Missing",
+          "NotNeeded"
+        ]
+      },
+      "ReviewVerdictOutcome": {
+        "enum": [
+          "Approved",
+          "ApprovedForPerson",
+          "ChangesRequested"
+        ]
+      },
       "RolePluginComponent": {
         "required": [
           "name",
@@ -6761,6 +6938,16 @@
             "items": {
               "$ref": "#/components/schemas/WorkerRunTool"
             }
+          },
+          "reviewVerdict": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkerRunReviewVerdict"
+              }
+            ]
           }
         }
       },
@@ -6856,6 +7043,57 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "WorkerRunReviewVerdict": {
+        "required": [
+          "outcome",
+          "reviewedCommit",
+          "patchId",
+          "summary",
+          "findings",
+          "dimensions",
+          "criteria",
+          "tests"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/ReviewVerdictOutcome"
+          },
+          "reviewedCommit": {
+            "type": "string"
+          },
+          "patchId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewFinding"
+            }
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewDimension"
+            }
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewCriterionAnswer"
+            }
+          },
+          "tests": {
+            "$ref": "#/components/schemas/ReviewTests"
           }
         }
       },

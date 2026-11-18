@@ -236,6 +236,7 @@ internal static partial class SystemPromptBuilder
     /// questions and context are never cut.
     /// </summary>
     /// <param name="principles">The role's assembled Worker Principles; empty when the role selects no section.</param>
+    /// <param name="reviewFacts">A review run's facts (ADR 0114), rendered after the role prompt; never shed.</param>
     public static Result<string> BuildRestricted(
         string principles,
         int issueNumber,
@@ -243,7 +244,8 @@ internal static partial class SystemPromptBuilder
         IssueContent issue,
         Toolchain toolchain,
         IReadOnlyList<Clarification>? clarifications = null,
-        TrackerContext? trackerContext = null)
+        TrackerContext? trackerContext = null,
+        ReviewFacts? reviewFacts = null)
     {
         ArgumentNullException.ThrowIfNull(principles);
         ArgumentNullException.ThrowIfNull(issue);
@@ -251,6 +253,7 @@ internal static partial class SystemPromptBuilder
 
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string csharpLspSection = CSharpLspSection(toolchain);
+        string reviewFactsSection = ReviewFactsSection(reviewFacts);
 
         // A re-triage after answered questions (ADR 0097) reads the clarification log, as an implement run does.
         IReadOnlyList<LogRound> log = LogRound.FromLog(clarifications ?? []);
@@ -263,6 +266,7 @@ internal static partial class SystemPromptBuilder
                         RolePromptPlaceholders.IssueContent,
                         WithTrackerContext(issueContent, trackerContext, trackerFit),
                         StringComparison.Ordinal)
+                + reviewFactsSection
                 + "\n\n" + TaskListInstruction + csharpLspSection
                 + (fittedLog.Count > 0 ? "\n\n" + BuildClarificationSection(fittedLog) : string.Empty))
             .Replace("\r\n", "\n", StringComparison.Ordinal);

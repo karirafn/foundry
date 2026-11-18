@@ -82,6 +82,13 @@ public sealed class StartingRun : WorkerRun
         StoreSuppliedOpenIssueNumbers([.. openReferencedNumbers.Concat(indexNumbers).Distinct()]);
     }
 
+    /// <summary>Records the facts a review run's verdict is checked against (ADR 0114); later states carry them.</summary>
+    public void RecordSuppliedReviewFacts(ReviewFacts reviewFacts)
+    {
+        ArgumentNullException.ThrowIfNull(reviewFacts);
+        StoreSuppliedReviewFacts(reviewFacts);
+    }
+
     public ActiveRun Activate(
         ContainerId containerId,
         BranchName? branchName,

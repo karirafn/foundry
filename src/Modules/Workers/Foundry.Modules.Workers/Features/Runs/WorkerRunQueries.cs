@@ -148,8 +148,20 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             Toolchain = run.Toolchain is { } toolchain
                 ? [.. toolchain.Entries.Select(entry => new WorkerRunTool(entry.Name, entry.Version))]
                 : null,
+            ReviewVerdict = run is CompletedRun { ReviewDecision: { } decision } ? ReviewVerdictOf(decision) : null,
         };
     }
+
+    private static WorkerRunReviewVerdict ReviewVerdictOf(ReviewDecision decision) =>
+        new(
+            decision.Outcome,
+            decision.ReviewedCommit.Value,
+            decision.PatchId?.Value,
+            decision.Verdict.Summary,
+            decision.Verdict.Findings,
+            decision.Verdict.Dimensions,
+            decision.Verdict.Criteria,
+            decision.Verdict.Tests);
 
     private static WorkerRunRevertedFile RevertedFileOf(RevertedFile file) =>
         new(

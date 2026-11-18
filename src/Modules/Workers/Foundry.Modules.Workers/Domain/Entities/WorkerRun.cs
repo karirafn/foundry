@@ -160,6 +160,17 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// </summary>
     public Toolchain? Toolchain { get; private set; }
 
+    /// <summary>
+    /// The facts code computed for a review run at dispatch (ADR 0114), which its verdict is checked against;
+    /// <see langword="null"/> for a run that recorded none.
+    /// </summary>
+    public ReviewFacts? SuppliedReviewFacts { get; private set; }
+
+    protected void StoreSuppliedReviewFacts(ReviewFacts reviewFacts)
+    {
+        SuppliedReviewFacts = reviewFacts;
+    }
+
     protected void StoreSuppliedOpenIssueNumbers(IReadOnlyList<int>? suppliedOpenIssueNumbers)
     {
         SuppliedOpenIssueNumbers = suppliedOpenIssueNumbers;
@@ -227,6 +238,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
 
         RecordBase(source.Base, source.PreparedRepositoryId);
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
+        SuppliedReviewFacts = source.SuppliedReviewFacts;
         SourceTokenHash = source.SourceTokenHash;
         StoreToolchain(source.Toolchain);
         RefusesNeedsInput = source.RefusesNeedsInput;
