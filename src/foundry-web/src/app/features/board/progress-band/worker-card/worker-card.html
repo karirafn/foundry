@@ -5,7 +5,7 @@
   [class.fd-board-moved]="item().moved"
 >
   <div class="worker-card__meta" [id]="idBase() + '-meta'">
-    <fd-role-tag [role]="role()" />
+    <fd-run-kind-tag [kind]="item().runKind" />
     <fd-issue-ref
       class="worker-card__ref"
       [slug]="item().issue.repositorySlug"

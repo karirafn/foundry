@@ -17,7 +17,7 @@ public sealed class RevisionInProgressIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
-    public override RunKind? RunKind => null;
+    public override RunKind? RunKind => RevisionRunKind.Of(Trigger);
 
     // Private parameterless constructor for EF Core materialization.
     private RevisionInProgressIssue()

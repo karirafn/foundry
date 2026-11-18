@@ -1,0 +1,18 @@
+using Foundry.Modules.Issues.Contracts;
+
+namespace Foundry.Modules.Issues.Domain.ValueObjects;
+
+/// <summary>
+/// The run kind of a revision, split by its revision trigger: the same kind whether the revision is queued or running.
+/// </summary>
+internal static class RevisionRunKind
+{
+    internal static RunKind Of(RevisionTrigger trigger) => trigger switch
+    {
+        RevisionTrigger.ReviewFeedback => RunKind.ReviewFix,
+        RevisionTrigger.FailedChecks => RunKind.ChecksFix,
+        RevisionTrigger.RebaseConflict => RunKind.ConflictFix,
+        RevisionTrigger.InputProvided => RunKind.InputResume,
+        _ => throw new InvalidOperationException($"Unknown revision trigger '{trigger.Discriminator}'."),
+    };
+}

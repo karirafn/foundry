@@ -22,7 +22,7 @@ public sealed class TriageInProgressIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
-    public override RunKind? RunKind => null;
+    public override RunKind? RunKind => ValueObjects.RunKind.Triage;
 
     // Private parameterless constructor for EF Core materialization.
     private TriageInProgressIssue()

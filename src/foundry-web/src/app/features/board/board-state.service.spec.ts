@@ -26,7 +26,7 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
-    runKind: null,
+    runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -689,6 +689,21 @@ describe('BoardStateService', () => {
 
     // Assert
     expect(h.service.announcement()).toBe('#7 started: implement');
+  });
+
+  it('announces a revision that starts with its run kind', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [
+      buildIssue({ id: 'a', issueNumber: 8, state: 'revision_queued', awaitsDispatch: true, runKind: 'checks_fix' }),
+    ]);
+
+    // Act
+    change(h, [buildIssue({ id: 'a', issueNumber: 8, state: 'revision_in_progress', runKind: 'checks_fix' })]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.announcement()).toBe('#8 started: checks fix');
   });
 
   it('announces a repository that newly holds issues', async () => {

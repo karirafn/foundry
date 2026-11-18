@@ -447,7 +447,7 @@ The step Foundry's own code is running for the issue, with no worker involved �
 
 ## TriageInProgressIssue
 
-`triage_in_progress`: an issue a triage worker is reading. Carries `WorkerRunId`. Display group: In flow, label "Triaging".
+`triage_in_progress`: an issue a triage worker is reading. Carries `WorkerRunId`. Display group: In flow, label "Triaging". [Run Kind](#run-kind): `Triage`.
 Counts against the global slots and the [Repository Worker Limit](#repository-worker-limit) like every running worker.
 
 - **Ways out** — the run's outcome step dispatches by role: a triage run that exits 0 with a schema-valid verdict publishes `TriageRunCompleted(IssueId, WorkerRunId, TriageResult, DecidedAt)` with `TriageResult = Ready(kind) | NeedsInput(kind, questions) | Blocked(kind, blockedBy)` instead of `WorkerRunCompleted`, and the merge-request lookup never runs.
@@ -678,15 +678,18 @@ Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` ann
 
 ## Run Kind
 
-The kind of worker run an issue is running, or will run when it's next dispatched (#1059). It is declared by the issue state (`Issue.RunKind`, `null` for states with no run ahead) and shown as the board's lead tag on Pipeline and Blocked rows. Values are `Triage`, `Fresh`, `Continuation`, `ReviewFix`, `ChecksFix`, `ConflictFix` and `InputResume`; the last four split a `Revision` by its [Revision Trigger](#revision-trigger) (`ReviewFeedback`, `FailedChecks`, `RebaseConflict`, `InputProvided`). Run Kind is related to [Dispatch Context](#dispatch-context) but is not the same thing. Dispatch Context is the payload handed to the worker and exists only on queued states. Run Kind is a flat display fact that also covers in-flight and blocked states. It always implies the [Worker Role](#worker-role): `Triage` → triage, everything else → implement.
+The kind of worker run an issue is running, or will run when it's next dispatched (#1059). It is declared by the issue state (`Issue.RunKind`, `null` for states with no run ahead) and shown as the board's lead tag on Pipeline and Blocked rows and on worker cards. Values are `Triage`, `Fresh`, `Continuation`, `ReviewFix`, `ChecksFix`, `ConflictFix` and `InputResume`; the last four split a `Revision` by its [Revision Trigger](#revision-trigger) (`ReviewFeedback`, `FailedChecks`, `RebaseConflict`, `InputProvided`). Run Kind is related to [Dispatch Context](#dispatch-context) but is not the same thing. Dispatch Context is the payload handed to the worker and exists only on queued states. Run Kind is a flat display fact that also covers in-flight and blocked states. It always implies the [Worker Role](#worker-role): `Triage` → triage, everything else → implement.
 
 - `detected`, `triage_queued`, `triage_blocked` → `Triage`.
 - `queued`, `blocked` → `Fresh`.
 - `continuation_queued` → `Continuation`.
 - `revision_queued` → `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`, by its trigger.
-- Every other state → `null`. The in-flight states (`triage_in_progress`, `in_progress`, `revision_in_progress`) are `null` for now, so worker cards keep the role tag.
+- `triage_in_progress` → `Triage`.
+- `in_progress` → `Fresh` or `Continuation`, by its origin (see [In-Progress Issue](#in-progress-issue), #1060).
+- `revision_in_progress` → `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`, by its trigger.
+- Every other state → `null`.
 
-Served on `IssueSummary.RunKind` as `triage | fresh | continuation | review_fix | checks_fix | conflict_fix | input_resume`, or null. The board labels them `triage`, `implement`, `continue`, `review fix`, `checks fix`, `conflict` and `resume`; screen readers hear "Run: <label>". A Pipeline or Blocked issue whose run kind is null or unknown to the dashboard is left unplaced rather than tagged with a guess.
+Served on `IssueSummary.RunKind` as `triage | fresh | continuation | review_fix | checks_fix | conflict_fix | input_resume`, or null. The board labels them `triage`, `implement`, `continue`, `review fix`, `checks fix`, `conflict` and `resume`; screen readers hear "Run: <label>". A Pipeline, Blocked or worker issue whose run kind is null or unknown to the dashboard is left unplaced rather than tagged with a guess. The live announcement for a worker that starts reads "#<n> started: <label>".
 
 ## Tracker Context
 
@@ -982,11 +985,17 @@ Claimed with priority over regular `FreshQueuedIssue` to minimize open issue cou
 Its [Run Kind](#run-kind) follows its trigger: `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`.
 Transitions: `Claim()` → `RevisionInProgressIssue`.
 
+## In-Progress Issue
+
+`in_progress`: an issue whose implement worker is running (`InProgressIssue`). Carries `WorkerRunId` and its **origin** (`ImplementRunOrigin`, column `implement_run_origin`): `Fresh` when claimed from `FreshQueuedIssue`, `Continuation` when claimed from `ContinuationQueuedIssue` (#1060). The origin is a required argument of every factory, so no path can leave it unset, and it decides the state's [Run Kind](#run-kind): `Fresh` or `Continuation`.
+`PublishBlockedIssue` and `PublishFailedIssue` keep the origin of the implement run they hold (`null` when they hold a revision, which carries its trigger instead), so Confirm false positives and Retry publish return to `in_progress` with the origin it had. Rows that existed before the column were backfilled as `Fresh`: no stored record shows whether a run in flight then was a continuation, and the tag corrects itself when that run finishes.
+Transitions: `MarkRebasePending()`, `MarkAwaitingInput()`, `MarkUnchanged()`, `MarkCompleted()`, `MarkFailed()`, `MarkContinuableFailed()`, `MarkPublishFailed()`, `MarkPublishBlocked()`, `MarkBranchDiverged()`.
+
 ## Revision In-Progress Issue
 
 A lifecycle state for an issue whose worker is executing a revision cycle.
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl` and `Trigger`, plus the fix and conflict counters and `PriorFeedbackCutoffAt` carried from `RevisionQueuedIssue`.
-Created from `RevisionQueuedIssue.Claim()`.
+Created from `RevisionQueuedIssue.Claim()`. Its [Run Kind](#run-kind) follows its trigger, as when it was queued.
 Transitions: `MarkRebasePending()` → `RebasePendingIssue` (worker pushed changes); `MarkUnchangedRebasePending()` → `RebasePendingIssue` (worker made no changes but the PR still exists); `MarkAwaitingInput()` → `AwaitingInputIssue`; `MarkBranchDiverged()` → `BranchDivergedIssue`; `MarkPublishFailed()` → `PublishFailedIssue`; `MarkPublishBlocked()` → `PublishBlockedIssue`; `MarkFailed()` → `RevisionFailedIssue`.
 
 ## Completed Issue
@@ -1025,7 +1034,7 @@ A lifecycle state for an issue queued for continuation from an existing branch w
 Carries `BranchName` and `FailureReason` — both non-nullable. `FailureReason` is copied from the originating `ContinuableFailedIssue` and truncated to 500 characters by the aggregate.
 Created from `ContinuableFailedIssue.Retry()`.
 Its [Run Kind](#run-kind) is `Continuation`.
-Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant; the continuation context lives in the dispatch payload).
+Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant with origin `Continuation`; the continuation context lives in the dispatch payload).
 
 ## Continuation Context
 

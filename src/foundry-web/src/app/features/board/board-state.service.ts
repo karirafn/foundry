@@ -16,6 +16,7 @@ import { AGENT_SILENCE_THRESHOLD_MINUTES } from '../../core/models/agent-activit
 import { ConnectionGateService } from '../../core/services/connection-gate.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
+import { RUN_KIND_LABELS } from '../../shared/utils/run-kind';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
 import { RepositorySummary } from '../settings/repositories/repository.model';
@@ -414,7 +415,7 @@ export class BoardStateService {
     });
     const started = next.workers
       .filter((item) => previousItems.get(item.issue.id)?.band !== 'workers')
-      .map((item) => `#${item.issue.issueNumber} started: ${item.role}`);
+      .map((item) => `#${item.issue.issueNumber} started: ${RUN_KIND_LABELS[item.runKind]}`);
     const alerted = new Set(previous.alerts.map((alert) => alert.repositoryId));
     const alerts = next.alerts
       .filter((alert) => !alerted.has(alert.repositoryId))
