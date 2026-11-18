@@ -3,6 +3,7 @@ import { SystemSignalRService } from './system-signalr.service';
 import { HubConnections } from './hub-connection';
 import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 import {
+  ACCOUNT_TOKEN_EXPIRY_NOTIFICATION_CATEGORY,
   ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
   CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
@@ -497,6 +498,51 @@ describe('SystemSignalRService', () => {
 
       // Assert
       expect(reloads).toBe(0);
+    });
+  });
+
+  describe('applyAccountTokenExpiryStatus', () => {
+    const EXPIRING = '1 account has a token expiring within 14 days — enter a new one before monitoring stops.';
+
+    it('should show the account-token-expiry message when given one', () => {
+      // Arrange
+      const { svc } = setup();
+
+      // Act
+      svc.applyAccountTokenExpiryStatus(EXPIRING);
+
+      // Assert
+      expect(svc.notifications()).toEqual([
+        { category: ACCOUNT_TOKEN_EXPIRY_NOTIFICATION_CATEGORY, isActive: true, message: EXPIRING },
+      ]);
+    });
+
+    it('should remove the account-token-expiry notification when given null', () => {
+      // Arrange
+      const { svc } = setup();
+      svc.applyAccountTokenExpiryStatus(EXPIRING);
+
+      // Act
+      svc.applyAccountTokenExpiryStatus(null);
+
+      // Assert
+      expect(svc.notifications()).toEqual([]);
+    });
+
+    it('should keep the account-token notification when the expiry one changes', () => {
+      // Arrange
+      const { svc } = setup();
+      const invalid = '1 account has an invalid token — enter a new one to resume monitoring.';
+      svc.applyAccountTokenStatus(invalid);
+
+      // Act
+      svc.applyAccountTokenExpiryStatus(EXPIRING);
+      svc.applyAccountTokenExpiryStatus(null);
+
+      // Assert
+      expect(svc.notifications()).toEqual([
+        { category: ACCOUNT_TOKEN_NOTIFICATION_CATEGORY, isActive: true, message: invalid },
+      ]);
     });
   });
 });

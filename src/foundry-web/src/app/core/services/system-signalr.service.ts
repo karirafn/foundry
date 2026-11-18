@@ -1,6 +1,7 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import {
+  ACCOUNT_TOKEN_EXPIRY_NOTIFICATION_CATEGORY,
   ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
   CREDITS_NOTIFICATION_CATEGORY,
   DISPATCH_NOTIFICATION_CATEGORY,
@@ -86,6 +87,16 @@ export class SystemSignalRService {
   applyAccountTokenStatus(message: string | null): void {
     const notification: SystemNotification = {
       category: ACCOUNT_TOKEN_NOTIFICATION_CATEGORY,
+      isActive: message !== null,
+      message: message ?? '',
+    };
+    this._applyNotification(notification);
+  }
+
+  /** Seeds the account-token-expiry banner with the server-built message; null removes it. */
+  applyAccountTokenExpiryStatus(message: string | null): void {
+    const notification: SystemNotification = {
+      category: ACCOUNT_TOKEN_EXPIRY_NOTIFICATION_CATEGORY,
       isActive: message !== null,
       message: message ?? '',
     };

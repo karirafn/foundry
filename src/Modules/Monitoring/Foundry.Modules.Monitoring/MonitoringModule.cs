@@ -102,6 +102,12 @@ public static class MonitoringModule
         services.AddScoped<IAccountTokenHealthQueries, AccountTokenHealthQueries>();
         services.AddDomainEventHandler<CredentialTokenInvalidated, AccountTokenBroadcastHandler>();
         services.AddDomainEventHandler<CredentialTokenRevalidated, AccountTokenBroadcastHandler>();
+        services.AddScoped<AccountTokenExpiryBroadcaster>();
+        services.AddDomainEventHandler<CredentialTokenInvalidated, AccountTokenExpiryBroadcastHandler>();
+        services.AddDomainEventHandler<CredentialTokenRevalidated, AccountTokenExpiryBroadcastHandler>();
+        services.AddDomainEventHandler<CredentialTokenSet, AccountTokenExpiryBroadcastHandler>();
+        services.AddDomainEventHandler<CredentialDeleted, AccountTokenExpiryBroadcastHandler>();
+        services.AddHostedService<AccountTokenExpiryAlertService>();
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IHostRepositoryQueries, HostRepositoryQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();

@@ -1,5 +1,7 @@
 using System.Diagnostics;
 
+using Foundry.Modules.Monitoring.Contracts;
+
 namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
 public abstract record TokenExpiry
 {
     /// <summary>How far ahead of the expiry an operator is warned.</summary>
-    public static readonly TimeSpan WarningWindow = TimeSpan.FromDays(14);
+    public static readonly TimeSpan WarningWindow = AccountTokenExpiryNotification.WarningWindow;
 
     private TokenExpiry() { }
 

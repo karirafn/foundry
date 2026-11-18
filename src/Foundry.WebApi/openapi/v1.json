@@ -2350,7 +2350,7 @@
         "tags": [
           "System"
         ],
-        "summary": "Returns system availability state: whether the Docker daemon is reachable and how many accounts have an invalid token",
+        "summary": "Returns system availability state: whether the Docker daemon is reachable and how many accounts have an invalid, expiring or expired token",
         "operationId": "GetSystemStatus",
         "responses": {
           "200": {
@@ -5489,7 +5489,10 @@
         "required": [
           "dockerAvailable",
           "invalidTokenAccountCount",
-          "accountTokenMessage"
+          "accountTokenMessage",
+          "expiringTokenAccountCount",
+          "expiredTokenAccountCount",
+          "accountTokenExpiryMessage"
         ],
         "type": "object",
         "properties": {
@@ -5505,6 +5508,28 @@
             "format": "int32"
           },
           "accountTokenMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expiringTokenAccountCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "expiredTokenAccountCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "accountTokenExpiryMessage": {
             "type": [
               "null",
               "string"

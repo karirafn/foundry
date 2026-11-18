@@ -747,7 +747,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns system availability state: whether the Docker daemon is reachable and how many accounts have an invalid token */
+        /** Returns system availability state: whether the Docker daemon is reachable and how many accounts have an invalid, expiring or expired token */
         get: operations["GetSystemStatus"];
         put?: never;
         post?: never;
@@ -1593,6 +1593,11 @@ export interface components {
             /** Format: int32 */
             invalidTokenAccountCount: number | string;
             accountTokenMessage: null | string;
+            /** Format: int32 */
+            expiringTokenAccountCount: number | string;
+            /** Format: int32 */
+            expiredTokenAccountCount: number | string;
+            accountTokenExpiryMessage: null | string;
         };
         TakeoverValidationResponse: {
             invalidNamespaces: string[];

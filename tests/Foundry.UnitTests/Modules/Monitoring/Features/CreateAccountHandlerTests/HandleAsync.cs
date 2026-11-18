@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
@@ -62,7 +63,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IRepositoryEligibilityEvaluator? evaluator = null,
         IGitHubWriteProber? writeProber = null,
         IQueryHandler<ValidateToken.Query, ValidateToken.Response>? validateToken = null,
-        ProviderHostGuard? hostGuard = null)
+        ProviderHostGuard? hostGuard = null,
+        IDomainEventDispatcher? domainEventDispatcher = null)
     {
         RepositoryEligibilityDiffer differ = new(
             _dbContext,
@@ -75,7 +77,8 @@ public sealed class HandleAsync : IAsyncDisposable
             differ,
             writeProber ?? new GrantedWriteProber(),
             hostGuard ?? BuildPassingGuard(),
-            TimeProvider.System);
+            TimeProvider.System,
+            domainEventDispatcher ?? new NullDomainEventDispatcher());
     }
 
     [Fact]
@@ -643,6 +646,78 @@ public sealed class HandleAsync : IAsyncDisposable
         result.ShouldBeOfType<CreateAccount.Outcome.Created>();
         long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
         credentialCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenAccountIsCreated_DispatchesCredentialTokenSetAfterTheSave()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CommittedAccountsDispatcher dispatcher = new(_connection);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), domainEventDispatcher: dispatcher);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — the dispatch saw the new account already committed.
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        dispatcher.ShouldSatisfyAllConditions(
+            () => dispatcher.Events.ShouldBe([new CredentialTokenSet(CredentialId.From(created.Value.Credential.Id))]),
+            () => dispatcher.AccountCountsAtDispatch.ShouldBe([1]));
+    }
+
+    [Fact]
+    public async Task WhenAccountIsCreatedByTakeover_DispatchesCredentialTokenSetAfterTheCommit()
+    {
+        // Arrange
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existingHolder = GitHubCredential.Create(AccountName.Create("holder-user").ValueOrThrow(), new IssuedToken("holder-token", new TokenExpiry.NotChecked()), baseUrl);
+        existingHolder.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existingHolder);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CommittedAccountsDispatcher dispatcher = new(_connection);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), domainEventDispatcher: dispatcher);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test", TakeoverNamespaces: ["octocat"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        dispatcher.ShouldSatisfyAllConditions(
+            () => dispatcher.Events.ShouldBe([new CredentialTokenSet(CredentialId.From(created.Value.Credential.Id))]),
+            () => dispatcher.AccountCountsAtDispatch.ShouldBe([2]));
+    }
+
+    private sealed class CommittedAccountsDispatcher(SqliteConnection connection) : IDomainEventDispatcher
+    {
+        private readonly List<IDomainEvent> _events = [];
+        private readonly List<int> _counts = [];
+
+        public IReadOnlyList<IDomainEvent> Events => _events;
+
+        public IReadOnlyList<int> AccountCountsAtDispatch => _counts;
+
+        public async Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken)
+        {
+            List<IDomainEvent> batch = [.. events];
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            _events.AddRange(batch);
+            await using FoundryDbContext reader = new(
+                new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(connection).Options);
+            _counts.Add(await reader.Set<Credential>().CountAsync(cancellationToken));
+        }
     }
 
     [Fact]

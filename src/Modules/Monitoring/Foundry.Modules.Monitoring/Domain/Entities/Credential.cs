@@ -138,7 +138,14 @@ public abstract class Credential : AggregateRoot<CredentialId>
         TokenExpiry = token.Expiry;
         TokenVersion++;
         MarkTokenValid();
+        AddDomainEvent(new CredentialTokenSet(Id));
     }
+
+    /// <summary>
+    /// Marks the account for deletion. The caller removes the entity and saves; this raises
+    /// <see cref="CredentialDeleted"/> so whatever the account counted towards is recounted after the save.
+    /// </summary>
+    public void Delete() => AddDomainEvent(new CredentialDeleted(Id));
 
     /// <summary>
     /// Returns the raw decrypted token string when <see cref="Token"/> is <see cref="ProviderToken.Present"/>;

@@ -20,13 +20,13 @@ public sealed class TokenValidityEvents
     private static string Token(string suffix) => string.Concat("ghp_", suffix);
 
     [Fact]
-    public void WhenAccountIsCreated_RaisesNothing()
+    public void WhenAccountIsCreatedWithAToken_RaisesCredentialTokenSet()
     {
         // Act
         GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Assert
-        credential.DomainEvents.ShouldBeEmpty();
+        credential.DomainEvents.ShouldBe([new CredentialTokenSet(credential.Id)]);
     }
 
     [Fact]
@@ -34,6 +34,7 @@ public sealed class TokenValidityEvents
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
+        credential.ClearDomainEvents();
 
         // Act
         credential.MarkTokenInvalid(Detected);
@@ -77,6 +78,7 @@ public sealed class TokenValidityEvents
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
+        credential.ClearDomainEvents();
 
         // Act
         credential.MarkTokenValid();
@@ -86,7 +88,7 @@ public sealed class TokenValidityEvents
     }
 
     [Fact]
-    public void WhenInvalidGitHubAccountGetsNewToken_RaisesCredentialTokenRevalidated()
+    public void WhenInvalidGitHubAccountGetsNewToken_RaisesRevalidatedAndTokenSet()
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
@@ -97,11 +99,11 @@ public sealed class TokenValidityEvents
         credential.Update(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("b"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Assert
-        credential.DomainEvents.ShouldBe([new CredentialTokenRevalidated(credential.Id)]);
+        credential.DomainEvents.ShouldBe([new CredentialTokenRevalidated(credential.Id), new CredentialTokenSet(credential.Id)]);
     }
 
     [Fact]
-    public void WhenInvalidGitLabAccountGetsNewToken_RaisesCredentialTokenRevalidated()
+    public void WhenInvalidGitLabAccountGetsNewToken_RaisesRevalidatedAndTokenSet()
     {
         // Arrange
         GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitLabBaseUrl());
@@ -112,19 +114,20 @@ public sealed class TokenValidityEvents
         credential.Update(AccountName.Create("my-group").ValueOrThrow(), new IssuedToken(Token("b"), new TokenExpiry.NotChecked()), GitLabBaseUrl());
 
         // Assert
-        credential.DomainEvents.ShouldBe([new CredentialTokenRevalidated(credential.Id)]);
+        credential.DomainEvents.ShouldBe([new CredentialTokenRevalidated(credential.Id), new CredentialTokenSet(credential.Id)]);
     }
 
     [Fact]
-    public void WhenValidAccountGetsNewToken_RaisesNothing()
+    public void WhenValidAccountGetsNewToken_RaisesOnlyCredentialTokenSet()
     {
         // Arrange
         GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
+        credential.ClearDomainEvents();
 
         // Act
         credential.Update(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("b"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Assert
-        credential.DomainEvents.ShouldBeEmpty();
+        credential.DomainEvents.ShouldBe([new CredentialTokenSet(credential.Id)]);
     }
 }

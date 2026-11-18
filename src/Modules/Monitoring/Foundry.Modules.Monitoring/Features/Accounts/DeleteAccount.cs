@@ -15,7 +15,7 @@ internal static class DeleteAccount
 {
     internal sealed record Command(CredentialId Id) : ICommand<bool>;
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, bool>
+    internal sealed class Handler(DbContext dbContext, IDomainEventDispatcher domainEventDispatcher) : ICommandHandler<Command, bool>
     {
         public async Task<Result<bool>> HandleAsync(
             Command command,
@@ -28,8 +28,14 @@ internal static class DeleteAccount
                 return Result<bool>.Fail(CredentialErrors.NotFound(command.Id));
             }
 
+            credential.Delete();
             dbContext.Set<Credential>().Remove(credential);
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            // The deletion is committed, so a handler that recounts accounts no longer sees this one.
+            IDomainEvent[] events = [.. credential.DomainEvents];
+            credential.ClearDomainEvents();
+            await domainEventDispatcher.DispatchAsync(events, cancellationToken);
 
             return Result<bool>.Ok(true);
         }

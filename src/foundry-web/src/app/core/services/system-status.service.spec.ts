@@ -8,12 +8,15 @@ import { SystemStatusService } from './system-status.service';
 import { SystemSignalRService } from './system-signalr.service';
 import { SystemStatusResponse } from '../models/system-status.model';
 
+const NO_EXPIRY = { expiringTokenAccountCount: 0, expiredTokenAccountCount: 0, accountTokenExpiryMessage: null };
+
 function createMockSignalRService() {
   const reconnected$ = new Subject<void>();
   return {
     reconnected: reconnected$.asObservable(),
     applyDockerAvailability: vi.fn(),
     applyAccountTokenStatus: vi.fn(),
+    applyAccountTokenExpiryStatus: vi.fn(),
     notifications: signal([]).asReadonly(),
     _reconnected$: reconnected$,
   };
@@ -46,7 +49,7 @@ describe('SystemStatusService', () => {
   it('should call applyDockerAvailability(true) when GET returns dockerAvailable: true', () => {
     // Arrange
     const { http, mockSignalR } = setup();
-    const response: SystemStatusResponse = { dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null };
+    const response: SystemStatusResponse = { dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY };
 
     // Act
     const req = http.expectOne('/api/system/status');
@@ -60,7 +63,7 @@ describe('SystemStatusService', () => {
   it('should call applyDockerAvailability(false) when GET returns dockerAvailable: false', () => {
     // Arrange
     const { http, mockSignalR } = setup();
-    const response: SystemStatusResponse = { dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null };
+    const response: SystemStatusResponse = { dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY };
 
     // Act
     const req = http.expectOne('/api/system/status');
@@ -88,13 +91,13 @@ describe('SystemStatusService', () => {
     // Arrange
     const { http, mockSignalR } = setup();
     const initReq = http.expectOne('/api/system/status');
-    initReq.flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null });
+    initReq.flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY });
 
     // Act — trigger reconnect
     mockSignalR._reconnected$.next();
 
     const reconnectReq = http.expectOne('/api/system/status');
-    reconnectReq.flush({ dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null });
+    reconnectReq.flush({ dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY });
 
     // Assert
     expect(mockSignalR.applyDockerAvailability).toHaveBeenCalledTimes(2);
@@ -109,13 +112,13 @@ describe('SystemStatusService', () => {
 
     // Initial seed: Docker is down
     const initReq = http.expectOne('/api/system/status');
-    initReq.flush({ dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null });
+    initReq.flush({ dockerAvailable: false, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY });
     expect(mockSignalR.applyDockerAvailability).toHaveBeenLastCalledWith(false);
 
     // Act — reconnect, Docker now available
     mockSignalR._reconnected$.next();
     const reconnectReq = http.expectOne('/api/system/status');
-    reconnectReq.flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null });
+    reconnectReq.flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY });
 
     // Assert — true passed (clear the banner)
     expect(mockSignalR.applyDockerAvailability).toHaveBeenLastCalledWith(true);
@@ -130,6 +133,7 @@ describe('SystemStatusService', () => {
         dockerAvailable: true,
         invalidTokenAccountCount: 2,
         accountTokenMessage: message,
+        ...NO_EXPIRY,
       };
 
       // Act
@@ -148,6 +152,7 @@ describe('SystemStatusService', () => {
         dockerAvailable: true,
         invalidTokenAccountCount: 0,
         accountTokenMessage: null,
+        ...NO_EXPIRY,
       });
 
       // Assert
@@ -163,6 +168,56 @@ describe('SystemStatusService', () => {
 
       // Assert
       expect(mockSignalR.applyAccountTokenStatus).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('account-token-expiry seed', () => {
+    const EXPIRING = '1 account has a token expiring within 14 days — enter a new one before monitoring stops.';
+    const WITH_EXPIRING: SystemStatusResponse = {
+      dockerAvailable: true,
+      invalidTokenAccountCount: 0,
+      accountTokenMessage: null,
+      expiringTokenAccountCount: 1,
+      expiredTokenAccountCount: 0,
+      accountTokenExpiryMessage: EXPIRING,
+    };
+
+    it('should seed the expiry banner from accountTokenExpiryMessage on page load', () => {
+      // Arrange
+      const { http, mockSignalR } = setup();
+
+      // Act
+      http.expectOne('/api/system/status').flush(WITH_EXPIRING);
+
+      // Assert
+      expect(mockSignalR.applyAccountTokenExpiryStatus).toHaveBeenCalledWith(EXPIRING);
+    });
+
+    it('should re-seed the expiry banner when SignalR reconnects', () => {
+      // Arrange
+      const { http, mockSignalR } = setup();
+      http.expectOne('/api/system/status').flush(WITH_EXPIRING);
+
+      // Act
+      mockSignalR._reconnected$.next();
+      http
+        .expectOne('/api/system/status')
+        .flush({ dockerAvailable: true, invalidTokenAccountCount: 0, accountTokenMessage: null, ...NO_EXPIRY });
+
+      // Assert
+      expect(mockSignalR.applyAccountTokenExpiryStatus).toHaveBeenNthCalledWith(1, EXPIRING);
+      expect(mockSignalR.applyAccountTokenExpiryStatus).toHaveBeenNthCalledWith(2, null);
+    });
+
+    it('should treat a missing accountTokenExpiryMessage as null', () => {
+      // Arrange
+      const { http, mockSignalR } = setup();
+
+      // Act
+      http.expectOne('/api/system/status').flush({ dockerAvailable: true });
+
+      // Assert
+      expect(mockSignalR.applyAccountTokenExpiryStatus).toHaveBeenCalledWith(null);
     });
   });
 });

@@ -1,0 +1,23 @@
+<span class="sr-only" role="status" aria-atomic="true">{{ announcement() }}</span>
+<div class="system-banner" role="region" aria-label="Account token expiry" [hidden]="!isVisible()">
+  <div class="system-banner__bar">
+    <svg
+      class="system-banner__icon"
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10"></circle>
+      <polyline points="12 6 12 12 16 14"></polyline>
+    </svg>
+    <span class="system-banner__message">{{ message() }}</span>
+    <a class="system-banner__details-link" routerLink="/settings/accounts">Open Accounts</a>
+  </div>
+</div>
