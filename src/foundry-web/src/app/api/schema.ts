@@ -1546,6 +1546,47 @@ export interface components {
             /** Format: uuid */
             workerRunId: string;
         };
+        /** @enum {unknown} */
+        ReviewCategory: "Correctness" | "Criteria" | "Tests" | "Security" | "Quality" | "Design" | "Conventions";
+        ReviewCriterionAnswer: {
+            id: string;
+            status: components["schemas"]["ReviewCriterionStatus"];
+            evidence: string;
+        };
+        /** @enum {unknown} */
+        ReviewCriterionStatus: "Met" | "Unmet" | "NotVerifiable";
+        ReviewDimension: {
+            category: components["schemas"]["ReviewCategory"];
+            status: components["schemas"]["ReviewDimensionStatus"];
+            note: string;
+        };
+        /** @enum {unknown} */
+        ReviewDimensionStatus: "Clear" | "Findings" | "NotApplicable";
+        ReviewFinding: {
+            path: string;
+            /** Format: int32 */
+            line: null | number | string;
+            severity: components["schemas"]["ReviewFindingSeverity"];
+            category: components["schemas"]["ReviewCategory"];
+            rule: null | components["schemas"]["ReviewRule"];
+            body: string;
+        };
+        /** @enum {unknown} */
+        ReviewFindingSeverity: "Blocking" | "Advisory";
+        ReviewRule: {
+            principle: null | string;
+            file: null | string;
+            quote: null | string;
+        };
+        ReviewTests: {
+            assessment: components["schemas"]["ReviewTestsAssessment"];
+            reason: string;
+            coveringTests: string[];
+        };
+        /** @enum {unknown} */
+        ReviewTestsAssessment: "Adequate" | "Missing" | "NotNeeded";
+        /** @enum {unknown} */
+        ReviewVerdictOutcome: "Approved" | "ApprovedForPerson" | "ChangesRequested";
         RolePluginComponent: {
             name: string;
             description: null | string;
@@ -1869,6 +1910,7 @@ export interface components {
             falsePositivesConfirmedAt?: null | string;
             confirmedFindings?: components["schemas"]["WorkerRunConfirmedFinding"][];
             toolchain?: null | components["schemas"]["WorkerRunTool"][];
+            reviewVerdict?: null | components["schemas"]["WorkerRunReviewVerdict"];
         };
         WorkerRunPublishDetail: {
             headSha: string;
@@ -1891,6 +1933,16 @@ export interface components {
             reason: string;
             /** Format: int64 */
             sizeBytes: number | string;
+        };
+        WorkerRunReviewVerdict: {
+            outcome: components["schemas"]["ReviewVerdictOutcome"];
+            reviewedCommit: string;
+            patchId: null | string;
+            summary: string;
+            findings: components["schemas"]["ReviewFinding"][];
+            dimensions: components["schemas"]["ReviewDimension"][];
+            criteria: components["schemas"]["ReviewCriterionAnswer"][];
+            tests: components["schemas"]["ReviewTests"];
         };
         WorkerRunSecretFinding: {
             path: string;

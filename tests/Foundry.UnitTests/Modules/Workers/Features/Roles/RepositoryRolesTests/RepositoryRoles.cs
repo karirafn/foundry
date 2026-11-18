@@ -308,6 +308,78 @@ public sealed class RepositoryRoles
         verdict.Status.ShouldBe(expected);
     }
 
+    private static JsonObject ReviewSchema() =>
+        ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Review.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+    private static string[] Keys(JsonNode? node) => [.. node!.AsObject().Select(property => property.Key)];
+
+    private static string[] Strings(JsonNode? node) => [.. node!.AsArray().Select(item => item!.GetValue<string>())];
+
+    [Fact]
+    public void TheReviewVerdictSchema_MatchesTheTypedReviewVerdictParser()
+    {
+        // Arrange
+        JsonObject schema = ReviewSchema();
+        JsonNode properties = schema["properties"]!;
+        JsonNode finding = properties[ReviewVerdictParser.FindingsProperty]!["items"]!;
+        JsonNode dimension = schema["$defs"]!["dimension"]!;
+        JsonNode criterion = properties[ReviewVerdictParser.CriteriaProperty]!["items"]!;
+        JsonNode tests = properties[ReviewVerdictParser.TestsProperty]!;
+
+        // Assert
+        schema.ShouldSatisfyAllConditions(
+            () => Keys(properties).ShouldBe(ReviewVerdictParser.TopLevelProperties, ignoreOrder: true),
+            () => Strings(schema["required"]).ShouldBe(ReviewVerdictParser.TopLevelProperties, ignoreOrder: true),
+            () => properties[ReviewVerdictParser.SummaryProperty]!["maxLength"]!.GetValue<int>().ShouldBe(ReviewVerdictParser.SummaryMaxLength),
+            () => properties[ReviewVerdictParser.FindingsProperty]!["maxItems"]!.GetValue<int>().ShouldBe(ReviewVerdictParser.MaxItems),
+            () => Keys(finding["properties"]).ShouldBe(ReviewVerdictParser.FindingProperties, ignoreOrder: true),
+            () => Strings(finding["required"]).ShouldBe(ReviewVerdictParser.RequiredFindingProperties, ignoreOrder: true),
+            () => Strings(finding["properties"]![ReviewVerdictParser.SeverityProperty]!["enum"]).ShouldBe(ReviewTokens.Severities.Keys, ignoreOrder: true),
+            () => Strings(finding["properties"]![ReviewVerdictParser.CategoryProperty]!["enum"]).ShouldBe(ReviewTokens.Categories.Keys, ignoreOrder: true),
+            () => Keys(finding["properties"]![ReviewVerdictParser.RuleProperty]!["properties"]).ShouldBe(ReviewVerdictParser.RuleProperties, ignoreOrder: true),
+            () => finding["properties"]![ReviewVerdictParser.BodyProperty]!["maxLength"]!.GetValue<int>().ShouldBe(ReviewVerdictParser.BodyMaxLength),
+            () => Strings(properties[ReviewVerdictParser.DimensionsProperty]!["required"]).ShouldBe(ReviewTokens.Categories.Keys, ignoreOrder: true),
+            () => Keys(dimension["properties"]).ShouldBe(ReviewVerdictParser.DimensionProperties, ignoreOrder: true),
+            () => Strings(dimension["properties"]![ReviewVerdictParser.StatusProperty]!["enum"]).ShouldBe(ReviewTokens.DimensionStatuses.Keys, ignoreOrder: true),
+            () => dimension["properties"]![ReviewVerdictParser.NoteProperty]!["maxLength"]!.GetValue<int>().ShouldBe(ReviewVerdictParser.NoteMaxLength),
+            () => Keys(criterion["properties"]).ShouldBe(ReviewVerdictParser.CriterionProperties, ignoreOrder: true),
+            () => Strings(criterion["properties"]![ReviewVerdictParser.StatusProperty]!["enum"]).ShouldBe(ReviewTokens.CriterionStatuses.Keys, ignoreOrder: true),
+            () => criterion["properties"]![ReviewVerdictParser.IdProperty]!["pattern"]!.GetValue<string>().ShouldBe("^AC[0-9]+$"),
+            () => criterion["properties"]![ReviewVerdictParser.EvidenceProperty]!["maxLength"]!.GetValue<int>().ShouldBe(ReviewVerdictParser.EvidenceMaxLength),
+            () => Keys(tests["properties"]).ShouldBe(ReviewVerdictParser.TestsProperties, ignoreOrder: true),
+            () => Strings(tests["properties"]![ReviewVerdictParser.AssessmentProperty]!["enum"]).ShouldBe(ReviewTokens.TestsAssessments.Keys, ignoreOrder: true),
+            () => tests["properties"]![ReviewVerdictParser.ReasonProperty]!["maxLength"]!.GetValue<int>().ShouldBe(ReviewVerdictParser.ReasonMaxLength));
+    }
+
+    [Fact]
+    public void ASampleMatchingTheReviewVerdictSchema_ParsesWithTheReviewVerdictParser()
+    {
+        // Arrange
+        const string sample = """
+            {
+              "summary": "Adds retry.",
+              "findings": [{"path": "src/a.cs", "line": 3, "severity": "blocking", "category": "design", "rule": {"principle": "design.1"}, "body": "Leaks."}],
+              "dimensions": {
+                "correctness": {"status": "clear", "note": ""},
+                "criteria": {"status": "clear", "note": ""},
+                "tests": {"status": "not_applicable", "note": ""},
+                "security": {"status": "clear", "note": ""},
+                "quality": {"status": "clear", "note": ""},
+                "design": {"status": "findings", "note": "One leak."},
+                "conventions": {"status": "clear", "note": ""}
+              },
+              "criteria": [{"id": "AC1", "status": "not_verifiable", "evidence": "Needs a live provider."}],
+              "tests": {"assessment": "not_needed", "reason": "No behaviour.", "coveringTests": []}
+            }
+            """;
+
+        // Act
+        RunVerdict verdict = new ReviewVerdictParser().Parse(JsonNode.Parse(sample)!.AsObject());
+
+        // Assert
+        verdict.Status.ShouldBe(RunVerdictStatus.Done);
+    }
+
     private static readonly string[] ReviewCategories =
         ["correctness", "criteria", "tests", "security", "quality", "design", "conventions"];
 

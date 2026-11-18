@@ -7,7 +7,9 @@ using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
+using Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.ReviewFactsTests;
 using Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServiceTests;
+using Foundry.UnitTests.Modules.Workers.Features.Verdicts.ReviewVerdictParserTests;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -267,6 +269,55 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
         blocked.ShouldSatisfyAllConditions(
             () => blocked.Kind.ShouldBe(TriageKind.Bug),
             () => blocked.BlockedBy.ShouldBe([new TriageBlocker(15, "Needs the auth module.")]));
+    }
+
+    [Fact]
+    public async Task WhenAReviewRunCompletes_StoresItsDecisionAndPublishesReviewRunCompleted()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        RecordingOrchestrator orchestrator = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, orchestrator, dispatcher);
+        ReviewFacts facts = ReviewFactsBuilder.With(
+            [new ChangedPath(ChangeStatus.Modified, "src/App.cs"), new ChangedPath(ChangeStatus.Modified, "tests/AppTests.cs")],
+            AcceptanceCriteria.Extract("## Acceptance Criteria\n\n- one\n- two\n"));
+        ReviewVerdict verdict = ReviewVerdictParser.TryParse(ReviewVerdictSamples.Valid("AC1", "AC2")
+            .WithCriterion("AC2", "unmet")
+            .WithFinding(ReviewVerdictSamples.Finding("correctness", "blocking"))
+            .WithFinding(ReviewVerdictSamples.Finding("security", "advisory"))
+            .WithTests("not_needed")).ShouldNotBeNull();
+        ReviewDecision decision = ReviewDecision.Decide(verdict, facts, [])
+            .ShouldBeOfType<ReviewDecisionResult.Decided>().Decision;
+
+        // Act
+        await sut.ApplyAsync(
+            new WorkerOutcome.ReviewCompleted(decision, ContainerOutput: null, Summary: null),
+            activeRun,
+            RunVerdict.Done(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        ReviewRunCompleted completed = dispatcher.Captured.OfType<ReviewRunCompleted>().ShouldHaveSingleItem();
+        await using FoundryDbContext assertDb = CreateDbContext();
+        CompletedRun run = (await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<CompletedRun>();
+        completed.ShouldSatisfyAllConditions(
+            () => completed.IssueId.ShouldBe(activeRun.IssueId.Value),
+            () => completed.WorkerRunId.ShouldBe(activeRun.Id),
+            () => completed.Outcome.ShouldBe(ReviewVerdictOutcome.ChangesRequested),
+            () => completed.ReviewedCommit.ShouldBe(facts.ReviewedCommit.Value),
+            () => completed.PatchId.ShouldBe(facts.PatchId!.Value.Value),
+            () => completed.BlockingFindings.Select(finding => finding.Category).ShouldBe([ReviewCategory.Correctness]),
+            () => completed.UnmetCriteria.Select(criterion => criterion.Id).ShouldBe(["AC2"]),
+            () => completed.TestsAssessment.ShouldBe(ReviewTestsAssessment.NotNeeded),
+            () => dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldBeEmpty(),
+            () => orchestrator.StopAndRemoveCalls.ShouldBe([ContainerId]),
+            () => run.BranchName.ShouldBeNull(),
+            () => run.PullRequestUrl.ShouldBeNull(),
+            () => run.ReviewDecision.ShouldBe(decision),
+            () => run.VerdictStatus.ShouldBe(RunVerdictStatus.Done));
     }
 
     [Fact]
