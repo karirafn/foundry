@@ -150,7 +150,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenRoleIsUnknown_ReturnsRoleNotFound()
     {
         // Act
-        Result<WorkerRoleModelResponse> result = await SaveAsync("opus", role: "review");
+        Result<WorkerRoleModelResponse> result = await SaveAsync("opus", role: "retired-role");
 
         // Assert
         result.ShouldBeOfType<Result<WorkerRoleModelResponse>.Failure>().Error.Code

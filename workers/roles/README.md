@@ -21,13 +21,20 @@ The engineering standards (the Worker Principles) live under `shared/prompts/`. 
 framing line; the standards themselves are split into Principle Sections, one file each under
 `shared/prompts/principles/`: `testing.md`, `design.md`, `code.md` and `domain.md` (Domain modelling). Each role
 declares in Foundry's code (`WorkerRole`) which sections its system prompt carries, never in its folder: implement
-carries all four, triage carries Design and Domain modelling. Foundry places the framing line followed by the role's
+and review carry all four (a unit test keeps review's sections equal to implement's), triage carries Design and
+Domain modelling. Foundry places the framing line followed by the role's
 sections, in the fixed order Testing, Design, Code, Domain modelling, after the safety preamble and before the role
 prompt; a role with no sections gets neither the framing nor any principles. They yield to the target repository's
 style, testing and design conventions, never to the safety rules. Every file is required and takes no placeholders,
 and the framing line with all four sections together stays within 8 KiB (UTF-8 bytes): a missing, blank or
 placeholder-bearing file, or files over the combined cap, fail the unit tests and the startup image build. A role's
 own prompt says how it uses them (implement: "Apply the engineering principles above to every change.").
+
+Each bullet of a section file gets a principle id `<section>.<n>` when Foundry assembles the principles:
+`testing`, `design`, `code` or `domain`, then the bullet's 1-based position in its file after the heading line
+(`- [design.1] Invalid states are …`). The ids are never written in the files, so the prompts and the role cards
+always show the same ids. A review finding cites an id as its rule; inserting a bullet renumbers the later ids for
+future runs only. The ids count towards the 8 KiB cap.
 
 ## Capability profiles
 
@@ -41,7 +48,7 @@ Each role declares the `WorkerCapability` it runs under in Foundry's code (`Work
   Foundry also reads the Referenced Issues and the Open-Issue Index (the Tracker Context) and renders them after the
   issue content as XML-encoded untrusted data; when the prompt does not fit, Referenced Issue bodies and then the
   open-issue list are shed before the issue's own content.
-- `restricted` (`triage`): `--restricted --strict-mcp-config` and never the permission skip, no provider token, no
+- `restricted` (`triage`, `review`): `--restricted --strict-mcp-config` and never the permission skip, no provider token, no
   branch, and a clone of a Publisher base bundle holding only the default branch. Foundry reads the issue title, body and comments and renders them
   into `{issueContent}` as XML-encoded untrusted data. Foundry also reads the Referenced Issues and the Open-Issue
   Index and renders them after the issue content as XML-encoded untrusted data; when the prompt does not fit,
@@ -100,3 +107,17 @@ The schema's conditional stays flat (`needs_input` requires `questions`); the ty
 breaks the verdict), and the resolver rejects an issue outside the run's supplied open issues, a duplicate or an
 over-cap list as `verdict_invalid`. Foundry records `ready` and `blocked` as `done`. A `blocked` verdict the resolver
 rejects is recorded as `invalid`.
+
+`review/verdict.schema.json` requires `summary` (1 to 2000 characters), `findings` (0 to 50
+`{path, line?, severity, category, rule?, body}` objects; `severity` is `blocking` or `advisory`, `category` one of
+`correctness`, `criteria`, `tests`, `security`, `quality`, `design`, `conventions`, and `rule` a principle id or a
+convention `file` with a verbatim `quote`), `dimensions` (every category, each `{status, note}` with `status`
+`clear`, `findings` or `not_applicable`), `criteria` (0 to 50 `{id, status, evidence}` objects answering the
+supplied `AC<n>` ids with `met`, `unmet` or `not_verifiable`) and `tests` (`{assessment, reason, coveringTests}`,
+`assessment` `adequate`, `missing` or `not_needed`). It has no `outcome`: Foundry derives the outcome from the
+verdict in code (ADR 0113). Until the review verdict parser lands, a review run that exits cleanly fails as
+`verdict_invalid`, so a review can never approve anything; nothing dispatches a review yet.
+
+The review role's `skills/security-review/SKILL.md` holds its whole security checklist in one file, with no
+`references/` folder: a restricted run cannot read files beside `SKILL.md`, because the plugin directory lies outside
+its working directories.

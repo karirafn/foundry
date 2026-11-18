@@ -28,8 +28,17 @@ public sealed record WorkerRole
             PrincipleSection.Code,
             PrincipleSection.DomainModelling));
 
+    /// <summary>
+    /// Judges whether an implementation pull request is correct and meets its issue (ADR 0113). Returns a verdict only.
+    /// </summary>
+    public static readonly WorkerRole Review = new(
+        "review",
+        WorkerCapability.Restricted,
+        // The reviewer judges against exactly the sections the implementer received, never a rule it was not given.
+        Implement.PrincipleSections);
+
     /// <summary>Every role Foundry can dispatch, in display order.</summary>
-    public static readonly IReadOnlyList<WorkerRole> All = [Triage, Implement];
+    public static readonly IReadOnlyList<WorkerRole> All = [Triage, Implement, Review];
 
     private WorkerRole(string name, WorkerCapability capability, PrincipleSectionSet principleSections)
     {

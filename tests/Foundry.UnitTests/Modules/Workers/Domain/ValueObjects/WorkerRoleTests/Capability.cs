@@ -23,10 +23,24 @@ public sealed class Capability
     }
 
     [Fact]
-    public void EveryDispatchableRole_ListsTriageBeforeImplement()
+    public void TheReviewRole_RunsRestricted()
     {
         // Assert
-        WorkerRole.All.ShouldBe([WorkerRole.Triage, WorkerRole.Implement]);
+        WorkerRole.Review.Capability.ShouldBe(WorkerCapability.Restricted);
+    }
+
+    [Fact]
+    public void TheReviewRole_IsNamedReview()
+    {
+        // Assert
+        WorkerRole.Review.Name.ShouldBe("review");
+    }
+
+    [Fact]
+    public void EveryDispatchableRole_ListsTriageThenImplementThenReview()
+    {
+        // Assert
+        WorkerRole.All.ShouldBe([WorkerRole.Triage, WorkerRole.Implement, WorkerRole.Review]);
     }
 
     [Theory]

@@ -28,6 +28,20 @@ public static class PrincipleSectionNames
             _ => throw new ArgumentOutOfRangeException(nameof(section), section, "Unknown principle section."),
         };
 
+    /// <summary>
+    /// The first part of the section's principle ids (<c>&lt;prefix&gt;.&lt;n&gt;</c>), which a review verdict cites.
+    /// Stable: changing one invalidates every recorded citation.
+    /// </summary>
+    public static string ToIdPrefix(this PrincipleSection section) =>
+        section switch
+        {
+            PrincipleSection.Testing => "testing",
+            PrincipleSection.Design => "design",
+            PrincipleSection.Code => "code",
+            PrincipleSection.DomainModelling => "domain",
+            _ => throw new ArgumentOutOfRangeException(nameof(section), section, "Unknown principle section."),
+        };
+
     /// <summary>The section's file name under <c>shared/prompts/principles/</c>.</summary>
     public static string ToFileName(this PrincipleSection section) =>
         section switch

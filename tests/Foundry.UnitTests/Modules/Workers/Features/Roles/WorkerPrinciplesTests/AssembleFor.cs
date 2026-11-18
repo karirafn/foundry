@@ -67,6 +67,74 @@ public sealed class AssembleFor
     }
 
     [Fact]
+    public void WhenASectionHasBullets_PrefixesEachBulletWithItsSectionIdAndPosition()
+    {
+        // Arrange
+        WorkerPrinciples principles = new(
+            "FRAMING",
+            new Dictionary<PrincipleSection, string>
+            {
+                [PrincipleSection.Testing] = "Testing:\n- Tests first.\n- One behaviour each.",
+                [PrincipleSection.Design] = "Design:\n- Safe defaults.",
+                [PrincipleSection.Code] = "Code:\n- Comments explain why.",
+                [PrincipleSection.DomainModelling] = "Domain modelling:\n- Domain terms.\n- One type per state.",
+            });
+
+        // Act
+        string text = principles.AssembleFor(WorkerRole.Implement.PrincipleSections);
+
+        // Assert
+        text.ShouldBe(
+            "FRAMING\n\n"
+            + "Testing:\n- [testing.1] Tests first.\n- [testing.2] One behaviour each.\n\n"
+            + "Design:\n- [design.1] Safe defaults.\n\n"
+            + "Code:\n- [code.1] Comments explain why.\n\n"
+            + "Domain modelling:\n- [domain.1] Domain terms.\n- [domain.2] One type per state.");
+    }
+
+    [Fact]
+    public void WhenASectionLineIsNotABullet_LeavesItUnnumberedAndDoesNotCountIt()
+    {
+        // Arrange
+        WorkerPrinciples principles = new(
+            "FRAMING",
+            new Dictionary<PrincipleSection, string>
+            {
+                [PrincipleSection.Testing] = "TESTING",
+                [PrincipleSection.Design] = "Design:\n- First.\n  continued\n- Second.",
+                [PrincipleSection.Code] = "CODE",
+                [PrincipleSection.DomainModelling] = "DOMAIN",
+            });
+
+        // Act
+        string text = principles.AssembleFor(PrincipleSectionSet.Of(PrincipleSection.Design));
+
+        // Assert
+        text.ShouldBe("FRAMING\n\nDesign:\n- [design.1] First.\n  continued\n- [design.2] Second.");
+    }
+
+    [Fact]
+    public void IdsFor_ListsEveryBulletIdOfTheSelectedSectionsInOrder()
+    {
+        // Arrange
+        WorkerPrinciples principles = new(
+            "FRAMING",
+            new Dictionary<PrincipleSection, string>
+            {
+                [PrincipleSection.Testing] = "Testing:\n- A.\n- B.",
+                [PrincipleSection.Design] = "Design:\n- C.\n- D.",
+                [PrincipleSection.Code] = "Code:\n- E.",
+                [PrincipleSection.DomainModelling] = "Domain modelling:\n- F.",
+            });
+
+        // Act
+        IReadOnlyList<string> ids = principles.IdsFor(WorkerRole.Triage.PrincipleSections);
+
+        // Assert
+        ids.ShouldBe(["design.1", "design.2", "domain.1"]);
+    }
+
+    [Fact]
     public void WhenASectionHasNoText_RejectsThePrinciples()
     {
         // Act
