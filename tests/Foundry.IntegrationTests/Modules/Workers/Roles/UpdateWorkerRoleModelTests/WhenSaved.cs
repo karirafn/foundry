@@ -129,7 +129,7 @@ public sealed class WhenSaved : IAsyncDisposable
     public async Task WhenRoleIsUnknown_ReturnsNotFound()
     {
         // Act
-        HttpResponseMessage response = await PutModelAsync("review", "opus");
+        HttpResponseMessage response = await PutModelAsync("retired-role", "opus");
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -148,6 +148,9 @@ public sealed class WhenSaved : IAsyncDisposable
             ["triage/.claude-plugin/plugin.json"] = """{"name":"triage","description":"Triages an issue."}""",
             ["triage/prompts/system.md"] = "You are triaging issue #{issueNumber}.\n\n{issueContent}",
             ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.",
+            ["review/.claude-plugin/plugin.json"] = """{"name":"review","description":"Reviews a pull request."}""",
+            ["review/prompts/system.md"] = "You are reviewing issue #{issueNumber}.\n\n{issueContent}",
+            ["review/prompts/task.md"] = "Review issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
             ["shared/prompts/principles.md"] = "Engineering principles.",
             ["shared/prompts/principles/testing.md"] = "Testing:",

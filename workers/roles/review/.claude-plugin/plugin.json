@@ -1,0 +1,5 @@
+{
+  "name": "foundry-role-review",
+  "description": "Judges whether an implementation pull request is correct and meets its issue, reading the reviewed commit and its diff, against the Worker Principles and the repository's conventions. Returns a verdict only.",
+  "version": "1.0.0"
+}

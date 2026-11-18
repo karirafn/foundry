@@ -1,0 +1,157 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings", "dimensions", "criteria", "tests"],
+  "properties": {
+    "summary": {
+      "description": "What the change does and your overall judgment of it, in a few sentences.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "findings": {
+      "description": "Every problem you found, one per finding. Empty when you found none.",
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "severity", "category", "body"],
+        "properties": {
+          "path": {
+            "description": "The repository-relative path of the file the finding is in.",
+            "type": "string"
+          },
+          "line": {
+            "description": "The 1-based line in the reviewed commit's version of the file, when the finding has one.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "severity": {
+            "description": "blocking when the change must not merge until this is fixed; advisory otherwise. A blocking quality, design or conventions finding must cite a rule.",
+            "type": "string",
+            "enum": ["blocking", "advisory"]
+          },
+          "category": {
+            "description": "The dimension the finding belongs to.",
+            "type": "string",
+            "enum": ["correctness", "criteria", "tests", "security", "quality", "design", "conventions"]
+          },
+          "rule": {
+            "description": "The rule the finding applies: a principle id, or a repository convention file with a verbatim quote from it.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "principle": {
+                "description": "A principle id shown in the engineering principles, such as design.1.",
+                "type": "string"
+              },
+              "file": {
+                "description": "The repository-relative path of the convention file the quote is from, such as CLAUDE.md.",
+                "type": "string"
+              },
+              "quote": {
+                "description": "The rule, quoted verbatim from that file.",
+                "type": "string"
+              }
+            }
+          },
+          "body": {
+            "description": "What is wrong, why it matters, and what would fix it.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "dimensions": {
+      "description": "Your answer for every dimension of the review.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correctness", "criteria", "tests", "security", "quality", "design", "conventions"],
+      "properties": {
+        "correctness": { "$ref": "#/$defs/dimension" },
+        "criteria": { "$ref": "#/$defs/dimension" },
+        "tests": { "$ref": "#/$defs/dimension" },
+        "security": { "$ref": "#/$defs/dimension" },
+        "quality": { "$ref": "#/$defs/dimension" },
+        "design": { "$ref": "#/$defs/dimension" },
+        "conventions": { "$ref": "#/$defs/dimension" }
+      }
+    },
+    "criteria": {
+      "description": "Your answer for every listed acceptance criterion, by its id. Empty when none are listed.",
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": {
+            "description": "The criterion's id as listed, such as AC1.",
+            "type": "string",
+            "pattern": "^AC[0-9]+$"
+          },
+          "status": {
+            "description": "met when the change satisfies the criterion; unmet when it does not; not_verifiable when the diff and checkout cannot show either.",
+            "type": "string",
+            "enum": ["met", "unmet", "not_verifiable"]
+          },
+          "evidence": {
+            "description": "Where the change meets or misses the criterion (files, tests), or why it cannot be verified.",
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "tests": {
+      "description": "Whether the change's tests are adequate.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assessment", "reason", "coveringTests"],
+      "properties": {
+        "assessment": {
+          "description": "adequate when tests cover the changed behaviour; missing when changed behaviour is untested; not_needed when the change has no behaviour to test.",
+          "type": "string",
+          "enum": ["adequate", "missing", "not_needed"]
+        },
+        "reason": {
+          "description": "Why you judged the tests that way.",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "coveringTests": {
+          "description": "The repository-relative paths of the test files that cover the change.",
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 50,
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "note"],
+      "properties": {
+        "status": {
+          "description": "clear when you checked and found nothing; findings when the findings list has at least one finding in this category; not_applicable when the change gives this dimension nothing to judge.",
+          "type": "string",
+          "enum": ["clear", "findings", "not_applicable"]
+        },
+        "note": {
+          "description": "What you checked for this dimension, in a sentence or two.",
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    }
+  }
+}

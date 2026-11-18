@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
 namespace Foundry.Modules.Workers.Features.Roles;
@@ -47,6 +49,7 @@ internal sealed record WorkerRoleCatalogContent(
 internal sealed class WorkerPrinciples
 {
     private const string Separator = "\n\n";
+    private const string BulletPrefix = "- ";
 
     private readonly IReadOnlyDictionary<PrincipleSection, string> _sections;
 
@@ -69,11 +72,13 @@ internal sealed class WorkerPrinciples
 
     public string Framing { get; }
 
+    /// <summary>The section's file text as read, without principle ids.</summary>
     public string TextOf(PrincipleSection section) => _sections[section];
 
     /// <summary>
-    /// The framing line followed by the selected sections in the fixed order. An empty selection yields an empty
-    /// string: no framing introducing principles that never follow.
+    /// The framing line followed by the selected sections in the fixed order, each bullet prefixed with its principle id
+    /// (<c>- [design.1] …</c>). An empty selection yields an empty string: no framing introducing principles that never
+    /// follow.
     /// </summary>
     public string AssembleFor(PrincipleSectionSet selection)
     {
@@ -84,11 +89,43 @@ internal sealed class WorkerPrinciples
             return string.Empty;
         }
 
-        return string.Join(Separator, [Framing, .. selection.InOrder.Select(TextOf)]);
+        return string.Join(Separator, [Framing, .. selection.InOrder.Select(NumberedTextOf)]);
+    }
+
+    /// <summary>
+    /// The principle ids the selected sections carry, in the fixed order: the only ids a verdict assembled from this
+    /// selection can cite.
+    /// </summary>
+    public IReadOnlyList<string> IdsFor(PrincipleSectionSet selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+
+        return [.. selection.InOrder.SelectMany(section =>
+            Enumerable.Range(1, BulletLines(section).Count()).Select(position => PrincipleId(section, position)))];
     }
 
     /// <summary>The largest text any role can receive: the framing followed by every section.</summary>
     public string AssembleAll() => AssembleFor(PrincipleSectionSet.Of([.. PrincipleSectionNames.All]));
+
+    // Ids are computed from each bullet's position rather than written in the files, so a hand-numbered id can never
+    // drift from the line it names.
+    private string NumberedTextOf(PrincipleSection section)
+    {
+        int position = 0;
+
+        return string.Join('\n', TextOf(section).Split('\n').Select(line =>
+            IsBullet(line)
+                ? $"{BulletPrefix}[{PrincipleId(section, ++position)}] {line[BulletPrefix.Length..]}"
+                : line));
+    }
+
+    private IEnumerable<string> BulletLines(PrincipleSection section) =>
+        TextOf(section).Split('\n').Where(IsBullet);
+
+    private static bool IsBullet(string line) => line.StartsWith(BulletPrefix, StringComparison.Ordinal);
+
+    private static string PrincipleId(PrincipleSection section, int position) =>
+        $"{section.ToIdPrefix()}.{position.ToString(CultureInfo.InvariantCulture)}";
 }
 
 /// <summary>

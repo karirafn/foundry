@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Foundry.Modules.Issues.Contracts;
@@ -307,6 +308,269 @@ public sealed class RepositoryRoles
         verdict.Status.ShouldBe(expected);
     }
 
+    private static readonly string[] ReviewCategories =
+        ["correctness", "criteria", "tests", "security", "quality", "design", "conventions"];
+
+    [Fact]
+    public void TheReviewRole_HasAVerdictSchema()
+    {
+        // Act
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Assert
+        catalog.Find(WorkerRole.Review).ShouldNotBeNull().VerdictSchema.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void TheReviewPluginManifest_NamesTheRoleAndStatesItsPurpose()
+    {
+        // Arrange
+        JsonObject manifest = ReadJsonObject(
+            Path.Combine(RolesDirectory, WorkerRole.Review.Name, WorkerRoleCatalogReader.PluginManifestPath));
+
+        // Act
+        RolePlugin plugin = LoadRepositoryCatalog().Find(WorkerRole.Review).ShouldNotBeNull().Plugin;
+
+        // Assert
+        manifest.ShouldSatisfyAllConditions(
+            () => manifest["name"]!.GetValue<string>().ShouldBe("foundry-role-review"),
+            () => plugin.Description.ShouldNotBeNullOrWhiteSpace());
+    }
+
+    [Fact]
+    public void TheReviewVerdictSchema_RequiresExactlyTheFiveTopLevelPropertiesAndNoOutcome()
+    {
+        // Arrange
+        JsonObject schema = ReadReviewSchema();
+
+        // Act
+        string[] properties = [.. schema["properties"]!.AsObject().Select(pair => pair.Key)];
+        string[] required = [.. schema["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+
+        // Assert
+        schema.ShouldSatisfyAllConditions(
+            () => properties.ShouldBe(["summary", "findings", "dimensions", "criteria", "tests"], ignoreOrder: true),
+            () => required.ShouldBe(properties, ignoreOrder: true),
+            () => properties.ShouldNotContain("outcome"),
+            () => schema["summary"].ShouldBeNull(),
+            () => schema["properties"]!["summary"]!["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => schema["properties"]!["summary"]!["maxLength"]!.GetValue<int>().ShouldBe(2000));
+    }
+
+    [Fact]
+    public void TheReviewVerdictSchema_ForbidsAdditionalPropertiesOnEveryObject()
+    {
+        // Arrange
+        JsonObject schema = ReadReviewSchema();
+        List<string> open = [];
+
+        // Act
+        CollectOpenObjects(schema, "$", open);
+
+        // Assert
+        open.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void TheReviewVerdictSchemaFindings_MatchTheIssueContract()
+    {
+        // Arrange
+        JsonObject schema = ReadReviewSchema();
+
+        // Act
+        JsonNode findings = schema["properties"]!["findings"]!;
+        JsonNode item = findings["items"]!;
+        JsonNode properties = item["properties"]!;
+        JsonNode rule = properties["rule"]!;
+
+        // Assert
+        findings.ShouldSatisfyAllConditions(
+            () => findings["minItems"]!.GetValue<int>().ShouldBe(0),
+            () => findings["maxItems"]!.GetValue<int>().ShouldBe(50),
+            () => StringsOf(item["required"]).ShouldBe(["path", "severity", "category", "body"], ignoreOrder: true),
+            () => properties.AsObject().Select(pair => pair.Key)
+                .ShouldBe(["path", "line", "severity", "category", "rule", "body"], ignoreOrder: true),
+            () => properties["path"]!["type"]!.GetValue<string>().ShouldBe("string"),
+            () => properties["line"]!["type"]!.GetValue<string>().ShouldBe("integer"),
+            () => properties["line"]!["minimum"]!.GetValue<int>().ShouldBe(1),
+            () => StringsOf(properties["severity"]!["enum"]).ShouldBe(["blocking", "advisory"]),
+            () => StringsOf(properties["category"]!["enum"]).ShouldBe(ReviewCategories),
+            () => rule["required"].ShouldBeNull(),
+            () => rule["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(["principle", "file", "quote"], ignoreOrder: true),
+            () => properties["body"]!["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => properties["body"]!["maxLength"]!.GetValue<int>().ShouldBe(2000));
+    }
+
+    [Fact]
+    public void TheReviewVerdictSchemaDimensions_RequireEveryCategoryWithAStatusAndANote()
+    {
+        // Arrange
+        JsonObject schema = ReadReviewSchema();
+
+        // Act
+        JsonNode dimensions = schema["properties"]!["dimensions"]!;
+        JsonNode dimension = schema["$defs"]!["dimension"]!;
+
+        // Assert
+        dimensions.ShouldSatisfyAllConditions(
+            () => StringsOf(dimensions["required"]).ShouldBe(ReviewCategories, ignoreOrder: true),
+            () => dimensions["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(ReviewCategories, ignoreOrder: true),
+            () => dimensions["properties"]!.AsObject().ShouldAllBe(
+                pair => pair.Value!["$ref"]!.GetValue<string>() == "#/$defs/dimension"),
+            () => StringsOf(dimension["required"]).ShouldBe(["status", "note"], ignoreOrder: true),
+            () => StringsOf(dimension["properties"]!["status"]!["enum"]).ShouldBe(["clear", "findings", "not_applicable"]),
+            () => dimension["properties"]!["note"]!["maxLength"]!.GetValue<int>().ShouldBe(500));
+    }
+
+    [Fact]
+    public void TheReviewVerdictSchemaCriteriaAndTests_MatchTheIssueContract()
+    {
+        // Arrange
+        JsonObject schema = ReadReviewSchema();
+
+        // Act
+        JsonNode criteria = schema["properties"]!["criteria"]!;
+        JsonNode criterion = criteria["items"]!["properties"]!;
+        JsonNode tests = schema["properties"]!["tests"]!;
+        JsonNode testProperties = tests["properties"]!;
+
+        // Assert
+        criteria.ShouldSatisfyAllConditions(
+            () => criteria["minItems"]!.GetValue<int>().ShouldBe(0),
+            () => criteria["maxItems"]!.GetValue<int>().ShouldBe(50),
+            () => StringsOf(criteria["items"]!["required"]).ShouldBe(["id", "status", "evidence"], ignoreOrder: true),
+            () => criterion["id"]!["pattern"]!.GetValue<string>().ShouldBe("^AC[0-9]+$"),
+            () => StringsOf(criterion["status"]!["enum"]).ShouldBe(["met", "unmet", "not_verifiable"]),
+            () => criterion["evidence"]!["maxLength"]!.GetValue<int>().ShouldBe(1000),
+            () => StringsOf(tests["required"]).ShouldBe(["assessment", "reason", "coveringTests"], ignoreOrder: true),
+            () => StringsOf(testProperties["assessment"]!["enum"]).ShouldBe(["adequate", "missing", "not_needed"]),
+            () => testProperties["reason"]!["maxLength"]!.GetValue<int>().ShouldBe(1000),
+            () => testProperties["coveringTests"]!["minItems"]!.GetValue<int>().ShouldBe(0),
+            () => testProperties["coveringTests"]!["maxItems"]!.GetValue<int>().ShouldBe(50),
+            () => testProperties["coveringTests"]!["items"]!["type"]!.GetValue<string>().ShouldBe("string"));
+    }
+
+    [Fact]
+    public void TheReviewSystemPrompt_TellsTheReviewerWhereTheChangeIsAndHowToGradeIt()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Review.Name);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("`/handoff/in/review/diff.patch`"),
+            () => prompt.ShouldContain("The checkout in your working directory is the reviewed commit."),
+            () => prompt.ShouldContain("answer every one in `dimensions`"),
+            () => ReviewCategories.ShouldAllBe(category => prompt.Contains($"- `{category}`: ", StringComparison.Ordinal)),
+            () => prompt.ShouldContain("Answer every listed acceptance criterion in `criteria` by its `AC` id"),
+            () => prompt.ShouldContain("A `blocking` finding in `quality`, `design` or `conventions` must cite a rule"),
+            () => prompt.ShouldContain("`design.1`"),
+            () => prompt.ShouldContain("`CLAUDE.md`, `AGENTS.md`, `.editorconfig`"),
+            () => prompt.ShouldContain("verbatim quote"),
+            () => prompt.ShouldContain("A finding without a rule is `advisory`."),
+            () => prompt.ShouldContain("by its observable result in the diff"),
+            () => prompt.ShouldContain("`foundry-role-review:security-review`"));
+    }
+
+    [Fact]
+    public void TheReviewSecuritySkill_HoldsTheWholeChecklistInOneFile()
+    {
+        // Arrange
+        string skillDirectory = Path.Combine(RolesDirectory, WorkerRole.Review.Name, "skills", "security-review");
+        RolePlugin plugin = LoadRepositoryCatalog().Find(WorkerRole.Review).ShouldNotBeNull().Plugin;
+
+        // Act
+        string skill = File.ReadAllText(Path.Combine(skillDirectory, "SKILL.md"));
+
+        // Assert
+        skill.ShouldSatisfyAllConditions(
+            () => plugin.Skills.Select(component => component.Name).ShouldBe(["security-review"]),
+            () => Directory.GetFileSystemEntries(skillDirectory).Select(Path.GetFileName).ShouldBe(["SKILL.md"]),
+            () => skill.ShouldContain("## Injection"),
+            () => skill.ShouldContain("## Authentication and authorization"),
+            () => skill.ShouldContain("## Secrets"),
+            () => skill.ShouldContain("## Input validation at boundaries"),
+            () => skill.ShouldContain("## Cryptography"),
+            () => skill.ShouldContain("## Unsafe deserialization"),
+            () => skill.ShouldContain("## Path traversal"),
+            () => skill.ShouldContain("## Server-side request forgery"));
+    }
+
+    [Fact]
+    public void WhenTheReviewRolePromptIsRendered_CarriesTheImplementPrinciplesWithTheirIds()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+        WorkerRoleDefinition review = catalog.Find(WorkerRole.Review).ShouldNotBeNull();
+
+        // Act
+        Result<string> result = SystemPromptBuilder.BuildRestricted(
+            catalog.PrinciplesFor(WorkerRole.Review),
+            42,
+            review.SystemPromptTemplate,
+            new IssueContent("Add retry", "Retry webhook delivery.", []),
+            toolchain: ToolchainFixtures.With(csharpLs: false));
+
+        // Assert
+        string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain(catalog.PrinciplesFor(WorkerRole.Implement)),
+            () => catalog.Principles.IdsFor(WorkerRole.Review.PrincipleSections)
+                .ShouldAllBe(id => prompt.Contains($"- [{id}] ", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void EveryRepositoryPrincipleBullet_RendersWithItsSectionIdAndPosition()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Act
+        string all = catalog.Principles.AssembleAll();
+
+        // Assert
+        PrincipleSectionNames.All.ShouldAllBe(section =>
+            catalog.Principles.TextOf(section).Split('\n').Count(line => line.StartsWith("- ", StringComparison.Ordinal))
+                == all.Split('\n').Count(line => line.StartsWith($"- [{section.ToIdPrefix()}.", StringComparison.Ordinal)));
+    }
+
+    private static JsonObject ReadReviewSchema() =>
+        ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Review.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+    private static string[] StringsOf(JsonNode? array) =>
+        [.. array.ShouldNotBeNull().AsArray().Select(node => node!.GetValue<string>())];
+
+    private static void CollectOpenObjects(JsonNode? node, string path, List<string> open)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                bool isObjectSchema = obj["type"] is JsonValue type && type.GetValueKind() == JsonValueKind.String
+                    && type.GetValue<string>() == "object";
+                bool closed = obj["additionalProperties"] is JsonValue additional
+                    && additional.GetValueKind() == JsonValueKind.False;
+
+                if (isObjectSchema && !closed)
+                {
+                    open.Add(path);
+                }
+
+                foreach (KeyValuePair<string, JsonNode?> property in obj)
+                {
+                    CollectOpenObjects(property.Value, $"{path}.{property.Key}", open);
+                }
+
+                break;
+            case JsonArray array:
+                for (int index = 0; index < array.Count; index++)
+                {
+                    CollectOpenObjects(array[index], $"{path}[{index}]", open);
+                }
+
+                break;
+        }
+    }
+
     private static IEnumerable<string> ForbiddenTopLevelKeywordsIn(WorkerRoleDefinition role)
     {
         if (role.VerdictSchema is not { } verdictSchema)
@@ -486,10 +750,10 @@ public sealed class RepositoryRoles
         // Assert
         string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
         prompt.ShouldSatisfyAllConditions(
-            () => prompt.ShouldContain(catalog.Principles.Framing + "\n\n" + catalog.Principles.TextOf(PrincipleSection.Design)),
-            () => prompt.ShouldContain(catalog.Principles.TextOf(PrincipleSection.DomainModelling)),
-            () => prompt.ShouldNotContain(catalog.Principles.TextOf(PrincipleSection.Testing)),
-            () => prompt.ShouldNotContain(catalog.Principles.TextOf(PrincipleSection.Code)),
+            () => prompt.ShouldContain(catalog.Principles.Framing + "\n\nDesign:\n- [design.1] "),
+            () => prompt.ShouldContain("\n- [domain.1] "),
+            () => prompt.ShouldNotContain("[testing."),
+            () => prompt.ShouldNotContain("[code."),
             () => prompt.IndexOf(principles, StringComparison.Ordinal)
                 .ShouldBeLessThan(prompt.IndexOf(judgeLine, StringComparison.Ordinal)));
     }

@@ -27,4 +27,11 @@ public sealed class PrincipleSections
         // Assert
         WorkerRole.Triage.PrincipleSections.InOrder.ShouldBe([PrincipleSection.Design, PrincipleSection.DomainModelling]);
     }
+
+    [Fact]
+    public void TheReviewRole_DeclaresTheSameSectionsAsImplement_SoItNeverJudgesAgainstARuleTheImplementerDidNotReceive()
+    {
+        // Assert
+        WorkerRole.Review.PrincipleSections.ShouldBe(WorkerRole.Implement.PrincipleSections);
+    }
 }
