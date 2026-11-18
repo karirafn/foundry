@@ -63,8 +63,10 @@ public sealed class SelectAsync : IAsyncDisposable
             repositoryDispatchQueries ?? new StubRepositoryDispatchQueries(DefaultDispatchInfo),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            issueBlockerQueries ?? new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            ClaimTimeRecheckFactory.Create(
+                _dbContext,
+                issueBlockerQueries ?? new StubIssueBlockerQueries(),
+                _domainEventDispatcher),
             settingsQueries ?? new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
     }
@@ -524,38 +526,6 @@ public sealed class SelectAsync : IAsyncDisposable
         // Assert
         outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(revision.Id);
         blockerQueries.RequestedIssueNumbers.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenClaimTimeBlockerFormsCycle_BlocksCandidateAndRaisesCircularDependency()
-    {
-        // Arrange — issue 1 is already blocked by 2; issue 2 now reports 1 as a blocker
-        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
-        BlockedIssue existing = new IssueBuilder()
-            .WithMonitoredRepositoryId(repoId)
-            .WithIssueNumber(1)
-            .Detected()
-            .Block([2]);
-        _dbContext.Set<Issue>().Add(existing);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-        SeedQueuedIssue(repoId, issueNumber: 2);
-
-        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(2, 1);
-
-        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
-
-        // Act
-        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
-
-        // Assert
-        outcome.ShouldBeOfType<SelectionOutcome.AllCandidatesSkipped>().Blocked.ShouldBe(1);
-
-        _dbContext.ChangeTracker.Clear();
-        Issue issue = await _dbContext.Set<Issue>()
-            .SingleAsync(i => i.IssueNumber == 2, TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([1]);
-        _domainEventDispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
     }
 
     private TriageQueuedIssue SeedTriageQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)

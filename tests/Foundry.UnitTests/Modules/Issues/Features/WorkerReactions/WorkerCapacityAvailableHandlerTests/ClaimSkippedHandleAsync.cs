@@ -65,8 +65,10 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
                 "github.com")),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
-            new StubIssueBlockerQueries(),
-            IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
+            ClaimTimeRecheckFactory.Create(
+                _dbContext,
+                new StubIssueBlockerQueries(),
+                new NullDomainEventDispatcher()),
             new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
