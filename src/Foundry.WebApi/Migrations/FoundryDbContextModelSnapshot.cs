@@ -1777,6 +1777,14 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("implement_run_origin");
+
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
@@ -1953,6 +1961,13 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("checks_fix_attempts");
 
+                    b.Property<string>("Origin")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("implement_run_origin");
+
                     b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
@@ -2058,6 +2073,13 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("failure_reason");
+
+                    b.Property<string>("Origin")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("implement_run_origin");
 
                     b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
                         .ValueGeneratedOnUpdateSometimes()

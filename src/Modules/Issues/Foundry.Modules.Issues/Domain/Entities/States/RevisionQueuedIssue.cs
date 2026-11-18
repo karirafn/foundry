@@ -21,14 +21,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     public override IssueCodeStep? CodeStep => null;
 
-    public override RunKind? RunKind => Trigger switch
-    {
-        RevisionTrigger.ReviewFeedback => ValueObjects.RunKind.ReviewFix,
-        RevisionTrigger.FailedChecks => ValueObjects.RunKind.ChecksFix,
-        RevisionTrigger.RebaseConflict => ValueObjects.RunKind.ConflictFix,
-        RevisionTrigger.InputProvided => ValueObjects.RunKind.InputResume,
-        _ => throw new InvalidOperationException($"Unknown revision trigger '{Trigger.Discriminator}'."),
-    };
+    public override RunKind? RunKind => RevisionRunKind.Of(Trigger);
 
     // Private parameterless constructor for EF Core materialization.
     private RevisionQueuedIssue()

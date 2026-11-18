@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { AgentActivity } from '../../../../core/models/agent-activity.model';
 import { WorkerSignalRService } from '../../../../core/services/worker-signalr.service';
-import { RoleTagComponent } from '../../../../shared/components/role-tag/role-tag';
+import { RunKindTagComponent } from '../../../../shared/components/run-kind-tag/run-kind-tag';
 import { formatElapsed } from '../../../../shared/utils/agent-activity-format';
 import { ItemView } from '../../board-state.service';
 import { WorkerItem } from '../../board.model';
@@ -25,11 +25,11 @@ import {
 } from '../worker-activity/worker-activity.model';
 
 /**
- * A running worker: its role, issue, how long it has run and its live activity.
+ * A running worker: its run kind, issue, how long it has run and its live activity.
  */
 @Component({
   selector: 'fd-worker-card',
-  imports: [IssueRefComponent, RoleTagComponent, WorkerActivityComponent],
+  imports: [IssueRefComponent, RunKindTagComponent, WorkerActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'item().issue.id',
@@ -65,10 +65,6 @@ export class WorkerCardComponent {
     this._workerSignalR.agentActivityForIssue(this.item().issue.id),
   );
 
-  /** The run's role once its activity names it; until then, the one the issue state implies. */
-  protected readonly role: Signal<string> = computed(
-    () => this._activity()?.role ?? this.item().role,
-  );
   protected readonly panel: Signal<ActivityPanel> = computed(() =>
     activityPanel(this._activity()),
   );

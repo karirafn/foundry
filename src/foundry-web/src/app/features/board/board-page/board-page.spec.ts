@@ -36,7 +36,7 @@ function item(id: string, issueNumber: number, overrides: Record<string, unknown
     needsAction: false,
     awaitsDispatch: false,
     codeStep: null,
-    runKind: null,
+    runKind: 'fresh',
     waitsOnBlockers: false,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -458,22 +458,23 @@ describe('BoardPageComponent', () => {
   });
 
   describe('In progress', () => {
-    it('shows a worker card with its role, elapsed time and a status-only footer', async () => {
+    it('shows a worker card with its run kind, elapsed time and a status-only footer', async () => {
       // Act
       const { el } = await loaded([
         item('w', 3, {
           stage: 'triage',
           state: 'triage_in_progress',
+          runKind: 'triage',
           enteredStateAt: minutesAgo(12),
         }),
       ]);
 
       // Assert
       const card = el.querySelector('fd-worker-card')!;
-      expect(text(card.querySelector('fd-role-tag'))).toBe('Role: triage');
+      expect(text(card.querySelector('fd-run-kind-tag'))).toBe('Run: triage');
       const meta = card.querySelector('.worker-card__meta')!;
       expect([...meta.children].map((c) => c.tagName.toLowerCase())).toEqual([
-        'fd-role-tag',
+        'fd-run-kind-tag',
         'fd-issue-ref',
       ]);
       expect(text(meta.querySelector('fd-issue-ref .issue-ref__number'))).toBe('#3');
@@ -595,7 +596,7 @@ describe('BoardPageComponent', () => {
           'worker-card-w-meta worker-card-w-task worker-card-w-status',
         );
         expect(spoken(h.el.querySelector('[id="worker-card-w-meta"]'))).toMatch(
-          /^Role: implement ?acme\/api #3$/,
+          /^Run: implement ?acme\/api #3$/,
         );
         expect(spoken(h.el.querySelector('[id="worker-card-w-status"]'))).toBe(
           'Running for 12m, last event 2m ago',
@@ -722,16 +723,16 @@ describe('BoardPageComponent', () => {
         expect(h.el.querySelector('.worker-card__waiting')).toBeNull();
       });
 
-      it("takes the role from the run's activity once it arrives", async () => {
+      it("keeps the summary's run kind when the run's activity arrives", async () => {
         // Arrange
-        const h = await loaded([item('w', 3)]);
+        const h = await loaded([item('w', 3, { runKind: 'fresh' })]);
 
         // Act
         h.activities.set(new Map([['w', activity('w', { role: 'revise' })]]));
         await h.render();
 
         // Assert
-        expect(text(h.el.querySelector('fd-worker-card fd-role-tag'))).toBe('Role: revise');
+        expect(text(h.el.querySelector('fd-worker-card fd-run-kind-tag'))).toBe('Run: implement');
       });
     });
 

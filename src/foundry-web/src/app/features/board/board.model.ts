@@ -41,9 +41,6 @@ export function codeStepTone(step: CodeStep): StepTone {
   return step === 'publish_retrying' ? 'warning' : 'working';
 }
 
-/** The worker role that runs (or runs next) for an issue. */
-export type WorkerRole = 'triage' | 'implement';
-
 /** The bands, in the order the page shows them; `workers` and `steps` together are In progress. */
 export type BoardBand = 'needs' | 'workers' | 'steps' | 'pipeline' | 'blocked';
 
@@ -61,7 +58,7 @@ export interface NeedsItem extends ItemBase {
 
 export interface WorkerItem extends ItemBase {
   readonly band: 'workers';
-  readonly role: WorkerRole;
+  readonly runKind: RunKind;
 }
 
 export interface StepItem extends ItemBase {
@@ -262,15 +259,6 @@ export function bandFor(issue: IssueSummary): BoardBand | null {
   return null;
 }
 
-function roleFor(stage: BoardStage): WorkerRole {
-  return stage === 'triage' ? 'triage' : 'implement';
-}
-
-// Until the run's Agent Activity names its role, the issue state says which run this is.
-function workerRoleFor(issue: IssueSummary, stage: BoardStage): WorkerRole {
-  return issue.state === 'triage_in_progress' ? 'triage' : roleFor(stage);
-}
-
 function isHeldByRepository(issue: IssueSummary): boolean {
   return (
     issue.repositoryEligibilityStatus === 'ineligible' ||
@@ -395,7 +383,12 @@ export function buildBoardBands(
         break;
       }
       case 'workers':
-        workers.push({ band, issue, stage, role: workerRoleFor(issue, stage) });
+        // The tag names the run in flight; without a known run kind the card isn't guessed at.
+        if (issue.runKind === null) {
+          unplaced.push(issue);
+          break;
+        }
+        workers.push({ band, issue, stage, runKind: issue.runKind });
         break;
       case 'steps':
         // bandFor places an issue here only with a code step.

@@ -28,7 +28,7 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
-    runKind: null,
+    runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -237,32 +237,23 @@ describe('buildBoardBands', () => {
     expect(ids(bands.workers)).toEqual(['early', 'late']);
   });
 
-  it('gives a triage worker the triage role and others the implement role', () => {
+  it('gives each worker the run kind the server declares', () => {
     // Arrange
     const issues = [
-      buildIssue({ id: 't', stage: 'triage', state: 'triage_in_progress' }),
-      buildIssue({ id: 'r', state: 'revision_in_progress' }),
+      buildIssue({ id: 't', stage: 'triage', state: 'triage_in_progress', runKind: 'triage' }),
+      buildIssue({ id: 'c', state: 'in_progress', runKind: 'continuation' }),
+      buildIssue({ id: 'r', state: 'revision_in_progress', runKind: 'checks_fix' }),
     ];
 
     // Act
     const bands = buildBoardBands(issues, [], []);
 
     // Assert
-    expect(bands.workers.map((w) => [w.issue.id, w.role])).toEqual([
+    expect(bands.workers.map((w) => [w.issue.id, w.runKind])).toEqual([
       ['t', 'triage'],
-      ['r', 'implement'],
+      ['c', 'continuation'],
+      ['r', 'checks_fix'],
     ]);
-  });
-
-  it('gives a triage run the triage role from its state, whatever its stage', () => {
-    // Arrange
-    const issues = [buildIssue({ id: 't', stage: 'implement', state: 'triage_in_progress' })];
-
-    // Act
-    const bands = buildBoardBands(issues, [], []);
-
-    // Assert
-    expect(bands.workers[0].role).toBe('triage');
   });
 
   it('lists the pipeline in global dispatch order across stages', () => {
@@ -343,7 +334,7 @@ describe('buildBoardBands', () => {
     expect(bands.unplaced).toEqual([issue]);
   });
 
-  it('still places a worker whose run kind is null', () => {
+  it('leaves a worker whose run kind is null unplaced', () => {
     // Arrange
     const issue = buildIssue({ id: 'w', state: 'in_progress', runKind: null });
 
@@ -351,8 +342,8 @@ describe('buildBoardBands', () => {
     const bands = buildBoardBands([issue], [], []);
 
     // Assert
-    expect(bands.workers.map((w) => w.issue.id)).toEqual(['w']);
-    expect(bands.unplaced).toEqual([]);
+    expect(bands.workers).toEqual([]);
+    expect(bands.unplaced).toEqual([issue]);
   });
 
   it('lists blocked issues in server order', () => {

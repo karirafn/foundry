@@ -14,5 +14,7 @@ public sealed class InProgressIssueConfiguration : IEntityTypeConfiguration<InPr
         builder.Property(i => i.WorkerRunId)
             .HasConversion(new StronglyTypedIdValueConverter<WorkerRunId>())
             .HasColumnName("worker_run_id");
+
+        ImplementRunOriginConversion.Configure(builder.Property(i => i.Origin));
     }
 }

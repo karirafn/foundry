@@ -712,7 +712,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     [InlineData("triage_queued", "triage")]
     [InlineData("queued", "fresh")]
     [InlineData("continuation_queued", "continuation")]
-    [InlineData("in_progress", null)]
+    [InlineData("in_progress", "fresh")]
     [InlineData("review", null)]
     public async Task WhenInState_SummaryCarriesTheRunKind(string state, string? expectedRunKind)
     {
