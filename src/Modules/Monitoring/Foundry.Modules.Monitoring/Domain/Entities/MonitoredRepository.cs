@@ -21,11 +21,17 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     /// <summary>
     /// Minimum interval between automatic write-probe re-attempts for a repository parked at
-    /// <see cref="WriteProbeVerdict.Unknown"/>. Passed into <see cref="IsDueForWriteProbe"/> by
-    /// callers (mirroring how <see cref="IsDueForPoll"/> receives its interval) so the poller and
-    /// tests share one source of truth.
+    /// <see cref="WriteProbeVerdict.Unknown"/>. Chosen by <see cref="IsDueForWriteProbe"/> from the stored verdict.
     /// </summary>
     internal static readonly TimeSpan WriteProbeCooldown = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Minimum interval between automatic write-probe re-attempts for a repository whose verdict is
+    /// <see cref="WriteProbeVerdict.Denied"/>. Longer than <see cref="WriteProbeCooldown"/> because each
+    /// probe sequence spends GitHub content-creating requests (secondary rate limit), and a denial
+    /// rarely changes within minutes.
+    /// </summary>
+    internal static readonly TimeSpan DeniedWriteProbeCooldown = TimeSpan.FromHours(1);
 
     /// <summary>Length of the opaque webhook hook id (16 random bytes, lower-case hex).</summary>
     public const int WebhookHookIdLength = 32;
@@ -295,26 +301,27 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     /// <summary>
     /// Returns <see langword="true"/> when the repository should have its write probe re-run on the next
-    /// poll cycle: the stored verdict is <see cref="WriteProbeVerdict.Unknown"/> and either the probe
-    /// was never attempted (<see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/> is <see langword="null"/>)
-    /// or <paramref name="cooldown"/> has elapsed since the last attempt (strict &lt; boundary, mirroring
-    /// <see cref="IsDueForPoll"/>). Returns <see langword="false"/> for <see cref="WriteProbeVerdict.Granted"/>
-    /// and <see cref="WriteProbeVerdict.Denied"/> unconditionally — those verdicts are event-triggered.
+    /// poll cycle, choosing the cooldown from the stored verdict (strict &lt; boundary, mirroring
+    /// <see cref="IsDueForPoll"/>):
+    /// <list type="bullet">
+    /// <item><see cref="WriteProbeVerdict.Unknown"/> is due when never attempted or once
+    /// <see cref="WriteProbeCooldown"/> has elapsed since <see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/>.</item>
+    /// <item><see cref="WriteProbeVerdict.Denied"/> is due when <see cref="WriteProbeVerdict.Denied.ProbedAt"/> is
+    /// <see langword="null"/> (a row persisted before it existed) or once <see cref="DeniedWriteProbeCooldown"/> has
+    /// elapsed, so a permission granted on the provider without a new token string is picked up unattended.</item>
+    /// <item><see cref="WriteProbeVerdict.Granted"/> is never due — it is event-triggered, so steady-state polling
+    /// sends no write probes.</item>
+    /// </list>
     /// </summary>
-    public bool IsDueForWriteProbe(TimeSpan cooldown, DateTimeOffset now)
+    public bool IsDueForWriteProbe(DateTimeOffset now) => WriteProbeVerdict switch
     {
-        if (WriteProbeVerdict is not WriteProbeVerdict.Unknown unknown)
-        {
-            return false;
-        }
+        WriteProbeVerdict.Unknown unknown => IsCooldownElapsed(unknown.LastAttemptedAt, WriteProbeCooldown, now),
+        WriteProbeVerdict.Denied denied => IsCooldownElapsed(denied.ProbedAt, DeniedWriteProbeCooldown, now),
+        _ => false,
+    };
 
-        if (unknown.LastAttemptedAt is null)
-        {
-            return true;
-        }
-
-        return unknown.LastAttemptedAt.Value + cooldown < now;
-    }
+    private static bool IsCooldownElapsed(DateTimeOffset? lastProbe, TimeSpan cooldown, DateTimeOffset now)
+        => lastProbe is null || lastProbe.Value + cooldown < now;
 
     public Result Update(TimeSpan? pollInterval, bool isActive, int maxConcurrentWorkers)
     {

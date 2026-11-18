@@ -228,6 +228,52 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     [Fact]
+    public async Task WhenGitHubProbeReturnsMissing_StampsDeniedVerdictWithProbeTime()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo("owner/repo");
+        GitHubCredential credential = GitHubCredential.Create(
+            AccountName.Create("test").ValueOrThrow(),
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)),
+            writeProber: new MissingWriteProber(WritePermission.Contents));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task WhenGitLabCanPushReturnsFalse_StampsDeniedVerdictWithProbeTime()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo("owner/repo");
+        GitLabCredential credential = GitLabCredential.Create(
+            AccountName.Create("test").ValueOrThrow(),
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new StubProviderFactory(
+                Result<BranchProtection>.Ok(protection),
+                canPushResult: Result<bool>.Ok(false)),
+            writeProber: new GrantedWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBe(Now);
+    }
+
+    [Fact]
     public async Task WhenGitHubProbeReturnsTransportFailure_SetsEligibilityToUnreachable()
     {
         // Arrange

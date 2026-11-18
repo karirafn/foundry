@@ -11,8 +11,6 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.MonitoredRepositoryTests;
 
 public sealed class IsDueForWriteProbe
 {
-    private static readonly TimeSpan Cooldown = MonitoredRepository.WriteProbeCooldown;
-
     private static readonly DateTimeOffset Now = new(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
 
     private static RepositorySlug ValidSlug =>
@@ -29,7 +27,7 @@ public sealed class IsDueForWriteProbe
         repository.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(LastAttemptedAt: null));
 
         // Act
-        bool result = repository.IsDueForWriteProbe(Cooldown, Now);
+        bool result = repository.IsDueForWriteProbe(Now);
 
         // Assert
         result.ShouldBeTrue();
@@ -44,7 +42,7 @@ public sealed class IsDueForWriteProbe
         repository.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(justPast));
 
         // Act
-        bool result = repository.IsDueForWriteProbe(Cooldown, Now);
+        bool result = repository.IsDueForWriteProbe(Now);
 
         // Assert
         result.ShouldBeTrue();
@@ -59,7 +57,7 @@ public sealed class IsDueForWriteProbe
         repository.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(exactBoundary));
 
         // Act
-        bool result = repository.IsDueForWriteProbe(Cooldown, Now);
+        bool result = repository.IsDueForWriteProbe(Now);
 
         // Assert
         result.ShouldBeFalse();
@@ -74,7 +72,7 @@ public sealed class IsDueForWriteProbe
         repository.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(recentAttempt));
 
         // Act
-        bool result = repository.IsDueForWriteProbe(Cooldown, Now);
+        bool result = repository.IsDueForWriteProbe(Now);
 
         // Assert
         result.ShouldBeFalse();
@@ -88,23 +86,65 @@ public sealed class IsDueForWriteProbe
         repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
 
         // Act
-        bool result = repository.IsDueForWriteProbe(Cooldown, Now);
+        bool result = repository.IsDueForWriteProbe(Now);
 
         // Assert
         result.ShouldBeFalse();
     }
 
     [Fact]
-    public void WhenVerdictIsDenied_ReturnsFalse()
+    public void WhenVerdictIsDeniedWithNullProbedAt_ReturnsTrue()
     {
-        // Arrange
+        // Arrange — a Denied row persisted before ProbedAt existed is due on the first poll
         MonitoredRepository repository = CreateRepository();
-        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied());
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(ProbedAt: null));
 
         // Act
-        bool result = repository.IsDueForWriteProbe(Cooldown, Now);
+        bool result = repository.IsDueForWriteProbe(Now);
+
+        // Assert
+        result.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenVerdictIsDeniedWithinDeniedCooldown_ReturnsFalse()
+    {
+        // Arrange — denied at 11:30, poll at 12:00: past the Unknown cooldown but within the Denied one
+        MonitoredRepository repository = CreateRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-30)));
+
+        // Act
+        bool result = repository.IsDueForWriteProbe(Now);
 
         // Assert
         result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenVerdictIsDeniedExactlyAtDeniedCooldownBoundary_ReturnsFalse()
+    {
+        // Arrange — ProbedAt + one hour == now → NOT due (strict < boundary, as for Unknown)
+        MonitoredRepository repository = CreateRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddHours(-1)));
+
+        // Act
+        bool result = repository.IsDueForWriteProbe(Now);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenVerdictIsDeniedJustPastDeniedCooldown_ReturnsTrue()
+    {
+        // Arrange — ProbedAt + one hour < now → due
+        MonitoredRepository repository = CreateRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddHours(-1).AddTicks(-1)));
+
+        // Act
+        bool result = repository.IsDueForWriteProbe(Now);
+
+        // Assert
+        result.ShouldBeTrue();
     }
 }

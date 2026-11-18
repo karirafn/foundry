@@ -1048,6 +1048,40 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPolling_AndVerdictIsDeniedWithinDeniedCooldown_UsesCheapEvaluation()
+    {
+        // Arrange — denied 30 minutes ago: past the Unknown cooldown, still within the one-hour Denied cooldown.
+        MonitoredRepository repository = SeedRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-30)));
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenPolling_AndVerdictIsDeniedPastDeniedCooldown_UsesFullEvaluation()
+    {
+        // Arrange — denied 61 minutes ago: the one-hour Denied cooldown has elapsed, so the write probe re-runs.
+        MonitoredRepository repository = SeedRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-61)));
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task WhenPolling_AndVerdictIsUnknownWithNullTimestamp_UsesFullEvaluation()
     {
         // Arrange — Unknown with no prior attempt is always due; use the full write-probe path.

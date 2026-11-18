@@ -47,7 +47,7 @@ public sealed class WriteProbeVerdict
         MonitoredRepository repository = CreateRepository();
 
         // Act
-        repository.SetWriteProbeVerdict(new Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Denied());
+        repository.SetWriteProbeVerdict(new Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Denied(ProbedAt: null));
 
         // Assert
         repository.WriteProbeVerdict.ShouldBeOfType<Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Denied>();
@@ -75,7 +75,7 @@ public sealed class WriteProbeVerdict
         repository.SetWriteProbeVerdict(new Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Granted());
 
         // Act
-        repository.SetWriteProbeVerdict(new Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Denied());
+        repository.SetWriteProbeVerdict(new Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Denied(ProbedAt: null));
 
         // Assert
         repository.WriteProbeVerdict.ShouldBeOfType<Foundry.Modules.Monitoring.Domain.ValueObjects.WriteProbeVerdict.Denied>();

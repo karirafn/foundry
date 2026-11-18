@@ -175,7 +175,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     public async Task WhenVerdictIsDenied_SetsEligibilityToIneligibleWithCannotPushViolation()
     {
         // Arrange
-        MonitoredRepository repo = CreateRepo("owner/repo", new WriteProbeVerdict.Denied());
+        MonitoredRepository repo = CreateRepo("owner/repo", new WriteProbeVerdict.Denied(ProbedAt: null));
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
             new IssuedToken("token", new TokenExpiry.NotChecked()),
@@ -198,7 +198,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     public async Task WhenVerdictIsDenied_DoesNotRunBranchRulesGet()
     {
         // Arrange — Denied short-circuits before branch-rules GET
-        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Denied());
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Denied(ProbedAt: null));
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
             new IssuedToken("token", new TokenExpiry.NotChecked()),

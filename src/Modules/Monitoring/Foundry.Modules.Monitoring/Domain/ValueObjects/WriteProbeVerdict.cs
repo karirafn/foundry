@@ -11,7 +11,12 @@ internal abstract record WriteProbeVerdict
 
     internal sealed record Granted : WriteProbeVerdict;
 
-    internal sealed record Denied : WriteProbeVerdict;
+    /// <summary>
+    /// The token cannot write to the repository. <see cref="ProbedAt"/> is when the probe ran, so the
+    /// poller can re-probe after the Denied cooldown. Legacy rows persisted without a <c>ProbedAt</c>
+    /// field deserialize to <see langword="null"/> and are due at once.
+    /// </summary>
+    internal sealed record Denied(DateTimeOffset? ProbedAt) : WriteProbeVerdict;
 
     /// <summary>
     /// The probe result is indeterminate — either a transient transport failure or a rate-limit

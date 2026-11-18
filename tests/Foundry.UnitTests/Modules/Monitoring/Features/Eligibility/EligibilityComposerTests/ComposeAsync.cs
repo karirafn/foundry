@@ -71,7 +71,7 @@ public sealed class ComposeAsync
     {
         // Arrange
         (EligibilityComposer composer, GitHubCredential credential) = BuildSut();
-        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied();
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied(ProbedAt: null);
 
         // Act
         RepositoryEligibility eligibility = await composer.ComposeAsync(

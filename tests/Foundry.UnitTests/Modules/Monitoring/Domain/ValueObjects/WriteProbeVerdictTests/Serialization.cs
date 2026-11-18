@@ -30,7 +30,7 @@ public sealed class Serialization
     public void WhenDeniedSerialized_RoundTripsToDenied()
     {
         // Arrange
-        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied();
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied(ProbedAt: null);
 
         // Act
         string json = JsonSerializer.Serialize(verdict, Options);
@@ -71,7 +71,7 @@ public sealed class Serialization
     public void WhenDeniedDiscriminator_SerializesWithDeniedType()
     {
         // Arrange
-        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied();
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied(ProbedAt: null);
 
         // Act
         string json = JsonSerializer.Serialize(verdict, Options);
@@ -181,6 +181,34 @@ public sealed class Serialization
         // Assert
         WriteProbeVerdict.Unknown unknown = deserialized.ShouldBeOfType<WriteProbeVerdict.Unknown>();
         unknown.Reason.ShouldBe(UnknownReason.Transport);
+    }
+
+    [Fact]
+    public void WhenDeniedWithProbedAtSerialized_RoundTripsProbedAt()
+    {
+        // Arrange
+        DateTimeOffset probedAt = new(2026, 8, 25, 10, 0, 0, TimeSpan.Zero);
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied(probedAt);
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBe(probedAt);
+    }
+
+    [Fact]
+    public void WhenDeniedLegacyJsonWithoutProbedAtField_DeserializesToNullProbedAt()
+    {
+        // Arrange — rows persisted before ProbedAt was added carry only the discriminator.
+        const string legacyJson = """{"$type":"denied"}""";
+
+        // Act
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(legacyJson, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBeNull();
     }
 
     [Fact]
