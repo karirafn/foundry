@@ -77,7 +77,8 @@ internal sealed class StubIssueQueries(int issueNumber = 42, string title = "Add
             [],
             StateDetails: null,
             new IssueKindDetails(kind is null ? IssueKindDetails.UnclassifiedSource : IssueKindDetails.LabelledSource, kind, null),
-            Triage: null)));
+            Triage: null,
+            Clarifications: [])));
 
     public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();

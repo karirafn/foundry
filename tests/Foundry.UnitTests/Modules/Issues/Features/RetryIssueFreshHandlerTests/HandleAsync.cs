@@ -205,7 +205,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 Labels: [],
                 StateDetails: null,
                 Kind: new IssueKindDetails(IssueKindDetails.UnclassifiedSource, null, null),
-                Triage: null);
+                Triage: null,
+                Clarifications: []);
             return Task.FromResult(Result<IssueDetail>.Ok(detail));
         }
 

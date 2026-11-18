@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
@@ -15,7 +17,47 @@ public sealed record IssueDetail(
     IReadOnlyList<string> Labels,
     IssueStateDetails? StateDetails,
     IssueKindDetails Kind,
-    TriageVerdictDetails? Triage);
+    TriageVerdictDetails? Triage,
+    IReadOnlyList<ClarificationDetails> Clarifications);
+
+/// <summary>
+/// One round of the issue's clarification log (ADR 0096), oldest first in <see cref="IssueDetail.Clarifications"/>:
+/// the questions a run asked and when and, once the round closed, the input that answered it and when it arrived.
+/// <paramref name="Input"/> and <paramref name="AnsweredAt"/> are both <see langword="null"/> while the round is open.
+/// </summary>
+public sealed record ClarificationDetails(
+    IReadOnlyList<InputQuestion> Questions,
+    IReadOnlyList<InputPartDetails>? Input,
+    DateTimeOffset AskedAt,
+    DateTimeOffset? AnsweredAt);
+
+/// <summary>One part of a clarification round's input, as the dashboard renders it.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(Comments), typeDiscriminator: "comments")]
+[JsonDerivedType(typeof(DescriptionEdited), typeDiscriminator: "descriptionEdited")]
+[JsonDerivedType(typeof(BranchUpdated), typeDiscriminator: "branchUpdated")]
+[JsonDerivedType(typeof(ContinuedWithoutAnswer), typeDiscriminator: "continuedWithoutAnswer")]
+public abstract record InputPartDetails
+{
+    private InputPartDetails() { }
+
+    /// <summary>The settled comments' text. It is untrusted, so it renders as text, never as HTML.</summary>
+    public sealed record Comments(string Text) : InputPartDetails;
+
+    /// <summary>The issue description was edited after the question was posted.</summary>
+    public sealed record DescriptionEdited : InputPartDetails;
+
+    /// <summary>
+    /// Someone moved the branch from <paramref name="FromSha"/> (<see langword="null"/> when the branch did not exist
+    /// when the question was posted) to <paramref name="ToSha"/>. <paramref name="CompareUrl"/> is the provider's
+    /// compare view of the move, or the new head's commit page when there is no from SHA, and <see langword="null"/>
+    /// when the issue URL has no known provider shape.
+    /// </summary>
+    public sealed record BranchUpdated(string? FromSha, string ToSha, string? CompareUrl) : InputPartDetails;
+
+    /// <summary>No answer arrived, and an operator chose to continue anyway.</summary>
+    public sealed record ContinuedWithoutAnswer : InputPartDetails;
+}
 
 /// <summary>
 /// How the issue's kind was decided (ADR 0097): <paramref name="Source"/> is <c>labelled</c>, <c>triaged</c> or
@@ -100,6 +142,9 @@ public sealed record MergeWaitDetails(int Position, int? WaitingForIssueNumber);
 /// <paramref name="ResumeTarget"/> is where input sends the issue: <c>revision</c>, <c>continuation</c>, <c>fresh</c> or
 /// <c>retriage</c>.
 /// <paramref name="ReminderSentAt"/> is when the round's one reminder was posted, <see langword="null"/> until then.
+/// <paramref name="ReminderDueAt"/> is when the reminder is due: the reminder delay after the post, or the retry time
+/// after a failed reminder post. It is <see langword="null"/> while the question is unposted, once the reminder is sent,
+/// and after its post failed permanently.
 /// </summary>
 public sealed record AwaitingInputDetails(
     IReadOnlyList<InputQuestion> Questions,
@@ -109,7 +154,8 @@ public sealed record AwaitingInputDetails(
     string? PostFailureReason,
     DateTimeOffset? NextPostAttemptAt,
     string ResumeTarget,
-    DateTimeOffset? ReminderSentAt);
+    DateTimeOffset? ReminderSentAt,
+    DateTimeOffset? ReminderDueAt);
 
 /// <summary>
 /// An open issue blocking this one. <paramref name="Reason"/> is the triage verdict's reason for a blocker it named,

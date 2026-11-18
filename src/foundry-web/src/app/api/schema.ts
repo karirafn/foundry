@@ -1067,6 +1067,8 @@ export interface components {
             resumeTarget: string;
             /** Format: date-time */
             reminderSentAt: null | string;
+            /** Format: date-time */
+            reminderDueAt: null | string;
         };
         BlockerDetails: {
             /** Format: int32 */
@@ -1082,6 +1084,14 @@ export interface components {
         CheckCreditsNowResponse: {
             inFlight: boolean;
             outcome: null | string;
+        };
+        ClarificationDetails: {
+            questions: components["schemas"]["InputQuestion"][];
+            input: null | components["schemas"]["InputPartDetails"][];
+            /** Format: date-time */
+            askedAt: string;
+            /** Format: date-time */
+            answeredAt: null | string;
         };
         ClaudeAccountSummary: {
             /** Format: uuid */
@@ -1222,6 +1232,27 @@ export interface components {
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
+        InputPartDetails: components["schemas"]["InputPartDetailsInputPartDetailsComments"] | components["schemas"]["InputPartDetailsInputPartDetailsDescriptionEdited"] | components["schemas"]["InputPartDetailsInputPartDetailsBranchUpdated"] | components["schemas"]["InputPartDetailsInputPartDetailsContinuedWithoutAnswer"];
+        InputPartDetailsInputPartDetailsBranchUpdated: {
+            /** @enum {string} */
+            kind?: "branchUpdated";
+            fromSha: null | string;
+            toSha: string;
+            compareUrl: null | string;
+        };
+        InputPartDetailsInputPartDetailsComments: {
+            /** @enum {string} */
+            kind?: "comments";
+            text: string;
+        };
+        InputPartDetailsInputPartDetailsContinuedWithoutAnswer: {
+            /** @enum {string} */
+            kind?: "continuedWithoutAnswer";
+        };
+        InputPartDetailsInputPartDetailsDescriptionEdited: {
+            /** @enum {string} */
+            kind?: "descriptionEdited";
+        };
         InputQuestion: {
             question: string;
             context: string;
@@ -1243,6 +1274,7 @@ export interface components {
             stateDetails: null | components["schemas"]["IssueStateDetails"];
             kind: components["schemas"]["IssueKindDetails"];
             triage: null | components["schemas"]["TriageVerdictDetails"];
+            clarifications: components["schemas"]["ClarificationDetails"][];
         };
         IssueKindDetails: {
             source: string;
