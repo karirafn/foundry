@@ -1553,8 +1553,9 @@ All of these run through `UsagePollCoordinator`, which holds a `SemaphoreSlim(1,
 ## System Notification
 
 A lightweight SignalR broadcast (`Category`, `IsActive`, `Message`) delivered to all dashboard clients via the system hub, used for global operational banners.
-Categories in use: `dispatch`, `docker`, `image-build`, `credits`, `account-token`.
+Categories in use: `dispatch`, `docker`, `image-build`, `credits`, `account-token`, `account-token-expiry`.
 The `account-token` category (see Invalid Token) carries a server-built message counting accounts whose token is Invalid — `isActive: true` while the count is above zero, `isActive: false` once every account token is valid again — and `/api/system/status` seeds it on page load.
+The `account-token-expiry` category carries a server-built warning counting Valid accounts whose Token Expiry is expiring soon (within 14 days) or has passed — Invalid accounts are left to `account-token`, so the two categories show independently. It is recounted hourly (broadcast only when the counts change) and on every account change (token set, Invalid/Valid transition, deletion), and `/api/system/status` seeds it on page load.
 Auth-invalid and auth-restored conditions broadcast on `dispatch` (they gate dispatch via `ClaudeAccount.Validity`), not on a separate category.
 Client semantics: an `isActive: true` notification is stored, replacing any prior entry for its category; `isActive: false` removes the category's entry.
 Both `dispatch` and `image-build` are pure reload triggers — each broadcast carries an empty message and signals the client to re-sync authoritative state from `/api/settings` rather than reading any payload (see Dispatch Pause and Worker Image Build State).

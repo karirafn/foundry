@@ -13,6 +13,9 @@ import { SystemStatusService } from '../../../core/services/system-status.servic
 import { CreditsService } from '../../../core/services/credits.service';
 import { PausedHost } from '../../../core/models/settings.model';
 
+const INVALID_MESSAGE = '1 account has an invalid token — enter a new one to resume monitoring.';
+const EXPIRING_MESSAGE = '1 account has a token expiring within 14 days — enter a new one before monitoring stops.';
+
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
   const reconnected$ = new Subject<void>();
@@ -184,6 +187,35 @@ describe('SystemBannerComponent', () => {
         'fd-account-token-banner',
         'fd-host-pause-banner',
       ]);
+    });
+
+    it('should render fd-account-token-expiry-banner last, after fd-host-pause-banner', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
+      expect(children.slice(-2)).toEqual(['fd-host-pause-banner', 'fd-account-token-expiry-banner']);
+    });
+
+    it('should show the invalid-token and expiry banners at once as separate regions', () => {
+      // Arrange / Act
+      const { fixture } = setup([
+        { category: 'account-token', isActive: true, message: INVALID_MESSAGE },
+        { category: 'account-token-expiry', isActive: true, message: EXPIRING_MESSAGE },
+      ]);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const invalid = el.querySelector('[aria-label="Account token status"]') as HTMLElement;
+      const expiry = el.querySelector('[aria-label="Account token expiry"]') as HTMLElement;
+      expect(invalid.hidden).toBe(false);
+      expect(expiry.hidden).toBe(false);
+      expect(invalid.textContent).toContain(INVALID_MESSAGE);
+      expect(expiry.textContent).toContain(EXPIRING_MESSAGE);
+      expect(el.querySelectorAll('a.system-banner__details-link[href="/settings/accounts"]').length).toBe(2);
     });
   });
 

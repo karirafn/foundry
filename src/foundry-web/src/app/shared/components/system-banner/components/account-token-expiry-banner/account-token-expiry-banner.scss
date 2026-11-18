@@ -1,0 +1,55 @@
+:host {
+  display: contents;
+}
+
+.system-banner {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.system-banner__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fd-spacing-sm);
+  row-gap: var(--fd-spacing-xs);
+  padding: var(--fd-spacing-sm) var(--fd-spacing-xl);
+  background: var(--fd-bg-warning-subtle);
+  border-bottom: 1px solid var(--fd-border-warning);
+  color: var(--fd-text-warning);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.system-banner__icon {
+  flex-shrink: 0;
+  color: var(--fd-text-warning);
+}
+
+.system-banner__message {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+// A 44px touch target, matching system-banner__action-btn.
+.system-banner__details-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+
+  &:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: 2px;
+  }
+}
