@@ -115,6 +115,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
             sp.GetRequiredService<IPostExitProviderQueries>(),
             sp.GetRequiredService<IContainerOutputParser>(),
+            sp.GetServices<IVerdictOutcomeResolver>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());

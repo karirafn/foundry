@@ -556,7 +556,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             new StubIssueQueries(),
             new StubGlobalSettingsQueries(),
             parser,
-            new WorkerOutcomeResolver(provider, parser, prRetryDelay: TimeSpan.Zero),
+            new WorkerOutcomeResolver(provider, parser, [new TriageOutcomeResolver(parser)], prRetryDelay: TimeSpan.Zero),
             new WorkerOutcomeApplier(
                 db,
                 new FakeWorkerOrchestrator(),

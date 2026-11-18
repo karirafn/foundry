@@ -47,6 +47,7 @@ public sealed partial class ResolveAsync
         new(
             new NoProviderCallsQueries(),
             new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
+            [new TriageOutcomeResolver(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance))],
             prRetryDelay: TimeSpan.Zero);
 
     [Fact]
