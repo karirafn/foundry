@@ -994,15 +994,9 @@ Transitions: `MarkRebasePending()`, `MarkAwaitingInput()`, `MarkUnchanged()`, `M
 ## Revision In-Progress Issue
 
 A lifecycle state for an issue whose worker is executing a revision cycle.
-<<<<<<< HEAD
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl` and `Trigger`, plus the fix and conflict counters and `PriorFeedbackCutoffAt` carried from `RevisionQueuedIssue`.
-Created from `RevisionQueuedIssue.Claim()`.
-Transitions: `MarkRebasePending()` → `RebasePendingIssue` (worker pushed changes); `MarkUnchangedRebasePending()` → `RebasePendingIssue` (worker made no changes but the PR still exists); `MarkAwaitingInput()` → `AwaitingInputIssue`; `MarkBranchDiverged()` → `BranchDivergedIssue`; `MarkPublishFailed()` → `PublishFailedIssue`; `MarkPublishBlocked()` → `PublishBlockedIssue`; `MarkFailed()` → `RevisionFailedIssue`.
-=======
-Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `ReviewComments` (`IReadOnlyList<ReviewComment>`) — all non-nullable.
 Created from `RevisionQueuedIssue.Claim()`. Its [Run Kind](#run-kind) follows its trigger, as when it was queued.
-Transitions: `MarkInReview()` → `ReviewIssue` (worker pushed changes); `MarkUnchanged()` → `ReviewIssue` (worker made no changes but PR still exists); `MarkFailed()` → `RevisionFailedIssue`.
->>>>>>> 118d7a76 (docs(domain): Run Kind covers in-flight states and InProgressIssue names its origin (#1060))
+Transitions: `MarkRebasePending()` → `RebasePendingIssue` (worker pushed changes); `MarkUnchangedRebasePending()` → `RebasePendingIssue` (worker made no changes but the PR still exists); `MarkAwaitingInput()` → `AwaitingInputIssue`; `MarkBranchDiverged()` → `BranchDivergedIssue`; `MarkPublishFailed()` → `PublishFailedIssue`; `MarkPublishBlocked()` → `PublishBlockedIssue`; `MarkFailed()` → `RevisionFailedIssue`.
 
 ## Completed Issue
 
