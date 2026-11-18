@@ -24,6 +24,7 @@ import { WorkerRunDetail } from '../workers/worker-run.model';
 import { WorkerRunService } from '../workers/worker-run.service';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
 import { PaneActivityComponent } from './pane-activity/pane-activity';
+import { PaneClarificationsComponent } from './pane-clarifications/pane-clarifications';
 import { PaneFactsComponent } from './pane-facts/pane-facts';
 import { PaneHeaderComponent } from './pane-header/pane-header';
 import { PaneStatusComponent } from './pane-status/pane-status';
@@ -32,12 +33,12 @@ export const ISSUE_PANE_TITLE_ID = 'issue-pane-title';
 
 /**
  * The issue pane's content, rendered inside `fd-side-sheet`: the header, the status line with its
- * one callout and actions, the facts, and, while a worker runs, its activity. It loads the worker
- * run of the selected issue for the layers below it.
+ * one callout and actions, the clarification log, the facts, and, while a worker runs, its activity.
+ * It loads the worker run of the selected issue for the layers below it.
  */
 @Component({
   selector: 'fd-issue-pane',
-  imports: [PaneHeaderComponent, PaneStatusComponent, PaneFactsComponent, PaneActivityComponent],
+  imports: [PaneHeaderComponent, PaneStatusComponent, PaneClarificationsComponent, PaneFactsComponent, PaneActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './issue-pane.html',
   styleUrl: './issue-pane.scss',

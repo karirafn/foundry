@@ -222,6 +222,7 @@ describe('IssueService', () => {
       labels: ['bug'],
       kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
       triage: null,
+      clarifications: [],
       stateDetails: {
         workerRunId: null,
         branchName: null,
@@ -255,6 +256,7 @@ describe('IssueService', () => {
       labels: [],
       kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
       triage: null,
+      clarifications: [],
       stateDetails: {
         workerRunId: null,
         branchName: null,
@@ -383,6 +385,7 @@ describe('IssueService', () => {
       labels: [],
       kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
       triage: null,
+      clarifications: [],
       stateDetails: {
         workerRunId: null,
         branchName: null,

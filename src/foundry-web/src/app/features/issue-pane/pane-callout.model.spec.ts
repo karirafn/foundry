@@ -42,6 +42,7 @@ function detail(state: IssueDetail['state'], details: Partial<IssueStateDetails>
     stateDetails: details === null ? null : stateDetails(details),
     kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
     triage: null,
+    clarifications: [],
   };
 }
 
@@ -313,7 +314,7 @@ describe('buildCallout', () => {
       expect(callout.actions).toEqual([]);
     });
 
-    it('asks for more triage detail with the questions, post status and question link', () => {
+    it('asks for more triage detail with a link to the posted question, leaving the questions to Clarifications', () => {
       // Act
       const callout = buildCallout(
         detail('awaiting_input', {
@@ -324,7 +325,8 @@ describe('buildCallout', () => {
             commentUrl: 'https://github.com/acme/api/issues/42#c1',
             postFailureReason: null,
             nextPostAttemptAt: null,
-            reminderSentAt: null,
+            reminderSentAt: '2026-02-04T12:00:00Z',
+            reminderDueAt: null,
             resumeTarget: 'retriage',
           },
         }),
@@ -339,11 +341,8 @@ describe('buildCallout', () => {
       expect(callout.lines).toEqual([
         'The questions are posted on the issue; once a reply settles, Foundry triages again.',
       ]);
-      expect(callout.list).toEqual({
-        heading: 'Questions from triage',
-        items: [{ text: 'Which API?', detail: 'Two exist.', recommendation: 'The v2 one.', badge: null, link: null }],
-      });
-      expect(callout.notes[0]).toMatch(new RegExp(`^Posted ${MEDIUM_DATE.source} — waiting for a reply\\.$`));
+      expect(callout.list).toBeNull();
+      expect(callout.notes).toEqual([]);
       expect(callout.links).toEqual([
         {
           label: 'View question',
@@ -354,7 +353,7 @@ describe('buildCallout', () => {
       expect(callout.actions).toEqual(['continue_without_answer']);
     });
 
-    it('asks for answers to open questions, saying when posting them failed', () => {
+    it('asks for answers to open questions, offering Retry post when posting them failed', () => {
       // Act
       const callout = buildCallout(
         detail('awaiting_input', {
@@ -366,6 +365,7 @@ describe('buildCallout', () => {
             postFailureReason: 'rate limited',
             nextPostAttemptAt: null,
             reminderSentAt: null,
+            reminderDueAt: null,
             resumeTarget: 'revision',
           },
         }),
@@ -379,35 +379,10 @@ describe('buildCallout', () => {
       expect(callout.lines).toEqual([
         'Answer the questions on the issue. Once a reply settles, Foundry resumes the work.',
       ]);
-      expect(callout.list?.heading).toBe('Open questions');
-      expect(callout.list?.items[0].detail).toBeNull();
-      expect(callout.notes).toEqual(['Posting the questions failed: rate limited.']);
+      expect(callout.list).toBeNull();
+      expect(callout.notes).toEqual([]);
       expect(callout.links).toEqual([]);
       expect(callout.actions).toEqual(['retry_post', 'continue_without_answer']);
-    });
-
-    it('says when the reminder was posted', () => {
-      // Act
-      const callout = buildCallout(
-        detail('awaiting_input', {
-          awaitingInput: {
-            questions: [{ question: 'Which API?', context: '' }],
-            postStatus: 'posted',
-            postedAt: '2026-02-01T12:00:00Z',
-            commentUrl: null,
-            postFailureReason: null,
-            nextPostAttemptAt: null,
-            resumeTarget: 'fresh',
-            reminderSentAt: '2026-02-04T12:00:00Z',
-          },
-        }),
-        null,
-        null,
-        null,
-      );
-
-      // Assert
-      expect(callout.notes[1]).toMatch(new RegExp(`^Reminder posted ${MEDIUM_DATE.source}\\.$`));
     });
 
     it('shows a failed triage with its failure chip and reason, offering Retry triage and Skip triage', () => {

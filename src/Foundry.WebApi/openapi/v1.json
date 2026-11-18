@@ -3177,7 +3177,8 @@
           "postFailureReason",
           "nextPostAttemptAt",
           "resumeTarget",
-          "reminderSentAt"
+          "reminderSentAt",
+          "reminderDueAt"
         ],
         "type": "object",
         "properties": {
@@ -3220,6 +3221,13 @@
             "type": "string"
           },
           "reminderSentAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "reminderDueAt": {
             "type": [
               "null",
               "string"
@@ -3295,6 +3303,43 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ClarificationDetails": {
+        "required": [
+          "questions",
+          "input",
+          "askedAt",
+          "answeredAt"
+        ],
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InputQuestion"
+            }
+          },
+          "input": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/InputPartDetails"
+            }
+          },
+          "askedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answeredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -3881,6 +3926,101 @@
           "Failed"
         ]
       },
+      "InputPartDetails": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/InputPartDetailsInputPartDetailsComments"
+          },
+          {
+            "$ref": "#/components/schemas/InputPartDetailsInputPartDetailsDescriptionEdited"
+          },
+          {
+            "$ref": "#/components/schemas/InputPartDetailsInputPartDetailsBranchUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/InputPartDetailsInputPartDetailsContinuedWithoutAnswer"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "comments": "#/components/schemas/InputPartDetailsInputPartDetailsComments",
+            "descriptionEdited": "#/components/schemas/InputPartDetailsInputPartDetailsDescriptionEdited",
+            "branchUpdated": "#/components/schemas/InputPartDetailsInputPartDetailsBranchUpdated",
+            "continuedWithoutAnswer": "#/components/schemas/InputPartDetailsInputPartDetailsContinuedWithoutAnswer"
+          }
+        }
+      },
+      "InputPartDetailsInputPartDetailsBranchUpdated": {
+        "required": [
+          "fromSha",
+          "toSha",
+          "compareUrl"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "branchUpdated"
+            ],
+            "type": "string"
+          },
+          "fromSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toSha": {
+            "type": "string"
+          },
+          "compareUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "InputPartDetailsInputPartDetailsComments": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "comments"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "InputPartDetailsInputPartDetailsContinuedWithoutAnswer": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "continuedWithoutAnswer"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "InputPartDetailsInputPartDetailsDescriptionEdited": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "descriptionEdited"
+            ],
+            "type": "string"
+          }
+        }
+      },
       "InputQuestion": {
         "required": [
           "question",
@@ -3916,7 +4056,8 @@
           "labels",
           "stateDetails",
           "kind",
-          "triage"
+          "triage",
+          "clarifications"
         ],
         "type": "object",
         "properties": {
@@ -3979,6 +4120,12 @@
                 "$ref": "#/components/schemas/TriageVerdictDetails"
               }
             ]
+          },
+          "clarifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClarificationDetails"
+            }
           }
         }
       },

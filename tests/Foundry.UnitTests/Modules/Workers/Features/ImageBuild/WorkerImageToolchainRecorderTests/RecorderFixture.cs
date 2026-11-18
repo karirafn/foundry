@@ -22,12 +22,16 @@ internal sealed class RecorderFixture : IAsyncDisposable
 
     public RecorderFixture(string? imageId, ImageBuildRetryPolicy? retryPolicy = null)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
+        // Each context opens its own connection: the recorder writes on its background loop while the test polls,
+        // and one SqliteConnection shared across threads fails with "database is locked". The open connection keeps
+        // the named in-memory database alive for the fixture's lifetime.
+        string connectionString = $"Data Source=recorder-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        _connection = new SqliteConnection(connectionString);
         _connection.Open();
 
         ServiceCollection services = new();
         services.AddScoped<DbContext>(_ => new FoundryDbContext(
-            new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options));
+            new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(connectionString).Options));
         _services = services.BuildServiceProvider();
 
         using (IServiceScope scope = _services.CreateScope())

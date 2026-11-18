@@ -18,8 +18,8 @@
         [error]="issueService.detailError()"
         (retry)="retry()"
       />
-      <!-- The Clarifications section (#757) slots in here, between the status and the facts. -->
       @if (issueService.detailError() === null) {
+        <fd-pane-clarifications [detail]="detail()" [providerType]="liveSummary()?.providerType ?? ''" />
         <fd-pane-facts [detail]="detail()" [run]="run()" [summary]="liveSummary()" />
       }
       @if (showsActivity()) {

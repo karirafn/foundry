@@ -1,0 +1,204 @@
+@use 'sass:map';
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/badge' as *;
+
+// The round status chips take the shared pill shape; no state or outlined modifier is emitted here.
+@include badge($states: (), $exclude-outlined: map.keys($badge-outlined-variants));
+
+:host {
+  display: block;
+}
+
+.pane-clarifications {
+  margin-bottom: var(--fd-spacing-xl);
+}
+
+// The pane's section-heading style, as on Details and Activity.
+.pane-clarifications__heading {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--fd-spacing-sm);
+  text-transform: uppercase;
+}
+
+.pane-clarifications__rounds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-md);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pane-clarifications__round {
+  border-left: 2px solid var(--fd-border-default);
+  font-size: 0.8125rem;
+  min-width: 0;
+  padding-left: var(--fd-spacing-md);
+}
+
+.pane-clarifications__round-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-sm);
+}
+
+.pane-clarifications__round-title {
+  color: var(--fd-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+// Outlined chips; their pill shape and type come from the badge mixin (`.badge`).
+.pane-clarifications__chip {
+  &--warning {
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &--success {
+    border: 1px solid var(--fd-text-success);
+    color: var(--fd-text-success);
+  }
+
+  &--neutral {
+    border: 1px solid var(--fd-text-secondary);
+    color: var(--fd-text-secondary);
+  }
+}
+
+.pane-clarifications__meta,
+.pane-clarifications__secondary,
+.pane-clarifications__note {
+  color: var(--fd-text-secondary);
+}
+
+.pane-clarifications__meta {
+  margin: var(--fd-spacing-xs) 0 0;
+}
+
+.pane-clarifications__label {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: var(--fd-spacing-sm) 0 var(--fd-spacing-xs);
+}
+
+.pane-clarifications__questions,
+.pane-clarifications__input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.pane-clarifications__input {
+  list-style: none;
+  padding-left: 0;
+}
+
+.pane-clarifications__question {
+  color: var(--fd-text-primary);
+  overflow-wrap: anywhere;
+
+  span {
+    display: block;
+  }
+}
+
+.pane-clarifications__question-text {
+  font-weight: 500;
+}
+
+.pane-clarifications__part {
+  color: var(--fd-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pane-clarifications__comment {
+  background: var(--fd-bg-card-hover);
+  border-radius: var(--fd-radius-sm);
+  line-height: 1.6;
+  margin: 0;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  white-space: pre-wrap;
+
+  &--clamped {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    overflow: hidden;
+  }
+}
+
+.pane-clarifications__more {
+  background: transparent;
+  border: none;
+  color: var(--fd-text-link);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  min-height: 32px;
+  padding: 0;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+.pane-clarifications__mono {
+  font-family: var(--fd-font-mono);
+}
+
+.pane-clarifications__link {
+  color: var(--fd-text-link);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-clarifications__failed {
+  color: var(--fd-text-error);
+}
+
+.pane-clarifications__facts {
+  display: grid;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  grid-template-columns: minmax(5rem, max-content) 1fr;
+  margin: var(--fd-spacing-sm) 0 0;
+
+  dt {
+    color: var(--fd-text-secondary);
+  }
+
+  dd {
+    color: var(--fd-text-primary);
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 479px) {
+    grid-template-columns: 1fr;
+
+    dd {
+      margin-bottom: var(--fd-spacing-xs);
+    }
+  }
+}

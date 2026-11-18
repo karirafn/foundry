@@ -38,6 +38,7 @@ const baseDetail: IssueDetail = {
   stateDetails,
   kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
   triage: null,
+  clarifications: [],
 };
 
 function issue(state: string, overrides: Partial<IssueDetail> = {}): IssueDetail {

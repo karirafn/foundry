@@ -60,6 +60,7 @@ const mockDetail = {
   author: 'dev',
   labels: [],
   stateDetails: null,
+  clarifications: [],
 };
 
 function setup() {

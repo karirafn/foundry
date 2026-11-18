@@ -41,6 +41,7 @@ const detail = {
   stateDetails: null,
   kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
   triage: null,
+  clarifications: [],
 };
 
 const runningRun = {
@@ -152,6 +153,29 @@ describe('IssuePaneComponent', () => {
       n.tagName.toLowerCase());
     expect(layers).toEqual(['fd-pane-header', 'fd-pane-status', 'fd-pane-facts']);
     expect(el.querySelector('fd-pane-facts dl')).not.toBeNull();
+  });
+
+  it('renders the clarifications between the status and the facts, and updates them when the detail reloads', async () => {
+    // Arrange
+    const { el, httpMock, render, service } = await setup();
+    const open = { questions: [{ question: 'Which API?', context: '' }], input: null, askedAt: '2026-01-02T00:00:00Z', answeredAt: null };
+    httpMock.expectOne('/api/issues/f').flush({ ...detail, state: 'queued', clarifications: [open] });
+    await render();
+
+    // Act
+    service.loadDetail('f');
+    httpMock.expectOne('/api/issues/f').flush({
+      ...detail,
+      state: 'queued',
+      clarifications: [{ ...open, input: [{ kind: 'comments', text: 'Use v2.' }], answeredAt: '2026-01-03T00:00:00Z' }],
+    });
+    await render();
+
+    // Assert
+    const layers = Array.from(el.querySelectorAll('fd-pane-status, fd-pane-clarifications section, fd-pane-facts')).map((n) =>
+      n.tagName.toLowerCase());
+    expect(layers).toEqual(['fd-pane-status', 'section', 'fd-pane-facts']);
+    expect(el.querySelector('.pane-clarifications__comment')?.textContent).toBe('Use v2.');
   });
 
   it('renders the activity after the facts while a worker runs', async () => {

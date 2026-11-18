@@ -562,6 +562,7 @@ internal sealed class IssueQueries(
             issue,
             BuildStateDetails(issue, transientRetry),
             cancellationToken);
+        stateDetails = await WithReminderDueAsync(issue, stateDetails, cancellationToken);
 
         return new IssueDetail(
             Id: issue.Id.Value,
@@ -575,8 +576,54 @@ internal sealed class IssueQueries(
             Labels: issue.Labels,
             StateDetails: stateDetails,
             Kind: BuildKindDetails(issue),
-            Triage: BuildTriageDetails(issue));
+            Triage: BuildTriageDetails(issue),
+            Clarifications: BuildClarificationDetails(issue));
     }
+
+    /// <summary>
+    /// Adds when a posted question's reminder is due, computed as the awaiting-input step computes it. Only a posted
+    /// question reads the reminder delay setting.
+    /// </summary>
+    private async Task<IssueStateDetails?> WithReminderDueAsync(
+        Issue issue,
+        IssueStateDetails? stateDetails,
+        CancellationToken cancellationToken)
+    {
+        if (issue is not AwaitingInputIssue { QuestionPost: QuestionPost.Posted posted } awaiting
+            || stateDetails?.AwaitingInput is not { } awaitingInput)
+        {
+            return stateDetails;
+        }
+
+        TimeSpan reminderDelay = await globalSettingsQueries.GetAwaitingInputReminderDelayAsync(cancellationToken);
+
+        return stateDetails with
+        {
+            AwaitingInput = awaitingInput with { ReminderDueAt = awaiting.Reminder.DueAt(posted.PostedAt, reminderDelay) },
+        };
+    }
+
+    private static List<ClarificationDetails> BuildClarificationDetails(Issue issue) =>
+        [.. issue.Clarifications.Select(round => new ClarificationDetails(
+            round.Questions,
+            round.Input is null ? null : [.. round.Input.Parts.Select(part => BuildInputPartDetails(issue.Url, part))],
+            round.AskedAt,
+            round.AnsweredAt))];
+
+    private static InputPartDetails BuildInputPartDetails(ProviderUrl issueUrl, InputPart part) =>
+        part switch
+        {
+            InputPart.Comments comments => new InputPartDetails.Comments(comments.Text),
+            InputPart.DescriptionEdited => new InputPartDetails.DescriptionEdited(),
+            InputPart.BranchUpdated branchUpdated => new InputPartDetails.BranchUpdated(
+                branchUpdated.FromSha,
+                branchUpdated.ToSha,
+                branchUpdated.FromSha is { } fromSha
+                    ? ProviderWebUrl.Compare(issueUrl, fromSha, branchUpdated.ToSha)
+                    : ProviderWebUrl.Commit(issueUrl, branchUpdated.ToSha)),
+            InputPart.ContinuedWithoutAnswer => new InputPartDetails.ContinuedWithoutAnswer(),
+            _ => throw new InvalidOperationException($"Unknown input part {part.GetType().Name}."),
+        };
 
     /// <summary>
     /// Adds the catch-up fields (ADR 0111) from the issue's catch-up queue entry: the round while a catch-up has
@@ -736,7 +783,8 @@ internal sealed class IssueQueries(
                 PostFailureReason: null,
                 NextPostAttemptAt: null,
                 ResumeTargetName(issue.ResumeTarget),
-                issue.Reminder is QuestionReminder.Sent sent ? sent.SentAt : null),
+                issue.Reminder is QuestionReminder.Sent sent ? sent.SentAt : null,
+                ReminderDueAt: null),
             QuestionPost.Failed failed => new AwaitingInputDetails(
                 issue.Questions,
                 "failed",
@@ -745,7 +793,8 @@ internal sealed class IssueQueries(
                 failed.Reason,
                 failed.NextAttemptAt,
                 ResumeTargetName(issue.ResumeTarget),
-                ReminderSentAt: null),
+                ReminderSentAt: null,
+                ReminderDueAt: null),
             _ => new AwaitingInputDetails(
                 issue.Questions,
                 "pending",
@@ -754,7 +803,8 @@ internal sealed class IssueQueries(
                 PostFailureReason: null,
                 NextPostAttemptAt: null,
                 ResumeTargetName(issue.ResumeTarget),
-                ReminderSentAt: null),
+                ReminderSentAt: null,
+                ReminderDueAt: null),
         };
 
     private static List<BlockerDetails> BlockersOf(Issue issue)
@@ -1014,9 +1064,9 @@ internal sealed class IssueQueries(
                 CompletedAt: null,
                 BlockedBy: null,
                 TransientRetry: null,
-                BranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.BranchName),
+                BranchUrl: ProviderWebUrl.Branch(diverged.Url, diverged.BranchName),
                 SideBranchName: diverged.SideBranchName,
-                SideBranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.SideBranchName),
+                SideBranchUrl: ProviderWebUrl.Branch(diverged.Url, diverged.SideBranchName),
                 DivergenceReason: BranchDivergenceReasonTokens.ToToken(diverged.DivergenceReason)),
 
             _ => null

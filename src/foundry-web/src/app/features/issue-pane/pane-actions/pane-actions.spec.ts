@@ -42,6 +42,7 @@ function issue(state: IssueDetail['state']): IssueDetail {
     stateDetails,
     kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
     triage: null,
+    clarifications: [],
   };
 }
 
@@ -510,6 +511,7 @@ describe('PaneActionsComponent', () => {
             nextPostAttemptAt: null,
             resumeTarget: 'retriage',
             reminderSentAt: null,
+            reminderDueAt: null,
           },
         },
       });

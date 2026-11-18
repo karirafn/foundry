@@ -1,0 +1,151 @@
+<!-- Always mounted, and filled only when a round opens or closes, so a reload never replays the log. -->
+<span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</span>
+
+@if (rounds().length > 0) {
+  <section class="pane-clarifications" [attr.aria-labelledby]="headingId">
+    <h3 class="pane-clarifications__heading" [id]="headingId">Clarifications</h3>
+
+    <ol class="pane-clarifications__rounds">
+      @for (r of rounds(); track r.number) {
+        <li class="pane-clarifications__round">
+          <div class="pane-clarifications__round-head">
+            <h4 class="pane-clarifications__round-title" [id]="roundId(r, 'title')">Round {{ r.number }}</h4>
+            <span class="badge pane-clarifications__chip" [class]="'pane-clarifications__chip--' + chipTone(r.status)">{{
+              r.statusLabel
+            }}</span>
+          </div>
+
+          <p class="pane-clarifications__meta">
+            Asked <time [attr.datetime]="r.askedAt">{{ r.askedAt | date: 'medium' }}</time>
+            @if (r.answeredAt; as answeredAt) {
+              <span aria-hidden="true"> · </span>
+              Answered <time [attr.datetime]="answeredAt">{{ answeredAt | date: 'medium' }}</time>
+            }
+          </p>
+
+          <p class="pane-clarifications__label" [id]="roundId(r, 'questions')">Questions</p>
+          <ol class="pane-clarifications__questions" [attr.aria-labelledby]="roundId(r, 'questions')">
+            @for (q of r.questions; track $index) {
+              <li class="pane-clarifications__question">
+                <span class="pane-clarifications__question-text">{{ q.question }}</span>
+                @if (q.context) {
+                  <span class="pane-clarifications__secondary">{{ q.context }}</span>
+                }
+                @if (q.recommendation) {
+                  <span class="pane-clarifications__secondary"><strong>Recommended:</strong> {{ q.recommendation }}</span>
+                }
+              </li>
+            }
+          </ol>
+
+          @if (r.input.length > 0) {
+            <p class="pane-clarifications__label" [id]="roundId(r, 'input')">Input</p>
+            <ul class="pane-clarifications__input" [attr.aria-labelledby]="roundId(r, 'input')">
+              @for (p of r.input; track $index) {
+                <li class="pane-clarifications__part">
+                  @switch (p.type) {
+                    @case ('comments') {
+                      <!-- Untrusted comment text: interpolated as text, never bound as HTML. -->
+                      <p
+                        class="pane-clarifications__comment"
+                        [class.pane-clarifications__comment--clamped]="p.long && !isExpanded(r, $index)"
+                        [id]="roundId(r, 'comment-' + $index)"
+                      >{{ p.text }}</p>
+                      @if (p.long) {
+                        <button
+                          type="button"
+                          class="pane-clarifications__more"
+                          [attr.aria-expanded]="isExpanded(r, $index)"
+                          [attr.aria-controls]="roundId(r, 'comment-' + $index)"
+                          (click)="toggle(r, $index)"
+                        >{{ isExpanded(r, $index) ? 'Show less' : 'Show more' }}</button>
+                      }
+                    }
+                    @case ('note') {
+                      <span class="pane-clarifications__note">{{ p.text }}</span>
+                    }
+                    @case ('branch') {
+                      <span class="pane-clarifications__note">{{ p.label }}</span>
+                      &ngsp;
+                      @if (p.href | safeHref; as href) {
+                        <a
+                          class="pane-clarifications__link pane-clarifications__mono"
+                          [href]="href"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          [attr.aria-label]="p.ariaLabel"
+                          [attr.title]="p.fullRange"
+                        >{{ p.shortRange }}</a>
+                      } @else {
+                        <span
+                          class="pane-clarifications__mono"
+                          [attr.title]="p.fullRange"
+                        >{{ p.shortRange }}</span>
+                      }
+                    }
+                  }
+                </li>
+              }
+            </ul>
+          }
+
+          @if (r.open; as o) {
+            <dl class="pane-clarifications__facts">
+              <dt>Post</dt>
+              <dd>
+                @switch (o.post.status) {
+                  @case ('posted') {
+                    @if (o.post.postedAt; as postedAt) {
+                      Posted <time [attr.datetime]="postedAt">{{ postedAt | date: 'medium' }}</time>
+                    } @else {
+                      Posted
+                    }
+                    @if (o.post.commentUrl | safeHref; as href) {
+                      &ngsp;
+                      <a
+                        class="pane-clarifications__link"
+                        [href]="href"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [attr.aria-label]="'View the questions on issue #' + detail()?.issueNumber"
+                      >View question</a>
+                    }
+                  }
+                  @case ('failed') {
+                    <span class="pane-clarifications__failed">Failed: {{ o.post.reason }}.</span>
+                    @if (o.post.nextAttemptAt; as next) {
+                      Next attempt at <time [attr.datetime]="next">{{ next | date: 'medium' }}</time>.
+                    } @else {
+                      Use Retry post to post the questions again.
+                    }
+                  }
+                  @default {
+                    Posting the questions…
+                  }
+                }
+              </dd>
+              <dt>Waiting</dt>
+              <dd>{{ o.waited }}</dd>
+              @if (o.reminder; as reminder) {
+                <dt>Reminder</dt>
+                <dd>
+                  @switch (reminder.status) {
+                    @case ('sent') {
+                      Sent <time [attr.datetime]="reminder.at">{{ reminder.at | date: 'medium' }}</time>
+                    }
+                    @case ('due') {
+                      Due <time [attr.datetime]="reminder.at">{{ reminder.at | date: 'medium' }}</time>
+                    }
+                    @default {
+                      Scheduled once the questions are posted
+                    }
+                  }
+                </dd>
+              }
+            </dl>
+          }
+        </li>
+      }
+    </ol>
+  </section>
+}
