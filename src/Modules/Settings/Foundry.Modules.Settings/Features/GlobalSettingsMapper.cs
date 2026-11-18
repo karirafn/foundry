@@ -39,7 +39,7 @@ internal static class GlobalSettingsMapper
             settings.WorkerResourceLimits.PidsLimit,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
             [.. settings.HostPauses.Select(HostPauseMapper.ToPausedHost)],
-            settings.WebhookPublicBaseUrl,
+            settings.WebhookPublicBaseUrl?.Value,
             settings.BackstopIntervalMinutes,
             settings.AwaitingInputReminderDelayHours);
     }

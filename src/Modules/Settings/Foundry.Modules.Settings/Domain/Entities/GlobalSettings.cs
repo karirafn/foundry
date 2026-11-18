@@ -73,7 +73,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     /// The operator-supplied public base URL (absolute <c>https</c>) that a tunnel or reverse proxy
     /// forwards to Foundry's webhook-only port. <see langword="null"/> when webhooks are not configured.
     /// </summary>
-    public string? WebhookPublicBaseUrl { get; private set; }
+    public WebhookPublicBaseUrl? WebhookPublicBaseUrl { get; private set; }
 
     public DateTimeOffset? UsageLimitResetsAt { get; private set; }
 
@@ -253,9 +253,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     }
 
     /// <summary>
-    /// Updates the webhook ingress settings. The public base URL is optional; when present it must be
-    /// an absolute <c>https</c> URL without query or fragment. A trailing slash is trimmed so the payload
-    /// URL is built as <c>&lt;base&gt;/webhooks/{github|gitlab}/&lt;hookId&gt;</c>.
+    /// Updates the webhook ingress settings. The public base URL is optional: a blank value clears it,
+    /// any other value must pass <see cref="ValueObjects.WebhookPublicBaseUrl.Create"/>.
     /// </summary>
     public Result UpdateWebhookSettings(string? publicBaseUrl, int backstopIntervalMinutes)
     {
@@ -264,26 +263,20 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
             return SettingsErrors.InvalidBackstopInterval(backstopIntervalMinutes);
         }
 
-        string? normalizedUrl = null;
+        WebhookPublicBaseUrl? url = null;
         if (!string.IsNullOrWhiteSpace(publicBaseUrl))
         {
-            string trimmed = publicBaseUrl.Trim();
-
-            if (trimmed.Length > MaxWebhookPublicBaseUrlLength
-                || !Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri)
-                || uri.Scheme != Uri.UriSchemeHttps
-                || !string.IsNullOrEmpty(uri.Query)
-                || !string.IsNullOrEmpty(uri.Fragment)
-                || !string.IsNullOrEmpty(uri.UserInfo)
-                || string.IsNullOrEmpty(uri.Host))
+            switch (ValueObjects.WebhookPublicBaseUrl.Create(publicBaseUrl))
             {
-                return SettingsErrors.InvalidWebhookPublicBaseUrl;
+                case Result<WebhookPublicBaseUrl>.Failure failure:
+                    return failure.Error;
+                case Result<WebhookPublicBaseUrl>.Success success:
+                    url = success.Value;
+                    break;
             }
-
-            normalizedUrl = trimmed.TrimEnd('/');
         }
 
-        WebhookPublicBaseUrl = normalizedUrl;
+        WebhookPublicBaseUrl = url;
         BackstopIntervalMinutes = backstopIntervalMinutes;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();

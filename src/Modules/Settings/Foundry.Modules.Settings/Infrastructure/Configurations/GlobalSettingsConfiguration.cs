@@ -46,7 +46,12 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnName("awaiting_input_reminder_delay_hours")
             .HasDefaultValue(GlobalSettings.DefaultAwaitingInputReminderDelayHours);
 
+        // Stored as the normalized string; reading wraps it without re-validating so a row written
+        // under older rules still loads.
         builder.Property(s => s.WebhookPublicBaseUrl)
+            .HasConversion(
+                url => url!.Value,
+                stored => WebhookPublicBaseUrl.Restore(stored))
             .HasMaxLength(GlobalSettings.MaxWebhookPublicBaseUrlLength)
             .HasColumnName("webhook_public_base_url");
 

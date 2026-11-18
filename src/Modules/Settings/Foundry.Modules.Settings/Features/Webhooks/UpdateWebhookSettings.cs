@@ -38,7 +38,7 @@ internal static class UpdateWebhookSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            string? previousPublicBaseUrl = settings.WebhookPublicBaseUrl;
+            string? previousPublicBaseUrl = settings.WebhookPublicBaseUrl?.Value;
 
             Result updateResult = settings.UpdateWebhookSettings(command.PublicBaseUrl, command.BackstopIntervalMinutes);
             if (updateResult is Result.Failure failure)
@@ -47,7 +47,7 @@ internal static class UpdateWebhookSettings
             }
 
             // A new, non-empty URL re-points every registered hook; the event commits with the change.
-            if (settings.WebhookPublicBaseUrl is { } publicBaseUrl
+            if (settings.WebhookPublicBaseUrl?.Value is { } publicBaseUrl
                 && !string.Equals(previousPublicBaseUrl, publicBaseUrl, StringComparison.Ordinal))
             {
                 await integrationEventDispatcher.DispatchAsync(

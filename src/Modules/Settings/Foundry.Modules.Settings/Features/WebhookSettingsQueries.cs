@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -9,15 +10,15 @@ internal sealed class WebhookSettingsQueries(DbContext dbContext) : IWebhookSett
 {
     public async Task<WebhookSettingsSnapshot> GetWebhookSettingsAsync(CancellationToken cancellationToken)
     {
-        WebhookSettingsSnapshot? snapshot = await dbContext.Set<GlobalSettings>()
+        StoredWebhookSettings? stored = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
-            .Select(s => new WebhookSettingsSnapshot(
-                s.WebhookPublicBaseUrl,
-                TimeSpan.FromMinutes(s.BackstopIntervalMinutes)))
+            .Select(s => new StoredWebhookSettings(s.WebhookPublicBaseUrl, s.BackstopIntervalMinutes))
             .FirstOrDefaultAsync(cancellationToken);
 
-        return snapshot ?? new WebhookSettingsSnapshot(
-            null,
-            TimeSpan.FromMinutes(GlobalSettings.DefaultBackstopIntervalMinutes));
+        return stored is null
+            ? new WebhookSettingsSnapshot(null, TimeSpan.FromMinutes(GlobalSettings.DefaultBackstopIntervalMinutes))
+            : new WebhookSettingsSnapshot(stored.PublicBaseUrl?.Value, TimeSpan.FromMinutes(stored.BackstopIntervalMinutes));
     }
+
+    private sealed record StoredWebhookSettings(WebhookPublicBaseUrl? PublicBaseUrl, int BackstopIntervalMinutes);
 }
