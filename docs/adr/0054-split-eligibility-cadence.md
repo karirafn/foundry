@@ -1,5 +1,7 @@
 # Split Repository-Eligibility Cadence: Branch Rules Per-Cycle, Write Probes Event-Triggered
 
+> **2026-11-18 — Amended:** the event-triggered-only cadence for a `Denied` verdict in Decision is replaced by [ADR 0115](0115-one-account-token-verified-against-every-permission-foundry-uses.md): a `Denied` verdict is re-probed after a one-hour cooldown, and a verdict taken against an older permission list is re-probed as unprobed. `Granted` stays event-triggered.
+
 ## Context
 
 Repository eligibility combines two checks of very different cost: a cheap branch-rules GET
