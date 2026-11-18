@@ -37,7 +37,8 @@ internal sealed partial class GitLabHttpClient(
     private const int MaxDiscussionPages = 20;
     private const int DiscussionsPerPage = 100;
     private const int MaxFilePathLength = 4096; // PATH_MAX
-    private const int GitLabMinPushAccessLevel = 30; // Developer role
+    // Which repositories the token can push to (namespace claims), not what Foundry needs: stays Developer.
+    private const int GitLabWritableRepositoryAccessLevel = 30; // Developer role
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -602,7 +603,7 @@ internal sealed partial class GitLabHttpClient(
                 bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
                 int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
                 int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
-                bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+                bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabWritableRepositoryAccessLevel;
                 repositories.Add(new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush));
             }
 
@@ -930,7 +931,7 @@ internal sealed partial class GitLabHttpClient(
 
         int projectLevel = dto?.Permissions?.ProjectAccess?.AccessLevel ?? 0;
         int groupLevel = dto?.Permissions?.GroupAccess?.AccessLevel ?? 0;
-        bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabMinPushAccessLevel;
+        bool canPush = Math.Max(projectLevel, groupLevel) >= TokenPermissions.GitLabMinimumAccessLevel;
 
         return Result<bool>.Ok(canPush);
     }

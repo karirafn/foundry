@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -9,6 +10,7 @@ using System.Text.RegularExpressions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
@@ -192,9 +194,9 @@ internal sealed partial class GitHubHttpClient(
         """;
 
     // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
-    // This constant is intentionally decoupled from RequiredScopes.For(github), which now carries fine-grained
-    // permission display labels for the UI and is not a validation source for OAuth scope token checks.
-    private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = ["repo"];
+    // Each permission entry keeps its classic scope apart from its fine-grained display label, so the scopes
+    // checked here stay decoupled from the labels RequiredScopes.For(github) shows in the UI.
+    private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = TokenPermissions.GitHubClassicScopes;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -1107,32 +1109,33 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
-        Result<WritePermissionProbeResult> contentsResult = await ProbeContentsWriteAsync(
-            apiBaseUrl, slug, token, cancellationToken);
-
-        if (!IsGranted(contentsResult))
+        foreach (WritePermission permission in TokenPermissions.GitHubWriteProbes)
         {
-            return contentsResult;
-        }
+            Result<WritePermissionProbeResult> result = await ProbeWriteAsync(
+                permission, apiBaseUrl, slug, token, cancellationToken);
 
-        Result<WritePermissionProbeResult> issuesResult = await ProbeIssuesWriteAsync(
-            apiBaseUrl, slug, token, cancellationToken);
-
-        if (!IsGranted(issuesResult))
-        {
-            return issuesResult;
-        }
-
-        Result<WritePermissionProbeResult> pullsResult = await ProbePullRequestsWriteAsync(
-            apiBaseUrl, slug, token, cancellationToken);
-
-        if (!IsGranted(pullsResult))
-        {
-            return pullsResult;
+            if (!IsGranted(result))
+            {
+                return result;
+            }
         }
 
         return Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted());
     }
+
+    private Task<Result<WritePermissionProbeResult>> ProbeWriteAsync(
+        WritePermission permission,
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken) =>
+        permission switch
+        {
+            WritePermission.Contents => ProbeContentsWriteAsync(apiBaseUrl, slug, token, cancellationToken),
+            WritePermission.Issues => ProbeIssuesWriteAsync(apiBaseUrl, slug, token, cancellationToken),
+            WritePermission.PullRequests => ProbePullRequestsWriteAsync(apiBaseUrl, slug, token, cancellationToken),
+            _ => throw new UnreachableException($"No write probe for {permission}."),
+        };
 
     private static bool IsGranted(Result<WritePermissionProbeResult> result) =>
         result is Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult.Granted };
