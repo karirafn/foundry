@@ -87,6 +87,14 @@ internal sealed partial class GitLabIssueProvider(
         return httpClient.GetIssueStatusAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
     }
 
+    public Task<Result<BranchHead>> GetBranchHeadAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetBranchHeadAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+    }
+
     public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
         RepositorySlug slug,
         string pullRequestUrl,

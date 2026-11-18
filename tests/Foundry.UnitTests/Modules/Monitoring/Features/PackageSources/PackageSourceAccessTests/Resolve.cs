@@ -20,7 +20,7 @@ public sealed class Resolve
     private static GitLabCredential Account() =>
         GitLabCredential.Create(
             AccountName.Create("deploy-bot").ValueOrThrow(),
-            "account-token",
+            new IssuedToken("account-token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
     private static PackageSource SourceWithCredential(Uri url)

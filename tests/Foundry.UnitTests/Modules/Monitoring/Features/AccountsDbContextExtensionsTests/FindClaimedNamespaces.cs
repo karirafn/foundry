@@ -43,7 +43,7 @@ public sealed class FindClaimedNamespaces : IAsyncDisposable
         params string[] namespaceValues)
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), "ghp_token", baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), baseUrl);
         IEnumerable<Namespace> namespaces = namespaceValues.Select(v => Namespace.Create(v).ValueOrThrow());
         credential.SetNamespaces(namespaces);
         _dbContext.Set<Credential>().Add(credential);
@@ -123,7 +123,7 @@ public sealed class FindClaimedNamespaces : IAsyncDisposable
     {
         // Arrange
         BaseUrl githubUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential githubCredential = GitHubCredential.Create(AccountName.Create("github-user").ValueOrThrow(), "ghp_token", githubUrl);
+        GitHubCredential githubCredential = GitHubCredential.Create(AccountName.Create("github-user").ValueOrThrow(), new IssuedToken("ghp_token", new TokenExpiry.NotChecked()), githubUrl);
         githubCredential.SetNamespaces([Namespace.Create("github-org").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(githubCredential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);

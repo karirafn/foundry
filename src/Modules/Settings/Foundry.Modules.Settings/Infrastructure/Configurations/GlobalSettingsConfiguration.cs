@@ -42,6 +42,10 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnName("backstop_interval_minutes")
             .HasDefaultValue(GlobalSettings.DefaultBackstopIntervalMinutes);
 
+        builder.Property(s => s.AwaitingInputReminderDelayHours)
+            .HasColumnName("awaiting_input_reminder_delay_hours")
+            .HasDefaultValue(GlobalSettings.DefaultAwaitingInputReminderDelayHours);
+
         builder.Property(s => s.WebhookPublicBaseUrl)
             .HasMaxLength(GlobalSettings.MaxWebhookPublicBaseUrlLength)
             .HasColumnName("webhook_public_base_url");

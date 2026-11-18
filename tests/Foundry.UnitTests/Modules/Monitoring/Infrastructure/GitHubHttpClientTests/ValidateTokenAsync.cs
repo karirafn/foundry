@@ -1,13 +1,16 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -20,6 +23,107 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTe
 public sealed class ValidateTokenAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
+
+    // Header name and value format captured from api.github.com's /user response for a fine-grained PAT on 2026-11-15.
+    private const string ExpirationHeader = "github-authentication-token-expiration";
+    private const string ObservedExpirationValue = "2026-11-22 10:16:35 UTC";
+
+    private static GitHubHttpClient CreateSut(HttpClient httpClient, ILogger<GitHubHttpClient>? logger = null) =>
+        new(httpClient, logger ?? NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+    [Theory]
+    [InlineData("github-authentication-token-expiration")]
+    [InlineData("GitHub-Authentication-Token-Expiration")]
+    public async Task WhenExpirationHeaderIsPresent_ReturnsExpiryOnThatInstant(string headerName)
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
+        handler.ResponseHeaders[headerName] = ObservedExpirationValue;
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "github_pat_fine_grained_token", CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
+            .ShouldBe(new TokenExpiry.On(new DateTimeOffset(2026, 11, 22, 10, 16, 35, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task WhenClassicPatHasExpirationHeaderButNoScopesHeader_ReturnsScopesUnverifiableWithExpiry()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
+        handler.ResponseHeaders[ExpirationHeader] = ObservedExpirationValue;
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_classic_token_without_scope_header", CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>().TokenExpiry
+            .ShouldBe(new TokenExpiry.On(new DateTimeOffset(2026, 11, 22, 10, 16, 35, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task WhenExpirationHeaderIsMissing_ReturnsUnavailable()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
+        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_valid_token", CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
+            .ShouldBe(new TokenExpiry.Unavailable());
+    }
+
+    [Theory]
+    [InlineData("not a date")]
+    [InlineData("2026-11-22 10:16:35 +0100")]
+    public async Task WhenExpirationHeaderDoesNotParse_ReturnsUnavailable(string headerValue)
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
+        handler.ResponseHeaders[ExpirationHeader] = headerValue;
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "github_pat_fine_grained_token", CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
+            .ShouldBe(new TokenExpiry.Unavailable());
+    }
+
+    [Fact]
+    public async Task WhenExpirationHeaderDoesNotParse_LogsAWarningNamingTheHeaderButNotTheToken()
+    {
+        // Arrange
+        const string token = "github_pat_secret_value_for_log_check";
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
+        handler.ResponseHeaders[ExpirationHeader] = "not a date";
+        using HttpClient httpClient = new(handler);
+        CapturingLogger<GitHubHttpClient> logger = new();
+        GitHubHttpClient sut = CreateSut(httpClient, logger);
+
+        // Act
+        await sut.ValidateTokenAsync(ValidBaseUrl, token, CancellationToken.None);
+
+        // Assert
+        (LogLevel Level, string Message, Exception? Exception) warning = logger.Entries.ShouldHaveSingleItem();
+        warning.ShouldSatisfyAllConditions(
+            () => warning.Level.ShouldBe(LogLevel.Warning),
+            () => warning.Message.ShouldContain(ExpirationHeader),
+            () => warning.Message.ShouldNotContain(token));
+    }
 
     [Fact]
     public async Task WhenTokenIsUnauthorized_ReturnsAuthenticationFailed()

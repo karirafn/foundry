@@ -33,7 +33,7 @@ public sealed class DeriveAsync
     private static GitHubCredential BuildGitHubCredential(string token = "ghp_test")
     {
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        return GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), token, baseUrl);
+        return GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken(token, new TokenExpiry.NotChecked()), baseUrl);
     }
 
     private static NamespaceDeriver BuildSut(HttpClient gitHubClient, HttpClient? gitLabClient = null)
@@ -208,7 +208,7 @@ public sealed class DeriveAsync
     {
         // Arrange
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), string.Concat("ghp_", "rejected"), baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("octocat").ValueOrThrow(), new IssuedToken(string.Concat("ghp_", "rejected"), new TokenExpiry.NotChecked()), baseUrl);
         credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
         NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()));
 

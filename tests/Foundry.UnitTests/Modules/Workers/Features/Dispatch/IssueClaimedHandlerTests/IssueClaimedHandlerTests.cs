@@ -147,6 +147,37 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheClaimResumesARoundContinuedWithoutAnswer_TheRunRefusesNeedsInput()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+        DispatchContext context = new DispatchContext.Continuation("feat/42-test-issue") { ContinuedWithoutAnswer = true };
+
+        // Act
+        await sut.HandleAsync(BuildEvent(context: context), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.RefusesNeedsInput.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenTheClaimIsAnyOtherRun_TheRunMayAsk()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.RefusesNeedsInput.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenClaimed_RunRoleComesFromDispatchContextRole()
     {
         // Arrange
@@ -2402,6 +2433,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
+
+        public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
+            => Task.FromResult(TimeSpan.FromDays(3));
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true, []));

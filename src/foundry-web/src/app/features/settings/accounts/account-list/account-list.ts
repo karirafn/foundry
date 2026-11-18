@@ -14,9 +14,15 @@ import {
   AccountProblem,
   AccountStatusTag,
   AccountSummary,
+  ResolvedTokenExpiry,
   accountProblem,
   accountStatusTag,
+  isTokenExpiryWarning,
+  providerDisplayName,
+  resolveTokenExpiry,
+  resolveTokenStatus,
 } from '../account.model';
+import { TokenExpiryComponent } from '../token-expiry/token-expiry';
 import { resolveHost, sortNamespaces } from '../../account-label.util';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
@@ -31,12 +37,15 @@ interface AccountRowView {
   readonly hiddenCount: number;
   readonly status: AccountStatusTag | null;
   readonly problem: AccountProblem | null;
+  /** The muted expiry line: shown for a present token whose expiry needs no warning. */
+  readonly expiryLine: ResolvedTokenExpiry | null;
+  readonly providerName: string;
 }
 
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ProviderIconComponent, SpinnerComponent],
+  imports: [ProviderIconComponent, SpinnerComponent, TokenExpiryComponent],
   template: `
     @if (error()) {
       <div class="account-list__error" role="alert">
@@ -99,6 +108,9 @@ interface AccountRowView {
                   >{{ expanded ? 'Show fewer' : '+' + row.hiddenCount + ' more' }}</button>
                 }
               </p>
+              @if (row.expiryLine; as expiry) {
+                <p class="account-list__expiry"><fd-token-expiry [expiry]="expiry" [providerName]="row.providerName" /></p>
+              }
             </div>
 
             <div class="account-list__side">
@@ -148,7 +160,7 @@ interface AccountRowView {
                 role="group"
                 [attr.aria-label]="'Token status for ' + row.account.name"
               >
-                <p class="account-list__problem-text">{{ problem.message }}</p>
+                <p class="account-list__problem-text">@if (problem.expiry; as expiry) {<span class="sr-only">Warning: </span><fd-token-expiry [expiry]="expiry" [providerName]="row.providerName" />. }{{ problem.message }}</p>
                 <div class="account-list__problem-actions">
                   <button
                     type="button"
@@ -179,6 +191,7 @@ export class AccountListComponent {
   protected readonly _rows: Signal<AccountRowView[]> = computed(() =>
     this.accounts().map(account => {
       const namespaces = sortNamespaces(account.namespaces);
+      const expiry = resolveTokenExpiry(account.tokenExpiry);
       return {
         account,
         host: resolveHost(account.baseUrl),
@@ -187,6 +200,8 @@ export class AccountListComponent {
         hiddenCount: Math.max(0, namespaces.length - VISIBLE_NAMESPACE_COUNT),
         status: accountStatusTag(account),
         problem: accountProblem(account),
+        expiryLine: resolveTokenStatus(account) === 'present' && !isTokenExpiryWarning(expiry) ? expiry : null,
+        providerName: providerDisplayName(account.providerType),
       };
     }),
   );

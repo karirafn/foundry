@@ -98,6 +98,52 @@ public sealed class ClarificationLog
     }
 
     [Fact]
+    public void WhenARoundWasAnsweredByAPush_TellsTheRunToReviewThePushedCommits()
+    {
+        // Arrange
+        Clarification answeredByPush =
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.BranchUpdated("aaa111", "bbb222")]), AskedAt.AddHours(1));
+
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Continuation("feat/1-fix"), [answeredByPush]);
+
+        // Assert
+        prompt.ShouldContain(
+            "Someone pushed to the branch after the question was posted: aaa111..bbb222. Review those commits before continuing.");
+    }
+
+    [Fact]
+    public void WhenARoundWasAnsweredByRecreatingTheBranch_SaysWhereItWasRecreated()
+    {
+        // Arrange
+        Clarification answeredByRecreation =
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.BranchUpdated(null, "bbb222")]), AskedAt.AddHours(1));
+
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Continuation("feat/1-fix"), [answeredByRecreation]);
+
+        // Assert
+        prompt.ShouldContain("The branch was recreated at bbb222 after the question was posted.");
+    }
+
+    [Fact]
+    public void WhenARoundWasContinuedWithoutAnswer_TellsTheRunToUseItsJudgment()
+    {
+        // Arrange
+        Clarification continued =
+            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+                .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3));
+
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Fresh("feat/1-fix"), [continued]);
+
+        // Assert
+        prompt.ShouldContain("No answer arrived; the operator chose to continue. Use your judgment.");
+    }
+
+    [Fact]
     public void WhenARoundIsUnanswered_SaysNoInputArrived()
     {
         // Act

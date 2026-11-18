@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -112,7 +114,9 @@ public sealed class WhenAccountNameIsDuplicate : IAsyncDisposable
                 Kind: ValidateToken.Kinds.Authenticated,
                 AccountName: accountName,
                 MissingScopes: [],
-                DetectedProvider: null);
+                DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

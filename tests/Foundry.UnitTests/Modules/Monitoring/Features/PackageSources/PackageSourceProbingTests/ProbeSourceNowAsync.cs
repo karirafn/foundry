@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Shared;
@@ -28,6 +29,7 @@ public sealed class ProbeSourceNowAsync : IAsyncDisposable
     private readonly ProbeDueAsync.RecordingProber _prober = new();
     private readonly ProbeDueAsync.SlugCredentialResolver _resolver = new();
     private readonly CapturingSystemNotificationBroadcaster _broadcaster = new();
+    private readonly CapturingDomainEventDispatcher _dispatcher = new();
 
     public ProbeSourceNowAsync()
     {
@@ -47,10 +49,10 @@ public sealed class ProbeSourceNowAsync : IAsyncDisposable
         new(new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options);
 
     private PackageSourceProbing CreateSut() =>
-        new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), _broadcaster, NullLogger<PackageSourceProbing>.Instance);
+        new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), new PackageSourceVerdictPublisher(_dispatcher, _broadcaster, NullLogger<PackageSourceVerdictPublisher>.Instance), NullLogger<PackageSourceProbing>.Instance);
 
     private static GitLabCredential Account(string name) =>
-        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), "account-token", BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken("account-token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
     private async Task<MonitoredRepository> StoredRepositoryAsync(string slug, Credential account, params string[] sourceUrls)
     {
@@ -164,5 +166,45 @@ public sealed class ProbeSourceNowAsync : IAsyncDisposable
 
         // Assert
         _broadcaster.SentNotifications.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenNoVerdictChangesReadability_StillDispatchesTheReadabilityEventForTheSource()
+    {
+        // Arrange: a bad registered credential moves the verdict from Unchecked to Unreadable, which is no flip, but
+        // the declaring repositories now read the source with it.
+        await StoredRepositoryAsync("group/app", Account("deploy-bot"), GroupSourceUrl);
+        PackageSource source = await StoredSourceAsync(GroupSourceUrl, s => s.SetCredential("ci-reader", "bad-token", Now));
+        _prober.Verdicts[GroupSourceUrl] = new PackageSourceVerdict.Unreadable(401, "service index returned 401");
+
+        // Act
+        await CreateSut().ProbeSourceNowAsync(source.Id, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBe([new PackageSourceReadabilityChanged(source.Id, source.ServiceIndexUrl)]);
+    }
+
+    [Fact]
+    public async Task WhenAVerdictChangesReadability_DispatchesTheReadabilityEventOnce()
+    {
+        // Arrange
+        await StoredRepositoryAsync("group/app", Account("deploy-bot"), GroupSourceUrl);
+        PackageSource source = await StoredSourceAsync(GroupSourceUrl, s => s.SetCredential("ci-reader", "registered-token", Now));
+
+        // Act
+        await CreateSut().ProbeSourceNowAsync(source.Id, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBe([new PackageSourceReadabilityChanged(source.Id, source.ServiceIndexUrl)]);
+    }
+
+    [Fact]
+    public async Task WhenTheSourceIsGone_DispatchesNothing()
+    {
+        // Act
+        await CreateSut().ProbeSourceNowAsync(PackageSourceId.New(), Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
 }

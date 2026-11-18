@@ -260,6 +260,19 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("token_checked_at");
 
+                    b.Property<DateTimeOffset?>("_tokenExpiresAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("token_expires_at");
+
+                    b.Property<string>("_tokenExpiryKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("not_checked")
+                        .HasColumnName("token_expiry_kind");
+
                     b.Property<DateTimeOffset?>("_tokenInvalidSince")
                         .HasColumnType("TEXT")
                         .HasColumnName("token_invalid_since");
@@ -328,6 +341,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("baseline_body_hash");
 
+                    b.Property<string>("BaselineHead")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("baseline_head");
+
                     b.Property<string>("PendingBodyHash")
                         .HasColumnType("TEXT")
                         .HasColumnName("pending_body_hash");
@@ -335,6 +352,14 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("PendingBodySeenAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("pending_body_first_seen_at");
+
+                    b.Property<DateTimeOffset?>("PendingHeadSeenAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_head_first_seen_at");
+
+                    b.Property<string>("PendingHeadSha")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_head_sha");
 
                     b.Property<string>("Wait")
                         .IsRequired()
@@ -707,6 +732,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");
 
+                    b.Property<int>("AwaitingInputReminderDelayHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(72)
+                        .HasColumnName("awaiting_input_reminder_delay_hours");
+
                     b.Property<int>("BackstopIntervalMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
@@ -926,6 +957,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("published_head");
 
+                    b.Property<bool>("RefusesNeedsInput")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("refuses_needs_input");
+
                     b.Property<string>("RevertedFiles")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1095,6 +1132,12 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 
+                    b.Property<bool>("ContinuedWithoutAnswer")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("continued_without_answer");
+
                     b.ToTable(t =>
                         {
                             t.HasCheckConstraint("ck_issues_awaiting_input_fields", "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
@@ -1149,6 +1192,13 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(true)
                         .HasColumnType("TEXT")
                         .HasColumnName("question_post");
+
+                    b.Property<string>("Reminder")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .IsUnicode(true)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("question_reminder");
 
                     b.Property<string>("ResumeTarget")
                         .IsRequired()

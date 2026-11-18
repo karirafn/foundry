@@ -79,7 +79,9 @@ public static class MonitoringModule
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddTransient<IPackageSourceProber, PackageSourceProber>();
         services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
+        services.AddScoped<PackageSourceVerdictPublisher>();
         services.AddScoped<PackageSourceProbing>();
+        services.AddDomainEventHandler<PackageSourceReadabilityChanged, PackageSourceReadabilityChangedHandler>();
         services.TryAddSingleton<PackageSourceProbeGate>();
         services.TryAddSingleton<PackageSourceProbeRequests>();
         services.AddHostedService<PackageSourceProbeService>();
@@ -96,6 +98,7 @@ public static class MonitoringModule
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<IAccountTokenValidator, AccountTokenValidator>();
         services.AddScoped<AccountTokenVerdicts>();
+        services.AddHostedService<AccountTokenExpiryBackfillService>();
         services.AddScoped<IAccountTokenHealthQueries, AccountTokenHealthQueries>();
         services.AddDomainEventHandler<CredentialTokenInvalidated, AccountTokenBroadcastHandler>();
         services.AddDomainEventHandler<CredentialTokenRevalidated, AccountTokenBroadcastHandler>();
@@ -155,7 +158,6 @@ public static class MonitoringModule
         services.AddScoped<WebhookIngress>();
         services.AddScoped<ReceiveGitHubWebhook.Handler>();
         services.AddScoped<ReceiveGitLabWebhook.Handler>();
-        services.AddScoped<BranchPushPublisher>();
         services.AddScoped<IWebhookStatusQueries, WebhookStatusQueries>();
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
         services.AddScoped<WebhookRegistrar>();

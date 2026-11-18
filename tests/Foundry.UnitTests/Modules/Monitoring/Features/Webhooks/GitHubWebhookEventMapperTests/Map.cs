@@ -17,7 +17,8 @@ public sealed class Map
 
     // Issue 10 is tracked (detected) and blocked by untracked issue 77; 20 is in review on PR 21 and
     // blocks tracked issue 30; 30 is checks-pending on PR 31; 40 awaits input on its own thread;
-    // 50 awaits input on PR 51; 60 is in review with checks that are not passed on PR 61.
+    // 50 awaits input on PR 51 of branch feat/50-revise; 70 awaits input on its own thread with commits on
+    // feat/70-continue; 60 is in review with checks that are not passed on PR 61.
     private static readonly WebhookTrackingContext Tracked = new(
         new HashSet<int> { 10, 20, 30, 40, 50, 60 },
         [
@@ -26,7 +27,11 @@ public sealed class Map
         ],
         [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)],
         new HashSet<int> { 77, 20 },
-        [new AwaitingInputThread(40, null), new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51")]);
+        [
+            new AwaitingInputThread(40, null, null),
+            new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51", "feat/50-revise"),
+            new AwaitingInputThread(70, null, "feat/70-continue"),
+        ]);
 
     private static NudgeKey? MapEvent(string eventName, string json)
     {
@@ -250,7 +255,6 @@ public sealed class Map
 
     [Theory]
     [InlineData("ping")]
-    [InlineData("push")]
     [InlineData("star")]
     public void WhenEventMapsToNoPass_ReturnsNull(string eventName)
     {
@@ -337,5 +341,29 @@ public sealed class Map
     public void NeedsBlockers_IsTrueOnlyForIssuesEvents(string eventName, bool expected)
     {
         GitHubWebhookEventMapper.NeedsBlockers(eventName).ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData("refs/heads/feat/50-revise", 50)]
+    [InlineData("refs/heads/feat/70-continue", 70)]
+    public void WhenPushMovesTheResumeBranchOfAnAwaitingInputIssue_NudgesItsAwaitingInputPass(string pushedRef, int issueNumber)
+    {
+        MapEvent("push", $$"""{"ref":"{{pushedRef}}","before":"6113728f27ae82c7b1a177c8d03f9e96e0adf246","after":"0000000000000000000000000000000000000000"}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, issueNumber));
+    }
+
+    [Theory]
+    [InlineData("refs/heads/main")]
+    [InlineData("refs/heads/feat/20-thing")]
+    [InlineData("refs/tags/feat/70-continue")]
+    public void WhenPushMovesNoAwaitingInputIssuesBranch_IsDropped(string pushedRef)
+    {
+        MapEvent("push", $$"""{"ref":"{{pushedRef}}"}""").ShouldBeNull();
+    }
+
+    [Fact]
+    public void NeedsTrackingContext_IsTrueForAPush()
+    {
+        GitHubWebhookEventMapper.NeedsTrackingContext("push").ShouldBeTrue();
     }
 }

@@ -6,8 +6,11 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
-/// <summary>The identity a validated token authenticates as, ready to set on an account.</summary>
-internal sealed record ResolvedTokenIdentity(AccountName Name);
+/// <summary>
+/// The identity a validated token authenticates as, and the expiry the provider reported for it, ready
+/// to set on an account.
+/// </summary>
+internal sealed record ResolvedTokenIdentity(AccountName Name, TokenExpiry TokenExpiry);
 
 /// <summary>
 /// Turns a token-validation response into the identity an account takes from it. Shared by account
@@ -31,7 +34,7 @@ internal static class TokenIdentityResolution
 
         return AccountName.Create(resolvedName) switch
         {
-            Result<AccountName>.Success name => new ResolvedTokenIdentity(name.Value),
+            Result<AccountName>.Success name => new ResolvedTokenIdentity(name.Value, response.Expiry),
             Result<AccountName>.Failure failure => Result<ResolvedTokenIdentity>.Fail(failure.Error),
             _ => throw new UnreachableException("Unhandled Result<AccountName> variant."),
         };

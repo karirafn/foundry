@@ -29,6 +29,13 @@ public sealed class AwaitingInputIssueConfiguration : IEntityTypeConfiguration<A
             .HasColumnType("TEXT")
             .HasColumnName("question_post");
 
+        builder.Property(i => i.Reminder)
+            .HasConversion(AwaitingInputJsonConversion.QuestionReminderConverter, AwaitingInputJsonConversion.QuestionReminderComparer)
+            .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
+            .HasColumnType("TEXT")
+            .HasColumnName("question_reminder");
+
         builder.Ignore(i => i.Questions);
     }
 }

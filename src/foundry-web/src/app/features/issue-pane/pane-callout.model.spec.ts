@@ -34,6 +34,7 @@ function detail(state: IssueDetail['state'], details: Partial<IssueStateDetails>
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     author: 'dev',
@@ -59,6 +60,7 @@ function summary(overrides: Partial<IssueSummary> = {}): IssueSummary {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -322,6 +324,7 @@ describe('buildCallout', () => {
             commentUrl: 'https://github.com/acme/api/issues/42#c1',
             postFailureReason: null,
             nextPostAttemptAt: null,
+            reminderSentAt: null,
             resumeTarget: 'retriage',
           },
         }),
@@ -348,7 +351,7 @@ describe('buildCallout', () => {
           ariaLabel: 'View the questions on issue #42',
         },
       ]);
-      expect(callout.actions).toEqual([]);
+      expect(callout.actions).toEqual(['continue_without_answer']);
     });
 
     it('asks for answers to open questions, saying when posting them failed', () => {
@@ -362,6 +365,7 @@ describe('buildCallout', () => {
             commentUrl: null,
             postFailureReason: 'rate limited',
             nextPostAttemptAt: null,
+            reminderSentAt: null,
             resumeTarget: 'revision',
           },
         }),
@@ -379,6 +383,31 @@ describe('buildCallout', () => {
       expect(callout.list?.items[0].detail).toBeNull();
       expect(callout.notes).toEqual(['Posting the questions failed: rate limited.']);
       expect(callout.links).toEqual([]);
+      expect(callout.actions).toEqual(['retry_post', 'continue_without_answer']);
+    });
+
+    it('says when the reminder was posted', () => {
+      // Act
+      const callout = buildCallout(
+        detail('awaiting_input', {
+          awaitingInput: {
+            questions: [{ question: 'Which API?', context: '' }],
+            postStatus: 'posted',
+            postedAt: '2026-02-01T12:00:00Z',
+            commentUrl: null,
+            postFailureReason: null,
+            nextPostAttemptAt: null,
+            resumeTarget: 'fresh',
+            reminderSentAt: '2026-02-04T12:00:00Z',
+          },
+        }),
+        null,
+        null,
+        null,
+      );
+
+      // Assert
+      expect(callout.notes[1]).toMatch(new RegExp(`^Reminder posted ${MEDIUM_DATE.source}\\.$`));
     });
 
     it('shows a failed triage with its failure chip and reason, offering Retry triage and Skip triage', () => {

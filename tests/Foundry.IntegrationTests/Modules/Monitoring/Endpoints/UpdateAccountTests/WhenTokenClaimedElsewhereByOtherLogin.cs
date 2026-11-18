@@ -237,7 +237,9 @@ public sealed class WhenTokenClaimedElsewhereByOtherLogin : IAsyncDisposable
                 Kind: ValidateToken.Kinds.Authenticated,
                 AccountName: accountName,
                 MissingScopes: [],
-                DetectedProvider: null);
+                DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

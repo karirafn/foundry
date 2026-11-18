@@ -133,7 +133,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            string.Concat("ghp_", "rejected"),
+            new IssuedToken(string.Concat("ghp_", "rejected"), new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
         return credential;
@@ -178,7 +178,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo("owner/repo", new WriteProbeVerdict.Denied());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -201,7 +201,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Denied());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -222,7 +222,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Unknown());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -242,7 +242,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Unknown());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         TrackingProviderFactory trackingFactory = new();
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -264,7 +264,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -285,7 +285,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // NeverCalledWriteProber throws if invoked — proves no write probe was issued
@@ -308,7 +308,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -329,7 +329,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -350,7 +350,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -372,7 +372,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -390,7 +390,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     private const string OtherHostSourceUrl = "https://nuget.pkg.github.com/owner/index.json";
 
     private static GitHubCredential CreateUsableCredential() =>
-        GitHubCredential.Create(AccountName.Create("test").ValueOrThrow(), "token", BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential.Create(AccountName.Create("test").ValueOrThrow(), new IssuedToken("token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
 
     private static MonitoredRepository CreateRepoDeclaring(params string[] sourceUrls)
     {

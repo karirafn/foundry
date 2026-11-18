@@ -14,7 +14,7 @@ public sealed class ResolveCoveringNamespace
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("my-org").ValueOrThrow(),
-            "ghp_token",
+            new IssuedToken("ghp_token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
         credential.SetNamespaces(namespaceValues.Select(v => Namespace.Create(v).ValueOrThrow()));

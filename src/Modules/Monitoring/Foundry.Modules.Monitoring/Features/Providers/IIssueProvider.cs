@@ -43,6 +43,19 @@ internal interface IIssueProvider
         CancellationToken cancellationToken)
         => Task.FromResult(Result<IssueStatus>.Fail(TrackerReadErrors.NotSupported()));
 
+    /// <summary>
+    /// Reads where <paramref name="branchName"/> points: <see cref="BranchHead.Present"/> with its head commit, or
+    /// <see cref="BranchHead.Absent"/> when the provider reports the branch missing (404). Any other non-success
+    /// response is a failed read.
+    /// </summary>
+    /// <remarks>Providers without a branch-head read keep this default, which fails with
+    /// <see cref="TrackerReadErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<BranchHead>> GetBranchHeadAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<BranchHead>.Fail(TrackerReadErrors.NotSupported()));
+
     Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
         RepositorySlug slug,
         string pullRequestUrl,

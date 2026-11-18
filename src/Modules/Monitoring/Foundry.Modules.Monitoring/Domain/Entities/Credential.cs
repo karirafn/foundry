@@ -22,6 +22,10 @@ public abstract class Credential : AggregateRoot<CredentialId>
     private DateTimeOffset? _tokenInvalidSince;
     private DateTimeOffset? _tokenCheckedAt;
 
+    // Persisted as token_expiry_kind / token_expires_at; the date is set exactly when the kind is "on".
+    private string _tokenExpiryKind = TokenExpiryKinds.NotChecked;
+    private DateTimeOffset? _tokenExpiresAt;
+
     protected Credential(CredentialId id) : base(id)
     {
     }
@@ -82,11 +86,56 @@ public abstract class Credential : AggregateRoot<CredentialId>
         TokenValidity is TokenValidity.Invalid invalid && now - invalid.LastCheckedAt >= TokenRecheckCooldown;
 
     /// <summary>
-    /// Sets a new account token. The provider has not refused a new token, so the account becomes Valid.
+    /// The account token's expiry as read from the provider when the token was set. It changes only
+    /// together with the token; an account with no token has <see cref="TokenExpiry.NotChecked"/>.
     /// </summary>
-    private protected void SetAccountToken(string token)
+    public TokenExpiry TokenExpiry
     {
-        Token = new ProviderToken.Present(token);
+        get => _tokenExpiryKind switch
+        {
+            TokenExpiryKinds.On when _tokenExpiresAt is { } expiresAt => new TokenExpiry.On(expiresAt),
+            TokenExpiryKinds.Never => new TokenExpiry.Never(),
+            TokenExpiryKinds.Unavailable => new TokenExpiry.Unavailable(),
+            _ => new TokenExpiry.NotChecked(),
+        };
+        private set
+        {
+            (_tokenExpiryKind, _tokenExpiresAt) = value switch
+            {
+                TokenExpiry.On on => (TokenExpiryKinds.On, on.ExpiresAt),
+                TokenExpiry.Never => (TokenExpiryKinds.Never, (DateTimeOffset?)null),
+                TokenExpiry.Unavailable => (TokenExpiryKinds.Unavailable, null),
+                TokenExpiry.NotChecked => (TokenExpiryKinds.NotChecked, null),
+                _ => throw new UnreachableException($"Unhandled TokenExpiry variant: {value.GetType().Name}"),
+            };
+        }
+    }
+
+    /// <summary>
+    /// Records the expiry read for the current token of an account saved before token expiry was tracked.
+    /// It fills in only an expiry that is still <see cref="TokenExpiry.NotChecked"/>: a known expiry was
+    /// read with its token and cannot change without the token changing.
+    /// </summary>
+    public void RecordTokenExpiry(TokenExpiry expiry)
+    {
+        ArgumentNullException.ThrowIfNull(expiry);
+
+        if (TokenExpiry is not TokenExpiry.NotChecked)
+        {
+            return;
+        }
+
+        TokenExpiry = expiry;
+    }
+
+    /// <summary>
+    /// Sets a new account token and its expiry. The provider has not refused a new token, so the
+    /// account becomes Valid.
+    /// </summary>
+    private protected void SetAccountToken(IssuedToken token)
+    {
+        Token = new ProviderToken.Present(token.Value);
+        TokenExpiry = token.Expiry;
         TokenVersion++;
         MarkTokenValid();
     }

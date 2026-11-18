@@ -36,6 +36,9 @@ public sealed class RunAsync : IAsyncDisposable
 {
     private const string PrUrl = "https://github.com/owner/repo/pull/7";
     private const string IssueUrl = "https://github.com/owner/repo/issues/1";
+    private const string BranchName = "feat/1-test";
+    private const string PostedHead = "aaa111";
+    private const string PushedHead = "bbb222";
 
     private static readonly DateTimeOffset PostedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 
@@ -124,12 +127,13 @@ public sealed class RunAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
     }
 
-    private void SeedWatch(int issueNumber, string? baselineBody)
+    private void SeedWatch(int issueNumber, string? baselineBody, BranchHead? baselineHead = null)
     {
         _dbContext.Set<IssueWatch>().Add(IssueWatch.Start(
             _repository.Id,
             issueNumber,
-            baselineBody is null ? null : IssueBodyHash.Of(baselineBody)));
+            baselineBody is null ? null : IssueBodyHash.Of(baselineBody),
+            baselineHead));
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
     }
@@ -728,6 +732,390 @@ public sealed class RunAsync : IAsyncDisposable
             () => watch.PendingBodyChange.ShouldBeNull());
     }
 
+    private static readonly DateTimeOffset ReminderDueAt = PostedAt.AddDays(3);
+
+    [Fact]
+    public async Task WhenPostedForAContinuation_StartsAWatchWithTheBranchHeadReadInThatPass()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputWithoutPullRequest(branchHasCommits: true));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(556).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.ShouldSatisfyAllConditions(
+            () => watch.BaselineHead.ShouldBe(new BranchHead.Present(PostedHead)),
+            () => watch.PendingHeadChange.ShouldBeNull(),
+            () => _provider.BranchHeadReads.ShouldBe([BranchName]));
+    }
+
+    [Fact]
+    public async Task WhenPostedForARevision_StartsAWatchWithThePullRequestHeadWithoutABranchRead()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInput());
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(555).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().BaselineHead.ShouldBe(new BranchHead.Present(PostedHead));
+        _provider.BranchHeadReads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPostedForAFreshRun_WatchesNoHead()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputWithoutPullRequest(branchHasCommits: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(556).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().BaselineHead.ShouldBeNull();
+        _provider.BranchHeadReads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAContinuationsBranchIsPushed_RecordsItAsPendingAndNudgesWhenItSettles()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody, new BranchHead.Present(PostedHead));
+        _provider.BranchHead = new BranchHead.Present(PushedHead);
+
+        // Act
+        await RunStepAtAsync(Now);
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().PendingHeadChange.ShouldBe(new PendingHeadChange(PushedHead, Now));
+        _dispatcher.Events.ShouldBeEmpty();
+        ReadNudge().ShouldNotBeNull().NotBefore.ShouldBe(Now + ActionableFeedbackPolicy.QuietPeriod);
+    }
+
+    [Fact]
+    public async Task WhenAContinuationsPushOutlastsTheQuietPeriod_InputArrivesAsABranchUpdateAndTheWatchIsDeleted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody, new BranchHead.Present(PostedHead));
+        _provider.BranchHead = new BranchHead.Present(PushedHead);
+        DateTimeOffset firstSeen = Now;
+        await RunStepAtAsync(firstSeen);
+
+        // Act
+        await RunStepAtAsync(firstSeen.AddMinutes(2));
+
+        // Assert
+        AwaitingInputArrived arrived = _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        arrived.ShouldSatisfyAllConditions(
+            () => arrived.Input.ShouldBe(new ClarificationInput([new InputPart.BranchUpdated(PostedHead, PushedHead)])),
+            () => arrived.ArrivedAt.ShouldBe(firstSeen));
+        LoadWatch().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenARevisionsPullRequestHeadMoves_InputArrivesAsABranchUpdateOnceItSettles()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        SeedWatch(issueNumber: 1, baselineBody: null, new BranchHead.Present(PostedHead));
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: PushedHead);
+        DateTimeOffset firstSeen = Now;
+        await RunStepAtAsync(firstSeen);
+        _dispatcher.Events.ShouldBeEmpty();
+
+        // Act
+        await RunStepAtAsync(firstSeen.AddMinutes(2));
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input
+            .ShouldBe(new ClarificationInput([new InputPart.BranchUpdated(PostedHead, PushedHead)]));
+        _provider.BranchHeadReads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenARevisionsPullRequestStatusHasNoHead_NothingIsObserved()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        SeedWatch(issueNumber: 1, baselineBody: null, baselineHead: null);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null);
+
+        // Act
+        await RunStepAtAsync(Now);
+
+        // Assert
+        LoadWatch().ShouldNotBeNull().BaselineHead.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAPushAndACommentSettle_ExactlyOneRoundArrivesWithBothParts()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody, new BranchHead.Present(PostedHead));
+        DateTimeOffset start = Now;
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithBody("I pushed the workflow change.").WithCreatedAt(start.AddSeconds(-30)).Build(),
+        ];
+        _provider.BranchHead = new BranchHead.Present(PushedHead);
+        await RunStepAtAsync(start);
+        _dispatcher.Events.ShouldBeEmpty();
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(2));
+
+        // Assert
+        AwaitingInputArrived arrived = _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        arrived.ShouldSatisfyAllConditions(
+            () => arrived.Input.ShouldBe(new ClarificationInput(
+                [new InputPart.Comments("I pushed the workflow change."), new InputPart.BranchUpdated(PostedHead, PushedHead)])),
+            () => arrived.ArrivedAt.ShouldBe(start));
+    }
+
+    [Fact]
+    public async Task WhenAPushIsForcedBackToTheBaselineWithinTheQuietPeriod_NoInputArrives()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody, new BranchHead.Present(PostedHead));
+        DateTimeOffset start = Now;
+        _provider.BranchHead = new BranchHead.Present(PushedHead);
+        await RunStepAtAsync(start);
+        _provider.BranchHead = new BranchHead.Present(PostedHead);
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(1));
+        await RunStepAtAsync(start.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().PendingHeadChange.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheBranchIsDeletedWhileWaiting_NoInputArrives()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody, new BranchHead.Present(PostedHead));
+        _provider.BranchHead = new BranchHead.Absent();
+        DateTimeOffset start = Now;
+        await RunStepAtAsync(start);
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().PendingHeadChange.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheHeadReadFailedAtPost_PostsWithoutABaselineAndTheNextReadRecordsItWithoutInput()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputWithoutPullRequest(branchHasCommits: true));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(556).ValueOrThrow());
+        _provider.BranchHead = null;
+        await RunStepAtAsync(Now);
+        LoadWatch().ShouldNotBeNull().BaselineHead.ShouldBeNull();
+        _provider.BranchHead = new BranchHead.Present(PushedHead);
+
+        // Act
+        await RunStepAtAsync(Now.AddMinutes(5));
+
+        // Assert
+        IssueWatch watch = LoadWatch().ShouldNotBeNull();
+        watch.BaselineHead.ShouldBe(new BranchHead.Present(PushedHead));
+        watch.PendingHeadChange.ShouldBeNull();
+        _dispatcher.Events.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheHeadReadFailsWhileAPushIsPending_NoInputArrives()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        SeedWatch(issueNumber: 1, baselineBody: _provider.IssueBody, new BranchHead.Present(PostedHead));
+        DateTimeOffset start = Now;
+        _provider.BranchHead = new BranchHead.Present(PushedHead);
+        await RunStepAtAsync(start);
+        _provider.BranchHead = null;
+
+        // Act
+        await RunStepAtAsync(start.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().PendingHeadChange.ShouldBe(new PendingHeadChange(PushedHead, start));
+    }
+
+    [Fact]
+    public async Task WhenTheReminderDelayHasPassedWithNoInput_PostsOneReminderInTheQuestionsThreadAndRegistersIt()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(1));
+
+        // Assert
+        QuestionReminder.Sent sent = LoadAwaiting().Reminder.ShouldBeOfType<QuestionReminder.Sent>();
+        sent.ShouldSatisfyAllConditions(
+            () => sent.CommentId.ShouldBe(777),
+            () => sent.SentAt.ShouldBe(ReminderDueAt.AddMinutes(1)),
+            () => _provider.PostedThreads.ShouldHaveSingleItem().ShouldBe(new CommentThread.PullRequest(PrUrl)),
+            () => _provider.PostedBodies.ShouldHaveSingleItem().ShouldContain("still waiting for input"),
+            () => _dbContext.Set<PostedComment>().ShouldHaveSingleItem().CommentId.Value.ShouldBe(777),
+            () => _dispatcher.Events.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenOnTheIssueThread_TheReminderGoesOnTheIssue()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        _provider.PostedThreads.ShouldHaveSingleItem().ShouldBe(new CommentThread.Issue(1));
+    }
+
+    [Fact]
+    public async Task WhenTheReminderWasSent_NoFurtherReminderIsPosted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddDays(7));
+
+        // Assert
+        _provider.PostedBodies.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenTheReminderDelayHasNotPassed_PostsNothing()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(-1));
+
+        // Assert
+        _provider.PostedThreads.ShouldBeEmpty();
+        LoadAwaiting().Reminder.ShouldBeOfType<QuestionReminder.Unsent>();
+    }
+
+    [Fact]
+    public async Task WhenInputArrivesOnceTheReminderIsDue_TheIssueResumesAndNoReminderIsPosted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres.").WithCreatedAt(PostedAt.AddMinutes(5)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        _provider.PostedThreads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAReplyIsStillInsideTheQuietPeriodOnceTheReminderIsDue_NoReminderIsPosted()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithBody("Use Postgres.").WithCreatedAt(ReminderDueAt.AddSeconds(-30)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        _provider.PostedThreads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheReminderPostFailsTransiently_ItRetriesWithTheQuestionPostsBackoffAndRegistersNothing()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        _provider.PostResult = Result<ProviderCommentId>.Fail(CommentPostErrors.Transient("503"));
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt);
+
+        // Assert
+        QuestionReminder.Failed failed = LoadAwaiting().Reminder.ShouldBeOfType<QuestionReminder.Failed>();
+        failed.ShouldSatisfyAllConditions(
+            () => failed.NextAttemptAt.ShouldBe(ReminderDueAt + QuestionPost.FirstRetryDelay),
+            () => _dbContext.Set<PostedComment>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenAReminderRetryIsNotDue_ReplyDetectionStillRuns()
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = Builder().AwaitingInputPosted(PostedAt, withPullRequest: false);
+        awaiting.RecordReminderPostFailed("503", transient: true, ReminderDueAt);
+        Seed(awaiting);
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres.").WithCreatedAt(ReminderDueAt.AddSeconds(10)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(5));
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem();
+        _provider.PostedThreads.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAReplyFollowsTheReminder_InputArrivesWithoutTheReminderComment()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(777).ValueOrThrow());
+        await RunStepAtAsync(ReminderDueAt);
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(777).WithAuthorLogin("operator").WithBody("Reminder").WithCreatedAt(ReminderDueAt).Build(),
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody("Use Postgres.").WithCreatedAt(ReminderDueAt.AddMinutes(1)).Build(),
+        ];
+
+        // Act
+        await RunStepAtAsync(ReminderDueAt.AddMinutes(10));
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input
+            .ShouldBe(ClarificationInput.FromComments("Use Postgres."));
+    }
+
     private sealed class ScriptedProvider : IIssueProvider
     {
         public bool IssueClosed { get; set; }
@@ -738,7 +1126,12 @@ public sealed class RunAsync : IAsyncDisposable
 
         public int IssueStatusReads { get; private set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: null);
+        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: PostedHead);
+
+        // The branch head a continuation's branch read returns; null makes the read fail.
+        public BranchHead? BranchHead { get; set; } = new BranchHead.Present(PostedHead);
+
+        public List<string> BranchHeadReads { get; } = [];
 
         public Result<ProviderCommentId> PostResult { get; set; } =
             Result<ProviderCommentId>.Fail(CommentPostErrors.Permanent("not scripted"));
@@ -772,6 +1165,17 @@ public sealed class RunAsync : IAsyncDisposable
             string pullRequestUrl,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<PullRequestStatus>.Ok(PullRequestStatus));
+
+        public Task<Result<BranchHead>> GetBranchHeadAsync(
+            RepositorySlug slug,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            BranchHeadReads.Add(branchName);
+            return Task.FromResult(BranchHead is { } head
+                ? Result<BranchHead>.Ok(head)
+                : Result<BranchHead>.Fail(new Error("Test.Unavailable", "503")));
+        }
 
         public Task<Result<ProviderCommentId>> PostCommentAsync(
             RepositorySlug slug,

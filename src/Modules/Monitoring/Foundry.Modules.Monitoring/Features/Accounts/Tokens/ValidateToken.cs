@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json.Serialization;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -31,15 +33,20 @@ internal static class ValidateToken
 
     internal sealed record Query(string Token, Uri ApiBaseUrl, string ProviderType) : IQuery<Response>;
 
+    /// <param name="Expiry">The expiry the provider reported, kept for the account the token is set on.</param>
+    /// <param name="TokenExpiry">The expiry as judged when the token was checked.</param>
     internal sealed record Response(
         string Kind,
         string? AccountName,
         IReadOnlyList<string> MissingScopes,
-        string? DetectedProvider);
+        string? DetectedProvider,
+        [property: JsonIgnore] Domain.ValueObjects.TokenExpiry Expiry,
+        TokenExpirySummary TokenExpiry);
 
     internal sealed class Handler(
         GitHubHttpClient gitHubHttpClient,
-        GitLabHttpClient gitLabHttpClient)
+        GitLabHttpClient gitLabHttpClient,
+        TimeProvider timeProvider)
         : IQueryHandler<Query, Response>
     {
         public async Task<Result<Response>> HandleAsync(Query query, CancellationToken cancellationToken)
@@ -49,47 +56,67 @@ internal static class ValidateToken
                 Result<TokenValidationOutcome> gitLabResult = await gitLabHttpClient.ValidateTokenAsync(
                     query.ApiBaseUrl, query.Token, cancellationToken);
                 return gitLabResult.Match(
-                    outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome)),
+                    outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome, timeProvider.GetUtcNow())),
                     error => Result<Response>.Fail(error));
             }
 
             Result<TokenValidationOutcome> gitHubResult = await gitHubHttpClient.ValidateTokenAsync(
                 query.ApiBaseUrl, query.Token, cancellationToken);
             return gitHubResult.Match(
-                outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome)),
+                outcome => Result<Response>.Ok(MapOutcomeToResponse(outcome, timeProvider.GetUtcNow())),
                 error => Result<Response>.Fail(error));
         }
 
-        private static Response MapOutcomeToResponse(TokenValidationOutcome outcome) =>
-            outcome switch
+        private static Response MapOutcomeToResponse(TokenValidationOutcome outcome, DateTimeOffset now)
+        {
+            TokenExpiry expiry = outcome switch
+            {
+                TokenValidationOutcome.AuthenticatedOutcome auth => auth.TokenExpiry,
+                TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => unverifiable.TokenExpiry,
+                _ => new TokenExpiry.NotChecked(),
+            };
+            TokenExpirySummary summary = TokenExpirySummaries.From(expiry, now);
+
+            return outcome switch
             {
                 TokenValidationOutcome.AuthenticatedOutcome auth => new Response(
                     Kind: Kinds.Authenticated,
                     AccountName: auth.AccountName,
                     MissingScopes: auth.MissingScopes,
-                    DetectedProvider: null),
+                    DetectedProvider: null,
+                    Expiry: expiry,
+                    TokenExpiry: summary),
                 TokenValidationOutcome.AuthenticationFailedOutcome => new Response(
                     Kind: Kinds.AuthenticationFailed,
                     AccountName: null,
                     MissingScopes: [],
-                    DetectedProvider: null),
+                    DetectedProvider: null,
+                    Expiry: expiry,
+                    TokenExpiry: summary),
                 TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => new Response(
                     Kind: Kinds.ScopesUnverifiable,
                     AccountName: unverifiable.AccountName,
                     MissingScopes: [],
-                    DetectedProvider: null),
+                    DetectedProvider: null,
+                    Expiry: expiry,
+                    TokenExpiry: summary),
                 TokenValidationOutcome.IdentityUnresolvedOutcome => new Response(
                     Kind: Kinds.IdentityUnresolved,
                     AccountName: null,
                     MissingScopes: [],
-                    DetectedProvider: null),
+                    DetectedProvider: null,
+                    Expiry: expiry,
+                    TokenExpiry: summary),
                 TokenValidationOutcome.ProviderMismatchOutcome mismatch => new Response(
                     Kind: Kinds.ProviderMismatch,
                     AccountName: null,
                     MissingScopes: [],
-                    DetectedProvider: mismatch.DetectedProvider),
+                    DetectedProvider: mismatch.DetectedProvider,
+                    Expiry: expiry,
+                    TokenExpiry: summary),
                 _ => throw new UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
             };
+        }
     }
 
     internal sealed record RequestBody(string Token, string BaseUrl, [property: JsonRequired] string ProviderType);

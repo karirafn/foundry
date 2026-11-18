@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { Subject, of } from 'rxjs';
 import { IssueDetail, IssueStateDetails } from '../../issues/issue.model';
-import { IssueService, TriageAction } from '../../issues/issue.service';
+import { IssueService, IssueAction } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { PaneAction } from '../pane-callout.model';
@@ -34,6 +34,7 @@ function issue(state: IssueDetail['state']): IssueDetail {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     author: 'dev',
@@ -81,14 +82,16 @@ function fakeIssueService() {
     retrying: signal(false),
     retryError: signal<string | null>(null),
     retrySuccess: signal<string | null>(null),
-    triageActionPending: signal<TriageAction | null>(null),
-    triageActionError: signal<string | null>(null),
-    triageActionSuccess: signal<string | null>(null),
+    issueActionPending: signal<IssueAction | null>(null),
+    issueActionError: signal<string | null>(null),
+    issueActionSuccess: signal<string | null>(null),
     retryIssue: vi.fn(),
     retryIssueFresh: vi.fn(),
     retryTriage: vi.fn(),
     skipTriage: vi.fn(),
     retriage: vi.fn(),
+    continueWithoutAnswer: vi.fn(),
+    retryQuestionPost: vi.fn(),
   };
 }
 
@@ -406,7 +409,7 @@ describe('PaneActionsComponent', () => {
       const { button, render, service } = setup('queued', ['retriage']);
 
       // Act
-      service.triageActionPending.set('retriage');
+      service.issueActionPending.set('retriage');
       render();
 
       // Assert
@@ -418,7 +421,7 @@ describe('PaneActionsComponent', () => {
       const { render, service, error } = setup('triage_failed', ['retry_triage', 'skip_triage']);
 
       // Act
-      service.triageActionError.set('Failed to retry triage.');
+      service.issueActionError.set('Failed to retry triage.');
       render();
 
       // Assert
@@ -435,7 +438,7 @@ describe('PaneActionsComponent', () => {
       confirm();
 
       // Act
-      service.triageActionSuccess.set('Re-triage queued. Issue status is updating.');
+      service.issueActionSuccess.set('Re-triage queued. Issue status is updating.');
       render();
 
       // Assert
@@ -448,7 +451,7 @@ describe('PaneActionsComponent', () => {
       button('Retry triage')!.click();
 
       // Act
-      service.triageActionSuccess.set('Triage queued again. Issue status is updating.');
+      service.issueActionSuccess.set('Triage queued again. Issue status is updating.');
       fixture.componentRef.setInput('detail', issue('triage_queued'));
       fixture.componentRef.setInput('actions', []);
       render();
@@ -458,6 +461,104 @@ describe('PaneActionsComponent', () => {
         'Triage queued again. Issue status is updating.',
       );
       expect(succeeded).toEqual(['retry_triage']);
+    });
+  });
+
+  describe('awaiting-input actions', () => {
+    it('retries the question post straight away, with no confirmation', () => {
+      // Arrange
+      const { button, openDialog, render, service } = setup('awaiting_input', ['retry_post', 'continue_without_answer']);
+
+      // Act
+      button('Retry post')!.click();
+      render();
+
+      // Assert
+      expect(service.retryQuestionPost).toHaveBeenCalledWith('abc');
+      expect(openDialog()).toBeNull();
+    });
+
+    it('confirms Continue without answer, saying the run cannot ask again, before continuing', () => {
+      // Arrange
+      const { button, render, openDialog, confirm, service } = setup('awaiting_input', ['continue_without_answer']);
+
+      // Act
+      button('Continue without answer')!.click();
+      render();
+      const text = openDialog()?.textContent ?? '';
+      confirm();
+
+      // Assert
+      expect(text).toContain('Continue #42 without an answer?');
+      expect(text).toContain('cannot ask again in that run');
+      expect(service.continueWithoutAnswer).toHaveBeenCalledWith('abc');
+    });
+
+    it('tells the Continue dialog of a triage question that the issue skips triage', () => {
+      // Arrange
+      const { fixture, button, render, openDialog } = setup('awaiting_input', ['continue_without_answer']);
+      fixture.componentRef.setInput('detail', {
+        ...issue('awaiting_input'),
+        stateDetails: {
+          ...stateDetails,
+          awaitingInput: {
+            questions: [{ question: 'Which API?', context: '' }],
+            postStatus: 'posted',
+            postedAt: '2026-01-01T00:00:00Z',
+            commentUrl: null,
+            postFailureReason: null,
+            nextPostAttemptAt: null,
+            resumeTarget: 'retriage',
+            reminderSentAt: null,
+          },
+        },
+      });
+      render();
+
+      // Act
+      button('Continue without answer')!.click();
+      render();
+
+      // Assert
+      expect(openDialog()?.textContent).toContain('as Skip triage does');
+    });
+
+    it('does not continue when the dialog is dismissed', () => {
+      // Arrange
+      const { button, render, dismiss, service } = setup('awaiting_input', ['continue_without_answer']);
+
+      // Act
+      button('Continue without answer')!.click();
+      render();
+      dismiss();
+
+      // Assert
+      expect(service.continueWithoutAnswer).not.toHaveBeenCalled();
+    });
+
+    it('shows Continuing… and disables both buttons while Continue is pending', () => {
+      // Arrange
+      const { button, render, service } = setup('awaiting_input', ['retry_post', 'continue_without_answer']);
+
+      // Act
+      service.issueActionPending.set('continue_without_answer');
+      render();
+
+      // Assert
+      expect(button('Continuing…')?.disabled).toBe(true);
+      expect(button('Retry post')?.disabled).toBe(true);
+    });
+
+    it('shows an awaiting-input action error in the alert', () => {
+      // Arrange
+      const { render, service, error } = setup('awaiting_input', ['continue_without_answer']);
+
+      // Act
+      service.issueActionError.set('This issue is no longer awaiting input.');
+      render();
+
+      // Assert
+      expect(error()).toBe('This issue is no longer awaiting input.');
     });
   });
 

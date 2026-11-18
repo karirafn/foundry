@@ -1,4 +1,4 @@
-import { CodeStep, IssueStage, IssueSummary } from '../issues/issue.model';
+import { CodeStep, IssueStage, IssueSummary, RunKind } from '../issues/issue.model';
 import { formatMergeSkippedReason } from '../issues/merge-outcome.format';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { getFailureCategoryDisplay } from '../../shared/utils/failure-category';
@@ -80,13 +80,13 @@ export type PipelineSlot =
 
 export interface PipelineItem extends ItemBase {
   readonly band: 'pipeline';
-  readonly role: WorkerRole;
+  readonly runKind: RunKind;
   readonly slot: PipelineSlot;
 }
 
 export interface BlockedItem extends ItemBase {
   readonly band: 'blocked';
-  readonly role: WorkerRole;
+  readonly runKind: RunKind;
 }
 
 export type BoardItem = NeedsItem | WorkerItem | StepItem | PipelineItem | BlockedItem;
@@ -109,7 +109,10 @@ export interface BoardBands {
   readonly steps: readonly StepItem[];
   readonly pipeline: readonly PipelineItem[];
   readonly blocked: readonly BlockedItem[];
-  /** Issues no band rule places (an unknown stage or an unknown combination of facts). */
+  /**
+   * Issues no band rule places: an unknown stage, an unknown combination of facts, or a pipeline or
+   * blocked issue without a known run kind.
+   */
   readonly unplaced: readonly IssueSummary[];
 }
 
@@ -401,14 +404,23 @@ export function buildBoardBands(
         }
         break;
       case 'blocked':
-        blocked.push({ band, issue, stage, role: roleFor(stage) });
+        // The tag names the run ahead; without a known run kind the row isn't guessed at.
+        if (issue.runKind === null) {
+          unplaced.push(issue);
+          break;
+        }
+        blocked.push({ band, issue, stage, runKind: issue.runKind });
         break;
       case 'pipeline':
+        if (issue.runKind === null) {
+          unplaced.push(issue);
+          break;
+        }
         pipeline.push({
           band,
           issue,
           stage,
-          role: roleFor(stage),
+          runKind: issue.runKind,
           slot: pipelineSlot(issue, positions),
         });
         break;

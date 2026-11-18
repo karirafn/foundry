@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -15,7 +17,7 @@ public sealed class TokenValidationOutcomeTests
         const string AccountName = "octocat";
 
         // Act
-        TokenValidationOutcome outcome = TokenValidationOutcome.Authenticated(AccountName);
+        TokenValidationOutcome outcome = TokenValidationOutcome.Authenticated(AccountName, new TokenExpiry.NotChecked());
 
         // Assert
         TokenValidationOutcome.AuthenticatedOutcome authenticated =
@@ -33,7 +35,7 @@ public sealed class TokenValidationOutcomeTests
         IReadOnlyList<string> missingScopes = ["repo", "workflow"];
 
         // Act
-        TokenValidationOutcome outcome = TokenValidationOutcome.Authenticated(AccountName, missingScopes);
+        TokenValidationOutcome outcome = TokenValidationOutcome.Authenticated(AccountName, new TokenExpiry.NotChecked(), missingScopes);
 
         // Assert
         TokenValidationOutcome.AuthenticatedOutcome authenticated =
@@ -60,7 +62,7 @@ public sealed class TokenValidationOutcomeTests
         const string AccountName = "octocat";
 
         // Act
-        TokenValidationOutcome outcome = TokenValidationOutcome.ScopesUnverifiable(AccountName);
+        TokenValidationOutcome outcome = TokenValidationOutcome.ScopesUnverifiable(AccountName, new TokenExpiry.NotChecked());
 
         // Assert
         TokenValidationOutcome.ScopesUnverifiableOutcome scopesUnverifiable =
@@ -101,9 +103,9 @@ public sealed class TokenValidationOutcomeTests
         // Arrange
         TokenValidationOutcome[] outcomes =
         [
-            TokenValidationOutcome.Authenticated("octocat"),
+            TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()),
             TokenValidationOutcome.AuthenticationFailed(),
-            TokenValidationOutcome.ScopesUnverifiable("octocat"),
+            TokenValidationOutcome.ScopesUnverifiable("octocat", new TokenExpiry.NotChecked()),
             TokenValidationOutcome.IdentityUnresolved(),
             TokenValidationOutcome.ProviderMismatch("gitlab"),
         ];

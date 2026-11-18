@@ -36,7 +36,7 @@ public sealed class SettleBodyChange
     public void WhenStartedForAQuestion_WatchesTheAwaitingInputWait()
     {
         // Act
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
 
         // Assert
         sut.Wait.ShouldBe(WatchedWait.AwaitingInput);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -110,9 +111,11 @@ internal sealed partial class GitLabHttpClient(
 
         using HttpResponseMessage selfResponse = await httpClient.SendAsync(selfRequest, cancellationToken);
 
+        // Group and project access tokens cannot read /self, so neither their scopes nor their expiry is known.
         if (!selfResponse.IsSuccessStatusCode)
         {
-            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(accountName));
+            return Result<TokenValidationOutcome>.Ok(
+                TokenValidationOutcome.ScopesUnverifiable(accountName, new TokenExpiry.Unavailable()));
         }
 
         RecordRestHeadroom(selfResponse);
@@ -130,7 +133,8 @@ internal sealed partial class GitLabHttpClient(
                 "GitLab token validation: failed to parse response body. Provider: gitlab, Host: {Host}, Status: {StatusCode}",
                 apiBaseUrl.Host,
                 (int)selfResponse.StatusCode);
-            return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(accountName));
+            return Result<TokenValidationOutcome>.Ok(
+                TokenValidationOutcome.ScopesUnverifiable(accountName, new TokenExpiry.Unavailable()));
         }
 
         HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
@@ -138,7 +142,38 @@ internal sealed partial class GitLabHttpClient(
             .Where(s => !granted.Contains(s))
             .ToList();
 
-        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(accountName, missing));
+        TokenExpiry tokenExpiry = dto is null ? new TokenExpiry.Unavailable() : ReadTokenExpiry(dto.ExpiresAt, apiBaseUrl);
+
+        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(accountName, tokenExpiry, missing));
+    }
+
+    /// <summary>
+    /// Maps <c>expires_at</c> from <c>/personal_access_tokens/self</c>. GitLab sends a date with no time,
+    /// and the token expires at midnight UTC on that date, so the date maps to its start: a day early,
+    /// never late. A null value means the token never expires.
+    /// </summary>
+    private TokenExpiry ReadTokenExpiry(JsonElement expiresAt, Uri apiBaseUrl)
+    {
+        if (expiresAt.ValueKind is JsonValueKind.Null)
+        {
+            return new TokenExpiry.Never();
+        }
+
+        if (expiresAt.ValueKind is JsonValueKind.String
+            && DateOnly.TryParseExact(
+                expiresAt.GetString(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out DateOnly date))
+        {
+            return new TokenExpiry.On(new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero));
+        }
+
+        logger.LogWarning(
+            "GitLab token validation: expires_at is not a yyyy-MM-dd date; expiry recorded as unavailable. Provider: gitlab, Host: {Host}",
+            apiBaseUrl.Host);
+        return new TokenExpiry.Unavailable();
     }
 
     public async Task<Result<IssueListing>> GetIssuesAsync(
@@ -633,6 +668,54 @@ internal sealed partial class GitLabHttpClient(
     }
 
     /// <summary>
+    /// Reads where <paramref name="branchName"/> points with <c>GET projects/:id/repository/branches/:branch</c>,
+    /// returning <c>commit.id</c>. GitLab answers 404 for a missing branch, which is <see cref="BranchHead.Absent"/>;
+    /// any other non-success response fails.
+    /// </summary>
+    public async Task<Result<BranchHead>> GetBranchHeadAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<BranchHead>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/repository/branches/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            RecordRestHeadroom(response);
+            return Result<BranchHead>.Ok(new BranchHead.Absent());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<BranchHead>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? sha = JsonSerializer.Deserialize<GitLabBranchDto>(body, JsonOptions)?.Commit?.Id;
+
+        return !string.IsNullOrWhiteSpace(sha)
+            ? Result<BranchHead>.Ok(new BranchHead.Present(sha))
+            : Result<BranchHead>.Fail(GitLabErrors.ProviderError("GitLab returned a branch without a commit id."));
+    }
+
+    /// <summary>
     /// Deletes <paramref name="branchName"/> from the project. Returns <c>true</c> when the branch
     /// was deleted and <c>false</c> when it was already absent (404), so a repeated discard is
     /// idempotent.
@@ -1088,7 +1171,10 @@ internal sealed partial class GitLabHttpClient(
         [property: JsonPropertyName("username")] string Username,
         [property: JsonPropertyName("login")] string Login);
 
-    private sealed record GitLabTokenSelfDto([property: JsonPropertyName("scopes")] IReadOnlyList<string> Scopes);
+    // ExpiresAt is a JsonElement so an explicit null (never expires) is told apart from a missing field.
+    private sealed record GitLabTokenSelfDto(
+        [property: JsonPropertyName("scopes")] IReadOnlyList<string> Scopes,
+        [property: JsonPropertyName("expires_at")] JsonElement ExpiresAt);
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
 
@@ -1108,6 +1194,10 @@ internal sealed partial class GitLabHttpClient(
         int? ProjectId);
 
     private sealed record GitLabIssueStateDto(string? State, string? Description);
+
+    private sealed record GitLabBranchDto(GitLabBranchCommitDto? Commit);
+
+    private sealed record GitLabBranchCommitDto(string? Id);
 
     private sealed record GitLabMergeRequestWithPipelineDto(
         string State,

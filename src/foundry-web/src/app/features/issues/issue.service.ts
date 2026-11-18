@@ -11,7 +11,9 @@ import {
   LIVE_STATES,
   PublishPhase,
   QUEUED_TIER_STATES,
+  RunKind,
 } from './issue.model';
+import { RUN_KIND_LABELS } from '../../shared/utils/run-kind';
 import type { TokenTotal } from '../workers/run-totals.model';
 import { RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
 import { components } from '../../api/schema';
@@ -33,16 +35,19 @@ const RETRY_FRESH_BRANCH_ERROR = 'Could not delete the branch on the provider. T
 const RETRY_FRESH_SUCCESS = 'Branch discarded. Issue queued fresh; status is updating.';
 const TRIAGE_FAILED_CONFLICT_ERROR = 'This issue is no longer in Triage failed.';
 
-export type TriageAction = 'retry_triage' | 'skip_triage' | 'retriage';
+/** An operator action on an issue that POSTs to its own endpoint and reloads the detail. */
+export type IssueAction = 'retry_triage' | 'skip_triage' | 'retriage' | 'continue_without_answer' | 'retry_post';
 
-interface TriageActionCopy {
+const AWAITING_INPUT_CONFLICT_ERROR = 'This issue is no longer awaiting input.';
+
+interface IssueActionCopy {
   readonly path: string;
   readonly success: string;
   readonly conflictError: string;
   readonly error: string;
 }
 
-const TRIAGE_ACTIONS: Readonly<Record<TriageAction, TriageActionCopy>> = {
+const ISSUE_ACTIONS: Readonly<Record<IssueAction, IssueActionCopy>> = {
   retry_triage: {
     path: 'retry-triage',
     success: 'Triage queued again. Issue status is updating.',
@@ -61,6 +66,18 @@ const TRIAGE_ACTIONS: Readonly<Record<TriageAction, TriageActionCopy>> = {
     conflictError:
       'Only queued or blocked issues can be re-triaged. It may have been dispatched already.',
     error: 'Failed to re-triage the issue.',
+  },
+  continue_without_answer: {
+    path: 'continue-without-answer',
+    success: 'Continuing without an answer. Issue status is updating.',
+    conflictError: AWAITING_INPUT_CONFLICT_ERROR,
+    error: 'Failed to continue without an answer.',
+  },
+  retry_post: {
+    path: 'retry-post',
+    success: 'Posting the questions again. Issue status is updating.',
+    conflictError: 'Only a question whose post failed can be posted again. It may have been posted already.',
+    error: 'Failed to retry posting the questions.',
   },
 };
 // Issue ids are GUID-like; anything else (from the wire or a URL) is rejected before use.
@@ -91,15 +108,24 @@ function toCodeStep(value: string | null | undefined): CodeStep | null {
   return value != null && CODE_STEPS.has(value) ? (value as CodeStep) : null;
 }
 
+const RUN_KINDS: ReadonlySet<string> = new Set<string>(Object.keys(RUN_KIND_LABELS));
+
+// Narrows the wire value to a known run kind; a kind this dashboard doesn't know reads as null, and
+// the board leaves that row out rather than guess its tag.
+function toRunKind(value: string | null | undefined): RunKind | null {
+  return value != null && RUN_KINDS.has(value) ? (value as RunKind) : null;
+}
+
 interface WirePlacement {
   stage?: string | null;
   needsAction?: boolean | null;
   awaitsDispatch?: boolean | null;
   waitsOnBlockers?: boolean | null;
   codeStep?: string | null;
+  runKind?: string | null;
 }
 
-type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'codeStep'>;
+type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'codeStep' | 'runKind'>;
 
 function toPlacement(wire: WirePlacement): Placement {
   return {
@@ -108,6 +134,7 @@ function toPlacement(wire: WirePlacement): Placement {
     awaitsDispatch: wire.awaitsDispatch === true,
     waitsOnBlockers: wire.waitsOnBlockers === true,
     codeStep: toCodeStep(wire.codeStep),
+    runKind: toRunKind(wire.runKind),
   };
 }
 
@@ -148,16 +175,16 @@ export class IssueService {
   private readonly _retrySuccessSignal: WritableSignal<string | null> = signal(null);
   readonly retrySuccess: Signal<string | null> = this._retrySuccessSignal.asReadonly();
 
-  private readonly _triageActionPendingSignal: WritableSignal<TriageAction | null> = signal(null);
-  readonly triageActionPending: Signal<TriageAction | null> =
-    this._triageActionPendingSignal.asReadonly();
+  private readonly _issueActionPendingSignal: WritableSignal<IssueAction | null> = signal(null);
+  readonly issueActionPending: Signal<IssueAction | null> =
+    this._issueActionPendingSignal.asReadonly();
 
-  private readonly _triageActionErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly triageActionError: Signal<string | null> = this._triageActionErrorSignal.asReadonly();
+  private readonly _issueActionErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly issueActionError: Signal<string | null> = this._issueActionErrorSignal.asReadonly();
 
-  private readonly _triageActionSuccessSignal: WritableSignal<string | null> = signal(null);
-  readonly triageActionSuccess: Signal<string | null> =
-    this._triageActionSuccessSignal.asReadonly();
+  private readonly _issueActionSuccessSignal: WritableSignal<string | null> = signal(null);
+  readonly issueActionSuccess: Signal<string | null> =
+    this._issueActionSuccessSignal.asReadonly();
 
   private readonly _resolvedIssuesSignal: WritableSignal<IssueSummary[]> = signal([]);
   readonly resolvedIssues: Signal<IssueSummary[]> = this._resolvedIssuesSignal.asReadonly();
@@ -324,9 +351,9 @@ export class IssueService {
     this._retryErrorSignal.set(null);
     this._retrySuccessSignal.set(null);
     this.retrying.set(false);
-    this._triageActionPendingSignal.set(null);
-    this._triageActionErrorSignal.set(null);
-    this._triageActionSuccessSignal.set(null);
+    this._issueActionPendingSignal.set(null);
+    this._issueActionErrorSignal.set(null);
+    this._issueActionSuccessSignal.set(null);
     this._detailMissingSignal.set(false);
 
     if (id === null) {
@@ -383,36 +410,46 @@ export class IssueService {
 
   /** Re-runs triage for an issue whose triage run failed (`triage_failed`). */
   retryTriage(id: string): void {
-    this._runTriageAction(id, 'retry_triage');
+    this._runIssueAction(id, 'retry_triage');
   }
 
   /** Queues a `triage_failed` issue without a readiness check. */
   skipTriage(id: string): void {
-    this._runTriageAction(id, 'skip_triage');
+    this._runIssueAction(id, 'skip_triage');
   }
 
   /** Sends a `queued` or `blocked` issue back through triage. */
   retriage(id: string): void {
-    this._runTriageAction(id, 'retriage');
+    this._runIssueAction(id, 'retriage');
   }
 
-  private _runTriageAction(id: string, action: TriageAction): void {
-    const copy = TRIAGE_ACTIONS[action];
-    this._triageActionErrorSignal.set(null);
-    this._triageActionSuccessSignal.set(null);
-    this._triageActionPendingSignal.set(action);
+  /** Closes an `awaiting_input` issue's open questions as unanswered and resumes its work. */
+  continueWithoutAnswer(id: string): void {
+    this._runIssueAction(id, 'continue_without_answer');
+  }
+
+  /** Sends an `awaiting_input` issue's failed question post back to pending, so it is posted again. */
+  retryQuestionPost(id: string): void {
+    this._runIssueAction(id, 'retry_post');
+  }
+
+  private _runIssueAction(id: string, action: IssueAction): void {
+    const copy = ISSUE_ACTIONS[action];
+    this._issueActionErrorSignal.set(null);
+    this._issueActionSuccessSignal.set(null);
+    this._issueActionPendingSignal.set(action);
     this._http
       .post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/${copy.path}`, {})
       .subscribe({
         next: () => {
-          this._triageActionPendingSignal.set(null);
-          this._triageActionSuccessSignal.set(copy.success);
+          this._issueActionPendingSignal.set(null);
+          this._issueActionSuccessSignal.set(copy.success);
           this.loadDetail(id);
         },
         error: (err: HttpErrorResponse) => {
           console.error(err);
-          this._triageActionPendingSignal.set(null);
-          this._triageActionErrorSignal.set(err.status === 409 ? copy.conflictError : copy.error);
+          this._issueActionPendingSignal.set(null);
+          this._issueActionErrorSignal.set(err.status === 409 ? copy.conflictError : copy.error);
         },
       });
   }

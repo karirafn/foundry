@@ -26,6 +26,7 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     awaitsDispatch: false,
     waitsOnBlockers: false,
     codeStep: null,
+    runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -588,6 +589,7 @@ describe('BoardStateService', () => {
       buildIssue({
         id: 'a',
         awaitsDispatch: true,
+        runKind: 'fresh',
         state: 'queued',
         repositoryEligibilityStatus: 'ineligible',
       }),
@@ -608,8 +610,8 @@ describe('BoardStateService', () => {
       buildIssue({ id: 'n', needsAction: true, state: 'failed' }),
       buildIssue({ id: 'w' }),
       buildIssue({ id: 's', state: 'checks_pending', codeStep: 'checks' }),
-      buildIssue({ id: 'p', state: 'queued', awaitsDispatch: true }),
-      buildIssue({ id: 'b', state: 'blocked', awaitsDispatch: true, waitsOnBlockers: true }),
+      buildIssue({ id: 'p', state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
+      buildIssue({ id: 'b', state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }),
     ]);
 
     // Assert
@@ -626,8 +628,8 @@ describe('BoardStateService', () => {
   it('applies a pipeline renumbering without a view transition', async () => {
     // Arrange
     const h = setup();
-    const a = buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true });
-    const b = buildIssue({ id: 'b', state: 'queued', awaitsDispatch: true });
+    const a = buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true, runKind: 'fresh' });
+    const b = buildIssue({ id: 'b', state: 'queued', awaitsDispatch: true, runKind: 'fresh' });
     load(h, [a, b]);
     const start = stubViewTransition();
 
@@ -644,7 +646,7 @@ describe('BoardStateService', () => {
     // Arrange
     const h = setup();
     const queued = Array.from({ length: 20 }, (_, i) =>
-      buildIssue({ id: `q${i}`, state: 'queued', awaitsDispatch: true }),
+      buildIssue({ id: `q${i}`, state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
     );
     load(h, [buildIssue({ id: 'w' }), ...queued]);
     const start = stubViewTransition();
@@ -679,7 +681,7 @@ describe('BoardStateService', () => {
   it('announces a worker that starts', async () => {
     // Arrange
     const h = setup();
-    load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true })]);
+    load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true, runKind: 'fresh' })]);
 
     // Act
     change(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'in_progress' })]);
@@ -693,7 +695,7 @@ describe('BoardStateService', () => {
     // Arrange
     const h = setup();
     load(h, [
-      buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true, repositorySlug: 'acme/web' }),
+      buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true, runKind: 'fresh', repositorySlug: 'acme/web' }),
     ]);
 
     // Act
@@ -702,6 +704,7 @@ describe('BoardStateService', () => {
         id: 'a',
         state: 'queued',
         awaitsDispatch: true,
+        runKind: 'fresh',
         repositorySlug: 'acme/web',
         repositoryEligibilityStatus: 'ineligible',
       }),
@@ -720,6 +723,7 @@ describe('BoardStateService', () => {
         id: 'a',
         state: 'queued',
         awaitsDispatch: true,
+        runKind: 'fresh',
         repositoryEligibilityStatus: 'ineligible',
       }),
     ]);
@@ -840,7 +844,7 @@ describe('BoardStateService', () => {
       const h = setup();
       load(h, [
         buildIssue({ id: 'a', issueNumber: 7 }),
-        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true }),
+        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       ]);
       silentRun(h, 'a', 'run-a', new Date(START - 300_000).toISOString());
       expect(h.service.announcement()).toBe('#7 worker silent for 5 minutes');
@@ -864,7 +868,7 @@ describe('BoardStateService', () => {
       const h = setup();
       load(h, [
         buildIssue({ id: 'a', issueNumber: 7 }),
-        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true }),
+        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       ]);
       silentRun(h, 'a', 'run-a', new Date(START - 300_000).toISOString());
       change(h, [
@@ -886,7 +890,7 @@ describe('BoardStateService', () => {
     it('does not announce silence for a run whose issue is not running', async () => {
       // Arrange
       const h = setup();
-      load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true })]);
+      load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true, runKind: 'fresh' })]);
       silentRun(h, 'a', 'run-a', new Date(START - 600_000).toISOString());
 
       // Act

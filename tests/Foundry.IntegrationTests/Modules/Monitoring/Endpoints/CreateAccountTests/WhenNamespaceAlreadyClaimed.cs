@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -131,7 +132,9 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
                 Kind: ValidateToken.Kinds.Authenticated,
                 AccountName: accountName,
                 MissingScopes: [],
-                DetectedProvider: null);
+                DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

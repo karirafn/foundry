@@ -20,7 +20,7 @@ public sealed class ObserveBody
     public void WhenThereIsNoBaseline_RecordsTheReadAsTheBaselineWithoutAChange()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, baselineBodyHash: null);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, baselineBodyHash: null, baselineHead: null);
 
         // Act
         sut.ObserveBody(Edited, Now);
@@ -34,7 +34,7 @@ public sealed class ObserveBody
     public void WhenTheBodyMatchesTheBaseline_RecordsNothing()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
 
         // Act
         sut.ObserveBody(Baseline, Now);
@@ -47,7 +47,7 @@ public sealed class ObserveBody
     public void WhenTheBodyDiffersFromTheBaseline_RecordsItAsPendingFirstSeenNow()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
 
         // Act
         sut.ObserveBody(Edited, Now);
@@ -61,7 +61,7 @@ public sealed class ObserveBody
     public void WhenThePendingBodyIsReadAgain_KeepsItsFirstSeenTime()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
         sut.ObserveBody(Edited, Now);
 
         // Act
@@ -75,7 +75,7 @@ public sealed class ObserveBody
     public void WhenAnotherBodyIsRead_ReplacesThePendingChangeAndRestartsItsTime()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
         sut.ObserveBody(Edited, Now);
 
         // Act
@@ -89,7 +89,7 @@ public sealed class ObserveBody
     public void WhenTheBaselineIsReadAgain_ClearsThePendingChange()
     {
         // Arrange
-        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline);
+        IssueWatch sut = IssueWatch.Start(RepositoryId, 42, Baseline, baselineHead: null);
         sut.ObserveBody(Edited, Now);
 
         // Act

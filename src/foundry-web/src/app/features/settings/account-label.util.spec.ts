@@ -13,6 +13,7 @@ function makeAccount(overrides: Partial<AccountSummary> = {}): AccountSummary {
     tokenInvalidSince: null,
     namespaces: [],
     ...overrides,
+    tokenExpiry: { status: 'notChecked', expiresAt: null },
   };
 }
 

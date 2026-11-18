@@ -22,6 +22,9 @@ const POLL_INTERVAL_MAX = 3600;
 const BACKSTOP_INTERVAL_MIN = 5;
 const BACKSTOP_INTERVAL_MAX = 1440;
 const BACKSTOP_INTERVAL_DEFAULT = 15;
+const REMINDER_DELAY_MIN = 1;
+const REMINDER_DELAY_MAX = 8760;
+const REMINDER_DELAY_DEFAULT = 72;
 const WEBHOOK_URL_ERROR_CODE = 'Settings.InvalidWebhookPublicBaseUrl';
 const BACKSTOP_ERROR_CODE = 'Settings.InvalidBackstopInterval';
 
@@ -219,6 +222,44 @@ export function isValidWebhookPublicBaseUrl(value: string): boolean {
           >{{ settingsService.savingWebhooks() ? 'Saving...' : 'Save' }}</button>
         </div>
       </section>
+
+      <section class="general-settings__section">
+        <h2 class="general-settings__section-title">Questions</h2>
+        <p class="general-settings__section-description">
+          When a worker asks a question and no reply arrives, Foundry posts one reminder in the same thread.
+        </p>
+
+        <div class="general-settings__dispatch-form">
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="awaitingInputReminderDelayHours">Reminder after (hours)</label>
+            <input
+              class="general-settings__number-input"
+              type="number"
+              id="awaitingInputReminderDelayHours"
+              [min]="REMINDER_DELAY_MIN"
+              [max]="REMINDER_DELAY_MAX"
+              step="1"
+              [ngModel]="_reminderDelayValue()"
+              (ngModelChange)="_reminderDelayValue.set($event)"
+              aria-describedby="reminder-delay-hint reminder-delay-error awaiting-input-error"
+              [attr.aria-invalid]="_reminderDelayError() ? true : null"
+            />
+            <span id="reminder-delay-hint" class="general-settings__field-hint">How long a posted question waits without a reply before the reminder. {{ REMINDER_DELAY_MIN }}–{{ REMINDER_DELAY_MAX }} hours; 72 is three days.</span>
+            <span id="reminder-delay-error" class="general-settings__field-error" role="alert">{{ _reminderDelayError() ?? '' }}</span>
+          </div>
+
+          <div id="awaiting-input-error" role="alert" class="general-settings__save-error">{{ settingsService.saveAwaitingInputError() ?? '' }}</div>
+
+          <div role="status" class="general-settings__save-success">{{ settingsService.saveAwaitingInputSuccess() ? 'Reminder setting saved successfully' : '' }}</div>
+
+          <button
+            class="general-settings__save-btn"
+            type="button"
+            [disabled]="settingsService.savingAwaitingInput() || _reminderDelayError() !== null"
+            (click)="saveAwaitingInput()"
+          >{{ settingsService.savingAwaitingInput() ? 'Saving...' : 'Save' }}</button>
+        </div>
+      </section>
     </div>
   `,
   styleUrl: './settings-dispatch.scss',
@@ -235,6 +276,8 @@ export class SettingsDispatchComponent implements UnsavedChanges {
   protected readonly POLL_INTERVAL_MAX = POLL_INTERVAL_MAX;
   protected readonly BACKSTOP_INTERVAL_MIN = BACKSTOP_INTERVAL_MIN;
   protected readonly BACKSTOP_INTERVAL_MAX = BACKSTOP_INTERVAL_MAX;
+  protected readonly REMINDER_DELAY_MIN = REMINDER_DELAY_MIN;
+  protected readonly REMINDER_DELAY_MAX = REMINDER_DELAY_MAX;
 
   protected readonly _maxConcurrentValue: WritableSignal<number> = signal(MAX_CONCURRENT_MIN);
   protected readonly _timeoutMinutesValue: WritableSignal<number> = signal(TIMEOUT_MINUTES_MIN);
@@ -248,6 +291,24 @@ export class SettingsDispatchComponent implements UnsavedChanges {
   protected readonly _webhookUrlValue: WritableSignal<string> = signal('');
   protected readonly _backstopValue: WritableSignal<number> = signal(BACKSTOP_INTERVAL_DEFAULT);
   private _webhooksInitialized = false;
+
+  protected readonly _reminderDelayValue: WritableSignal<number> = signal(REMINDER_DELAY_DEFAULT);
+  private _awaitingInputInitialized = false;
+
+  protected readonly _reminderDelayError: Signal<string | null> = computed(() => {
+    const value = this._reminderDelayValue();
+    return Number.isInteger(value) && value >= REMINDER_DELAY_MIN && value <= REMINDER_DELAY_MAX
+      ? null
+      : `Must be a whole number of hours between ${REMINDER_DELAY_MIN} and ${REMINDER_DELAY_MAX}`;
+  });
+
+  private readonly _isAwaitingInputDirty: Signal<boolean> = computed(() => {
+    const saved = this.settingsService.settings();
+    if (saved === null) {
+      return false;
+    }
+    return this._reminderDelayValue() !== (saved.awaitingInputReminderDelayHours ?? REMINDER_DELAY_DEFAULT);
+  });
 
   /** Field-keyed error for the URL: client-side rule first, then the server's keyed error code. */
   protected readonly _webhookUrlError: Signal<string | null> = computed(() => {
@@ -339,10 +400,18 @@ export class SettingsDispatchComponent implements UnsavedChanges {
         this._backstopValue.set(settings.backstopIntervalMinutes ?? BACKSTOP_INTERVAL_DEFAULT);
       }
     });
+
+    effect(() => {
+      const settings = this.settingsService.settings();
+      if (settings !== null && !this._awaitingInputInitialized) {
+        this._awaitingInputInitialized = true;
+        this._reminderDelayValue.set(settings.awaitingInputReminderDelayHours ?? REMINDER_DELAY_DEFAULT);
+      }
+    });
   }
 
   hasUnsavedChanges(): boolean {
-    return this._isLimitsDirty() || this._isDispatchDirty() || this._isWebhooksDirty();
+    return this._isLimitsDirty() || this._isDispatchDirty() || this._isWebhooksDirty() || this._isAwaitingInputDirty();
   }
 
   isLimitsFormValid(): boolean {
@@ -381,6 +450,10 @@ export class SettingsDispatchComponent implements UnsavedChanges {
   saveWebhooks(): void {
     const url = this._webhookUrlValue().trim();
     this.settingsService.updateWebhookSettings(url === '' ? null : url, this._backstopValue());
+  }
+
+  saveAwaitingInput(): void {
+    this.settingsService.updateAwaitingInputSettings(this._reminderDelayValue());
   }
 
   saveDispatch(): void {

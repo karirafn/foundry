@@ -1,0 +1,15 @@
+// A small outlined, lower-case mono tag: the look shared by the role tag and the run-kind tag.
+@mixin mono-tag {
+  align-items: center;
+  border: 1px solid var(--fd-border-default);
+  border-radius: 999px;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-family: var(--fd-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  padding-inline: var(--fd-spacing-sm);
+  white-space: nowrap;
+}

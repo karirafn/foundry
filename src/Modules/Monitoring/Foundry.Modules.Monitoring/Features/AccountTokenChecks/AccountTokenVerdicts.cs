@@ -108,6 +108,17 @@ internal sealed class AccountTokenVerdicts(
         }
     }
 
+    /// <summary>
+    /// Records the <paramref name="expiry"/> read with the token <paramref name="tested"/> was loaded with
+    /// (<see cref="Credential.RecordTokenExpiry"/>). A reading about a token replaced since is dropped, so it
+    /// never overwrites the new token's expiry. Returns whether the reading was saved.
+    /// </summary>
+    public Task<bool> RecordTokenExpiryAsync(
+        Credential tested,
+        TokenExpiry expiry,
+        CancellationToken cancellationToken) =>
+        RecordAsync(tested, c => c.RecordTokenExpiry(expiry), cancellationToken);
+
     private static CheckVerdict Classify(Result<TokenValidationOutcome> check) =>
         check switch
         {

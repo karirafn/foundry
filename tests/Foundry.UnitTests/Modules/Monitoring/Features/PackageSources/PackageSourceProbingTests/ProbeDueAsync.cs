@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.PackageSources;
@@ -29,6 +30,7 @@ public sealed class ProbeDueAsync : IAsyncDisposable
     private readonly RecordingProber _prober = new();
     private readonly SlugCredentialResolver _resolver = new();
     private readonly CapturingSystemNotificationBroadcaster _broadcaster = new();
+    private readonly CapturingDomainEventDispatcher _dispatcher = new();
 
     public ProbeDueAsync()
     {
@@ -48,10 +50,10 @@ public sealed class ProbeDueAsync : IAsyncDisposable
         new(new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options);
 
     private PackageSourceProbing CreateSut() =>
-        new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), _broadcaster, NullLogger<PackageSourceProbing>.Instance);
+        new(_dbContext, _resolver, _prober, new PackageSourceProbeGate(), new PackageSourceVerdictPublisher(_dispatcher, _broadcaster, NullLogger<PackageSourceVerdictPublisher>.Instance), NullLogger<PackageSourceProbing>.Instance);
 
     private static GitLabCredential Account(string name, string token = "unused-token") =>
-        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), token, BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        GitLabCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken(token, new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
     private MonitoredRepository Repository(string slug, Credential account, params string[] sourceUrls)
     {
@@ -210,7 +212,7 @@ public sealed class ProbeDueAsync : IAsyncDisposable
         MonitoredRepository repository = Repository("group/app", account, GroupSourceUrl);
         PackageSourceProbing sut = CreateSut();
         await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
-        account.Update(AccountName.Create("deploy-bot").ValueOrThrow(), "new-token", account.BaseUrl);
+        account.Update(AccountName.Create("deploy-bot").ValueOrThrow(), new IssuedToken("new-token", new TokenExpiry.NotChecked()), account.BaseUrl);
 
         // Act
         await sut.ProbeDueAsync([repository], Now + TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
@@ -319,21 +321,118 @@ public sealed class ProbeDueAsync : IAsyncDisposable
         _prober.Probes.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenAVerdictChangesReadability_DispatchesTheEventAfterSaving()
+    {
+        // Arrange
+        MonitoredRepository repository = Repository("group/app", Account("deploy-bot"), GroupSourceUrl);
+
+        // Act
+        await CreateSut().ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        PackageSource stored = await StoredSourceAsync(GroupSourceUrl);
+        _dispatcher.DispatchedEvents.ShouldBe([new PackageSourceReadabilityChanged(stored.Id, stored.ServiceIndexUrl)]);
+    }
+
+    [Fact]
+    public async Task WhenReadabilityIsUnchanged_DispatchesNothing()
+    {
+        // Arrange
+        MonitoredRepository repository = Repository("group/app", Account("deploy-bot"), GroupSourceUrl);
+        PackageSourceProbing sut = CreateSut();
+        await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Act
+        await sut.ProbeDueAsync([repository], Now + TimeSpan.FromMinutes(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenTheSaveIsRejected_DispatchesNothing()
+    {
+        // Arrange: another probe records the same source and credential while this one runs.
+        GitLabCredential account = Account("deploy-bot");
+        MonitoredRepository repository = Repository("group/app", account, GroupSourceUrl);
+        _prober.OnProbe = async () =>
+        {
+            await using FoundryDbContext other = NewContext();
+            PackageSource source = (await other.Set<PackageSource>().ToListAsync(TestContext.Current.CancellationToken))
+                .Single(s => s.ServiceIndexUrl.AbsoluteUri == GroupSourceUrl);
+            source.RecordProbe(
+                new ProbeCredential.Account(account.Id),
+                account.TokenVersion,
+                new PackageSourceVerdict.Unreadable(401, "service index returned 401"),
+                Now);
+            await other.SaveChangesAsync(TestContext.Current.CancellationToken);
+        };
+
+        // Act
+        await CreateSut().ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task DispatchesAfterLeavingTheGate()
+    {
+        // Arrange: a handler that needs the gate would deadlock if the events were dispatched inside it.
+        MonitoredRepository repository = Repository("group/app", Account("deploy-bot"), GroupSourceUrl);
+        using PackageSourceProbeGate gate = new();
+        bool gateFree = false;
+        GateCheckingDispatcher dispatcher = new(async () =>
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+            using (await gate.EnterAsync(timeout.Token))
+            {
+                gateFree = true;
+            }
+        });
+        PackageSourceProbing sut = new(
+            _dbContext,
+            _resolver,
+            _prober,
+            gate,
+            new PackageSourceVerdictPublisher(dispatcher, _broadcaster, NullLogger<PackageSourceVerdictPublisher>.Instance),
+            NullLogger<PackageSourceProbing>.Instance);
+
+        // Act
+        await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        gateFree.ShouldBeTrue();
+    }
+
+    private sealed class GateCheckingDispatcher(Func<Task> onDispatch) : IDomainEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IDomainEvent> events, CancellationToken cancellationToken) => onDispatch();
+    }
+
     internal sealed class RecordingProber : IPackageSourceProber
     {
         public Dictionary<string, PackageSourceVerdict.Probed> Verdicts { get; } = [];
 
         public List<(Uri Url, UpstreamCredential? Credential)> Probes { get; } = [];
 
-        public Task<PackageSourceVerdict.Probed> ProbeAsync(
+        public Func<Task>? OnProbe { get; set; }
+
+        public async Task<PackageSourceVerdict.Probed> ProbeAsync(
             Uri serviceIndexUrl,
             UpstreamCredential? credential,
             CancellationToken cancellationToken)
         {
             Probes.Add((serviceIndexUrl, credential));
-            return Task.FromResult(Verdicts.TryGetValue(serviceIndexUrl.AbsoluteUri, out PackageSourceVerdict.Probed? verdict)
+            if (OnProbe is { } onProbe)
+            {
+                await onProbe();
+            }
+
+            return Verdicts.TryGetValue(serviceIndexUrl.AbsoluteUri, out PackageSourceVerdict.Probed? verdict)
                 ? verdict
-                : new PackageSourceVerdict.Readable());
+                : new PackageSourceVerdict.Readable();
         }
     }
 

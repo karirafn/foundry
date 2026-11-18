@@ -17,7 +17,7 @@ public sealed class TokenUsabilityOutcome
     {
         // Arrange
         string token = string.Concat("ghp_", "usable");
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token, GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(token, new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Act
         TokenUsability result = credential.TokenUsability;
@@ -57,7 +57,7 @@ public sealed class TokenUsabilityOutcome
     {
         // Arrange
         string token = string.Concat("ghp_", "rejected");
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token, GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(token, new TokenExpiry.NotChecked()), GitHubBaseUrl());
         credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
 
         // Act

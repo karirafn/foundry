@@ -18,7 +18,7 @@ public sealed class TokenVersionIncrements
     public void WhenAccountIsCreatedWithToken_VersionIsOne()
     {
         // Act
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Assert
         credential.TokenVersion.ShouldBe(1);
@@ -28,10 +28,10 @@ public sealed class TokenVersionIncrements
     public void WhenAccountTokenIsSet_VersionIncrements()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Act
-        credential.Update(AccountName.Create("my-org").ValueOrThrow(), Token("b"), GitHubBaseUrl());
+        credential.Update(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("b"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Assert
         credential.TokenVersion.ShouldBe(2);
@@ -41,7 +41,7 @@ public sealed class TokenVersionIncrements
     public void WhenAccountIsUpdatedWithoutToken_VersionIsUnchanged()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Act
         credential.Update(AccountName.Create("renamed").ValueOrThrow(), token: null, GitHubBaseUrl());
@@ -54,7 +54,7 @@ public sealed class TokenVersionIncrements
     public void WhenBranchRulesTokenIsSet_VersionIsUnchanged()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Act
         credential.SetBranchRulesToken(Token("rules"));
@@ -67,7 +67,7 @@ public sealed class TokenVersionIncrements
     public void WhenTokenVerdictIsRecorded_VersionIsUnchanged()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), Token("a"), GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken(Token("a"), new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Act
         credential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));

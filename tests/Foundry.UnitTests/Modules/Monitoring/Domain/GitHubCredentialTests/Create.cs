@@ -21,7 +21,7 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token, baseUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), new IssuedToken(token, new TokenExpiry.NotChecked()), baseUrl);
 
         // Assert
         credential.ShouldSatisfyAllConditions(
@@ -38,8 +38,8 @@ public sealed class Create
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
 
         // Act
-        GitHubCredential a = GitHubCredential.Create(AccountName.Create("account-a").ValueOrThrow(), "token-a", baseUrl);
-        GitHubCredential b = GitHubCredential.Create(AccountName.Create("account-b").ValueOrThrow(), "token-b", baseUrl);
+        GitHubCredential a = GitHubCredential.Create(AccountName.Create("account-a").ValueOrThrow(), new IssuedToken("token-a", new TokenExpiry.NotChecked()), baseUrl);
+        GitHubCredential b = GitHubCredential.Create(AccountName.Create("account-b").ValueOrThrow(), new IssuedToken("token-b", new TokenExpiry.NotChecked()), baseUrl);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);

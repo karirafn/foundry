@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -58,7 +59,9 @@ public sealed class WhenTokenIsUnreadableAndRepaired : IAsyncDisposable
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: RepairedAccountName,
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {

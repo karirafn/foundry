@@ -17,6 +17,7 @@ const ACCOUNT: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 describe('account.model', () => {

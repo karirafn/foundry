@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -28,6 +29,7 @@ internal sealed partial class GitHubHttpClient(
     TimeProvider timeProvider) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
+    private const string TokenExpirationHeader = "github-authentication-token-expiration";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const string FineGrainedPatPrefix = "github_pat_";
     private const int MaxRepositoryPages = 5;
@@ -1002,16 +1004,18 @@ internal sealed partial class GitHubHttpClient(
             return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.IdentityUnresolved());
         }
 
+        TokenExpiry tokenExpiry = ReadTokenExpiry(response, apiBaseUrl);
+
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
             return IsFineGrainedPat(token)
-                ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login))
-                : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login));
+                ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry))
+                : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login, tokenExpiry));
         }
 
         IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
 
-        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, missingScopes));
+        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry, missingScopes));
     }
 
     public async Task<Result<WritePermissionProbeResult>> ProbeContentsWriteAsync(
@@ -1334,6 +1338,56 @@ internal sealed partial class GitHubHttpClient(
         return Result<bool>.Ok(true);
     }
 
+    /// <summary>
+    /// Reads where <paramref name="branchName"/> points with <c>GET repos/{owner}/{repo}/git/ref/heads/{branch}</c>
+    /// (the singular <c>ref</c>, which matches the ref exactly). GitHub answers 404 when the ref does not exist, which
+    /// is <see cref="BranchHead.Absent"/>; any other non-success response fails.
+    /// </summary>
+    public async Task<Result<BranchHead>> GetBranchHeadAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<BranchHead>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        // Encode each segment but keep the '/' separators: the git refs API addresses a ref by path.
+        string encodedBranch = string.Join('/', branchName.Split('/').Select(Uri.EscapeDataString));
+        string relativePath = $"repos/{owner}/{repo}/git/ref/heads/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.NotFound)
+        {
+            RecordRestHeadroom(response);
+            return Result<BranchHead>.Ok(new BranchHead.Absent());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<BranchHead>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string? sha = JsonSerializer.Deserialize<GitHubRefDto>(body, JsonOptions)?.Object?.Sha;
+
+        return sha is not null && GitObjectIdRegex().IsMatch(sha)
+            ? Result<BranchHead>.Ok(new BranchHead.Present(sha))
+            : Result<BranchHead>.Fail(GitHubErrors.ProviderError("GitHub returned a branch ref without a commit SHA."));
+    }
+
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -1538,6 +1592,35 @@ internal sealed partial class GitHubHttpClient(
         return false;
     }
 
+    /// <summary>
+    /// Maps the undocumented <c>github-authentication-token-expiration</c> header (observed as
+    /// <c>2026-11-22 10:16:35 UTC</c>). A missing header is <see cref="TokenExpiry.Unavailable"/> rather than
+    /// <see cref="TokenExpiry.Never"/>: GitHub omitting it has not been observed to mean "never expires".
+    /// </summary>
+    private TokenExpiry ReadTokenExpiry(HttpResponseMessage response, Uri apiBaseUrl)
+    {
+        if (!response.Headers.TryGetValues(TokenExpirationHeader, out IEnumerable<string>? values))
+        {
+            return new TokenExpiry.Unavailable();
+        }
+
+        if (DateTimeOffset.TryParseExact(
+                values.FirstOrDefault(),
+                "yyyy-MM-dd HH:mm:ss 'UTC'",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out DateTimeOffset expiresAt))
+        {
+            return new TokenExpiry.On(expiresAt);
+        }
+
+        logger.LogWarning(
+            "GitHub token validation: the {Header} header is not a 'yyyy-MM-dd HH:mm:ss UTC' timestamp; expiry recorded as unavailable. Provider: github, Host: {Host}",
+            TokenExpirationHeader,
+            apiBaseUrl.Host);
+        return new TokenExpiry.Unavailable();
+    }
+
     private GitHubUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
     {
         try
@@ -1738,6 +1821,10 @@ internal sealed partial class GitHubHttpClient(
         IReadOnlyList<GitHubCommitRefDto> Commits);
 
     private sealed record GitHubCommitRefDto(string Sha);
+
+    private sealed record GitHubRefDto(GitHubRefObjectDto? Object);
+
+    private sealed record GitHubRefObjectDto(string? Sha);
 
     private sealed record GitHubPullRequestStateDto(
         string HtmlUrl,

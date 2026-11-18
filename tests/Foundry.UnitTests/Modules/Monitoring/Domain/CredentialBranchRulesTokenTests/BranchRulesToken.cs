@@ -20,7 +20,7 @@ public sealed class BranchRulesToken
     public void WhenCreatedWithoutBranchRulesToken_IsAbsent()
     {
         // Arrange / Act
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl);
 
         // Assert
         credential.ShouldSatisfyAllConditions(
@@ -32,7 +32,7 @@ public sealed class BranchRulesToken
     public void WhenGitHubCreatedWithBranchRulesToken_StoresItSeparatelyFromAccountToken()
     {
         // Arrange / Act
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl, "ghp_rules");
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl, "ghp_rules");
 
         // Assert
         credential.ShouldSatisfyAllConditions(
@@ -44,7 +44,7 @@ public sealed class BranchRulesToken
     public void WhenGitLabCreatedWithBranchRulesToken_StoresIt()
     {
         // Arrange / Act
-        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), "glpat-worker", GitLabUrl, "glpat-rules");
+        GitLabCredential credential = GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), new IssuedToken("glpat-worker", new TokenExpiry.NotChecked()), GitLabUrl, "glpat-rules");
 
         // Assert
         credential.BranchRulesToken.ShouldBe(new ProviderToken.Present("glpat-rules"));
@@ -54,7 +54,7 @@ public sealed class BranchRulesToken
     public void WhenSet_ReplacesExistingToken()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl, "ghp_old_rules");
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl, "ghp_old_rules");
 
         // Act
         credential.SetBranchRulesToken("ghp_new_rules");
@@ -67,7 +67,7 @@ public sealed class BranchRulesToken
     public void WhenSetOnUnreadableToken_RepairsIt()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl);
         Credential.ApplyUnreadableBranchRulesToken(credential);
         credential.IsBranchRulesTokenUnreadable.ShouldBeTrue();
 
@@ -84,7 +84,7 @@ public sealed class BranchRulesToken
     public void WhenBranchRulesTokenUnreadable_AccountTokenRemainsReadable()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl);
 
         // Act
         Credential.ApplyUnreadableBranchRulesToken(credential);
@@ -97,7 +97,7 @@ public sealed class BranchRulesToken
     public void WhenCleared_RemovesToken()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl, "ghp_rules");
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl, "ghp_rules");
 
         // Act
         credential.ClearBranchRulesToken();
@@ -110,10 +110,10 @@ public sealed class BranchRulesToken
     public void WhenAccountUpdatedWithNewToken_BranchRulesTokenIsPreserved()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl, "ghp_rules");
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl, "ghp_rules");
 
         // Act — account rotation replaces only the account token.
-        credential.Update(AccountName.Create("my-org").ValueOrThrow(), "ghp_rotated", GitHubUrl);
+        credential.Update(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_rotated", new TokenExpiry.NotChecked()), GitHubUrl);
 
         // Assert
         credential.ShouldSatisfyAllConditions(
@@ -127,7 +127,7 @@ public sealed class BranchRulesToken
     public void WhenSetToBlank_Throws(string token)
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_worker", GitHubUrl);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_worker", new TokenExpiry.NotChecked()), GitHubUrl);
 
         // Act / Assert
         Should.Throw<ArgumentException>(() => credential.SetBranchRulesToken(token));

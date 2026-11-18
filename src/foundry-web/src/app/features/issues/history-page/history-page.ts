@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, ElementRef, OnInit, Signal, computed, inject, viewChild } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { IssueService } from '../issue.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
 import { IssueCardSkeletonComponent } from '../issue-card/issue-card-skeleton';
@@ -16,7 +15,6 @@ const EMPTY_MESSAGE = 'No resolved issues yet. Completed issues appear here.';
 @Component({
   selector: 'fd-history-page',
   imports: [
-    RouterLink,
     RunStatsBarComponent,
     IssueCardComponent,
     IssueCardSkeletonComponent,

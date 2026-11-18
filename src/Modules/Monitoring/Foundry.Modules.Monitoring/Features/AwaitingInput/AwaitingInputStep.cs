@@ -16,8 +16,9 @@ namespace Foundry.Modules.Monitoring.Features.AwaitingInput;
 /// <summary>
 /// The awaiting-input step (ADR 0096): for every awaiting-input issue it first applies the review pass's ways out (the
 /// issue closed, or its pull request closed without merging), then posts the questions while they are unposted, or
-/// once they are posted reads the question's thread and, on an issue-thread wait, the issue body, and lets the issue's
-/// <see cref="IssueWatch"/> decide whether the round's input has arrived. It runs on every scheduled poll and on
+/// once they are posted reads the question's thread, on an issue-thread wait the issue body, and on a wait with a resume
+/// branch the branch head, and lets the issue's <see cref="IssueWatch"/> decide whether the round's input has arrived. A posted question that has waited the reminder
+/// delay with no input gets one reminder in the same thread. It runs on every scheduled poll and on
 /// <see cref="NudgePass.AwaitingInput"/> nudges.
 /// </summary>
 internal sealed class AwaitingInputStep(
@@ -71,7 +72,9 @@ internal sealed class AwaitingInputStep(
             IssueStatus? status = await provider.GetIssueStatusAsync(repository.Slug, info.IssueNumber, cancellationToken)
                 is Result<IssueStatus>.Success { Value: var read } ? read : null;
 
-            if (await FindWayOutAsync(repository, provider, info, status, cancellationToken) is { } wayOut)
+            PullRequestStatus? pullRequestStatus = await ReadPullRequestStatusAsync(repository, provider, info, status, cancellationToken);
+
+            if (FindWayOut(repository, info, status, pullRequestStatus) is { } wayOut)
             {
                 events.Add(wayOut);
                 continue;
@@ -80,16 +83,31 @@ internal sealed class AwaitingInputStep(
             switch (info.PostState)
             {
                 case AwaitingInputPostState.Unposted { DueAt: DateTimeOffset dueAt } when dueAt <= now:
-                    await PostQuestionsAsync(repository, provider, info, status, watches, now, cancellationToken);
+                    BranchHead? headBeforePost = await ReadHeadAsync(repository, provider, info, pullRequestStatus, cancellationToken);
+                    await PostQuestionsAsync(repository, provider, info, status, headBeforePost, watches, now, cancellationToken);
                     break;
 
                 case AwaitingInputPostState.Posted posted:
                     IssueWatch watch = WatchOf(repository, info, watches);
-                    if (await ReadInputAsync(repository, provider, info, posted.PostedAt, postedComments, watch, status, now, cancellationToken) is { } arrived)
+                    BranchHead? head = await ReadHeadAsync(repository, provider, info, pullRequestStatus, cancellationToken);
+                    switch (await ReadInputAsync(repository, provider, info, posted.PostedAt, postedComments, watch, status, head, now, cancellationToken))
                     {
-                        events.Add(arrived);
-                        dbContext.Set<IssueWatch>().Remove(watch);
-                        watches.Remove(info.IssueNumber);
+                        case InputSettlement.Settled settled:
+                            events.Add(new AwaitingInputArrived(repository.Id, info.IssueNumber, settled.Input, settled.ArrivedAt));
+                            dbContext.Set<IssueWatch>().Remove(watch);
+                            watches.Remove(info.IssueNumber);
+                            break;
+
+                        case InputSettlement.Waiting waitingUntil:
+                            nudgeQueue.TryEnqueue(new Nudge(
+                                new NudgeKey(repository.Id, NudgePass.AwaitingInput, info.IssueNumber),
+                                waitingUntil.Until));
+                            break;
+
+                        // Only a wait with no input at all is reminded: input inside its quiet period is about to resume it.
+                        case InputSettlement.NothingNew when posted.ReminderDueAt is { } reminderDueAt && reminderDueAt <= now:
+                            await PostReminderAsync(repository, provider, info, posted, now, cancellationToken);
+                            break;
                     }
 
                     break;
@@ -121,7 +139,7 @@ internal sealed class AwaitingInputStep(
 
     /// <summary>
     /// The issue's watch. A wait posted before watches existed has none: it starts one without a baseline, so the
-    /// first successful body read becomes the baseline rather than a change. A watch left from a failed triage the
+    /// first successful body and head reads become the baselines rather than changes. A watch left from a failed triage the
     /// failed-triage pass has not removed yet is replaced the same way: its baseline predates the question.
     /// </summary>
     private IssueWatch WatchOf(
@@ -134,9 +152,32 @@ internal sealed class AwaitingInputStep(
             return existing;
         }
 
-        IssueWatch started = IssueWatch.Start(repository.Id, info.IssueNumber, baselineBodyHash: null);
+        IssueWatch started = IssueWatch.Start(repository.Id, info.IssueNumber, baselineBodyHash: null, baselineHead: null);
         ReplaceWatch(watches, started);
         return started;
+    }
+
+    /// <summary>
+    /// Reads the pull request's status when the question lives on one and the issue read succeeded; its head is the
+    /// revision's branch head, so the head costs no extra request. Returns <see langword="null"/> otherwise or when the
+    /// read failed (retried on the next run).
+    /// </summary>
+    private static async Task<PullRequestStatus?> ReadPullRequestStatusAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        AwaitingInputIssueInfo info,
+        IssueStatus? status,
+        CancellationToken cancellationToken)
+    {
+        if (info.PullRequestUrl is not { } pullRequestUrl || status is null or { IsClosed: true })
+        {
+            return null;
+        }
+
+        return await provider.GetPullRequestStatusAsync(repository.Slug, pullRequestUrl, cancellationToken)
+            is Result<PullRequestStatus>.Success { Value: var pullRequestStatus }
+            ? pullRequestStatus
+            : null;
     }
 
     /// <summary>
@@ -144,56 +185,73 @@ internal sealed class AwaitingInputStep(
     /// a merged pull request waits for its issue to close. Returns <see langword="null"/> while the issue keeps waiting
     /// or a read failed (retried on the next run).
     /// </summary>
-    private static async Task<IIntegrationEvent?> FindWayOutAsync(
+    private static IIntegrationEvent? FindWayOut(
         MonitoredRepository repository,
-        IIssueProvider provider,
         AwaitingInputIssueInfo info,
         IssueStatus? status,
-        CancellationToken cancellationToken)
+        PullRequestStatus? pullRequestStatus)
     {
         if (status is { IsClosed: true })
         {
             return new ProviderIssueClosed(repository.Id, info.IssueNumber);
         }
 
-        if (info.PullRequestUrl is not { } pullRequestUrl || status is null)
+        return pullRequestStatus is { IsClosed: true, IsMerged: false }
+            ? new ProviderPullRequestClosed(repository.Id, info.IssueNumber)
+            : null;
+    }
+
+    /// <summary>
+    /// Reads the resume branch's head (ADR 0096): a revision's is the head of the pull request status already read, a
+    /// continuation's takes one branch read. Returns <see langword="null"/> when the wait has no branch or the read
+    /// failed; a pull request status without a head is a failed read.
+    /// </summary>
+    private static async Task<BranchHead?> ReadHeadAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        AwaitingInputIssueInfo info,
+        PullRequestStatus? pullRequestStatus,
+        CancellationToken cancellationToken)
+    {
+        if (info.BranchName is not { } branchName)
         {
             return null;
         }
 
-        Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
-            repository.Slug,
-            pullRequestUrl,
-            cancellationToken);
+        if (info.PullRequestUrl is not null)
+        {
+            return pullRequestStatus?.HeadSha is { } sha && !string.IsNullOrWhiteSpace(sha)
+                ? new BranchHead.Present(sha)
+                : null;
+        }
 
-        return prStatusResult is Result<PullRequestStatus>.Success { Value: { IsClosed: true, IsMerged: false } }
-            ? new ProviderPullRequestClosed(repository.Id, info.IssueNumber)
+        return await provider.GetBranchHeadAsync(repository.Slug, branchName, cancellationToken)
+            is Result<BranchHead>.Success { Value: var head }
+            ? head
             : null;
     }
 
     /// <summary>
     /// Posts the questions on the pull request when there is one, otherwise on the issue. A posted question is saved at
     /// once, together with its posted-comment registry entry and a fresh <see cref="IssueWatch"/>, so a later failure in
-    /// this run never posts it twice. On the issue thread the watch's baseline is the body read in this pass (none when
-    /// the read failed); an edit made before the post is part of the baseline, not input.
+    /// this run never posts it twice. On the issue thread the watch's body baseline is the body read in this pass, and
+    /// on a wait with a resume branch its head baseline is <paramref name="head"/> (each none when its read failed); an
+    /// edit or push made before the post is part of the baseline, not input.
     /// </summary>
     private async Task PostQuestionsAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
         AwaitingInputIssueInfo info,
         IssueStatus? status,
+        BranchHead? head,
         Dictionary<int, IssueWatch> watches,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        CommentThread thread = info.PullRequestUrl is { } pullRequestUrl
-            ? new CommentThread.PullRequest(pullRequestUrl)
-            : new CommentThread.Issue(info.IssueNumber);
-
         Result<ProviderCommentId> result = await PostSafelyAsync(
             repository,
             provider,
-            thread,
+            ThreadOf(info),
             QuestionComment.Compose(info.Questions),
             cancellationToken);
 
@@ -206,7 +264,8 @@ internal sealed class AwaitingInputStep(
                     IssueWatch.Start(
                         repository.Id,
                         info.IssueNumber,
-                        WatchesBody(info) && status is not null ? IssueBodyHash.Of(status.Body) : null));
+                        WatchesBody(info) && status is not null ? IssueBodyHash.Of(status.Body) : null,
+                        head));
                 await awaitingInputCommands.RecordQuestionPostedAsync(
                     info.IssueId,
                     success.Value.Value,
@@ -236,6 +295,60 @@ internal sealed class AwaitingInputStep(
                 break;
         }
     }
+
+    /// <summary>
+    /// Posts the round's one reminder in the question's thread. A posted reminder is saved at once with its
+    /// posted-comment registry entry, so it is never read as a reply and never posted twice; a failed one retries with
+    /// the question post's backoff.
+    /// </summary>
+    private async Task PostReminderAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        AwaitingInputIssueInfo info,
+        AwaitingInputPostState.Posted posted,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        Result<ProviderCommentId> result = await PostSafelyAsync(
+            repository,
+            provider,
+            ThreadOf(info),
+            QuestionComment.ComposeReminder(posted.CommentUrl),
+            cancellationToken);
+
+        switch (result)
+        {
+            case Result<ProviderCommentId>.Success success:
+                postedCommentRegistry.Record(repository.Id, success.Value, now);
+                await awaitingInputCommands.RecordReminderPostedAsync(info.IssueId, success.Value.Value, now, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                logger.LogInformation(
+                    "Posted the reminder of awaiting-input issue #{IssueNumber} in '{Slug}' as comment {CommentId}.",
+                    info.IssueNumber,
+                    repository.Slug,
+                    success.Value);
+                break;
+
+            case Result<ProviderCommentId>.Failure failure:
+                await awaitingInputCommands.RecordReminderPostFailedAsync(
+                    info.IssueId,
+                    failure.Error.Message,
+                    CommentPostErrors.IsTransient(failure.Error),
+                    now,
+                    cancellationToken);
+                logger.LogWarning(
+                    "Posting the reminder of awaiting-input issue #{IssueNumber} in '{Slug}' failed: {Error}",
+                    info.IssueNumber,
+                    repository.Slug,
+                    failure.Error.Message);
+                break;
+        }
+    }
+
+    private static CommentThread ThreadOf(AwaitingInputIssueInfo info) =>
+        info.PullRequestUrl is { } pullRequestUrl
+            ? new CommentThread.PullRequest(pullRequestUrl)
+            : new CommentThread.Issue(info.IssueNumber);
 
     private void ReplaceWatch(Dictionary<int, IssueWatch> watches, IssueWatch watch)
     {
@@ -271,11 +384,10 @@ internal sealed class AwaitingInputStep(
 
     /// <summary>
     /// Reads the question's thread after its post time (the eligible comments: not a bot, not system, not in a resolved
-    /// thread, not in the posted-comment registry), records this pass's body on an issue-thread wait, and lets the watch
-    /// decide. Returns the input once all of it has outlasted the quiet period; input still inside it schedules one
-    /// follow-up nudge for when the last of it settles.
+    /// thread, not in the posted-comment registry), records this pass's body on an issue-thread wait and its head on a
+    /// wait with a resume branch, and lets the watch decide. Returns <see langword="null"/> when this pass can't tell (a read failed).
     /// </summary>
-    private async Task<AwaitingInputArrived?> ReadInputAsync(
+    private async Task<InputSettlement?> ReadInputAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
         AwaitingInputIssueInfo info,
@@ -283,6 +395,7 @@ internal sealed class AwaitingInputStep(
         PostedCommentIds postedComments,
         IssueWatch watch,
         IssueStatus? status,
+        BranchHead? head,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -302,6 +415,22 @@ internal sealed class AwaitingInputStep(
             }
         }
 
+        if (info.BranchName is not null)
+        {
+            if (head is null)
+            {
+                // Without this pass's head a pending push can't be confirmed, nor a revert seen; read again next pass.
+                if (watch.PendingHeadChange is not null)
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                watch.ObserveHead(head, now);
+            }
+        }
+
         ReviewFeedback? feedback = info.PullRequestUrl is { } pullRequestUrl
             ? await provider.GetReviewFeedbackAsync(repository.Slug, pullRequestUrl, postedAt, postedComments, cancellationToken)
                 is Result<ReviewFeedback>.Success { Value: var reviewFeedback } ? reviewFeedback : null
@@ -315,19 +444,6 @@ internal sealed class AwaitingInputStep(
             return null;
         }
 
-        switch (watch.Settle(feedback, now))
-        {
-            case InputSettlement.Settled settled:
-                return new AwaitingInputArrived(repository.Id, info.IssueNumber, settled.Input, settled.ArrivedAt);
-
-            case InputSettlement.Waiting waitingUntil:
-                nudgeQueue.TryEnqueue(new Nudge(
-                    new NudgeKey(repository.Id, NudgePass.AwaitingInput, info.IssueNumber),
-                    waitingUntil.Until));
-                return null;
-
-            default:
-                return null;
-        }
+        return watch.Settle(feedback, now);
     }
 }

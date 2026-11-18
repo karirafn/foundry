@@ -49,14 +49,15 @@ public abstract record QuestionPost
     {
         int attempts = this is Failed failed ? failed.Attempts + 1 : 1;
 
-        if (!transient)
-        {
-            return new Failed(reason, NextAttemptAt: null, attempts);
-        }
+        return new Failed(reason, transient ? NextAttemptAfter(attempts, now) : null, attempts);
+    }
 
+    /// <summary>When the next post is tried after <paramref name="attempts"/> failed ones, capped at an hour.</summary>
+    internal static DateTimeOffset NextAttemptAfter(int attempts, DateTimeOffset now)
+    {
         double delayTicks = Math.Min(
             FirstRetryDelay.Ticks * Math.Pow(2, attempts - 1),
             MaxRetryDelay.Ticks);
-        return new Failed(reason, now + TimeSpan.FromTicks((long)delayTicks), attempts);
+        return now + TimeSpan.FromTicks((long)delayTicks);
     }
 }

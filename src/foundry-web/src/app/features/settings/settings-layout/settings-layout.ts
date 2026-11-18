@@ -24,7 +24,6 @@ const HEADING_SELECTOR = 'h1, h2';
   template: `
     <div class="settings-layout">
       <header class="settings-layout__header">
-        <a class="settings-layout__back-link" routerLink="/issues">&larr; Back to issues</a>
         <h1 class="settings-layout__heading">Settings</h1>
       </header>
 

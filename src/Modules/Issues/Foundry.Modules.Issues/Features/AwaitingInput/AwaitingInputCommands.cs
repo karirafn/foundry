@@ -37,6 +37,31 @@ internal sealed class AwaitingInputCommands(
         }
     }
 
+    public async Task RecordReminderPostedAsync(
+        IssueId issueId,
+        long commentId,
+        DateTimeOffset sentAt,
+        CancellationToken cancellationToken)
+    {
+        if (await FindAsync(issueId, cancellationToken) is { } awaiting)
+        {
+            awaiting.RecordReminderPosted(commentId, sentAt);
+        }
+    }
+
+    public async Task RecordReminderPostFailedAsync(
+        IssueId issueId,
+        string reason,
+        bool transient,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (await FindAsync(issueId, cancellationToken) is { } awaiting)
+        {
+            awaiting.RecordReminderPostFailed(reason, transient, now);
+        }
+    }
+
     private async Task<AwaitingInputIssue?> FindAsync(IssueId issueId, CancellationToken cancellationToken)
     {
         Issue? issue = await db.Set<Issue>().FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
@@ -47,7 +72,7 @@ internal sealed class AwaitingInputCommands(
         }
 
         logger.LogWarning(
-            "Question post result for issue {IssueId} ignored: the issue is no longer awaiting input (state: {State}).",
+            "Question or reminder post result for issue {IssueId} ignored: the issue is no longer awaiting input (state: {State}).",
             issueId,
             issue?.GetType().Name ?? "not found");
         return null;

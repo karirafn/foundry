@@ -1,5 +1,6 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -26,7 +27,9 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
             Kind: ValidateToken.Kinds.Authenticated,
             AccountName: "test-user",
             MissingScopes: [],
-            DetectedProvider: null);
+            DetectedProvider: null,
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }

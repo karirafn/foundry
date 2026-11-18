@@ -22,16 +22,22 @@ internal sealed class CredentialConfiguration(
 
     internal const string TokenInvalidSinceField = "_tokenInvalidSince";
     private const string TokenCheckedAtField = "_tokenCheckedAt";
+    private const string TokenExpiryKindField = "_tokenExpiryKind";
+    private const string TokenExpiresAtField = "_tokenExpiresAt";
+    private const int TokenExpiryKindMaxLength = 20;
 
     /// <summary>
-    /// Writes the token validity columns with the next save even when they look unchanged. A token verdict
-    /// does not change <see cref="Credential.TokenVersion"/>, so one about the old token can commit after
-    /// <paramref name="entry"/> was loaded; writing the columns with a new token keeps the new token Valid.
+    /// Writes the token validity and expiry columns with the next save even when they look unchanged. A
+    /// token verdict does not change <see cref="Credential.TokenVersion"/>, so one about the old token can
+    /// commit after <paramref name="entry"/> was loaded; writing the columns with a new token keeps the new
+    /// token Valid and its expiry the one read with it.
     /// </summary>
     internal static void WriteTokenValidity(EntityEntry<Credential> entry)
     {
         entry.Property(TokenInvalidSinceField).IsModified = true;
         entry.Property(TokenCheckedAtField).IsModified = true;
+        entry.Property(TokenExpiryKindField).IsModified = true;
+        entry.Property(TokenExpiresAtField).IsModified = true;
     }
 
     public void Configure(EntityTypeBuilder<Credential> builder)
@@ -76,6 +82,19 @@ internal sealed class CredentialConfiguration(
             .HasColumnName("token_checked_at");
 
         builder.Ignore(a => a.TokenValidity);
+
+        // TokenExpiry is derived from these two columns; token_expires_at is set exactly when the kind is "on".
+        builder.Property<string>(TokenExpiryKindField)
+            .HasMaxLength(TokenExpiryKindMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasDefaultValue(TokenExpiryKinds.NotChecked)
+            .HasColumnName("token_expiry_kind");
+
+        builder.Property<DateTimeOffset?>(TokenExpiresAtField)
+            .HasColumnName("token_expires_at");
+
+        builder.Ignore(a => a.TokenExpiry);
 
         // Same encryption mechanism as the account token; the column is nullable because the
         // branch-rules token is optional.

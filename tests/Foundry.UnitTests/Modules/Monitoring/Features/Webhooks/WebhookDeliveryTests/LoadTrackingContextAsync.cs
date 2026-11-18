@@ -15,13 +15,13 @@ public sealed class LoadTrackingContextAsync
     private static readonly MonitoredRepositoryId RepoId = MonitoredRepositoryId.New();
 
     [Fact]
-    public async Task CarriesTheAwaitingInputIssuesAndTheirPullRequests()
+    public async Task CarriesTheAwaitingInputIssuesWithTheirPullRequestsAndBranches()
     {
-        // Arrange — 40 waits on its own thread, 50 on its pull request.
+        // Arrange — 40 waits on its own thread with no branch, 50 on its pull request of feat/50-revise.
         StubIssueQueries queries = new(
         [
-            Waiting(40, pullRequestUrl: null),
-            Waiting(50, pullRequestUrl: "https://github.com/owner/repo/pull/51"),
+            Waiting(40, pullRequestUrl: null, branchName: null),
+            Waiting(50, pullRequestUrl: "https://github.com/owner/repo/pull/51", branchName: "feat/50-revise"),
         ]);
 
         // Act
@@ -34,19 +34,20 @@ public sealed class LoadTrackingContextAsync
         // Assert
         tracked.AwaitingInput.ShouldBe(
         [
-            new AwaitingInputThread(40, null),
-            new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51"),
+            new AwaitingInputThread(40, null, null),
+            new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51", "feat/50-revise"),
         ]);
     }
 
-    private static AwaitingInputIssueInfo Waiting(int issueNumber, string? pullRequestUrl) =>
+    private static AwaitingInputIssueInfo Waiting(int issueNumber, string? pullRequestUrl, string? branchName) =>
         new(
             IssueId.New(),
             issueNumber,
             $"https://github.com/owner/repo/issues/{issueNumber}",
             pullRequestUrl,
+            branchName,
             [new InputQuestion("Which?", "Context.", null)],
-            new AwaitingInputPostState.Posted(DateTimeOffset.UnixEpoch));
+            new AwaitingInputPostState.Posted(DateTimeOffset.UnixEpoch, CommentUrl: null, ReminderDueAt: null));
 
     private sealed class StubIssueQueries(IReadOnlyList<AwaitingInputIssueInfo> awaitingInput) : IIssueQueries
     {

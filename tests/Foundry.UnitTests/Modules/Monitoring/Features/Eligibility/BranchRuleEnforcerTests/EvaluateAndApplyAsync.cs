@@ -39,7 +39,7 @@ public sealed class EvaluateAndApplyAsync
     private static GitHubCredential CreateAccount(string? branchRulesToken = RulesToken) =>
         GitHubCredential.Create(
             AccountName.Create("acct").ValueOrThrow(),
-            "ghp_account",
+            new IssuedToken("ghp_account", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow(),
             branchRulesToken);
 

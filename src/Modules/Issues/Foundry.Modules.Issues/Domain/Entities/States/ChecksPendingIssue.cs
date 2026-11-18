@@ -21,6 +21,8 @@ public sealed class ChecksPendingIssue : Issue
 
     public override IssueCodeStep? CodeStep => IssueCodeStep.Checks;
 
+    public override RunKind? RunKind => null;
+
     /// <summary>
     /// Maximum number of FailedChecks revision containers Foundry will dispatch across the lifetime
     /// of an issue before transitioning it back to review instead of retrying.

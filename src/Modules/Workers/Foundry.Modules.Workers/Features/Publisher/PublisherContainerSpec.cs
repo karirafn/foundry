@@ -35,6 +35,12 @@ internal static class PublisherContainerSpec
             environment["RUN_BRANCH"] = runBranch.Value;
         }
 
+        if (request.Review is { } review)
+        {
+            environment["REVIEW_BRANCH"] = review.Branch.Value;
+            environment["REVIEW_COMMIT"] = review.Commit.Value;
+        }
+
         return Build(request.RunId, environment, "prepare", request.Limits);
     }
 

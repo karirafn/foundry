@@ -259,6 +259,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/issues/{id}/continue-without-answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Closes an awaiting-input issue's open questions as unanswered and resumes its work */
+        post: operations["ContinueWithoutAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues/{id}/retry-post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends an awaiting-input issue's failed question post back to pending so it is posted again */
+        post: operations["RetryQuestionPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts": {
         parameters: {
             query?: never;
@@ -978,6 +1012,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/awaiting-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates how long a posted question waits without input before its one reminder */
+        put: operations["UpdateAwaitingInputSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1014,6 +1065,8 @@ export interface components {
             /** Format: date-time */
             nextPostAttemptAt: null | string;
             resumeTarget: string;
+            /** Format: date-time */
+            reminderSentAt: null | string;
         };
         BlockerDetails: {
             /** Format: int32 */
@@ -1087,6 +1140,7 @@ export interface components {
             branchRulesTokenStatus: string;
             /** Format: date-time */
             tokenInvalidSince: null | string;
+            tokenExpiry: components["schemas"]["TokenExpirySummary"];
         };
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -1149,6 +1203,11 @@ export interface components {
              * @default 15
              */
             backstopIntervalMinutes: number | string;
+            /**
+             * Format: int32
+             * @default 72
+             */
+            awaitingInputReminderDelayHours: number | string;
         };
         HttpValidationProblemDetails: {
             type?: null | string;
@@ -1264,6 +1323,7 @@ export interface components {
             providerType?: null | string;
             revisionTriggerKind?: null | string;
             publishPhase?: null | string;
+            runKind?: null | string;
         };
         MergeWaitDetails: {
             /** Format: int32 */
@@ -1505,6 +1565,11 @@ export interface components {
         TakeoverValidationResponse: {
             invalidNamespaces: string[];
         };
+        TokenExpirySummary: {
+            status: string;
+            /** Format: date-time */
+            expiresAt: null | string;
+        };
         TokenRequirements: {
             providerType: string;
             tokenTypeLabel: string;
@@ -1554,6 +1619,10 @@ export interface components {
         UpdateAuthModeRequestBody: {
             mode: string;
             apiKey: null | string;
+        };
+        UpdateAwaitingInputSettingsRequestBody: {
+            /** Format: int32 */
+            awaitingInputReminderDelayHours: number | string;
         };
         UpdateClaudeCodeSettingsRequestBody: {
             additionalDenyRules: string[];
@@ -1646,6 +1715,7 @@ export interface components {
             accountName: null | string;
             missingScopes: string[];
             detectedProvider: null | string;
+            tokenExpiry: components["schemas"]["TokenExpirySummary"];
         };
         WebhookRegistrationOutcome: {
             kind: string;
@@ -2323,6 +2393,104 @@ export interface operations {
         };
     };
     Retriage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ContinueWithoutAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RetryQuestionPost: {
         parameters: {
             query?: never;
             header?: never;
@@ -4044,6 +4212,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateWebhookSettingsRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateAwaitingInputSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAwaitingInputSettingsRequestBody"];
             };
         };
         responses: {

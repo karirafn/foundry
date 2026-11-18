@@ -5,12 +5,15 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <summary>
 /// What the awaiting-input poll step needs of one waiting issue (ADR 0096). The questions go on
 /// <paramref name="PullRequestUrl"/>'s thread when it is set, otherwise on the issue's own thread.
+/// <paramref name="BranchName"/> is the resume target's branch, whose head counts as input: set for a revision or a
+/// continuation, <see langword="null"/> for a fresh run or a re-triage, which have no branch.
 /// </summary>
 public sealed record AwaitingInputIssueInfo(
     IssueId IssueId,
     int IssueNumber,
     string IssueUrl,
     string? PullRequestUrl,
+    string? BranchName,
     IReadOnlyList<InputQuestion> Questions,
     AwaitingInputPostState PostState);
 
@@ -27,6 +30,10 @@ public abstract record AwaitingInputPostState
     /// </summary>
     public sealed record Unposted(DateTimeOffset? DueAt) : AwaitingInputPostState;
 
-    /// <summary>Posted at <paramref name="PostedAt"/>, the cutoff replies are read after.</summary>
-    public sealed record Posted(DateTimeOffset PostedAt) : AwaitingInputPostState;
+    /// <summary>
+    /// Posted at <paramref name="PostedAt"/>, the cutoff replies are read after, as the comment at
+    /// <paramref name="CommentUrl"/> when its URL is known. The round's one reminder is due at
+    /// <paramref name="ReminderDueAt"/>; <see langword="null"/> once it is sent or after it failed permanently.
+    /// </summary>
+    public sealed record Posted(DateTimeOffset PostedAt, string? CommentUrl, DateTimeOffset? ReminderDueAt) : AwaitingInputPostState;
 }

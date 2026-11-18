@@ -711,6 +711,130 @@
         }
       }
     },
+    "/api/issues/{id}/continue-without-answer": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Closes an awaiting-input issue's open questions as unanswered and resumes its work",
+        "operationId": "ContinueWithoutAnswer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/{id}/retry-post": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Sends an awaiting-input issue's failed question post back to pending so it is posted again",
+        "operationId": "RetryQuestionPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/accounts": {
       "get": {
         "tags": [
@@ -2905,6 +3029,57 @@
           }
         }
       }
+    },
+    "/api/settings/awaiting-input": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates how long a posted question waits without input before its one reminder",
+        "operationId": "UpdateAwaitingInputSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAwaitingInputSettingsRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3001,7 +3176,8 @@
           "commentUrl",
           "postFailureReason",
           "nextPostAttemptAt",
-          "resumeTarget"
+          "resumeTarget",
+          "reminderSentAt"
         ],
         "type": "object",
         "properties": {
@@ -3042,6 +3218,13 @@
           },
           "resumeTarget": {
             "type": "string"
+          },
+          "reminderSentAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -3331,7 +3514,8 @@
           "tokenStatus",
           "namespaces",
           "branchRulesTokenStatus",
-          "tokenInvalidSince"
+          "tokenInvalidSince",
+          "tokenExpiry"
         ],
         "type": "object",
         "properties": {
@@ -3369,6 +3553,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "tokenExpiry": {
+            "$ref": "#/components/schemas/TokenExpirySummary"
           }
         }
       },
@@ -3628,6 +3815,15 @@
             ],
             "format": "int32",
             "default": 15
+          },
+          "awaitingInputReminderDelayHours": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 72
           }
         }
       },
@@ -4188,6 +4384,12 @@
             ]
           },
           "publishPhase": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "runKind": {
             "type": [
               "null",
               "string"
@@ -5177,6 +5379,25 @@
           }
         }
       },
+      "TokenExpirySummary": {
+        "required": [
+          "status",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "TokenRequirements": {
         "required": [
           "providerType",
@@ -5389,6 +5610,22 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "UpdateAwaitingInputSettingsRequestBody": {
+        "required": [
+          "awaitingInputReminderDelayHours"
+        ],
+        "type": "object",
+        "properties": {
+          "awaitingInputReminderDelayHours": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -5779,7 +6016,8 @@
           "kind",
           "accountName",
           "missingScopes",
-          "detectedProvider"
+          "detectedProvider",
+          "tokenExpiry"
         ],
         "type": "object",
         "properties": {
@@ -5803,6 +6041,9 @@
               "null",
               "string"
             ]
+          },
+          "tokenExpiry": {
+            "$ref": "#/components/schemas/TokenExpirySummary"
           }
         }
       },

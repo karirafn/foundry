@@ -36,6 +36,7 @@ function item(id: string, issueNumber: number, overrides: Record<string, unknown
     needsAction: false,
     awaitsDispatch: false,
     codeStep: null,
+    runKind: null,
     waitsOnBlockers: false,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -239,8 +240,8 @@ describe('BoardPageComponent', () => {
   it('shows the bands in priority order', async () => {
     // Act
     const { el } = await loaded([
-      item('b', 1, { state: 'blocked', awaitsDispatch: true, waitsOnBlockers: true }),
-      item('p', 2, { state: 'queued', awaitsDispatch: true }),
+      item('b', 1, { state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }),
+      item('p', 2, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       item('w', 3),
       item('n', 4, { state: 'failed', needsAction: true }),
     ]);
@@ -287,6 +288,7 @@ describe('BoardPageComponent', () => {
         item('q', 5, {
           state: 'queued',
           awaitsDispatch: true,
+          runKind: 'fresh',
           repositoryEligibilityStatus: 'ineligible',
         }),
       ]);
@@ -305,12 +307,14 @@ describe('BoardPageComponent', () => {
         item('a', 4, {
           state: 'queued',
           awaitsDispatch: true,
+          runKind: 'fresh',
           repositoryEligibilityStatus: 'ineligible',
           repositoryId: 'repo-9',
         }),
         item('b', 5, {
           state: 'queued',
           awaitsDispatch: true,
+          runKind: 'fresh',
           repositoryEligibilityStatus: 'ineligible',
           repositoryId: 'repo-9',
         }),
@@ -771,8 +775,8 @@ describe('BoardPageComponent', () => {
     it('says how many are queued when nothing runs', async () => {
       // Act
       const { el } = await loaded([
-        item('a', 1, { state: 'queued', awaitsDispatch: true }),
-        item('b', 2, { state: 'queued', awaitsDispatch: true }),
+        item('a', 1, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
+        item('b', 2, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       ]);
 
       // Assert
@@ -794,14 +798,15 @@ describe('BoardPageComponent', () => {
     it('lists every queued issue in global dispatch order with its position', async () => {
       // Act
       const { el } = await loaded([
-        item('t', 1, { stage: 'triage', state: 'triage_queued', awaitsDispatch: true }),
-        item('d', 2, { stage: 'triage', state: 'detected', awaitsDispatch: true }),
+        item('t', 1, { stage: 'triage', state: 'triage_queued', awaitsDispatch: true, runKind: 'triage' }),
+        item('d', 2, { stage: 'triage', state: 'detected', awaitsDispatch: true, runKind: 'triage' }),
         item('x', 3, {
           state: 'queued',
           awaitsDispatch: true,
+          runKind: 'fresh',
           repositoryEligibilityStatus: 'unreachable',
         }),
-        item('i', 4, { state: 'queued', awaitsDispatch: true }),
+        item('i', 4, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       ]);
 
       // Assert
@@ -828,6 +833,7 @@ describe('BoardPageComponent', () => {
           title: 'Fix alerts',
           state: 'queued',
           awaitsDispatch: true,
+          runKind: 'fresh',
           repositorySlug: 'acme/isal-monitoring',
         }),
       ]);
@@ -846,7 +852,7 @@ describe('BoardPageComponent', () => {
     it('shows the first 10 rows until Show all', async () => {
       // Arrange
       const queued = Array.from({ length: 12 }, (_, i) =>
-        item(`q${i}`, i + 1, { state: 'queued', awaitsDispatch: true }),
+        item(`q${i}`, i + 1, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       );
       const h = await loaded(queued);
       expect(h.el.querySelectorAll('fd-board-row')).toHaveLength(10);
@@ -864,7 +870,7 @@ describe('BoardPageComponent', () => {
 
     it('says the queue order may be out of date beside its heading', async () => {
       // Arrange
-      const h = await loaded([item('i', 4, { state: 'queued', awaitsDispatch: true })]);
+      const h = await loaded([item('i', 4, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' })]);
 
       // Act
       (
@@ -880,6 +886,19 @@ describe('BoardPageComponent', () => {
       );
     });
 
+    it("leads a revision queued by failing checks with its run kind, not its role", async () => {
+      // Act
+      const { el } = await loaded([
+        item('r', 1030, { state: 'revision_queued', awaitsDispatch: true, runKind: 'checks_fix' }),
+      ]);
+
+      // Assert
+      const lead = el.querySelector('ol[aria-label="Pipeline in dispatch order"] fd-board-row .board-row__lead');
+      expect(text(lead?.querySelector('fd-run-kind-tag'))).toBe('Run: checks fix');
+      expect(lead?.querySelector('fd-role-tag')).toBeNull();
+      expect(text(lead)).toBe('Position #1 next Run: checks fix');
+    });
+
     it('is hidden with no rows', async () => {
       // Act
       const { el } = await loaded([item('w', 3)]);
@@ -891,7 +910,7 @@ describe('BoardPageComponent', () => {
 
   describe('Blocked', () => {
     const blocked = () => [
-      item('b', 1, { state: 'blocked', awaitsDispatch: true, waitsOnBlockers: true }),
+      item('b', 1, { state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }),
     ];
 
     it('is collapsed by default behind a disclosure in its heading', async () => {
@@ -907,6 +926,18 @@ describe('BoardPageComponent', () => {
       expect(text(el.querySelector('.blocked-band__aside'))).toBe(
         'These start on their own once their blockers close.',
       );
+    });
+
+    it('leads each row with its run kind, not its role', async () => {
+      // Act
+      const { el } = await loaded([
+        item('b', 1, { stage: 'triage', state: 'triage_blocked', awaitsDispatch: true, runKind: 'triage', waitsOnBlockers: true }),
+      ]);
+
+      // Assert
+      const lead = el.querySelector('#board-blocked-list fd-board-row .board-row__lead');
+      expect(text(lead?.querySelector('fd-run-kind-tag'))).toBe('Run: triage');
+      expect(lead?.querySelector('fd-role-tag')).toBeNull();
     });
 
     it('expands and remembers it', async () => {
@@ -1328,7 +1359,7 @@ describe('BoardPageComponent', () => {
       await openCard(h, 'f');
       h.httpMock.expectOne('/api/issues/f');
       TestBed.inject(IssueService).issues.set([
-        item('f', 142, { state: 'blocked', awaitsDispatch: true, waitsOnBlockers: true }) as never,
+        item('f', 142, { state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }) as never,
       ]);
       await new Promise((resolve) => setTimeout(resolve, 200));
       await h.render();

@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Features;
+using Foundry.Modules.Settings.Features.AwaitingInput;
 using Foundry.Modules.Settings.Features.Dispatch;
 using Foundry.Modules.Settings.Features.ProviderHosts;
 using Foundry.Modules.Settings.Features.Webhooks;
@@ -29,6 +30,7 @@ public static class SettingsModule
         services.AddCommandHandler<ResumeDispatch.Command, GlobalSettingsSummary, ResumeDispatch.Handler>();
         services.AddCommandHandler<UpdateWorkerImageConfiguration.Command, GlobalSettingsSummary, UpdateWorkerImageConfiguration.Handler>();
         services.AddCommandHandler<UpdateNestedDocker.Command, GlobalSettingsSummary, UpdateNestedDocker.Handler>();
+        services.AddCommandHandler<UpdateAwaitingInputSettings.Command, GlobalSettingsSummary, UpdateAwaitingInputSettings.Handler>();
         services.AddCommandHandler<UpdateWorkerEnvironment.Command, GlobalSettingsSummary, UpdateWorkerEnvironment.Handler>();
         services.AddCommandHandler<UpdateClaudeCodeSettings.Command, GlobalSettingsSummary, UpdateClaudeCodeSettings.Handler>();
         services.AddCommandHandler<RetryImageBuild.Command, GlobalSettingsSummary, RetryImageBuild.Handler>();

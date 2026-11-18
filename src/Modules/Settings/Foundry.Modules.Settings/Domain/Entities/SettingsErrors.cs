@@ -38,6 +38,11 @@ internal static class SettingsErrors
     internal static Error InvalidBackstopInterval(int value) =>
         new(InvalidBackstopIntervalCode, $"Backstop interval must be between {GlobalSettings.MinBackstopIntervalMinutes} and {GlobalSettings.MaxBackstopIntervalMinutes} minutes, but was {value}.");
 
+    internal const string InvalidAwaitingInputReminderDelayCode = "Settings.InvalidAwaitingInputReminderDelay";
+
+    internal static Error InvalidAwaitingInputReminderDelay(int value) =>
+        new(InvalidAwaitingInputReminderDelayCode, $"The awaiting-input reminder delay must be between {GlobalSettings.MinAwaitingInputReminderDelayHours} and {GlobalSettings.MaxAwaitingInputReminderDelayHours} hours, but was {value}.");
+
     internal const string InvalidWebhookPublicBaseUrlCode = "Settings.InvalidWebhookPublicBaseUrl";
 
     internal static readonly Error InvalidWebhookPublicBaseUrl =

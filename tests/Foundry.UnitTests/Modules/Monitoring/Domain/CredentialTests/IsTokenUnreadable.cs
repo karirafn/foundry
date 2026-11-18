@@ -29,7 +29,7 @@ public sealed class IsTokenUnreadable
     public void WhenTokenIsPresent_ReturnsFalse()
     {
         // Arrange
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), "ghp_abc", GitHubBaseUrl());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_abc", new TokenExpiry.NotChecked()), GitHubBaseUrl());
 
         // Act
         bool result = credential.IsTokenUnreadable;

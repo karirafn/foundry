@@ -104,6 +104,7 @@ internal static partial class UpdateAccount
         OptedInBranchRuleApplier branchRuleApplier,
         ProviderHostGuard hostGuard,
         IDomainEventDispatcher domainEventDispatcher,
+        TimeProvider timeProvider,
         AccountWebhookRegistrar? webhookRegistrar = null)
     {
         public async Task<Outcome> HandleAsync(
@@ -165,7 +166,11 @@ internal static partial class UpdateAccount
 
                 accountName = resolved.Identity.Name;
 
-                UpdateCredential(credential, accountName, command.Token, baseUrl);
+                UpdateCredential(
+                    credential,
+                    accountName,
+                    new IssuedToken(command.Token, resolved.Identity.TokenExpiry),
+                    baseUrl);
                 CredentialConfiguration.WriteTokenValidity(dbContext.Entry(credential));
 
                 try
@@ -215,7 +220,7 @@ internal static partial class UpdateAccount
                 }
             }
 
-            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential);
+            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
 
             return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));
         }
@@ -232,7 +237,7 @@ internal static partial class UpdateAccount
             }
         }
 
-        private static void UpdateCredential(Credential credential, AccountName accountName, string? token, BaseUrlVo baseUrl)
+        private static void UpdateCredential(Credential credential, AccountName accountName, IssuedToken? token, BaseUrlVo baseUrl)
         {
             switch (credential)
             {

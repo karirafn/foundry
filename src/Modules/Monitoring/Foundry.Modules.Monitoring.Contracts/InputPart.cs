@@ -9,6 +9,8 @@ namespace Foundry.Modules.Monitoring.Contracts;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(Comments), "comments")]
 [JsonDerivedType(typeof(DescriptionEdited), "descriptionEdited")]
+[JsonDerivedType(typeof(BranchUpdated), "branchUpdated")]
+[JsonDerivedType(typeof(ContinuedWithoutAnswer), "continuedWithoutAnswer")]
 public abstract record InputPart
 {
     private InputPart()
@@ -23,4 +25,19 @@ public abstract record InputPart
 
     /// <summary>The issue description was edited after the question was posted, and the edit settled.</summary>
     public sealed record DescriptionEdited : InputPart;
+
+    /// <summary>
+    /// Someone moved the run's branch after the question was posted, and the move settled: from
+    /// <paramref name="FromSha"/>, the head when the question was posted (<see langword="null"/> when the branch did not
+    /// exist then), to <paramref name="ToSha"/>.
+    /// </summary>
+    public sealed record BranchUpdated(string? FromSha, string ToSha) : InputPart
+    {
+        public string ToSha { get; } = !string.IsNullOrWhiteSpace(ToSha)
+            ? ToSha
+            : throw new ArgumentException("The branch head a push moved to is required.", nameof(ToSha));
+    }
+
+    /// <summary>No answer arrived, and an operator chose to continue anyway; the run uses its own judgment.</summary>
+    public sealed record ContinuedWithoutAnswer : InputPart;
 }

@@ -19,6 +19,8 @@ public sealed class FreshQueuedIssue : QueuedIssue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override RunKind? RunKind => ValueObjects.RunKind.Fresh;
+
     // Private parameterless constructor for EF Core materialization.
     private FreshQueuedIssue()
     {
@@ -33,7 +35,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
     public override BranchName? DispatchBranchName => GeneratedBranchName;
 
     public override DispatchContext Context =>
-        new DispatchContext.Fresh(GeneratedBranchName.Value);
+        new DispatchContext.Fresh(GeneratedBranchName.Value) { ContinuedWithoutAnswer = ContinuedWithoutAnswer };
 
     private BranchName GeneratedBranchName =>
         BranchName.Generate(KindClassification, IssueNumber, Title);
@@ -73,6 +75,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
         FreshQueuedIssue queued = new(source.Id, transitionedAt);
         queued.CopySharedPropertiesFrom(source);
         queued.AnswerClarification(input, answeredAt);
+        queued.ContinuedWithoutAnswer = input.IsContinuedWithoutAnswer;
         return queued;
     }
 

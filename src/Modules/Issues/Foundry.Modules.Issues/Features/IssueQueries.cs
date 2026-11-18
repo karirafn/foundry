@@ -234,15 +234,26 @@ internal sealed class IssueQueries(
             .Where(i => i.MonitoredRepositoryId == repositoryId)
             .ToListAsync(cancellationToken);
 
+        if (issues.Count == 0)
+        {
+            return [];
+        }
+
+        TimeSpan reminderDelay = await globalSettingsQueries.GetAwaitingInputReminderDelayAsync(cancellationToken);
+
         return issues
             .Select(i => new AwaitingInputIssueInfo(
                 i.Id,
                 i.IssueNumber,
                 i.Url.Value.ToString(),
                 i.LinkedPullRequestUrl,
+                i.ResumeBranchName,
                 i.Questions,
                 i.QuestionPost is QuestionPost.Posted posted
-                    ? new AwaitingInputPostState.Posted(posted.PostedAt)
+                    ? new AwaitingInputPostState.Posted(
+                        posted.PostedAt,
+                        posted.CommentUrl,
+                        i.Reminder.DueAt(posted.PostedAt, reminderDelay))
                     : new AwaitingInputPostState.Unposted(i.QuestionPost.DueAt)))
             .ToList();
     }
@@ -437,7 +448,8 @@ internal sealed class IssueQueries(
             MergeSkippedReason: (mergeOutcome as MergeOutcome.Skipped)?.Reason,
             ProviderType: displayInfo?.ProviderType,
             RevisionTriggerKind: GetRevisionTriggerKind(issue),
-            PublishPhase: publishPhase);
+            PublishPhase: publishPhase,
+            RunKind: RunKindName(issue.RunKind));
     }
 
     private static string StageName(IssueStage stage) =>
@@ -448,6 +460,20 @@ internal sealed class IssueQueries(
             IssueStage.AwaitingReview => IssueSummary.AwaitingReviewStage,
             IssueStage.Done => IssueSummary.DoneStage,
             _ => throw new InvalidOperationException($"Unknown issue stage: {stage}"),
+        };
+
+    private static string? RunKindName(RunKind? runKind) =>
+        runKind switch
+        {
+            RunKind.Triage => IssueSummary.TriageRunKind,
+            RunKind.Fresh => IssueSummary.FreshRunKind,
+            RunKind.Continuation => IssueSummary.ContinuationRunKind,
+            RunKind.ReviewFix => IssueSummary.ReviewFixRunKind,
+            RunKind.ChecksFix => IssueSummary.ChecksFixRunKind,
+            RunKind.ConflictFix => IssueSummary.ConflictFixRunKind,
+            RunKind.InputResume => IssueSummary.InputResumeRunKind,
+            null => null,
+            _ => throw new InvalidOperationException($"Unknown run kind: {runKind}"),
         };
 
     // Publishing is a phase of the run, so a working issue's step comes from its run rather than its state.
@@ -709,7 +735,8 @@ internal sealed class IssueQueries(
                 posted.CommentUrl,
                 PostFailureReason: null,
                 NextPostAttemptAt: null,
-                ResumeTargetName(issue.ResumeTarget)),
+                ResumeTargetName(issue.ResumeTarget),
+                issue.Reminder is QuestionReminder.Sent sent ? sent.SentAt : null),
             QuestionPost.Failed failed => new AwaitingInputDetails(
                 issue.Questions,
                 "failed",
@@ -717,7 +744,8 @@ internal sealed class IssueQueries(
                 CommentUrl: null,
                 failed.Reason,
                 failed.NextAttemptAt,
-                ResumeTargetName(issue.ResumeTarget)),
+                ResumeTargetName(issue.ResumeTarget),
+                ReminderSentAt: null),
             _ => new AwaitingInputDetails(
                 issue.Questions,
                 "pending",
@@ -725,7 +753,8 @@ internal sealed class IssueQueries(
                 CommentUrl: null,
                 PostFailureReason: null,
                 NextPostAttemptAt: null,
-                ResumeTargetName(issue.ResumeTarget)),
+                ResumeTargetName(issue.ResumeTarget),
+                ReminderSentAt: null),
         };
 
     private static List<BlockerDetails> BlockersOf(Issue issue)

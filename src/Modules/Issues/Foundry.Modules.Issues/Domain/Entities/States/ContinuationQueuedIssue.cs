@@ -21,6 +21,8 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override RunKind? RunKind => ValueObjects.RunKind.Continuation;
+
     public const int FailureReasonMaxLength = 500;
 
     // Private parameterless constructor for EF Core materialization.
@@ -37,7 +39,7 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
     public override BranchNameValue? DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
-        new DispatchContext.Continuation(BranchName, FailureReason);
+        new DispatchContext.Continuation(BranchName, FailureReason) { ContinuedWithoutAnswer = ContinuedWithoutAnswer };
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -82,6 +84,7 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
         queued.CopySharedPropertiesFrom(source);
         queued.AnswerClarification(input, answeredAt);
+        queued.ContinuedWithoutAnswer = input.IsContinuedWithoutAnswer;
         queued.BranchName = target.BranchName;
         queued.FailureReason = string.Empty;
         return queued;

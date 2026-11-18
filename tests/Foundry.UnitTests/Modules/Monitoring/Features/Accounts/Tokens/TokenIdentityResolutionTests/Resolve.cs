@@ -1,4 +1,6 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -11,11 +13,34 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Tokens.TokenIde
 
 public sealed class Resolve
 {
+    private static ValidateToken.Response Response(
+        string kind,
+        string? accountName,
+        IReadOnlyList<string> missingScopes,
+        string? detectedProvider,
+        TokenExpiry? expiry = null) =>
+        new(kind, accountName, missingScopes, detectedProvider, expiry ?? new TokenExpiry.NotChecked(), new TokenExpirySummary("notChecked", null));
+
+    [Fact]
+    public void WhenAuthenticated_CarriesTheTokenExpiry()
+    {
+        // Arrange
+        DateTimeOffset expiresAt = new(2026, 8, 15, 0, 0, 0, TimeSpan.Zero);
+        ValidateToken.Response response = Response(
+            ValidateToken.Kinds.Authenticated, "octocat", [], null, new TokenExpiry.On(expiresAt));
+
+        // Act
+        Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
+
+        // Assert
+        result.ValueOrThrow().TokenExpiry.ShouldBe(new TokenExpiry.On(expiresAt));
+    }
+
     [Fact]
     public void WhenAuthenticatedWithAllScopes_ReturnsTheAccountName()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.Authenticated, "octocat", [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.Authenticated, "octocat", [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -28,7 +53,7 @@ public sealed class Resolve
     public void WhenScopesUnverifiable_ReturnsTheAccountName()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.ScopesUnverifiable, "group-bot", [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.ScopesUnverifiable, "group-bot", [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -41,7 +66,7 @@ public sealed class Resolve
     public void WhenAuthenticatedWithMissingScopes_ReturnsInvalidToken()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.Authenticated, "octocat", ["repo"], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.Authenticated, "octocat", ["repo"], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -54,7 +79,7 @@ public sealed class Resolve
     public void WhenAuthenticatedWithoutAnAccountName_ReturnsInvalidToken()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.Authenticated, null, [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.Authenticated, null, [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -67,7 +92,7 @@ public sealed class Resolve
     public void WhenAuthenticationFailed_ReturnsInvalidToken()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.AuthenticationFailed, null, [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.AuthenticationFailed, null, [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -80,7 +105,7 @@ public sealed class Resolve
     public void WhenIdentityUnresolved_ReturnsUnresolvedIdentity()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.IdentityUnresolved, null, [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.IdentityUnresolved, null, [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -96,7 +121,7 @@ public sealed class Resolve
     public void WhenScopesUnverifiableWithABlankAccountName_ReturnsUnresolvedIdentity(string? accountName)
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.ScopesUnverifiable, accountName, [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.ScopesUnverifiable, accountName, [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -109,7 +134,7 @@ public sealed class Resolve
     public void WhenAuthenticatedWithAnOverlongAccountName_ReturnsUnresolvedIdentity()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.Authenticated, new string('a', 201), [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.Authenticated, new string('a', 201), [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -122,7 +147,7 @@ public sealed class Resolve
     public void WhenProviderMismatch_ReturnsProviderMismatchNamingTheDetectedProvider()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.ProviderMismatch, null, [], "gitlab");
+        ValidateToken.Response response = Response(ValidateToken.Kinds.ProviderMismatch, null, [], "gitlab");
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
@@ -135,7 +160,7 @@ public sealed class Resolve
     public void WhenProviderMismatchWithoutADetectedProvider_ReturnsProviderMismatchWithAnEmptyName()
     {
         // Arrange
-        ValidateToken.Response response = new(ValidateToken.Kinds.ProviderMismatch, null, [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.ProviderMismatch, null, [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);

@@ -172,7 +172,7 @@ internal sealed class WorkerRunPublisher(
     private async Task<bool> SettlePullRequestAsync(PublishingRun run, CancellationToken cancellationToken)
     {
         if (!run.Exit.FinishedCleanly
-            || run.Verdict is { Status: RunVerdictStatus.NeedsInput }
+            || run.AsksForInput
             || run.DivergedSideBranch is not null)
         {
             return await RecordPullRequestSettledAsync(run, cancellationToken);

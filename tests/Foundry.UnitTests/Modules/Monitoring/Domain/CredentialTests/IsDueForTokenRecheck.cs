@@ -15,7 +15,7 @@ public sealed class IsDueForTokenRecheck
     private static GitHubCredential CreateAccount() =>
         GitHubCredential.Create(
             AccountName.Create("my-org").ValueOrThrow(),
-            string.Concat("ghp_", "token"),
+            new IssuedToken(string.Concat("ghp_", "token"), new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
 
     [Fact]

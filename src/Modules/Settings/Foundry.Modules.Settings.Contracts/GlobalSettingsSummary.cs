@@ -23,4 +23,5 @@ public sealed record GlobalSettingsSummary(
     IReadOnlyList<string> AdditionalDenyRules,
     IReadOnlyList<PausedHost> PausedHosts,
     string? WebhookPublicBaseUrl = null,
-    int BackstopIntervalMinutes = 15);
+    int BackstopIntervalMinutes = 15,
+    int AwaitingInputReminderDelayHours = 72);

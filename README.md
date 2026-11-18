@@ -116,7 +116,7 @@ By default Foundry polls every repository. GitHub and GitLab webhooks make it re
 
    For a **GitLab** repository the payload URL is `<public base URL>/webhooks/gitlab/<hookId>`. Paste the revealed secret as the hook's **Secret token** and tick the listed triggers (Issues/Work item events, Comments, Merge request events, Pipeline events, Push events, plus the confidential variants if you track confidential issues). GitLab has no `ping`, so after clicking **I've added the webhook** use the hook's **Test** action (for example *Issues events*) to send the first delivery. GitLab has no event for issue links or protected branches; while the hook is active those changes are picked up by the backstop poll.
 
-A repository polls at the backstop interval only while its webhook is **Active**. While it is active, a running worker's commit count is refreshed from push deliveries instead of a branch compare every 10 seconds. A hook registered before the `push` / *Push events* subscription was added should have it ticked, or the count only updates when the worker exits. If a scheduled poll finds a change that no delivery announced, the status becomes **Silent** and normal polling resumes until the next delivery.
+A repository polls at the backstop interval only while its webhook is **Active**. While it is active, a push to the branch of an issue awaiting input runs its awaiting-input check at once. A hook registered before the `push` / *Push events* subscription was added should have it ticked, or such a push is only seen by the next poll. If a scheduled poll finds a change that no delivery announced, the status becomes **Silent** and normal polling resumes until the next delivery.
 
 ## Moving an install
 

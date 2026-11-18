@@ -1171,6 +1171,12 @@ internal static partial class SystemPromptBuilder
             {
                 InputPart.Comments comments => comments.Text,
                 InputPart.DescriptionEdited => "The issue description was edited after the question was posted.",
+                InputPart.BranchUpdated { FromSha: { } fromSha } branchUpdated =>
+                    $"Someone pushed to the branch after the question was posted: {fromSha}..{branchUpdated.ToSha}. "
+                    + "Review those commits before continuing.",
+                InputPart.BranchUpdated branchUpdated =>
+                    $"The branch was recreated at {branchUpdated.ToSha} after the question was posted.",
+                InputPart.ContinuedWithoutAnswer => "No answer arrived; the operator chose to continue. Use your judgment.",
                 _ => throw new UnreachableException($"Unhandled InputPart variant: {part.GetType().Name}"),
             }));
     }

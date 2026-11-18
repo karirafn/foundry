@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
+import { RunKindTagComponent } from '../../../shared/components/run-kind-tag/run-kind-tag';
 import { BoardBandComponent } from '../board-band/board-band';
 import { BoardRowComponent } from '../board-row/board-row';
 import { ItemView } from '../board-state.service';
@@ -22,7 +22,7 @@ export const BLOCKED_OPEN_KEY = 'fd.board.blocked-open';
 /** Issues waiting on blockers, behind a disclosure that is collapsed by default. */
 @Component({
   selector: 'fd-blocked-band',
-  imports: [BoardBandComponent, BoardRowComponent, RoleTagComponent],
+  imports: [BoardBandComponent, BoardRowComponent, RunKindTagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './blocked-band.html',
   styleUrl: './blocked-band.scss',

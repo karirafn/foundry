@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
@@ -38,7 +40,9 @@ public sealed class WhenProviderMismatches : IAsyncDisposable
             Kind: ValidateToken.Kinds.ProviderMismatch,
             AccountName: null,
             MissingScopes: [],
-            DetectedProvider: "github");
+            DetectedProvider: "github",
+                Expiry: new TokenExpiry.NotChecked(),
+                TokenExpiry: new TokenExpirySummary("notChecked", null));
 
         await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {

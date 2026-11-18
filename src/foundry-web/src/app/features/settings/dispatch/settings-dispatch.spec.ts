@@ -579,4 +579,88 @@ describe('SettingsDispatchComponent', () => {
     // Assert
     expect(fixture.componentInstance.hasUnsavedChanges()).toBe(true);
   });
+
+  // ---------------------------------------------------------------------------
+  // Questions section (awaiting-input reminder)
+  // ---------------------------------------------------------------------------
+
+  function setupQuestions(overrides: Record<string, unknown> = {}) {
+    const { fixture, httpMock } = setupSettingsPage(SettingsDispatchComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, ...overrides });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const saveBtn = Array.from(el.querySelectorAll('section'))
+      .find(section => section.querySelector('h2')?.textContent?.trim() === 'Questions')!
+      .querySelector('button.general-settings__save-btn') as HTMLButtonElement;
+    const component = fixture.componentInstance as unknown as {
+      _reminderDelayValue: { set: (v: number) => void };
+    };
+    return { fixture, httpMock, el, saveBtn, component };
+  }
+
+  it('should initialize the reminder delay from loaded settings', () => {
+    // Arrange & Act
+    const { fixture } = setupQuestions({ awaitingInputReminderDelayHours: 48 });
+
+    // Assert
+    expect(fixture.debugElement.query(By.css('#awaitingInputReminderDelayHours')).injector.get(NgModel).model).toBe(48);
+  });
+
+  it('should send the reminder delay when Save is clicked', () => {
+    // Arrange
+    const { fixture, httpMock, saveBtn, component } = setupQuestions({ awaitingInputReminderDelayHours: 72 });
+    component._reminderDelayValue.set(24);
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+
+    // Assert
+    const req = httpMock.expectOne('/api/settings/awaiting-input');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ awaitingInputReminderDelayHours: 24 });
+    req.flush({ ...API_KEY_RESPONSE, awaitingInputReminderDelayHours: 24 });
+  });
+
+  it('should show a field error and disable Save for a delay that is not positive', () => {
+    // Arrange
+    const { fixture, el, saveBtn, component } = setupQuestions();
+
+    // Act
+    component._reminderDelayValue.set(0);
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('#reminder-delay-error')?.textContent).toContain('between 1 and 8760');
+    expect(el.querySelector('#awaitingInputReminderDelayHours')?.getAttribute('aria-invalid')).toBe('true');
+    expect(saveBtn.disabled).toBe(true);
+  });
+
+  it('should show the server error when the save fails', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn } = setupQuestions();
+
+    // Act
+    saveBtn.click();
+    httpMock.expectOne('/api/settings/awaiting-input').flush(
+      { type: 'tag:foundry,2026:problems/Settings.InvalidAwaitingInputReminderDelay', detail: 'Bad delay from server' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('#awaiting-input-error')?.textContent).toContain('Bad delay from server');
+  });
+
+  it('should report hasUnsavedChanges() as true when the reminder delay differs from saved value', () => {
+    // Arrange
+    const { fixture, component } = setupQuestions({ awaitingInputReminderDelayHours: 72 });
+
+    // Act
+    component._reminderDelayValue.set(12);
+
+    // Assert
+    expect(fixture.componentInstance.hasUnsavedChanges()).toBe(true);
+  });
 });

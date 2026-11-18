@@ -22,6 +22,9 @@ public interface IGlobalSettingsQueries
 
     Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken);
 
+    /// <summary>How long a posted question waits without input before its one reminder (ADR 0096).</summary>
+    Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken);
+
     Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken);
 
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);

@@ -55,7 +55,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
 
     private async Task<MonitoredRepositoryId> SeedRepoAsync(string? token = "ghp_test_token")
     {
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token, BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 
@@ -159,7 +159,7 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         MonitoredRepositoryId repoId = await SeedRepoAsync();
         GitHubCredential invalidCredential = GitHubCredential.Create(
             AccountName.Create("my-org").ValueOrThrow(),
-            string.Concat("ghp_", "rejected"),
+            new IssuedToken(string.Concat("ghp_", "rejected"), new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         invalidCredential.MarkTokenInvalid(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
 

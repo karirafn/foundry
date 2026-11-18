@@ -193,6 +193,13 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.Ignore(r => r.Verdict);
 
+        builder.Property(r => r.RefusesNeedsInput)
+            .HasColumnName("refuses_needs_input")
+            .HasDefaultValue(false);
+
+        builder.Ignore(r => r.NeedsInputRefused);
+        builder.Ignore(r => r.AsksForInput);
+
         builder.Property(r => r.BaseDefaultBranchHead)
             .HasConversion(WorkerRunValueConverters.CommitShaConverter)
             .HasMaxLength(CommitShaMaxLength)

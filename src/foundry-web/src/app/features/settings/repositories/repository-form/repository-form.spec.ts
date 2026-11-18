@@ -22,6 +22,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MOCK_ACCOUNT_2: AccountSummary = {
@@ -34,6 +35,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   branchRulesTokenStatus: 'absent',
   tokenInvalidSince: null,
   namespaces: [],
+  tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
 const MOCK_REPOSITORY: RepositorySummary = {
@@ -1292,6 +1294,7 @@ describe('RepositoryFormComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: ['team-alpha'],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     const accountB: AccountSummary = {
       id: '00000000-0000-0000-0000-000000000004',
@@ -1303,6 +1306,7 @@ describe('RepositoryFormComponent', () => {
       branchRulesTokenStatus: 'absent',
       tokenInvalidSince: null,
       namespaces: ['team-beta'],
+      tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
 
     // Act

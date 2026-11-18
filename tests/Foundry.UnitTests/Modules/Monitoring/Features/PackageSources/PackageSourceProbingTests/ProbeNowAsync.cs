@@ -47,7 +47,7 @@ public sealed class ProbeNowAsync : IAsyncDisposable
         ProbeDueAsync.SlugCredentialResolver resolver = new();
         resolver.Accounts["group/app"] = GitLabCredential.Create(
             AccountName.Create("deploy-bot").ValueOrThrow(),
-            "token",
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         MonitoredRepository repository = MonitoredRepository.Create(
             RepositorySlug.Create("group/app").ValueOrThrow(),
@@ -61,7 +61,7 @@ public sealed class ProbeNowAsync : IAsyncDisposable
             resolver,
             prober,
             new PackageSourceProbeGate(),
-            new CapturingSystemNotificationBroadcaster(),
+            new PackageSourceVerdictPublisher(new NullDomainEventDispatcher(), new CapturingSystemNotificationBroadcaster(), NullLogger<PackageSourceVerdictPublisher>.Instance),
             NullLogger<PackageSourceProbing>.Instance);
         await sut.ProbeDueAsync([repository], Now, TestContext.Current.CancellationToken);
 

@@ -27,6 +27,10 @@ internal static class AwaitingInputJsonConversion
     private const string FailedKind = "failed";
     private const string CommentsKind = "comments";
     private const string DescriptionEditedKind = "descriptionEdited";
+    private const string BranchUpdatedKind = "branchUpdated";
+    private const string ContinuedWithoutAnswerKind = "continuedWithoutAnswer";
+    private const string UnsentKind = "unsent";
+    private const string SentKind = "sent";
 
     public static ValueConverter<ResumeTarget, string> ResumeTargetConverter { get; } = new(
         target => SerializeResumeTarget(target),
@@ -45,6 +49,15 @@ internal static class AwaitingInputJsonConversion
         (a, b) => a == b,
         post => post.GetHashCode(),
         post => post);
+
+    public static ValueConverter<QuestionReminder, string> QuestionReminderConverter { get; } = new(
+        reminder => SerializeQuestionReminder(reminder),
+        json => DeserializeQuestionReminder(json));
+
+    public static ValueComparer<QuestionReminder> QuestionReminderComparer { get; } = new(
+        (a, b) => a == b,
+        reminder => reminder.GetHashCode(),
+        reminder => reminder);
 
     public static ValueConverter<IReadOnlyList<Clarification>, string> ClarificationsConverter { get; } = new(
         log => SerializeClarifications(log),
@@ -125,6 +138,39 @@ internal static class AwaitingInputJsonConversion
         };
     }
 
+    private static string SerializeQuestionReminder(QuestionReminder reminder)
+    {
+        QuestionReminderDto dto = reminder switch
+        {
+            QuestionReminder.Unsent => new QuestionReminderDto(UnsentKind, null, null, null, null, null),
+            QuestionReminder.Sent sent => new QuestionReminderDto(SentKind, sent.CommentId, sent.SentAt, null, null, null),
+            QuestionReminder.Failed failed => new QuestionReminderDto(
+                FailedKind,
+                null,
+                null,
+                failed.Reason,
+                failed.NextAttemptAt,
+                failed.Attempts),
+            _ => throw new UnreachableException($"Unknown QuestionReminder variant: {reminder.GetType().Name}"),
+        };
+
+        return JsonSerializer.Serialize(dto, (JsonSerializerOptions?)null);
+    }
+
+    private static QuestionReminder DeserializeQuestionReminder(string json)
+    {
+        QuestionReminderDto dto = JsonSerializer.Deserialize<QuestionReminderDto>(json, (JsonSerializerOptions?)null)
+            ?? throw new UnreachableException("Stored question_reminder JSON deserialised to null.");
+
+        return dto.Kind switch
+        {
+            UnsentKind => new QuestionReminder.Unsent(),
+            SentKind => new QuestionReminder.Sent(Required(dto.CommentId), Required(dto.SentAt)),
+            FailedKind => new QuestionReminder.Failed(dto.Reason ?? string.Empty, dto.NextAttemptAt, dto.Attempts ?? 1),
+            _ => throw new UnreachableException($"Unknown QuestionReminder kind: '{dto.Kind}'"),
+        };
+    }
+
     private static string SerializeClarifications(IReadOnlyList<Clarification> log) =>
         JsonSerializer.Serialize(
             log.Select(round => new ClarificationDto(
@@ -148,7 +194,12 @@ internal static class AwaitingInputJsonConversion
             input.Parts.Select(part => part switch
             {
                 InputPart.Comments comments => new InputPartDto(CommentsKind, comments.Text),
-                InputPart.DescriptionEdited => new InputPartDto(DescriptionEditedKind, Text: null),
+                InputPart.DescriptionEdited => new InputPartDto(DescriptionEditedKind),
+                InputPart.BranchUpdated branchUpdated => new InputPartDto(
+                    BranchUpdatedKind,
+                    FromSha: branchUpdated.FromSha,
+                    ToSha: branchUpdated.ToSha),
+                InputPart.ContinuedWithoutAnswer => new InputPartDto(ContinuedWithoutAnswerKind),
                 _ => throw new UnreachableException($"Unknown InputPart variant: {part.GetType().Name}"),
             }).ToList(),
             (JsonSerializerOptions?)null);
@@ -166,6 +217,8 @@ internal static class AwaitingInputJsonConversion
     {
         CommentsKind => new InputPart.Comments(Required(dto.Text)),
         DescriptionEditedKind => new InputPart.DescriptionEdited(),
+        BranchUpdatedKind => new InputPart.BranchUpdated(dto.FromSha, Required(dto.ToSha)),
+        ContinuedWithoutAnswerKind => new InputPart.ContinuedWithoutAnswer(),
         _ => throw new UnreachableException($"Unknown InputPart kind: '{dto.Kind}'"),
     };
 
@@ -191,6 +244,14 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("nextAttemptAt")] DateTimeOffset? NextAttemptAt,
         [property: JsonPropertyName("attempts")] int? Attempts);
 
+    private sealed record QuestionReminderDto(
+        [property: JsonPropertyName("kind")] string Kind,
+        [property: JsonPropertyName("commentId")] long? CommentId,
+        [property: JsonPropertyName("sentAt")] DateTimeOffset? SentAt,
+        [property: JsonPropertyName("reason")] string? Reason,
+        [property: JsonPropertyName("nextAttemptAt")] DateTimeOffset? NextAttemptAt,
+        [property: JsonPropertyName("attempts")] int? Attempts);
+
     private sealed record ClarificationDto(
         [property: JsonPropertyName("questions")] IReadOnlyList<QuestionDto> Questions,
         [property: JsonPropertyName("input")] JsonElement? Input,
@@ -202,8 +263,11 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("context")] string Context,
         [property: JsonPropertyName("recommendation")] string? Recommendation);
 
-    // A part without a payload is written as its kind alone.
+    // A part writes its kind and only the fields it has: one without a payload is its kind alone, and a branch recreated
+    // while waiting has no from-SHA.
     private sealed record InputPartDto(
         [property: JsonPropertyName("kind")] string Kind,
-        [property: JsonPropertyName("text"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text);
+        [property: JsonPropertyName("text"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text = null,
+        [property: JsonPropertyName("fromSha"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FromSha = null,
+        [property: JsonPropertyName("toSha"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ToSha = null);
 }
