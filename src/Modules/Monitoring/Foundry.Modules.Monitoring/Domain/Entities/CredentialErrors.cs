@@ -24,7 +24,7 @@ internal static class CredentialErrors
         new(DuplicateNamespaceCode, $"One or more namespaces derived for this token are already claimed by another credential on host '{host}'.");
 
     internal static Error MissingWritePermission(string permissionName) =>
-        new(MissingWritePermissionCode, $"The token is missing the '{permissionName}' write permission required by Foundry.");
+        new(MissingWritePermissionCode, $"The token is missing the '{permissionName}' permission required by Foundry.");
 
     internal static Error ProviderMismatch(string detectedProvider) =>
         new(ProviderMismatchCode,

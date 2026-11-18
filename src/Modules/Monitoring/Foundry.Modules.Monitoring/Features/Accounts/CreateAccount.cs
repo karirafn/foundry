@@ -383,7 +383,7 @@ internal static partial class CreateAccount
 
             if (probeSuccess.Value is WritePermissionProbeResult.Missing missing)
             {
-                string permissionName = ToDisplayName(missing.Permission);
+                string permissionName = TokenPermissions.LabelOf(missing.Permission);
                 return new Outcome.Failure(CredentialErrors.MissingWritePermission(permissionName));
             }
 
@@ -410,15 +410,6 @@ internal static partial class CreateAccount
 
             return null;
         }
-
-        private static string ToDisplayName(WritePermission permission) =>
-            permission switch
-            {
-                WritePermission.Contents => "Contents",
-                WritePermission.Issues => "Issues",
-                WritePermission.PullRequests => "Pull requests",
-                _ => permission.ToString(),
-            };
 
         private async Task<IReadOnlyList<AffectedRepository>> RecheckTransferredReposAsync(
             Credential credential,

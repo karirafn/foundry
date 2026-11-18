@@ -13,7 +13,7 @@ internal static class TokenRequirementsCatalog
                 ProviderType: ProviderTypes.GitHub,
                 TokenTypeLabel: "GitHub fine-grained personal access token",
                 Scopes: RequiredScopes.For(ProviderTypes.GitHub),
-                CreationUrlTemplate: "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write",
+                CreationUrlTemplate: $"{{baseUrl}}/settings/personal-access-tokens/new?name=Foundry&{TokenPermissions.GitHubTemplateQuery}",
                 ResourceOwnerHint: "Fine-grained tokens are bound to a single resource owner. To reach an organization's repositories, choose that organization as the token's resource owner when creating the token."),
             [ProviderTypes.GitLab] = new(
                 ProviderType: ProviderTypes.GitLab,

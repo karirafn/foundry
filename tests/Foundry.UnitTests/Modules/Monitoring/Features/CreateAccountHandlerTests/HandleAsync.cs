@@ -589,6 +589,26 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenGitHubProbeReturnsMissingContents_ErrorShowsThePermissionListLabel()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        MissingWriteProber missingProber = new(WritePermission.Contents);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: missingProber);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Message.ShouldBe(
+            "The token is missing the 'Contents (read and write)' permission required by Foundry.");
+    }
+
+    [Fact]
     public async Task WhenGitHubTokenHasNoRepositoriesUnderDerivedNamespace_ReturnsNoNamespaceRepositoriesFailure()
     {
         // Arrange — derived namespace is "octocat" but no writable repos have that prefix
