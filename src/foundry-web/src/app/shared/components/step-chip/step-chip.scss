@@ -54,6 +54,16 @@
     border-color: var(--fd-border-warning);
     color: var(--fd-text-warning);
   }
+
+  &--waiting {
+    background: var(--fd-bg-card-hover);
+    border-color: var(--fd-border-default);
+    color: var(--fd-text-secondary);
+
+    &::after {
+      display: none;
+    }
+  }
 }
 
 .step-chip__dot {
@@ -63,6 +73,11 @@
   flex-shrink: 0;
   height: 6px;
   width: 6px;
+}
+
+.step-chip--waiting .step-chip__dot {
+  animation: none;
+  background: var(--fd-text-tertiary);
 }
 
 @media (prefers-reduced-motion: reduce) {

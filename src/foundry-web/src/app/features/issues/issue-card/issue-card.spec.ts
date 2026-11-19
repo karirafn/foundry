@@ -397,6 +397,20 @@ describe('IssueCardComponent', () => {
     expect(card.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: credits exhausted');
   });
 
+  it('should announce a catch-up wait in aria-label, matching its badge', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'merge_pending', codeStep: 'catch_up_waiting' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
+
+    // Assert
+    expect(card.getAttribute('aria-label')).toContain('State: waiting to catch up');
+    expect(el.querySelector('fd-state-badge span')?.textContent?.trim()).toBe('CATCH-UP QUEUED');
+  });
+
   it('should pass the revision trigger kind to the state badge', () => {
     // Arrange
     const issue: IssueSummary = { ...mockIssue, state: 'revision_in_progress', revisionTriggerKind: 'rebase_conflict' };

@@ -156,6 +156,7 @@ function isUntracked(tokens: TokenTotal): boolean {
               [state]="issue().state"
               [failureClassification]="issue().failureClassification"
               [publishPhase]="_publishPhase()"
+              [codeStep]="issue().codeStep"
               [revisionTriggerKind]="issue().revisionTriggerKind"
             />
             @if (_checksOutcomeDisplay(); as outcome) {
@@ -490,6 +491,7 @@ export class IssueCardComponent {
     const stateLabel = resolveStateDisplay(issue.state, {
       failureClassification: issue.failureClassification,
       revisionTriggerKind: issue.revisionTriggerKind,
+      codeStep: issue.codeStep,
     }).ariaLabel;
     const nextUp = this.isNextUp() ? 'Next up. ' : '';
     const queuePositionPart = this._buildQueuePositionAriaClause();

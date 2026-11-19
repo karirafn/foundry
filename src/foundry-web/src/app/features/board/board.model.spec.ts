@@ -632,6 +632,7 @@ describe('code steps', () => {
       rebasing: 'Rebasing…',
       checks: 'Checks running…',
       merging: 'Merging…',
+      catch_up_waiting: 'Waiting to catch up',
     });
   });
 
@@ -645,6 +646,10 @@ describe('code steps', () => {
 
   it('reads merging in the working tone', () => {
     expect(codeStepTone('merging')).toBe('working');
+  });
+
+  it('reads a catch-up wait in the still waiting tone', () => {
+    expect(codeStepTone('catch_up_waiting')).toBe('waiting');
   });
 });
 

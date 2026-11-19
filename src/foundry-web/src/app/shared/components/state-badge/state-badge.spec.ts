@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { StateBadgeComponent } from './state-badge';
 import { IssueState } from '../../utils/issue-state';
 import { RevisionTriggerKind } from '../../utils/revision-trigger-kind';
+import { CodeStep } from '../../../features/issues/issue.model';
 
 function createComponent(state: IssueState, failureClassification?: string, revisionTriggerKind?: RevisionTriggerKind | null) {
   TestBed.configureTestingModule({
@@ -9,6 +10,7 @@ function createComponent(state: IssueState, failureClassification?: string, revi
   });
   const fixture = TestBed.createComponent(StateBadgeComponent);
   fixture.componentRef.setInput('state', state);
+  fixture.componentRef.setInput('codeStep', null);
   if (failureClassification !== undefined) {
     fixture.componentRef.setInput('failureClassification', failureClassification);
   }
@@ -523,6 +525,7 @@ describe('StateBadgeComponent', () => {
     TestBed.configureTestingModule({ imports: [StateBadgeComponent] });
     const fixture = TestBed.createComponent(StateBadgeComponent);
     fixture.componentRef.setInput('state', state);
+    fixture.componentRef.setInput('codeStep', null);
     fixture.componentRef.setInput('publishPhase', publishPhase);
     fixture.detectChanges();
     return (fixture.nativeElement as HTMLElement).querySelector('span');
@@ -575,6 +578,34 @@ describe('StateBadgeComponent', () => {
 
     // Assert
     expect(span?.textContent?.trim()).toBe('IN PROGRESS');
+  });
+
+  function createWithCodeStep(state: IssueState, codeStep: CodeStep | null) {
+    TestBed.configureTestingModule({ imports: [StateBadgeComponent] });
+    const fixture = TestBed.createComponent(StateBadgeComponent);
+    fixture.componentRef.setInput('state', state);
+    fixture.componentRef.setInput('codeStep', codeStep);
+    fixture.detectChanges();
+    return (fixture.nativeElement as HTMLElement).querySelector('span');
+  }
+
+  it('should display "CATCH-UP QUEUED" with badge--catch-up-waiting while waiting to catch up', () => {
+    // Arrange / Act
+    const span = createWithCodeStep('merge_pending', 'catch_up_waiting');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('CATCH-UP QUEUED');
+    expect(span?.getAttribute('aria-label')).toBe('State: waiting to catch up');
+    expect(span?.classList.contains('badge--catch-up-waiting')).toBe(true);
+  });
+
+  it('should display "MERGING" for merge_pending while merging', () => {
+    // Arrange / Act
+    const span = createWithCodeStep('merge_pending', 'merging');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('MERGING');
+    expect(span?.getAttribute('aria-label')).toBe('State: merging');
   });
 
   // Revision triggers (#832)

@@ -194,6 +194,27 @@ describe('PaneStatusComponent', () => {
     expect(text(line?.querySelector('fd-step-chip'))).toBe('Checks running…');
   });
 
+  it('shows a still waiting chip and the catch-up badge while waiting to catch up', () => {
+    // Act
+    const { el } = setup(issue('merge_pending'), {
+      summary: summary({ state: 'merge_pending', codeStep: 'catch_up_waiting' }),
+    });
+
+    // Assert
+    const line = el.querySelector('.pane-status__line');
+    expect(text(line?.querySelector('fd-step-chip'))).toBe('Waiting to catch up');
+    expect(line?.querySelector('.step-chip--waiting')).not.toBeNull();
+    expect(text(line?.querySelector('fd-state-badge span'))).toBe('CATCH-UP QUEUED');
+  });
+
+  it('shows MERGING when opened without a board summary', () => {
+    // Act
+    const { el } = setup(issue('merge_pending'));
+
+    // Assert
+    expect(text(el.querySelector('.pane-status__line fd-state-badge span'))).toBe('MERGING');
+  });
+
   it.each([
     ['triage', 'Triage'],
     ['awaiting_review', 'Your review'],

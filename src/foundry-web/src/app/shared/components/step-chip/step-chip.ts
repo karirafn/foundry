@@ -1,12 +1,18 @@
 import { ChangeDetectionStrategy, Component, InputSignal, input } from '@angular/core';
 
-export type StepChipTone = 'working' | 'warning';
+export type StepChipTone = 'working' | 'warning' | 'waiting';
 
-/** A step Foundry is running, as a pill with a sweeping sheen; it knows nothing about issue states. */
+/**
+ * A step Foundry is running, as a pill; it knows nothing about issue states. The working and warning
+ * tones carry a sweeping sheen and a pulsing dot; the waiting tone stays still, as nothing is running.
+ */
 @Component({
   selector: 'fd-step-chip',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<span class="step-chip" [class.step-chip--warning]="tone() === 'warning'"
+  template: `<span
+    class="step-chip"
+    [class.step-chip--warning]="tone() === 'warning'"
+    [class.step-chip--waiting]="tone() === 'waiting'"
     ><span class="step-chip__dot" aria-hidden="true"></span>{{ label() }}</span
   >`,
   styleUrl: './step-chip.scss',

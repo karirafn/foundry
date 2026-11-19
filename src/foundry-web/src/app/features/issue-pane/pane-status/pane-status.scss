@@ -2,7 +2,7 @@
 @use '../../../../styles/badge' as *;
 
 // Only the chips a callout renders: failure categories and retries. The state badge styles itself.
-@include badge($states: (failed), $exclude-outlined: (publishing, branch-diverged, reverted-oversized, reverted-binary));
+@include badge($states: (failed), $exclude-outlined: (publishing, catch-up-waiting, branch-diverged, reverted-oversized, reverted-binary));
 
 :host {
   display: block;

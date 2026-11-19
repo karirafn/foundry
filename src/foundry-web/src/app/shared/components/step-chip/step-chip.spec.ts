@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { StepChipComponent } from './step-chip';
+import { StepChipComponent, StepChipTone } from './step-chip';
 
-function render(label: string, tone?: 'working' | 'warning'): HTMLElement {
+function render(label: string, tone?: StepChipTone): HTMLElement {
   const fixture = TestBed.createComponent(StepChipComponent);
   fixture.componentRef.setInput('label', label);
   if (tone !== undefined) {
@@ -24,6 +24,16 @@ describe('StepChipComponent', () => {
     expect(
       render('Retrying publish…', 'warning').querySelector('.step-chip--warning'),
     ).not.toBeNull();
+  });
+
+  it('uses the waiting tone when asked', () => {
+    expect(
+      render('Waiting to catch up', 'waiting').querySelector('.step-chip--waiting'),
+    ).not.toBeNull();
+  });
+
+  it('leaves the waiting class off a working chip', () => {
+    expect(render('Merging…', 'working').querySelector('.step-chip--waiting')).toBeNull();
   });
 
   it('hides its decorative dot from assistive technology', () => {

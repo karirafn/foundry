@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, Signal, computed, input, InputSigna
 import { IssueState } from '../../utils/issue-state';
 import { StateDisplay, resolveStateDisplay } from '../../utils/state-display';
 import { RevisionTriggerKind } from '../../utils/revision-trigger-kind';
+import type { CodeStep } from '../../../features/issues/issue.model';
 
 export type BadgePublishPhase = 'publishing' | 'retrying';
 
@@ -24,6 +25,9 @@ export class StateBadgeComponent {
   /** Overrides the label of a working state while Foundry publishes the run's commits. */
   readonly publishPhase: InputSignal<BadgePublishPhase | null> = input<BadgePublishPhase | null>(null);
 
+  /** Required, so a caller passes null on purpose rather than silently showing MERGING for a catch-up wait. */
+  readonly codeStep: InputSignal<CodeStep | null> = input.required<CodeStep | null>();
+
   readonly revisionTriggerKind: InputSignal<RevisionTriggerKind | null | undefined> =
     input<RevisionTriggerKind | null | undefined>(undefined);
 
@@ -32,6 +36,7 @@ export class StateBadgeComponent {
       failureClassification: this.failureClassification(),
       revisionTriggerKind: this.revisionTriggerKind(),
       publishPhase: this.publishPhase(),
+      codeStep: this.codeStep(),
     }));
 
   label(): string {

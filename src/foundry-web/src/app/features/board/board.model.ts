@@ -27,7 +27,7 @@ export interface NeedsReason {
   readonly tone: ReasonTone;
 }
 
-export type StepTone = 'working' | 'warning';
+export type StepTone = 'working' | 'warning' | 'waiting';
 
 export const CODE_STEP_LABELS: Readonly<Record<CodeStep, string>> = {
   publishing: 'Publishing…',
@@ -35,10 +35,18 @@ export const CODE_STEP_LABELS: Readonly<Record<CodeStep, string>> = {
   rebasing: 'Rebasing…',
   checks: 'Checks running…',
   merging: 'Merging…',
+  catch_up_waiting: 'Waiting to catch up',
 };
 
 export function codeStepTone(step: CodeStep): StepTone {
-  return step === 'publish_retrying' ? 'warning' : 'working';
+  switch (step) {
+    case 'publish_retrying':
+      return 'warning';
+    case 'catch_up_waiting':
+      return 'waiting';
+    default:
+      return 'working';
+  }
 }
 
 /** The bands, in the order the page shows them; `workers` and `steps` together are In progress. */
