@@ -114,6 +114,26 @@ public sealed class ReviewQueuedIssue : QueuedIssue, IReviewStepState
         return queued;
     }
 
+    /// <summary>A person retries a review that failed open, for the commit the skipped review was given.</summary>
+    internal static ReviewQueuedIssue FromSkippedReview(
+        ReviewIssue source,
+        string reviewedCommit,
+        DateTimeOffset transitionedAt)
+    {
+        ReviewQueuedIssue queued = new(source.Id, transitionedAt);
+        queued.CopySharedPropertiesFrom(source);
+        queued.WorkerRunId = source.WorkerRunId;
+        queued.BranchName = source.BranchName;
+        queued.PullRequestUrl = source.PullRequestUrl;
+        queued.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        queued.ChecksOutcome = source.ChecksOutcome;
+        queued.RebaseOutcome = source.RebaseOutcome;
+        queued.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        queued.ReviewedCommit = reviewedCommit;
+        queued.AutoMerge = source.AutoMerge;
+        return queued;
+    }
+
     public override ReviewInProgressIssue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
         ReviewInProgressIssue inProgress = ReviewInProgressIssue.FromReviewQueued(this, workerRunId, claimedAt);

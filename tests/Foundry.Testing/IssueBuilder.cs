@@ -269,6 +269,17 @@ public sealed class IssueBuilder
             new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Missing, "No test covers the change."),
             _transitionedAt);
 
+    /// <summary>
+    /// Builds a <see cref="ReviewIssue"/> whose review failed open (ADR 0113): the review run of
+    /// <see cref="ReviewInProgress"/> failed with <c>verdict_invalid</c>, which is never retried automatically.
+    /// </summary>
+    public ReviewIssue ReviewSkipped() =>
+        (ReviewIssue)ReviewInProgress().MarkRunFailed(
+            _failureReason,
+            FailureCategory.VerdictInvalid,
+            consecutiveAutoRetryableFailures: 0,
+            _failedAt);
+
     /// <summary>Builds a <see cref="ReviewFailedIssue"/>: the review run failed transiently on its first attempt.</summary>
     public ReviewFailedIssue ReviewFailed() =>
         (ReviewFailedIssue)ReviewInProgress().MarkRunFailed(

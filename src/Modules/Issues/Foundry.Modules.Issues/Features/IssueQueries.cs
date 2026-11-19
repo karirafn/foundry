@@ -470,6 +470,7 @@ internal sealed class IssueQueries(
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
         MergeOutcome? mergeOutcome = GetMergeOutcome(issue);
+        ReviewOutcome? reviewOutcome = (issue as ReviewIssue)?.ReviewOutcome;
         string? publishPhase = PublishPhaseName(issue, publishPhases);
 
         return new IssueSummary(
@@ -504,7 +505,9 @@ internal sealed class IssueQueries(
             ProviderType: displayInfo?.ProviderType,
             RevisionTriggerKind: GetRevisionTriggerKind(issue),
             PublishPhase: publishPhase,
-            RunKind: RunKindName(issue.RunKind));
+            RunKind: RunKindName(issue.RunKind),
+            ReviewOutcome: reviewOutcome?.Discriminator,
+            ReviewSkippedReason: (reviewOutcome as ReviewOutcome.Skipped)?.Reason);
     }
 
     private static string StageName(IssueStage stage) =>
@@ -930,7 +933,9 @@ internal sealed class IssueQueries(
                 RebaseOutcome: review.RebaseOutcome?.Discriminator,
                 RebaseSkippedReason: (review.RebaseOutcome as RebaseOutcome.Skipped)?.Reason,
                 MergeOutcome: review.MergeOutcome?.Discriminator,
-                MergeSkippedReason: (review.MergeOutcome as MergeOutcome.Skipped)?.Reason),
+                MergeSkippedReason: (review.MergeOutcome as MergeOutcome.Skipped)?.Reason,
+                ReviewOutcome: review.ReviewOutcome?.Discriminator,
+                ReviewSkippedReason: (review.ReviewOutcome as ReviewOutcome.Skipped)?.Reason),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,

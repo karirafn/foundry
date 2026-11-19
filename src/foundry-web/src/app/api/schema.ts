@@ -225,6 +225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/issues/{id}/retry-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queues a skipped review for review again, for the same reviewed commit */
+        post: operations["RetryReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/issues/{id}/skip-triage": {
         parameters: {
             query?: never;
@@ -1345,6 +1362,8 @@ export interface components {
             /** Format: int32 */
             catchUpRoundLimit?: null | number | string;
             mergeWait?: null | components["schemas"]["MergeWaitDetails"];
+            reviewOutcome?: null | string;
+            reviewSkippedReason?: null | string;
         };
         IssueSummary: {
             /** Format: uuid */
@@ -1379,6 +1398,8 @@ export interface components {
             revisionTriggerKind?: null | string;
             publishPhase?: null | string;
             runKind?: null | string;
+            reviewOutcome?: null | string;
+            reviewSkippedReason?: null | string;
         };
         MergeWaitDetails: {
             /** Format: int32 */
@@ -2423,6 +2444,55 @@ export interface operations {
         };
     };
     RetryTriage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RetryReview: {
         parameters: {
             query?: never;
             header?: never;

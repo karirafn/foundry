@@ -98,7 +98,9 @@ public sealed record TriageVerdictDetails(
 /// (<c>branch-moved</c> or <c>force-push-protected</c>). <paramref name="ChecksPendingReason"/> is set only for
 /// <c>checks_pending</c>: <c>after_run</c>, <c>head_moved</c>, <c>checks_rerun</c> or <c>catch_up</c>.
 /// <paramref name="MergeOutcome"/> and <paramref name="MergeSkippedReason"/> are set only for a <c>review</c> issue that
-/// left merge-pending without a merge (ADR 0105). <paramref name="RebasePendingReason"/> is set only for
+/// left merge-pending without a merge (ADR 0105). <paramref name="ReviewOutcome"/> and
+/// <paramref name="ReviewSkippedReason"/> are set only for a <c>review</c> issue whose review run failed open (ADR 0113).
+/// <paramref name="RebasePendingReason"/> is set only for
 /// <c>rebase_pending</c>: <c>after_run</c> or <c>catch_up</c>. <paramref name="CatchUpRound"/> and
 /// <paramref name="CatchUpRoundLimit"/> are set while a catch-up (ADR 0111) has started: in <c>rebase_pending</c> or
 /// <c>checks_pending</c> with reason <c>catch_up</c>, or in <c>merge_pending</c>. <paramref name="MergeWait"/> is set
@@ -131,7 +133,9 @@ public sealed record IssueStateDetails(
     string? RebasePendingReason = null,
     int? CatchUpRound = null,
     int? CatchUpRoundLimit = null,
-    MergeWaitDetails? MergeWait = null);
+    MergeWaitDetails? MergeWait = null,
+    string? ReviewOutcome = null,
+    string? ReviewSkippedReason = null);
 
 /// <summary>
 /// A merge-pending issue's place in its repository's catch-up queue (ADR 0111): <paramref name="Position"/> is 1-based,

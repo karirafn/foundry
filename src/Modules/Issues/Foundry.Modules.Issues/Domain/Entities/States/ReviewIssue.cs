@@ -69,6 +69,12 @@ public sealed class ReviewIssue : Issue
     /// </summary>
     public ReviewOutcome? ReviewOutcome { get; private set; }
 
+    /// <summary>
+    /// The repository's Merge When Checks Pass as the review step carried it, kept so Retry review queues the review
+    /// with the flag the skipped review had. False when the issue did not come from the review step.
+    /// </summary>
+    public bool AutoMerge { get; private set; }
+
     internal static ReviewIssue FromChecksPending(
         ChecksPendingIssue source,
         ChecksOutcome checksOutcome,
@@ -133,6 +139,7 @@ public sealed class ReviewIssue : Issue
         review.RebaseConflictAttempts = source.RebaseConflictAttempts;
         review.VerifiedHeadSha = source.ReviewedCommit;
         review.ReviewOutcome = reviewOutcome;
+        review.AutoMerge = source.AutoMerge;
         return review;
     }
 
@@ -189,6 +196,22 @@ public sealed class ReviewIssue : Issue
             checksPending.IssueNumber,
             checksPending.EnteredChecksPendingAt));
         return checksPending;
+    }
+
+    /// <summary>
+    /// A person retries a review that failed open (ADR 0113): the issue waits for a review worker again, for the same
+    /// reviewed commit. Returns <see langword="null"/> unless the review was skipped, the only case with a review to retry.
+    /// </summary>
+    public ReviewQueuedIssue? RetryReview(DateTimeOffset transitionedAt)
+    {
+        if (ReviewOutcome is not ValueObjects.ReviewOutcome.Skipped || VerifiedHeadSha is null)
+        {
+            return null;
+        }
+
+        ReviewQueuedIssue queued = ReviewQueuedIssue.FromSkippedReview(this, VerifiedHeadSha, transitionedAt);
+        AddDomainEvent(new Events.IssueReviewQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 
     public RevisionQueuedIssue Revise(

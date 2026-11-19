@@ -2610,6 +2610,12 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 
+                    b.Property<bool>("AutoMerge")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("review_auto_merge");
+
                     b.Property<string>("BranchName")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()

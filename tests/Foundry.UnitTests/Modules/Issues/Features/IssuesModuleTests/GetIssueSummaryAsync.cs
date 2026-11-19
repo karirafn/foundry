@@ -520,6 +520,45 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewAfterSkippedReview_SummaryCarriesReviewOutcomeAndReason()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().ReviewSkipped();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.State.ShouldBe("review"),
+            () => summary.ReviewOutcome.ShouldBe("skipped"),
+            () => summary.ReviewSkippedReason.ShouldBe("verdict_invalid"));
+    }
+
+    [Fact]
+    public async Task WhenReviewNeverWentThroughTheReviewStep_ReviewOutcomeIsNullOnSummary()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.ReviewOutcome.ShouldBeNull(),
+            () => summary.ReviewSkippedReason.ShouldBeNull());
+    }
+
+    [Fact]
     public async Task WhenReviewNeverMergePending_MergeOutcomeIsNullOnSummary()
     {
         // Arrange

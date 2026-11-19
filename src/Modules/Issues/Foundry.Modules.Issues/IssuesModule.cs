@@ -43,6 +43,7 @@ public static class IssuesModule
         services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();
         services.AddCommandHandler<RetryIssueFresh.Command, IssueDetail, RetryIssueFresh.Handler>();
         services.AddCommandHandler<RetryTriage.Command, IssueDetail, RetryTriage.Handler>();
+        services.AddCommandHandler<RetryReview.Command, IssueDetail, RetryReview.Handler>();
         services.AddCommandHandler<SkipTriage.Command, IssueDetail, SkipTriage.Handler>();
         services.AddCommandHandler<ContinueWithoutAnswer.Command, IssueDetail, ContinueWithoutAnswer.Handler>();
         services.AddCommandHandler<RetryQuestionPost.Command, IssueDetail, RetryQuestionPost.Handler>();
