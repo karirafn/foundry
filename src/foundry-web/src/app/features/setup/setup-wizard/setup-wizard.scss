@@ -1,3 +1,5 @@
+@use '../../../../styles/breakpoints' as *;
+
 .setup-wizard {
   max-width: 640px;
   margin-inline: auto;
@@ -66,8 +68,39 @@
     padding: var(--fd-spacing-xl);
   }
 
+  &__step-check {
+    color: var(--fd-text-completed);
+    font-weight: 600;
+  }
+
+  &__resume-note {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0 0 var(--fd-spacing-lg);
+  }
+
   &__step-content {
     color: var(--fd-text-secondary);
     font-size: 0.875rem;
+  }
+
+  @media (width < $compact-breakpoint) {
+    &__steps {
+      flex-wrap: wrap;
+      gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+    }
+
+    &__step {
+      flex: 0 0 auto;
+
+      // Four connectors overflow a 320px viewport.
+      &::after {
+        display: none;
+      }
+    }
+
+    &__body {
+      padding: var(--fd-spacing-lg);
+    }
   }
 }

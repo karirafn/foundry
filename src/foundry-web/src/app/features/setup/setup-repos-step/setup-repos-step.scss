@@ -10,6 +10,10 @@
     font-size: 1.125rem;
     font-weight: 600;
     margin: 0;
+
+    &:focus {
+      outline: none;
+    }
   }
 
   &__description {
@@ -281,6 +285,8 @@
     align-items: center;
     display: flex;
     gap: var(--fd-spacing-sm);
+    // Stays at the end when Back is hidden.
+    margin-inline-start: auto;
   }
 
   &__back-btn {

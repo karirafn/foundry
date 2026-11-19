@@ -7,13 +7,41 @@ import { vi } from 'vitest';
 import { NEVER } from 'rxjs';
 import { SetupWizardComponent } from './setup-wizard';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { SettingsService } from '../../../core/services/settings.service';
+import { AccountService } from '../../settings/accounts/account.service';
+import { AccountSummary } from '../../settings/accounts/account.model';
+import { API_KEY_RESPONSE, flushSettings } from '../../settings/testing/settings-page-harness';
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}
 
-function setup() {
+const STORED_URL = 'https://hooks.example.com';
+
+function account(id: string): AccountSummary {
+  return {
+    id,
+    name: 'octocat',
+    providerType: 'GitHub',
+    baseUrl: 'https://github.com',
+    hasToken: true,
+    tokenStatus: 'present',
+    branchRulesTokenStatus: 'absent',
+    tokenInvalidSince: null,
+    namespaces: [],
+    tokenExpiry: { status: 'notChecked', expiresAt: null },
+  };
+}
+
+interface WizardState {
+  accounts?: AccountSummary[];
+  /** The loaded settings, or null when they could not be loaded. */
+  settings?: Record<string, unknown> | null;
+}
+
+/** Builds the wizard after the app-start loads of accounts and settings have settled into the given state. */
+function setup(state: WizardState = {}) {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     imports: [SetupWizardComponent],
@@ -24,230 +52,311 @@ function setup() {
       { provide: SystemSignalRService, useValue: mockSystemSignalR },
     ],
   });
+  const httpMock = TestBed.inject(HttpTestingController);
+
+  if (state.accounts !== undefined) {
+    TestBed.inject(AccountService).loadAccounts();
+    httpMock.expectOne('/api/accounts').flush(state.accounts);
+  }
+  if (state.settings !== undefined) {
+    TestBed.inject(SettingsService).loadSettings();
+    if (state.settings === null) {
+      httpMock.expectOne('/api/settings').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+      httpMock.match('/api/credentials');
+    } else {
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, ...state.settings });
+    }
+  }
 
   const fixture = TestBed.createComponent(SetupWizardComponent);
-  const httpMock = TestBed.inject(HttpTestingController);
-  return { fixture, component: fixture.componentInstance, httpMock };
+  const el = fixture.nativeElement as HTMLElement;
+  return {
+    fixture,
+    component: fixture.componentInstance,
+    httpMock,
+    el,
+    activeLabel: () => el.querySelector('.setup-wizard__step--active .setup-wizard__step-label')?.textContent?.trim(),
+    completedLabels: () =>
+      Array.from(el.querySelectorAll('.setup-wizard__step--completed .setup-wizard__step-label')).map(s => s.textContent?.trim()),
+    resumeNote: () => el.querySelector('.setup-wizard__resume-note')?.textContent?.trim() ?? null,
+  };
 }
+
+const RESUME_AT_WEBHOOKS = {
+  accounts: [account('account-7'), account('account-8')],
+  settings: { webhookPublicBaseUrl: null },
+};
+const RESUME_AT_REPOS = {
+  accounts: [account('account-7')],
+  settings: { webhookPublicBaseUrl: STORED_URL },
+};
 
 describe('SetupWizardComponent', () => {
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
-  // Cycle 1: progress bar shows three step labels
-  it('should render three step labels: Auth, Account, Repositories', () => {
-    // Arrange
-    const { fixture } = setup();
+  describe('progress', () => {
+    it('should render four step labels: Auth, Account, Webhooks, Repositories', () => {
+      // Arrange
+      const { fixture, el } = setup();
 
-    // Act
-    fixture.detectChanges();
+      // Act
+      fixture.detectChanges();
 
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const steps = el.querySelectorAll('.setup-wizard__step');
-    const labels = Array.from(steps).map((s) => s.textContent?.trim());
-    expect(labels).toEqual(['Auth', 'Account', 'Repositories']);
+      // Assert
+      const labels = Array.from(el.querySelectorAll('.setup-wizard__step-label')).map(s => s.textContent?.trim());
+      expect(labels).toEqual(['Auth', 'Account', 'Webhooks', 'Repositories']);
+    });
+
+    it('should render the progress nav with an accessible label', () => {
+      // Arrange
+      const { fixture, el } = setup();
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('nav.setup-wizard__progress')?.getAttribute('aria-label')).toBe('Setup progress');
+    });
+
+    it('should set aria-current="step" only on the active step', () => {
+      // Arrange
+      const { fixture, el } = setup();
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const current = el.querySelectorAll('[aria-current="step"]');
+      expect(current).toHaveLength(1);
+      expect(current[0].classList).toContain('setup-wizard__step--active');
+    });
+
+    it('should mark a completed step with a hidden check and a screen-reader suffix', () => {
+      // Arrange
+      const { fixture, el } = setup(RESUME_AT_WEBHOOKS);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const completed = el.querySelectorAll('.setup-wizard__step--completed');
+      expect(completed).toHaveLength(2);
+      const auth = completed[0];
+      expect(auth.querySelector('.setup-wizard__step-check')?.getAttribute('aria-hidden')).toBe('true');
+      expect(auth.querySelector('.setup-wizard__step-check')?.textContent).toBe('✓');
+      expect(auth.querySelector('.sr-only')?.textContent).toBe(', completed');
+      expect(el.querySelector('.setup-wizard__step--active .setup-wizard__step-check')).toBeNull();
+    });
   });
 
-  // Cycle 2: first step is active on initial render
-  it('should mark the first step as active initially', () => {
-    // Arrange
-    const { fixture } = setup();
+  describe('first step', () => {
+    it('should open at Auth with no resume note when no account exists', () => {
+      // Arrange
+      const { fixture, el, activeLabel, resumeNote } = setup({ accounts: [], settings: { webhookPublicBaseUrl: STORED_URL } });
 
-    // Act
-    fixture.detectChanges();
+      // Act
+      fixture.detectChanges();
 
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const activeStep = el.querySelector('.setup-wizard__step--active');
-    expect(activeStep?.textContent?.trim()).toBe('Auth');
+      // Assert
+      expect(activeLabel()).toBe('Auth');
+      expect(el.querySelector('fd-setup-auth-step')).toBeTruthy();
+      expect(resumeNote()).toBeNull();
+    });
+
+    it('should open at Webhooks with Auth and Account completed when an account exists but no URL is stored', () => {
+      // Arrange
+      const { fixture, el, activeLabel, completedLabels, resumeNote } = setup(RESUME_AT_WEBHOOKS);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(activeLabel()).toBe('Webhooks');
+      expect(completedLabels()).toEqual(['Auth', 'Account']);
+      expect(el.querySelector('fd-setup-webhook-step')).toBeTruthy();
+      expect(resumeNote()).toBe(
+        'Foundry now needs a public webhook URL. Your Claude authentication and provider account are already set up.',
+      );
+    });
+
+    it('should open at Webhooks when an account exists but the settings could not be loaded', () => {
+      // Arrange
+      const { fixture, activeLabel } = setup({ accounts: [account('account-7')], settings: null });
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(activeLabel()).toBe('Webhooks');
+    });
+
+    it('should open at Repositories with the first account when an account and URL exist', () => {
+      // Arrange
+      const { fixture, httpMock, activeLabel, completedLabels, resumeNote } = setup({
+        accounts: [account('account-7'), account('account-8')],
+        settings: { webhookPublicBaseUrl: STORED_URL },
+      });
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(activeLabel()).toBe('Repositories');
+      expect(completedLabels()).toEqual(['Auth', 'Account', 'Webhooks']);
+      expect(resumeNote()).toBe(
+        'Claude authentication, your provider account and the webhook URL are already set up. Add repositories now, or skip.',
+      );
+      httpMock.expectOne('/api/accounts/account-7/repositories/available-repositories').flush([]);
+    });
+
+    it('should not move focus on first render', () => {
+      // Arrange
+      const { fixture } = setup(RESUME_AT_WEBHOOKS);
+      const before = document.activeElement;
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(document.activeElement).toBe(before);
+    });
   });
 
-  // Cycle 3: onAuthComplete advances to step 2
-  it('should advance to step 2 when onAuthComplete is called', () => {
+  describe('Back visibility', () => {
+    it('should hide Back on the Webhooks step when the wizard opened there', () => {
+      // Arrange
+      const { fixture, el } = setup(RESUME_AT_WEBHOOKS);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('.setup-webhook-step__back-btn')).toBeNull();
+    });
+
+    it('should hide Back on the Repositories step when the wizard opened there', () => {
+      // Arrange
+      const { fixture, el, httpMock } = setup(RESUME_AT_REPOS);
+
+      // Act
+      fixture.detectChanges();
+      httpMock.expectOne('/api/accounts/account-7/repositories/available-repositories').flush([]);
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('.setup-repos-step__back-btn')).toBeNull();
+    });
+
+    it('should show Back on Repositories after resuming at Webhooks, and return to Webhooks but no further', () => {
+      // Arrange
+      const { fixture, component, el, httpMock, activeLabel } = setup(RESUME_AT_WEBHOOKS);
+      fixture.detectChanges();
+      component.onWebhookComplete();
+      fixture.detectChanges();
+      httpMock.expectOne('/api/accounts/account-7/repositories/available-repositories').flush([]);
+      fixture.detectChanges();
+      expect(el.querySelector('.setup-repos-step__back-btn')).toBeTruthy();
+
+      // Act
+      component.onBack();
+      fixture.detectChanges();
+      component.onBack();
+      fixture.detectChanges();
+
+      // Assert
+      expect(activeLabel()).toBe('Webhooks');
+      expect(el.querySelector('fd-setup-account-step')).toBeNull();
+    });
+
+    it('should show Back on Webhooks in a fresh run', () => {
+      // Arrange
+      const { fixture, component, el } = setup({ accounts: [], settings: { webhookPublicBaseUrl: null } });
+      fixture.detectChanges();
+      component.onAuthComplete();
+      fixture.detectChanges();
+
+      // Act
+      component.onAccountComplete('account-42');
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('.setup-webhook-step__back-btn')).toBeTruthy();
+    });
+  });
+
+  describe('fresh run', () => {
+    it('should advance Auth → Account → Webhooks → Repositories, passing the created account', () => {
+      // Arrange
+      const { fixture, component, el, httpMock, activeLabel } = setup({ accounts: [], settings: { webhookPublicBaseUrl: null } });
+      fixture.detectChanges();
+
+      // Act
+      component.onAuthComplete();
+      fixture.detectChanges();
+      const afterAuth = activeLabel();
+      component.onAccountComplete('account-42');
+      fixture.detectChanges();
+      const afterAccount = activeLabel();
+      component.onWebhookComplete();
+      fixture.detectChanges();
+
+      // Assert
+      expect(afterAuth).toBe('Account');
+      expect(afterAccount).toBe('Webhooks');
+      expect(activeLabel()).toBe('Repositories');
+      expect(el.querySelector('fd-setup-repos-step')).toBeTruthy();
+      expect(component.createdAccountId()).toBe('account-42');
+      httpMock.expectOne('/api/accounts/account-42/repositories/available-repositories').flush([]);
+    });
+
+    it('should return to Account from Webhooks and to Auth from Account', () => {
+      // Arrange
+      const { fixture, component, activeLabel } = setup();
+      fixture.detectChanges();
+      component.onAuthComplete();
+      component.onAccountComplete('account-42');
+      fixture.detectChanges();
+
+      // Act
+      component.onBack();
+      fixture.detectChanges();
+      const afterFirstBack = activeLabel();
+      component.onBack();
+      fixture.detectChanges();
+
+      // Assert
+      expect(afterFirstBack).toBe('Account');
+      expect(activeLabel()).toBe('Auth');
+    });
+
+    it('should focus the new step heading on a step change', async () => {
+      // Arrange
+      const { fixture, component, el } = setup({ accounts: [], settings: { webhookPublicBaseUrl: null } });
+      document.body.appendChild(el);
+      fixture.detectChanges();
+
+      // Act
+      component.onAuthComplete();
+      component.onAccountComplete('account-42');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      expect(document.activeElement?.id).toBe('setup-webhook-title');
+      el.remove();
+    });
+  });
+
+  it('should navigate to /issues when onReposComplete is called', () => {
     // Arrange
     const { fixture, component } = setup();
     fixture.detectChanges();
-
-    // Act
-    component.onAuthComplete();
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const activeStep = el.querySelector('.setup-wizard__step--active');
-    expect(activeStep?.textContent?.trim()).toBe('Account');
-  });
-
-  // Cycle 4: onAccountComplete stores accountId and advances to step 3
-  it('should advance to step 3 and store accountId when onAccountComplete is called', () => {
-    // Arrange
-    const { fixture, component, httpMock } = setup();
-    fixture.detectChanges();
-    component.onAuthComplete();
-    fixture.detectChanges();
-
-    // Act
-    component.onAccountComplete('account-42');
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const activeStep = el.querySelector('.setup-wizard__step--active');
-    expect(activeStep?.textContent?.trim()).toBe('Repositories');
-    expect(component.createdAccountId()).toBe('account-42');
-    // createdAccountId is a readonly Signal — it must not expose a set() method
-    expect(typeof (component.createdAccountId as unknown as { set?: unknown }).set).toBe('undefined');
-
-    // Cleanup
-    httpMock.expectOne('/api/accounts/account-42/repositories/available-repositories').flush([]);
-  });
-
-  // Cycle 5: progress indicator marks completed steps
-  it('should mark steps before the active step as completed', () => {
-    // Arrange
-    const { fixture, component, httpMock } = setup();
-    fixture.detectChanges();
-    component.onAuthComplete();
-    component.onAccountComplete('account-1');
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const completedSteps = el.querySelectorAll('.setup-wizard__step--completed');
-    const labels = Array.from(completedSteps).map((s) => s.textContent?.trim());
-    expect(labels).toEqual(['Auth', 'Account']);
-
-    // Cleanup
-    httpMock.expectOne('/api/accounts/account-1/repositories/available-repositories').flush([]);
-  });
-
-  // Cycle 6: step component rendered in each step
-  it('should render the auth step component on step 1', () => {
-    // Arrange
-    const { fixture } = setup();
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('fd-setup-auth-step')).toBeTruthy();
-  });
-
-  it('should render the account step component on step 2', () => {
-    // Arrange
-    const { fixture, component } = setup();
-    fixture.detectChanges();
-
-    // Act
-    component.onAuthComplete();
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('fd-setup-account-step')).toBeTruthy();
-  });
-
-  it('should render the repos step component on step 3', () => {
-    // Arrange
-    const { fixture, component, httpMock } = setup();
-    fixture.detectChanges();
-    component.onAuthComplete();
-    fixture.detectChanges();
-
-    // Act
-    component.onAccountComplete('account-1');
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('fd-setup-repos-step')).toBeTruthy();
-
-    // Cleanup
-    httpMock.expectOne('/api/accounts/account-1/repositories/available-repositories').flush([]);
-  });
-
-  // Cycle 7: progress bar has correct aria-label for accessibility
-  it('should render the progress bar nav with an accessible aria-label', () => {
-    // Arrange
-    const { fixture } = setup();
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const nav = el.querySelector('nav.setup-wizard__progress');
-    expect(nav).toBeTruthy();
-    expect(nav?.getAttribute('aria-label')).toBe('Setup progress');
-  });
-
-  // Cycle 8: aria-current on active step
-  it('should set aria-current="step" on the active step', () => {
-    // Arrange
-    const { fixture } = setup();
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const activeStep = el.querySelector('.setup-wizard__step--active');
-    expect(activeStep?.getAttribute('aria-current')).toBe('step');
-  });
-
-  // Cycle 9: back navigation from step 2 returns to step 1
-  it('should return to step 1 when onBack is called from step 2', () => {
-    // Arrange
-    const { fixture, component } = setup();
-    fixture.detectChanges();
-    component.onAuthComplete();
-    fixture.detectChanges();
-
-    // Act
-    component.onBack();
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const activeStep = el.querySelector('.setup-wizard__step--active');
-    expect(activeStep?.textContent?.trim()).toBe('Auth');
-  });
-
-  // Cycle 11: onReposComplete navigates to /issues
-  it('should navigate to /issues when onReposComplete is called', async () => {
-    // Arrange
-    const { fixture, component } = setup();
-    fixture.detectChanges();
-    const router = TestBed.inject(Router);
-    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
     // Act
     component.onReposComplete();
-    fixture.detectChanges();
 
     // Assert
     expect(navigateSpy).toHaveBeenCalledWith(['/issues']);
-  });
-
-  // Cycle 10: back navigation from step 3 returns to step 2
-  it('should return to step 2 when onBack is called from step 3', () => {
-    // Arrange
-    const { fixture, component, httpMock } = setup();
-    fixture.detectChanges();
-    component.onAuthComplete();
-    fixture.detectChanges();
-    component.onAccountComplete('account-1');
-    fixture.detectChanges();
-    httpMock.expectOne('/api/accounts/account-1/repositories/available-repositories').flush([]);
-
-    // Act
-    component.onBack();
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const activeStep = el.querySelector('.setup-wizard__step--active');
-    expect(activeStep?.textContent?.trim()).toBe('Account');
   });
 });

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  InputSignal,
   OnInit,
   OutputEmitterRef,
   Signal,
@@ -39,7 +40,7 @@ interface AddRow {
   imports: [SpinnerComponent, RepositoryAddProgressComponent, RepositoryAddOutcomeComponent],
   template: `
     <div class="setup-repos-step">
-      <h2 class="setup-repos-step__title">Select Repositories</h2>
+      <h2 class="setup-repos-step__title" tabindex="-1">Select Repositories</h2>
       <p class="setup-repos-step__description">
         Choose which repositories Foundry should monitor for issues.
       </p>
@@ -183,12 +184,14 @@ interface AddRow {
       <div class="setup-repos-step__save-error" role="alert">{{ _saveError() ?? '' }}</div>
 
       <div class="setup-repos-step__actions">
-        <button
-          class="setup-repos-step__back-btn"
-          type="button"
-          [disabled]="_saving()"
-          (click)="back.emit()"
-        >Back</button>
+        @if (showBack()) {
+          <button
+            class="setup-repos-step__back-btn"
+            type="button"
+            [disabled]="_saving()"
+            (click)="back.emit()"
+          >Back</button>
+        }
 
         <div class="setup-repos-step__secondary-actions">
           @if (_rows().length === 0) {
@@ -215,6 +218,7 @@ export class SetupReposStepComponent implements OnInit {
   protected readonly _repositoryService = inject(RepositoryService);
 
   readonly accountId = input.required<string>();
+  readonly showBack: InputSignal<boolean> = input<boolean>(true);
 
   readonly complete: OutputEmitterRef<void> = output<void>();
   readonly back: OutputEmitterRef<void> = output<void>();
