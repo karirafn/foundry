@@ -106,13 +106,71 @@
   color: var(--fd-text-primary);
   overflow-wrap: anywhere;
 
-  span {
+  > span {
     display: block;
   }
 }
 
 .pane-clarifications__question-text {
   font-weight: 500;
+}
+
+.pane-clarifications__field {
+  font-weight: 600;
+}
+
+.pane-clarifications__options,
+.pane-clarifications__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+  list-style: none;
+  margin: var(--fd-spacing-xs) 0 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.pane-clarifications__option {
+  color: var(--fd-text-primary);
+  overflow-wrap: anywhere;
+
+  &--recommended {
+    font-weight: 600;
+  }
+}
+
+.pane-clarifications__reason {
+  color: var(--fd-text-secondary);
+  font-weight: 400;
+}
+
+.pane-clarifications__evidence li {
+  color: var(--fd-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+// Native details keep their marker and keyboard toggling; the summary mirrors the toolchain disclosure in pane-facts.
+.pane-clarifications__disclosure {
+  margin-top: var(--fd-spacing-xs);
+
+  > span {
+    display: block;
+  }
+
+  summary {
+    color: var(--fd-text-link);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    min-height: 32px;
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+
+    @media (any-pointer: coarse) {
+      min-height: 44px;
+    }
+  }
 }
 
 .pane-clarifications__part {

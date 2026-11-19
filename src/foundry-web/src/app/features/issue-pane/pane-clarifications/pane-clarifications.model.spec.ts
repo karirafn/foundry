@@ -88,7 +88,7 @@ describe('buildClarifications', () => {
       [1, ASKED_AT, '2026-02-01T14:00:00Z'],
       [2, '2026-02-02T09:00:00Z', '2026-02-02T10:00:00Z'],
     ]);
-    expect(rounds[0].questions).toEqual([{ question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' }]);
+    expect(rounds[0].questions).toEqual([{ kind: 'legacy', question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' }]);
     expect(rounds[0].status).toBe('answered');
     expect(rounds[0].statusLabel).toBe('Answered');
   });
@@ -291,12 +291,25 @@ describe('questionView', () => {
     evidence: ['src/api.ts:3 routes v2'],
   };
 
-  it('shows a structured question with its problem and its lettered recommended option', () => {
+  it('maps a structured question, lettering its options and flagging only the recommended one', () => {
     // Act
-    const view = questionView(structured);
+    const view = questionView({ ...structured, options: ['v1', 'v2', 'v3'] });
 
     // Assert
-    expect(view).toEqual({ question: 'Which API?', context: 'Two exist.', recommendation: '✅ b) v2: Clients moved.' });
+    expect(view).toEqual({
+      kind: 'structured',
+      question: 'Which API?',
+      problem: 'Two exist.',
+      impact: 'Clients break.',
+      options: [
+        { letter: 'a', text: 'v1', recommended: false },
+        { letter: 'b', text: 'v2', recommended: true },
+        { letter: 'c', text: 'v3', recommended: false },
+      ],
+      recommended: { letter: 'b', text: 'v2', recommended: true },
+      reason: 'Clients moved.',
+      evidence: ['src/api.ts:3 routes v2'],
+    });
   });
 
   it('shows a legacy question unchanged', () => {
@@ -304,22 +317,22 @@ describe('questionView', () => {
     const view = questionView(question);
 
     // Assert
-    expect(view).toEqual({ question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' });
+    expect(view).toEqual({ kind: 'legacy', question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' });
   });
 
-  it('shows only the question when the recommended letter names no option', () => {
+  it('maps a recommended letter outside the options to the question-only legacy view', () => {
     // Act
     const view = questionView({ ...structured, recommendedOption: 'c' } as InputQuestion);
 
     // Assert
-    expect(view).toEqual({ question: 'Which API?', context: null, recommendation: null });
+    expect(view).toEqual({ kind: 'legacy', question: 'Which API?', context: null, recommendation: null });
   });
 
-  it('shows only the question for an unknown type', () => {
+  it('maps an unknown type to the question-only legacy view', () => {
     // Act
     const view = questionView({ $type: 'future', question: 'Which API?' } as unknown as InputQuestion);
 
     // Assert
-    expect(view).toEqual({ question: 'Which API?', context: null, recommendation: null });
+    expect(view).toEqual({ kind: 'legacy', question: 'Which API?', context: null, recommendation: null });
   });
 });
