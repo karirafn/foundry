@@ -111,6 +111,7 @@ public sealed class ChecksFixBudget
         // Act
         RevisionQueuedIssue revision = (RevisionQueuedIssue)reviewing.ResolveVerdict(
             ReviewVerdictOutcome.ChangesRequested,
+            patchId: null,
             Findings,
             Now);
 

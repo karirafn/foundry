@@ -91,6 +91,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("blocked_by")
                         .HasDefaultValueSql("'[]'");
 
+                    b.Property<int>("ChecksFixAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("checks_fix_attempts");
+
                     b.Property<string>("Clarifications")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1466,12 +1472,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
-
                     b.Property<DateTimeOffset>("EnteredChecksPendingAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("entered_checks_pending_at");
@@ -2060,12 +2060,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
-
                     b.Property<string>("Origin")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(20)
@@ -2165,12 +2159,6 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
-
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
 
                     b.Property<DateTimeOffset>("FailedAt")
                         .ValueGeneratedOnUpdateSometimes()
@@ -2291,12 +2279,6 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("merge_head_sha");
-
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
 
                     b.Property<DateTimeOffset>("EnteredRebasePendingAt")
                         .HasColumnType("TEXT")
@@ -2756,12 +2738,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
-
                     b.Property<DateTimeOffset>("FailedAt")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
@@ -2876,12 +2852,6 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
-
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
 
                     b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
                         .ValueGeneratedOnUpdateSometimes()
@@ -3781,12 +3751,6 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
-
-                    b.Property<int>("ChecksFixAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("checks_fix_attempts");
 
                     b.Property<DateTimeOffset?>("PriorFeedbackCutoffAt")
                         .ValueGeneratedOnUpdateSometimes()
