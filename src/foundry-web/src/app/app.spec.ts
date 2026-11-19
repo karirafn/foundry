@@ -83,6 +83,7 @@ function createMockDispatchService() {
     usageLimitResetsAt: signal(null).asReadonly(),
     resuming: signal(false).asReadonly(),
     pausedHosts: signal([]).asReadonly(),
+    packageProxyPause: signal(null).asReadonly(),
     resumeDispatch: () => {},
     updateFromSettings: () => {},
   };
