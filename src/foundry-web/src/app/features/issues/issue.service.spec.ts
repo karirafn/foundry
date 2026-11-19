@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
+import { CODE_STEPS, IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
 import { vi } from 'vitest';
 import type { components } from '../../api/schema';
 
@@ -135,6 +135,30 @@ describe('IssueService', () => {
     const [first, second] = service.issues();
     expect(first.publishPhase).toBe('retrying');
     expect(second.publishPhase).toBeNull();
+  });
+
+  it.each(CODE_STEPS)('should carry the known code step %s through loadIssues', (step) => {
+    // Arrange
+    const wire = { ...mockSummary, state: 'merge_pending', codeStep: step };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [wire], nextCursor: null });
+
+    // Assert
+    expect(service.issues()[0].codeStep).toBe(step);
+  });
+
+  it('should map an unknown code step to null on loadIssues', () => {
+    // Arrange
+    const wire = { ...mockSummary, state: 'merge_pending', codeStep: 'not_a_step' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [wire], nextCursor: null });
+
+    // Assert
+    expect(service.issues()[0].codeStep).toBeNull();
   });
 
   // Cycle 2: loadIssues with repositoryId appends query param
