@@ -166,6 +166,36 @@ describe('RepositoryAddOutcomeComponent', () => {
       expect(row('access')?.textContent).toContain(description);
     });
 
+    it('should read "Missing permissions" when the token lacks a permission on the repository', () => {
+      // Arrange / Act
+      const { row } = setup(
+        { kind: 'skipped', reason: 'access-failure', settingsUrl: SETTINGS_URL },
+        {
+          status: 'ineligible',
+          violations: [{ rule: 'cannot-push:my-org/my-repo', description: 'Token is missing Administration (read and write) for my-org/my-repo.' }],
+          reason: null,
+        },
+      );
+
+      // Assert
+      expect(row('access')?.textContent).toContain('Missing permissions');
+      expect(row('access')?.textContent).not.toContain('No push access');
+    });
+
+    it.each(['no-credential:my-org', 'credential-unreadable', 'credential-invalid'])(
+      'should read "No push access" for the %s access violation',
+      (rule) => {
+        // Arrange / Act
+        const { row } = setup(
+          { kind: 'skipped', reason: 'access-failure', settingsUrl: SETTINGS_URL },
+          { status: 'ineligible', violations: [{ rule, description: 'Some access problem.' }], reason: null },
+        );
+
+        // Assert
+        expect(row('access')?.textContent).toContain('No push access');
+      },
+    );
+
     it('should pass when the only violations are branch-protection rules', () => {
       // Arrange / Act
       const { row } = setup({ kind: 'failed', reason: 'provider-error', settingsUrl: SETTINGS_URL }, INELIGIBLE_RULES);

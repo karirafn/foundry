@@ -22,12 +22,14 @@ import {
   resolveTokenExpiry,
   resolveTokenStatus,
 } from '../account.model';
+import { RouterLink } from '@angular/router';
 import { TokenExpiryComponent } from '../token-expiry/token-expiry';
 import { resolveHost, sortNamespaces } from '../../account-label.util';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 
 const VISIBLE_NAMESPACE_COUNT = 3;
+const VISIBLE_REPOSITORY_COUNT = 3;
 
 interface AccountRowView {
   readonly account: AccountSummary;
@@ -45,7 +47,7 @@ interface AccountRowView {
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ProviderIconComponent, SpinnerComponent, TokenExpiryComponent],
+  imports: [ProviderIconComponent, RouterLink, SpinnerComponent, TokenExpiryComponent],
   template: `
     @if (error()) {
       <div class="account-list__error" role="alert">
@@ -155,6 +157,73 @@ interface AccountRowView {
             </div>
 
             @if (row.problem; as problem) {
+              @if (problem.kind === 'missing-permissions') {
+                @let reposExpanded = _isReposExpanded(row.account.id);
+                @let hiddenRepoCount = problem.repositories.length - visibleRepositoryCount;
+                <div
+                  class="account-list__problem account-list__problem--warning"
+                  role="group"
+                  [attr.aria-label]="'Token permissions for ' + row.account.name"
+                >
+                  <p class="account-list__problem-text">@if (problem.expiry; as expiry) {<span class="sr-only">Warning: </span><fd-token-expiry [expiry]="expiry" [providerName]="row.providerName" />. }{{ problem.message }}</p>
+                  <p class="account-list__problem-text">Missing: {{ problem.missingPermissions.join(', ') }}.</p>
+                  <p class="account-list__problem-text">
+                    <span [id]="'account-denied-repos-' + row.account.id">Repositories:
+                      @for (repository of (reposExpanded ? problem.repositories : problem.repositories.slice(0, visibleRepositoryCount)); track repository.id; let last = $last) {
+                        <a class="account-list__repo-link" [routerLink]="['/settings/repositories', repository.id]">{{ repository.slug }}</a>@if (!last) {<span>, </span>}
+                      }
+                    </span>
+                    @if (hiddenRepoCount > 0) {
+                      <button
+                        type="button"
+                        class="account-list__more-btn"
+                        [attr.aria-expanded]="reposExpanded"
+                        [attr.aria-controls]="'account-denied-repos-' + row.account.id"
+                        [attr.aria-label]="reposExpanded
+                          ? 'Show fewer repositories for ' + row.account.name
+                          : '+' + hiddenRepoCount + ' more repositories for ' + row.account.name"
+                        (click)="_toggleRepositories(row.account.id)"
+                      >{{ reposExpanded ? 'Show fewer' : '+' + hiddenRepoCount + ' more' }}</button>
+                    }
+                  </p>
+                  <p class="account-list__problem-text">{{ problem.remedyText }}</p>
+                  <div class="account-list__problem-actions">
+                    @if (problem.editToken; as editToken) {
+                      @if (problem.expiry) {
+                        <button
+                          type="button"
+                          class="account-list__btn account-list__btn--primary account-list__problem-btn"
+                          [attr.aria-label]="'Replace token for ' + row.account.name"
+                          (click)="edit.emit(row.account)"
+                        >Replace token</button>
+                      }
+                      <a
+                        class="account-list__btn account-list__link-btn account-list__problem-btn"
+                        [class.account-list__btn--primary]="!problem.expiry"
+                        [href]="editToken.url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [attr.aria-label]="'Edit token on ' + editToken.host + ' for ' + row.account.name + ' (opens in a new tab)'"
+                      >Edit token on {{ editToken.host }} <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a>
+                      @if (!problem.expiry) {
+                        <button
+                          type="button"
+                          class="account-list__btn account-list__problem-btn"
+                          [attr.aria-label]="'Replace token for ' + row.account.name"
+                          (click)="edit.emit(row.account)"
+                        >Replace token</button>
+                      }
+                    } @else {
+                      <button
+                        type="button"
+                        class="account-list__btn account-list__problem-btn"
+                        [attr.aria-label]="'Replace token for ' + row.account.name"
+                        (click)="edit.emit(row.account)"
+                      >Replace token</button>
+                    }
+                  </div>
+                </div>
+              } @else {
               <div
                 class="account-list__problem account-list__problem--{{ problem.tone }}"
                 role="group"
@@ -170,6 +239,7 @@ interface AccountRowView {
                   >{{ problem.actionLabel }}</button>
                 </div>
               </div>
+              }
             }
           </li>
         }
@@ -215,6 +285,31 @@ export class AccountListComponent {
       return new Set([...(previous?.value ?? [])].filter(id => present.has(id)));
     },
   });
+
+  protected readonly visibleRepositoryCount = VISIBLE_REPOSITORY_COUNT;
+
+  // Denied-repository expansion is kept apart from namespace expansion, keyed the same way.
+  private readonly _expandedRepoIds: WritableSignal<ReadonlySet<string>> = linkedSignal<AccountSummary[], ReadonlySet<string>>({
+    source: this.accounts,
+    computation: (accounts, previous) => {
+      const present = new Set(accounts.map(a => a.id));
+      return new Set([...(previous?.value ?? [])].filter(id => present.has(id)));
+    },
+  });
+
+  protected _isReposExpanded(id: string): boolean {
+    return this._expandedRepoIds().has(id);
+  }
+
+  protected _toggleRepositories(id: string): void {
+    const next = new Set(this._expandedRepoIds());
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this._expandedRepoIds.set(next);
+  }
 
   protected _isExpanded(id: string): boolean {
     return this._expandedIds().has(id);

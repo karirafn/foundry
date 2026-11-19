@@ -9,10 +9,12 @@ import {
   inject,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { AccountService } from '../../settings/accounts/account.service';
 import {
   ProviderType,
+  TokenRequirements,
   TokenValidationKind,
   TokenValidationResult,
   narrowTokenValidationKind,
@@ -22,6 +24,7 @@ import {
 import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
 import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
 import { TokenExpiryComponent } from '../../settings/accounts/token-expiry/token-expiry';
+import { TokenRequirementsComponent } from '../../settings/accounts/token-requirements/token-requirements';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const GITLAB_BASE_URL = 'https://gitlab.com';
@@ -29,7 +32,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
 @Component({
   selector: 'fd-setup-account-step',
   standalone: true,
-  imports: [ProviderSelectorComponent, SpinnerComponent, TokenExpiryComponent],
+  imports: [ProviderSelectorComponent, SpinnerComponent, TokenExpiryComponent, TokenRequirementsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="setup-account-step" role="region" aria-label="Add account" [attr.aria-busy]="saving() ? 'true' : null">
@@ -61,6 +64,10 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
             (blur)="onBaseUrlBlur()"
           />
         </div>
+
+        @if (_tokenRequirements(); as req) {
+          <fd-token-requirements [requirements]="req" [baseUrl]="_baseUrl()" idPrefix="setup" />
+        }
 
         <div class="setup-account-step__field">
           <label class="setup-account-step__field-label" for="setup-token">Token</label>
@@ -261,6 +268,7 @@ export class SetupAccountStepComponent {
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
+  protected readonly _tokenRequirements: WritableSignal<TokenRequirements | null> = signal(null);
 
   /** Tracks the last (token, baseUrl, providerType) triple sent to resolution to avoid duplicate calls. */
   private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string; providerType: string } | null> = signal(null);
@@ -303,6 +311,11 @@ export class SetupAccountStepComponent {
 
   constructor() {
     effect(() => {
+      const provider = this._provider();
+      untracked(() => { this._loadTokenRequirements(provider); });
+    });
+
+    effect(() => {
       const hasSaved = this._hasSaved();
       const saving = this._accountService.saving();
       const saveSuccess = this._accountService.saveSuccess();
@@ -315,6 +328,18 @@ export class SetupAccountStepComponent {
         }
       }
     });
+  }
+
+  private _loadTokenRequirements(provider: ProviderType): void {
+    this._tokenRequirements.set(null);
+    this._accountService.getTokenRequirements(provider).then(
+      (requirements) => {
+        if (this._provider() === provider) {
+          this._tokenRequirements.set(requirements);
+        }
+      },
+      () => { /* The list is guidance only; the wizard works without it. */ },
+    );
   }
 
   protected _kindOf(result: TokenValidationResult): TokenValidationKind | 'unknown' {

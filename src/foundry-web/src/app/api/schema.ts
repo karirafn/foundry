@@ -1151,10 +1151,17 @@ export interface components {
             /** Format: date-time */
             tokenInvalidSince: null | string;
             tokenExpiry: components["schemas"]["TokenExpirySummary"];
+            deniedRepositories: components["schemas"]["DeniedRepositorySummary"][];
         };
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];
             affectedRepositories: components["schemas"]["AffectedRepository"][];
+        };
+        DeniedRepositorySummary: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            missingPermissions: string[];
         };
         DispatchCapacity: {
             /** Format: int32 */
@@ -1669,10 +1676,14 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        TokenPermissionRequirement: {
+            label: string;
+            verification: string;
+        };
         TokenRequirements: {
             providerType: string;
             tokenTypeLabel: string;
-            scopes: string[];
+            permissions: components["schemas"]["TokenPermissionRequirement"][];
             creationUrlTemplate: string;
             resourceOwnerHint: null | string;
         };

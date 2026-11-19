@@ -42,7 +42,9 @@ public sealed class WhenProviderIsGitLab : IAsyncDisposable
             .ReadFromJsonAsync<TokenRequirements>(TestContext.Current.CancellationToken);
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
-            () => dto.Scopes.ShouldBe(["api", "Maintainer role"]),
+            () => dto.Permissions.ShouldBe([
+                new TokenPermissionRequirement("api", "scope"),
+                new TokenPermissionRequirement("Maintainer role", "role")]),
             () => dto.CreationUrlTemplate.ShouldContain("/-/user_settings/personal_access_tokens"),
             () => dto.ResourceOwnerHint.ShouldBeNull());
     }

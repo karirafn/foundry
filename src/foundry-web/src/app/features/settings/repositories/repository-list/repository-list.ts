@@ -15,7 +15,7 @@ import {
   splitRepositorySlug,
 } from '../repository.model';
 import { RepositoryAddProgressComponent } from '../repository-add-progress/repository-add-progress';
-import { RepositoryAddOutcomeComponent } from '../repository-add-outcome/repository-add-outcome';
+import { RepositoryAddOutcomeComponent, isCannotPushViolation } from '../repository-add-outcome/repository-add-outcome';
 import { RepositoryService } from '../repository.service';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
@@ -201,7 +201,11 @@ function problemToneOf(repo: RepositorySummary): RepositoryStatusTone {
                             routerLink="/settings/package-sources"
                             [queryParams]="{ source: sourceUrl }"
                             [attr.aria-label]="'View package source ' + sourceUrl + ' in Package sources settings'"
-                          >View package source</a>}</li>
+                          >View package source</a>}@if (_isCannotPush(violation)) {<a
+                            class="repository-list__problem-link"
+                            routerLink="/settings/accounts"
+                            [attr.aria-label]="'View account ' + row.repo.accountName + ' in Accounts settings'"
+                          >View account</a>}</li>
                       }
                     } @else {
                       <li>{{ _unreachableExplanation(row.repo) }}</li>
@@ -270,6 +274,7 @@ export class RepositoryListComponent {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly _packageSourceUrl = unreachablePackageSourceUrl;
+  protected readonly _isCannotPush = isCannotPushViolation;
 
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);

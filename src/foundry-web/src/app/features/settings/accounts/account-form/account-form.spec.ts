@@ -13,6 +13,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -26,6 +27,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -82,7 +84,13 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
 const GITHUB_REQUIREMENTS: TokenRequirements = {
   providerType: 'github',
   tokenTypeLabel: 'GitHub fine-grained personal access token',
-  scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+  permissions: [
+    { label: 'Contents (read and write)', verification: 'probe' },
+    { label: 'Issues (read and write)', verification: 'probe' },
+    { label: 'Pull requests (read and write)', verification: 'probe' },
+    { label: 'Metadata (read)', verification: 'always-granted' },
+    { label: 'Workflows (read and write)', verification: 'unverifiable' },
+  ],
   creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
   resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
 };
@@ -90,7 +98,10 @@ const GITHUB_REQUIREMENTS: TokenRequirements = {
 const GITLAB_REQUIREMENTS: TokenRequirements = {
   providerType: 'gitlab',
   tokenTypeLabel: 'Personal Access Token',
-  scopes: ['api'],
+  permissions: [
+    { label: 'api', verification: 'scope' },
+    { label: 'Maintainer role', verification: 'role' },
+  ],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
   resourceOwnerHint: null,
 };
@@ -1109,8 +1120,8 @@ describe('AccountFormComponent', () => {
     expect(errorEl?.getAttribute('role')).toBe('alert');
   });
 
-  // Cycle 56: add mode — requirements block renders token type label and scope chips
-  it('should render token requirements block with label and scope chips in add mode', async () => {
+  // Cycle 56: add mode — requirements block renders token type label and permission list
+  it('should render token requirements block with label and permission list in add mode', async () => {
     // Arrange
     const { el, fixture } = setup({ account: null });
 
@@ -1119,17 +1130,18 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const section = el.querySelector('.account-form__requirements');
+    const section = el.querySelector('.token-requirements');
     expect(section).toBeTruthy();
-    const text = section!.querySelector('.account-form__requirements-text');
+    const text = section!.querySelector('.token-requirements__text');
     expect(text?.textContent).toContain('GitHub fine-grained personal access token');
-    const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(5);
-    expect(scopes[0].textContent).toBe('Contents (read and write)');
-    expect(scopes[1].textContent).toBe('Issues (read and write)');
-    expect(scopes[2].textContent).toBe('Pull requests (read and write)');
-    expect(scopes[3].textContent).toBe('Workflows (write)');
-    expect(scopes[4].textContent).toBe('Metadata (read)');
+    const scopes = section!.querySelectorAll('.token-requirements__label');
+    expect(Array.from(scopes, (s) => s.textContent)).toEqual([
+      'Contents (read and write)',
+      'Issues (read and write)',
+      'Pull requests (read and write)',
+      'Metadata (read)',
+      'Workflows (read and write)',
+    ]);
   });
 
   // Cycle 57: provider radio change refetches requirements and updates displayed label/scope
@@ -1148,9 +1160,8 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const scopes = el.querySelectorAll('.account-form__requirements-scope code');
-    expect(scopes.length).toBe(1);
-    expect(scopes[0].textContent).toBe('api');
+    const scopes = el.querySelectorAll('.token-requirements__label');
+    expect(Array.from(scopes, (s) => s.textContent)).toEqual(['api', 'Maintainer role']);
   });
 
   // Cycle 58: edit mode — block shows provider requirements normalized from lowercase stored value
@@ -1164,11 +1175,11 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const section = el.querySelector('.account-form__requirements');
+    const section = el.querySelector('.token-requirements');
     expect(section).toBeTruthy();
-    const text = section!.querySelector('.account-form__requirements-text');
+    const text = section!.querySelector('.token-requirements__text');
     expect(text?.textContent).toContain('GitHub fine-grained personal access token');
-    const scopes = section!.querySelectorAll('.account-form__requirements-scope code');
+    const scopes = section!.querySelectorAll('.token-requirements__label');
     expect(scopes.length).toBe(5);
     expect(scopes[0].textContent).toBe('Contents (read and write)');
   });
@@ -1184,6 +1195,7 @@ describe('AccountFormComponent', () => {
       hasToken: true,
       tokenStatus: 'present',
       branchRulesTokenStatus: 'absent',
+      deniedRepositories: [],
       tokenInvalidSince: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -1203,7 +1215,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    const link = el.querySelector('.token-requirements__link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link.href).toContain('https://gitlab.example.com/-/user_settings/personal_access_tokens');
     expect(link.target).toBe('_blank');
@@ -1221,7 +1233,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert — link points to the pre-filled fine-grained PAT creation URL
-    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    const link = el.querySelector('.token-requirements__link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link.href).toBe(
       'https://github.com/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write'
@@ -1240,7 +1252,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const hint = el.querySelector('.account-form__requirements-owner-hint');
+    const hint = el.querySelector('.token-requirements__owner-hint');
     expect(hint).toBeTruthy();
     expect(hint?.textContent).toContain('Fine-grained tokens are bound to a single resource owner');
   });
@@ -1261,7 +1273,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert — no hint element rendered
-    const hint = el.querySelector('.account-form__requirements-owner-hint');
+    const hint = el.querySelector('.token-requirements__owner-hint');
     expect(hint).toBeNull();
   });
 
@@ -1275,11 +1287,11 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert — DOM order: scopes ul → owner-hint p → link a
-    const section = el.querySelector('.account-form__requirements')!;
+    const section = el.querySelector('.token-requirements')!;
     const children = Array.from(section.children);
-    const scopesIndex = children.findIndex(c => c.classList.contains('account-form__requirements-scopes'));
-    const hintIndex = children.findIndex(c => c.classList.contains('account-form__requirements-owner-hint'));
-    const linkIndex = children.findIndex(c => c.classList.contains('account-form__requirements-link'));
+    const scopesIndex = children.findIndex(c => c.classList.contains('token-requirements__list'));
+    const hintIndex = children.findIndex(c => c.classList.contains('token-requirements__owner-hint'));
+    const linkIndex = children.findIndex(c => c.classList.contains('token-requirements__link'));
     expect(scopesIndex).toBeGreaterThan(-1);
     expect(hintIndex).toBeGreaterThan(scopesIndex);
     expect(linkIndex).toBeGreaterThan(hintIndex);
@@ -1298,7 +1310,7 @@ describe('AccountFormComponent', () => {
     const hint = el.querySelector('#account-form-owner-hint');
     expect(hint).toBeTruthy();
     // Assert — create-token link is associated with the hint via aria-describedby
-    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    const link = el.querySelector('.token-requirements__link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link.getAttribute('aria-describedby')).toBe('account-form-owner-hint');
   });
@@ -1319,7 +1331,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert — no aria-describedby on the create-token link
-    const link = el.querySelector('.account-form__requirements-link') as HTMLAnchorElement;
+    const link = el.querySelector('.token-requirements__link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link.getAttribute('aria-describedby')).toBeNull();
   });
@@ -1338,10 +1350,10 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert — no link
-    const link = el.querySelector('.account-form__requirements-link');
+    const link = el.querySelector('.token-requirements__link');
     expect(link).toBeNull();
     // Fallback hint present
-    const hint = el.querySelector('.account-form__requirements-link-hint');
+    const hint = el.querySelector('.token-requirements__link-hint');
     expect(hint?.textContent).toContain('Enter a Base URL above');
   });
 
@@ -1358,7 +1370,7 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const section = el.querySelector('.account-form__requirements');
+    const section = el.querySelector('.token-requirements');
     expect(section).toBeNull();
   });
 
@@ -2032,6 +2044,7 @@ describe('AccountFormComponent', () => {
     hasToken: true,
     tokenStatus: 'unreadable',
     branchRulesTokenStatus: 'absent',
+    deniedRepositories: [],
     tokenInvalidSince: null,
     namespaces: [],
     tokenExpiry: { status: 'notChecked', expiresAt: null },

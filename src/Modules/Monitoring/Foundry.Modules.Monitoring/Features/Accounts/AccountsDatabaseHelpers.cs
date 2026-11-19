@@ -50,7 +50,10 @@ internal static class AccountsDatabaseHelpers
     /// including the branch-rules token — are never included; only their statuses. The token expiry
     /// is judged at <paramref name="now"/>.
     /// </summary>
-    internal static CredentialSummary ToSummary(Credential credential, DateTimeOffset now) =>
+    internal static CredentialSummary ToSummary(
+        Credential credential,
+        DateTimeOffset now,
+        IReadOnlyList<DeniedRepositorySummary> deniedRepositories) =>
         new(
             credential.Id.Value,
             credential.Name.Value,
@@ -64,7 +67,8 @@ internal static class AccountsDatabaseHelpers
                 && credential.TokenValidity is TokenValidity.Invalid invalid
                     ? invalid.DetectedAt
                     : null,
-            TokenExpirySummaries.From(credential.TokenExpiry, now));
+            TokenExpirySummaries.From(credential.TokenExpiry, now),
+            deniedRepositories);
 
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,

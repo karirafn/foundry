@@ -191,7 +191,7 @@ public sealed class HandleAsync : IAsyncDisposable
         AvailableRepositoriesResponse response =
             result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>().Value;
         response.NoPushAccessExplanation.ShouldBe(
-            "Your token's role is below Developer.");
+            "Your token's role is below Maintainer.");
     }
 
     [Fact]

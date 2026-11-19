@@ -23,16 +23,16 @@ public sealed class For
         result.ShouldSatisfyAllConditions(
             () => result.ProviderType.ShouldBe("github"),
             () => result.TokenTypeLabel.ShouldBe("GitHub fine-grained personal access token"),
-            () => result.Scopes.ShouldBe([
-                "Contents (read and write)",
-                "Issues (read and write)",
-                "Pull requests (read and write)",
-                "Administration (read and write)",
-                "Webhooks (read and write)",
-                "Commit statuses (read)",
-                "Actions (read)",
-                "Metadata (read)",
-                "Workflows (read and write)"]),
+            () => result.Permissions.ShouldBe([
+                new TokenPermissionRequirement("Contents (read and write)", "probe"),
+                new TokenPermissionRequirement("Issues (read and write)", "probe"),
+                new TokenPermissionRequirement("Pull requests (read and write)", "probe"),
+                new TokenPermissionRequirement("Administration (read and write)", "probe"),
+                new TokenPermissionRequirement("Webhooks (read and write)", "probe"),
+                new TokenPermissionRequirement("Commit statuses (read)", "probe"),
+                new TokenPermissionRequirement("Actions (read)", "probe"),
+                new TokenPermissionRequirement("Metadata (read)", "always-granted"),
+                new TokenPermissionRequirement("Workflows (read and write)", "unverifiable")]),
             () => result.CreationUrlTemplate.ShouldBe(
                 "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=read&workflows=write"));
     }
@@ -50,7 +50,9 @@ public sealed class For
         result.ShouldSatisfyAllConditions(
             () => result.ProviderType.ShouldBe("gitlab"),
             () => result.TokenTypeLabel.ShouldBe("GitLab personal access token"),
-            () => result.Scopes.ShouldBe(["api", "Maintainer role"]),
+            () => result.Permissions.ShouldBe([
+                new TokenPermissionRequirement("api", "scope"),
+                new TokenPermissionRequirement("Maintainer role", "role")]),
             () => result.CreationUrlTemplate.ShouldBe("{baseUrl}/-/user_settings/personal_access_tokens"));
     }
 

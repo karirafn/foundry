@@ -63,7 +63,8 @@
     }
   }
 
-  &__package-source-link {
+  &__package-source-link,
+  &__account-link {
     color: var(--fd-text-link);
     text-decoration: none;
 

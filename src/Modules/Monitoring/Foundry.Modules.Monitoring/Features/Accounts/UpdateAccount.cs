@@ -220,7 +220,10 @@ internal static partial class UpdateAccount
                 }
             }
 
-            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
+            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(
+                credential,
+                timeProvider.GetUtcNow(),
+                await DeniedRepositories.ForAccountAsync(dbContext, credential.Id, cancellationToken));
 
             return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));
         }

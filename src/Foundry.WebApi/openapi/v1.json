@@ -3560,7 +3560,8 @@
           "namespaces",
           "branchRulesTokenStatus",
           "tokenInvalidSince",
-          "tokenExpiry"
+          "tokenExpiry",
+          "deniedRepositories"
         ],
         "type": "object",
         "properties": {
@@ -3601,6 +3602,12 @@
           },
           "tokenExpiry": {
             "$ref": "#/components/schemas/TokenExpirySummary"
+          },
+          "deniedRepositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeniedRepositorySummary"
+            }
           }
         }
       },
@@ -3618,6 +3625,29 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AffectedRepository"
+            }
+          }
+        }
+      },
+      "DeniedRepositorySummary": {
+        "required": [
+          "id",
+          "slug",
+          "missingPermissions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "missingPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -5843,11 +5873,26 @@
           }
         }
       },
+      "TokenPermissionRequirement": {
+        "required": [
+          "label",
+          "verification"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "verification": {
+            "type": "string"
+          }
+        }
+      },
       "TokenRequirements": {
         "required": [
           "providerType",
           "tokenTypeLabel",
-          "scopes",
+          "permissions",
           "creationUrlTemplate",
           "resourceOwnerHint"
         ],
@@ -5859,10 +5904,10 @@
           "tokenTypeLabel": {
             "type": "string"
           },
-          "scopes": {
+          "permissions": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/TokenPermissionRequirement"
             }
           },
           "creationUrlTemplate": {

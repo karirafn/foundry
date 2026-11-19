@@ -1,5 +1,6 @@
 import { Component, input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { AccountSummary } from '../account.model';
 import { AccountListComponent } from './account-list';
 
@@ -11,6 +12,7 @@ const BASE: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -58,6 +60,22 @@ const ACCOUNTS: AccountSummary[] = [
     id: 'account-5',
     tokenExpiry: { status: 'expired', expiresAt: '2026-09-30T00:00:00+00:00' },
   },
+  {
+    ...BASE,
+    id: 'account-6',
+    name: 'octo-org-release-automation-with-a-long-name',
+    tokenExpiry: { status: 'expired', expiresAt: '2026-09-30T00:00:00+00:00' },
+    deniedRepositories: Array.from({ length: 7 }, (_, i) => ({
+      id: `repo-${i + 1}`,
+      slug: `octo-org/customer-projects-regional-infrastructure-monitoring-platform-${i + 1}`,
+      missingPermissions: [
+        'Administration (read and write)',
+        'Webhooks (read and write)',
+        'Commit statuses (read)',
+        'Actions (read)',
+      ],
+    })),
+  },
 ];
 
 @Component({
@@ -80,11 +98,17 @@ async function render(width: number): Promise<{ fixture: ComponentFixture<HostCo
 
 // Runs in a real browser (test-layout target); jsdom would measure every box as 0.
 describe('account list layout', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  });
+
   // 332px is the list width inside a 390px viewport after the settings and section padding.
   it.each([390, 332])('has no horizontal overflow at %ipx with 27 namespaces expanded', async width => {
     // Arrange
     const { fixture, host } = await render(width);
-    (host.querySelector('.account-list__more-btn') as HTMLButtonElement).click();
+    for (const toggle of Array.from(host.querySelectorAll<HTMLButtonElement>('.account-list__more-btn'))) {
+      toggle.click();
+    }
     await fixture.whenStable();
     const hostRight = host.getBoundingClientRect().right;
 
@@ -97,7 +121,8 @@ describe('account list layout', () => {
     // Assert
     expect(host.querySelector('.account-list__namespace-text')?.textContent).toContain('service-23');
     expect(host.querySelectorAll('.account-list__expiry').length).toBe(1);
-    expect(host.querySelectorAll('.account-list__problem fd-token-expiry').length).toBe(2);
+    expect(host.querySelectorAll('.account-list__problem fd-token-expiry').length).toBe(3);
+    expect(host.querySelectorAll('.account-list__repo-link').length).toBe(7);
     expect(overflowing).toEqual([]);
     expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth);
   });
@@ -141,5 +166,39 @@ describe('account list layout', () => {
     // Assert
     expect(side.display).not.toBe('none');
     expect(inline.display).toBe('none');
+  });
+
+  it.each([332, 800])('spans the permissions block from column 2 to the row end at %ipx', async width => {
+    // Arrange
+    const { host } = await render(width);
+    const block = host.querySelector('[aria-label="Token permissions for octo-org-release-automation-with-a-long-name"]') as HTMLElement;
+    const row = block.closest('.account-list__row') as HTMLElement;
+    const main = row.querySelector('.account-list__main') as HTMLElement;
+
+    // Act
+    const blockBox = block.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    const rowPaddingEnd = parseFloat(getComputedStyle(row).paddingRight);
+
+    // Assert
+    expect(Math.abs(blockBox.left - main.getBoundingClientRect().left)).toBeLessThan(1);
+    expect(Math.abs(blockBox.right - (rowBox.right - rowPaddingEnd))).toBeLessThan(1);
+  });
+
+  it('wraps the permissions actions without overflow at 332px', async () => {
+    // Arrange
+    const { host } = await render(332);
+    const block = host.querySelector('[aria-label="Token permissions for octo-org-release-automation-with-a-long-name"]') as HTMLElement;
+
+    // Act
+    const actions = Array.from(block.querySelectorAll<HTMLElement>('.account-list__problem-actions > *'));
+    const blockRight = block.getBoundingClientRect().right;
+
+    // Assert
+    expect(actions.length).toBe(2);
+    for (const action of actions) {
+      expect(action.getBoundingClientRect().right).toBeLessThanOrEqual(blockRight + 0.5);
+      expect(action.getBoundingClientRect().height).toBeGreaterThanOrEqual(32);
+    }
   });
 });
