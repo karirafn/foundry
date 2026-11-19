@@ -93,8 +93,6 @@ internal sealed class RunPublishingCommands(
                 $"{failed.Comment.Path}:{failed.Comment.Line}: {Classify(failed.Error).Code}: {failed.Error.Message}")]));
     }
 
-    private static InlineReviewComment ToContract(InlineComment comment) => new(comment.Path, comment.Line, comment.Body);
-
     public Task<Result<CommitIdentity>> GetCommitIdentityAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken) =>
@@ -151,6 +149,8 @@ internal sealed class RunPublishingCommands(
             _ => throw new UnreachableException(),
         };
     }
+
+    private static InlineReviewComment ToContract(InlineComment comment) => new(comment.Path, comment.Line, comment.Body);
 
     /// <summary>
     /// Maps every provider failure onto the contract's codes. Errors the provider already classified keep their
