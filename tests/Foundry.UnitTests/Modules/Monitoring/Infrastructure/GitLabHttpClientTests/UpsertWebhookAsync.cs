@@ -58,11 +58,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Created);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Created, 42));
         handler.Requests.Count.ShouldBe(2);
         handler.Requests[0].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Get),
@@ -87,6 +87,27 @@ public sealed class UpsertWebhookAsync
     }
 
     [Fact]
+    public async Task WhenTheCreateResponseCarriesNoHookId_FailsWithAProviderError()
+    {
+        // Arrange
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, """[{ "id": 7, "url": "https://elsewhere.example.com/hook" }]"""),
+            (HttpStatusCode.Created, "{}"),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
+            ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>()
+            .Error.Message.ShouldContain("returned no hook id");
+    }
+
+    [Fact]
     public async Task WhenAHookHasThePayloadUrl_UpdatesItInPlaceWithPut()
     {
         // Arrange
@@ -100,11 +121,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Updated, 42));
         handler.Requests[1].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Put),
             r => r.RequestUri!.AbsoluteUri.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fproject/hooks/42"));
@@ -130,11 +151,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Updated, 41));
         handler.Requests.Count.ShouldBe(3);
         handler.Requests[1].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Put),
@@ -190,11 +211,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Created);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Created, 100));
         handler.Requests.Count.ShouldBe(2);
         handler.Requests[1].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Post),
@@ -221,11 +242,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Updated, 41));
         handler.Requests.Count.ShouldBe(3);
     }
 
@@ -248,11 +269,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>();
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>();
         handler.Requests.Count.ShouldBe(2);
     }
 
@@ -268,11 +289,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>()
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>()
             .Error.Code.ShouldBe(WebhookWriteErrors.InsufficientPermissionCode);
         handler.Requests.Count.ShouldBe(1);
     }
@@ -289,11 +310,11 @@ public sealed class UpsertWebhookAsync
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>()
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>()
             .Error.Code.ShouldNotBe(WebhookWriteErrors.InsufficientPermissionCode);
     }
 }

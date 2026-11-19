@@ -14,6 +14,7 @@ using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -32,6 +33,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 {
     private const string AccountToken = "ghp_account_token";
     private const string PublicBaseUrl = "https://hooks.example.com";
+    private const long CreatedProviderHookId = 4242;
 
     private readonly ProviderState _state = new();
     private readonly FoundryWebAppFactory _factory;
@@ -98,6 +100,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         token.ShouldBe(AccountToken);
         spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/github/{repository.WebhookHookId}");
         spec.Secret.ShouldBe((await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookSecret);
+        _state.Tests.ShouldBe([("owner/repo", AccountToken, CreatedProviderHookId)]);
     }
 
     [Fact]
@@ -126,7 +129,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
         Guid accountId = await SeedAccountAsync();
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory);
-        _state.UpsertResult = Result<WebhookUpsertKind>.Fail(WebhookWriteErrors.InsufficientPermission("403"));
+        _state.UpsertResult = Result<WebhookUpsert>.Fail(WebhookWriteErrors.InsufficientPermission("403"));
 
         // Act
         RegisterWebhookResponse response = await RegisterAsync(accountId, repository);
@@ -135,6 +138,60 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         response.Outcome.Kind.ShouldBe(WebhookRegistrationOutcome.FailedKind);
         response.Outcome.Reason.ShouldBe(WebhookRegistrationOutcome.InsufficientPermissionReason);
         response.Webhook.Status.ShouldBe("not-registered");
+        _state.Tests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task RegisterAction_ForGitLab_TheTestPushDeliveryActivatesTheHook()
+    {
+        // Arrange
+        await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
+        Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory, name: "Hooks Group");
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "group");
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(
+            _factory, slug: "group/project", host: "gitlab.com");
+        RegisterWebhookResponse registered = await RegisterAsync(accountId, repository);
+        registered.Webhook.Status.ShouldBe("pending");
+        _state.Tests.ShouldBe([("group/project", "glpat-test_token", CreatedProviderHookId)]);
+        string secret = (await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookSecret!;
+
+        // Act — the shape of GitLab's sample push event, as the existing GitLab delivery tests send it.
+        HttpContext delivery = await WebhookTestHost.DeliverGitLabAsync(
+            _factory,
+            repository.WebhookHookId,
+            "Push Hook",
+            """{"object_kind":"push","ref":"refs/heads/main","project":{"path_with_namespace":"group/project"}}""",
+            secret);
+
+        // Assert
+        delivery.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
+        (await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookStatus.ShouldBe(WebhookStatus.Active);
+    }
+
+    [Fact]
+    public async Task RegisterAction_WhenUpdatedInPlace_PingsTheHookAndThePingActivatesIt()
+    {
+        // Arrange — a hook left at an older base URL is updated in place.
+        await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
+        Guid accountId = await SeedAccountAsync();
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, registered: true);
+        _state.UpsertResult = Result<WebhookUpsert>.Ok(new WebhookUpsert(WebhookUpsertKind.Updated, 77));
+        RegisterWebhookResponse registered = await RegisterAsync(accountId, repository);
+        registered.Outcome.Kind.ShouldBe(WebhookRegistrationOutcome.UpdatedKind);
+        _state.Tests.ShouldBe([("owner/repo", AccountToken, 77L)]);
+        string secret = (await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookSecret!;
+
+        // Act
+        HttpContext delivery = await WebhookTestHost.DeliverAsync(
+            _factory,
+            repository.WebhookHookId,
+            "ping",
+            """{"zen":"x","repository":{"full_name":"owner/repo"}}""",
+            secret);
+
+        // Assert
+        delivery.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
+        (await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookStatus.ShouldBe(WebhookStatus.Active);
     }
 
     [Fact]
@@ -228,7 +285,9 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 
     private sealed class ProviderState
     {
-        public Result<WebhookUpsertKind> UpsertResult { get; set; } = Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Created);
+        public Result<WebhookUpsert> UpsertResult { get; set; } = Result<WebhookUpsert>.Ok(new WebhookUpsert(WebhookUpsertKind.Created, CreatedProviderHookId));
+
+        public ConcurrentQueue<(string Slug, string Token, long ProviderHookId)> Tests { get; } = new();
 
         public ConcurrentQueue<(string Slug, string Token, WebhookHookSpec Spec)> Upserts { get; } = new();
 
@@ -245,13 +304,22 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 
     private sealed class StatefulProvider(ProviderState state, string token) : IIssueProvider
     {
-        public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+        public Task<Result<WebhookUpsert>> UpsertWebhookAsync(
             RepositorySlug slug,
             WebhookHookSpec spec,
             CancellationToken cancellationToken)
         {
             state.Upserts.Enqueue((slug.FullPath, token, spec));
             return Task.FromResult(state.UpsertResult);
+        }
+
+        public Task<Result> TestWebhookAsync(
+            RepositorySlug slug,
+            long providerHookId,
+            CancellationToken cancellationToken)
+        {
+            state.Tests.Enqueue((slug.FullPath, token, providerHookId));
+            return Task.FromResult(Result.Ok());
         }
 
         public Task<Result<int>> DeleteWebhooksAsync(

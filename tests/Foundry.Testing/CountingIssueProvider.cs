@@ -36,6 +36,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int DeleteBranchCallCount { get; private set; }
     public int ApplyBranchRulesCallCount { get; private set; }
     public int UpsertWebhookCallCount { get; private set; }
+    public int TestWebhookCallCount { get; private set; }
 
     /// <summary>Slugs whose webhook registration the provider refuses with a provider error.</summary>
     public HashSet<string> FailingWebhookSlugs { get; } = new(StringComparer.Ordinal);
@@ -143,7 +144,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
 
     }
 
-    public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+    public Task<Result<WebhookUpsert>> UpsertWebhookAsync(
         RepositorySlug slug,
         WebhookHookSpec spec,
         CancellationToken cancellationToken)
@@ -151,8 +152,18 @@ internal sealed class CountingIssueProvider : IIssueProvider
         TotalCalls++;
         UpsertWebhookCallCount++;
         return Task.FromResult(FailingWebhookSlugs.Contains(slug.FullPath)
-            ? Result<WebhookUpsertKind>.Fail(new Error("Test.ProviderError", "Refused by the test provider."))
-            : Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Updated));
+            ? Result<WebhookUpsert>.Fail(new Error("Test.ProviderError", "Refused by the test provider."))
+            : Result<WebhookUpsert>.Ok(new WebhookUpsert(WebhookUpsertKind.Updated, 1)));
+    }
+
+    public Task<Result> TestWebhookAsync(
+        RepositorySlug slug,
+        long providerHookId,
+        CancellationToken cancellationToken)
+    {
+        TotalCalls++;
+        TestWebhookCallCount++;
+        return Task.FromResult(Result.Ok());
     }
 
 
