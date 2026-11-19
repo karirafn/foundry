@@ -351,7 +351,7 @@ public sealed partial class ResolveAsync
         public Task<Result<bool>> CreateBranchAsync(MonitoredRepositoryId repositoryId, string branchName, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("No provider call is expected.");
 
-        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(MonitoredRepositoryId repositoryId, string branchName, CancellationToken cancellationToken) =>
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(MonitoredRepositoryId repositoryId, string branchName, CommitSha? publishedHead, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("No merge-request lookup is expected for a triage run.");
 
         public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(MonitoredRepositoryId repositoryId, string branchName, CancellationToken cancellationToken) =>

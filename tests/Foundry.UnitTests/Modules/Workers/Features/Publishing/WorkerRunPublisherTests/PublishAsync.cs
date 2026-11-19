@@ -82,6 +82,23 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task SettlingThePullRequest_LooksItUpByThePublishedHead()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
+        StubPostExitProviderQueries provider = new(hasCommits: true);
+
+        // Act
+        await RunPublisherAsync(publisher, provider);
+
+        // Assert
+        provider.PublishedHeadsLookedUp.ShouldNotBeEmpty();
+        provider.PublishedHeadsLookedUp[0].ShouldBe(Head);
+    }
+
+    [Fact]
     public async Task ALaterRunOnAnOpenPullRequest_PostsOneSummaryAndOpensNone()
     {
         // Arrange

@@ -763,6 +763,7 @@ internal sealed partial class GitLabHttpClient(
         RepositorySlug slug,
         string branchName,
         string token,
+        CommitSha? publishedHead,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
@@ -795,30 +796,27 @@ internal sealed partial class GitLabHttpClient(
 
         List<GitLabMergeRequestStateDto> items = dtos ?? [];
 
-        if (items.Count == 0)
-        {
-            return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
-        }
-
-        GitLabMergeRequestStateDto? merged = items.FirstOrDefault(
-            dto => string.Equals(dto.State, "merged", StringComparison.OrdinalIgnoreCase));
-
-        GitLabMergeRequestStateDto selected = merged
-            ?? items.MaxBy(dto => dto.UpdatedAt)!;
-
-        if (string.IsNullOrEmpty(selected.State))
+        if (items.Any(dto => string.IsNullOrEmpty(dto.State)))
         {
             return Result<MergeRequestByBranch>.Fail(GitLabErrors.MissingMergeRequestState);
         }
 
-        MergeRequestPresence presence = selected.State.ToLowerInvariant() switch
+        List<MergeRequestCandidate> candidates = items.Select(ToCandidate).ToList();
+
+        return Result<MergeRequestByBranch>.Ok(MergeRequestSelection.Select(candidates, publishedHead));
+    }
+
+    private static MergeRequestCandidate ToCandidate(GitLabMergeRequestStateDto dto)
+    {
+        MergeRequestPresence presence = dto.State.ToLowerInvariant() switch
         {
             "merged" => MergeRequestPresence.Merged,
             "opened" => MergeRequestPresence.Open,
             _ => MergeRequestPresence.Closed,
         };
+        CommitSha? head = CommitSha.TryFrom(dto.Sha, out CommitSha sha) ? sha : null;
 
-        return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.WebUrl));
+        return new MergeRequestCandidate(presence, dto.WebUrl, dto.UpdatedAt, head);
     }
 
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
@@ -1235,7 +1233,7 @@ internal sealed partial class GitLabHttpClient(
 
     private sealed record GitLabCommitDto(string Id);
 
-    private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt);
+    private sealed record GitLabMergeRequestStateDto(string State, string WebUrl, DateTimeOffset UpdatedAt, string? Sha);
 
     private sealed record GitLabProjectWithPermissionsDto(GitLabProjectPermissionsDto? Permissions);
 

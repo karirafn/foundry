@@ -78,6 +78,7 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
         Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             nonExistentId,
             "feat/my-branch",
+            publishedHead: null,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -99,6 +100,7 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
         Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             repoId,
             "feat/my-branch",
+            publishedHead: null,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -122,12 +124,33 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
         Result<MergeRequestByBranch> result = await _sut.GetMergeRequestByBranchAsync(
             repoId,
             "feat/my-branch",
+            publishedHead: null,
             TestContext.Current.CancellationToken);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
         Result<MergeRequestByBranch>.Failure failure = result.ShouldBeOfType<Result<MergeRequestByBranch>.Failure>();
         failure.Error.Code.ShouldBe("Provider.Unreachable");
+    }
+
+    [Fact]
+    public async Task WhenPublishedHeadIsGiven_PassesItToTheProvider()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync();
+        CommitSha publishedHead = CommitSha.From(new string('c', 40));
+        StubIssueProvider provider = new();
+        _stubProvider = provider;
+
+        // Act
+        await _sut.GetMergeRequestByBranchAsync(
+            repoId,
+            "feat/my-branch",
+            publishedHead,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.ReceivedPublishedHead.ShouldBe(publishedHead);
     }
 
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
@@ -138,6 +161,8 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
     private sealed class StubIssueProvider(
         Result<MergeRequestByBranch>? getMergeRequestResult = null) : IIssueProvider
     {
+        public CommitSha? ReceivedPublishedHead { get; private set; }
+
         public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
@@ -208,8 +233,10 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
+            ReceivedPublishedHead = publishedHead;
             return Task.FromResult(
                 getMergeRequestResult
                 ?? Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));

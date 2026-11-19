@@ -9,6 +9,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;

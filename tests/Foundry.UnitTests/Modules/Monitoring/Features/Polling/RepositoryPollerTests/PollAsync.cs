@@ -2234,6 +2234,7 @@ public sealed class PollAsync : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
             return Task.FromResult(
@@ -2335,6 +2336,7 @@ public sealed class PollAsync : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
             return Task.FromResult(Result<MergeRequestByBranch>.Fail(error));

@@ -1566,6 +1566,7 @@ internal sealed partial class GitHubHttpClient(
         RepositorySlug slug,
         string branchName,
         string token,
+        CommitSha? publishedHead,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
@@ -1598,25 +1599,21 @@ internal sealed partial class GitHubHttpClient(
         List<GitHubPullRequestStateDto>? dtos =
             JsonSerializer.Deserialize<List<GitHubPullRequestStateDto>>(body, JsonOptions);
 
-        List<GitHubPullRequestStateDto> items = dtos ?? [];
+        List<MergeRequestCandidate> candidates = (dtos ?? []).Select(ToCandidate).ToList();
 
-        if (items.Count == 0)
-        {
-            return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null));
-        }
+        return Result<MergeRequestByBranch>.Ok(MergeRequestSelection.Select(candidates, publishedHead));
+    }
 
-        GitHubPullRequestStateDto? merged = items.FirstOrDefault(dto => dto.MergedAt is not null);
-
-        GitHubPullRequestStateDto selected = merged
-            ?? items.MaxBy(dto => dto.UpdatedAt)!;
-
-        MergeRequestPresence presence = selected.MergedAt is not null
+    private static MergeRequestCandidate ToCandidate(GitHubPullRequestStateDto dto)
+    {
+        MergeRequestPresence presence = dto.MergedAt is not null
             ? MergeRequestPresence.Merged
-            : string.Equals(selected.State, "open", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(dto.State, "open", StringComparison.OrdinalIgnoreCase)
                 ? MergeRequestPresence.Open
                 : MergeRequestPresence.Closed;
+        CommitSha? head = CommitSha.TryFrom(dto.Head?.Sha, out CommitSha sha) ? sha : null;
 
-        return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.HtmlUrl));
+        return new MergeRequestCandidate(presence, dto.HtmlUrl, dto.UpdatedAt, head);
     }
 
     /// <summary>
@@ -1988,7 +1985,10 @@ internal sealed partial class GitHubHttpClient(
         string HtmlUrl,
         string State,
         string? MergedAt,
-        DateTimeOffset UpdatedAt);
+        DateTimeOffset UpdatedAt,
+        GitHubPullRequestHeadDto? Head);
+
+    private sealed record GitHubPullRequestHeadDto(string? Sha);
 
     private sealed record GitHubErrorBodyDto(string? Message);
 

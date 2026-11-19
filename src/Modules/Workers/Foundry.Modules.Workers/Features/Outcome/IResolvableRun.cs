@@ -27,4 +27,7 @@ internal interface IResolvableRun
 
     /// <summary>Whether the run was started by Continue without answer, so its <c>needs_input</c> verdict is refused (ADR 0096).</summary>
     bool RefusesNeedsInput { get; }
+
+    /// <summary>The commit the run published to its branch; <see langword="null"/> when it published nothing.</summary>
+    CommitSha? PublishedHead { get; }
 }

@@ -1493,6 +1493,8 @@ public sealed partial class ResolveAsync
         private readonly Queue<Result<bool>> _commitsResultQueue;
         private readonly Result<bool> _commitsResult;
 
+        public List<CommitSha?> ReceivedPublishedHeads { get; } = [];
+
         public ScriptedProviderQueries(
             Result<bool> commitsResult,
             Result<MergeRequestByBranch>? fallbackMrResult = null,
@@ -1509,8 +1511,10 @@ public sealed partial class ResolveAsync
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
+            ReceivedPublishedHeads.Add(publishedHead);
             Result<MergeRequestByBranch> result = _mrResultQueue.Count > 0
                 ? _mrResultQueue.Dequeue()
                 : _fallbackMrResult;

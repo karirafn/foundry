@@ -79,7 +79,7 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
     public Task<Result<bool>> DeleteBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken)
         => Task.FromResult(Result<bool>.Ok(true));
 
-    public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken)
+    public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(RepositorySlug slug, string branchName, CommitSha? publishedHead, CancellationToken cancellationToken)
         => Task.FromResult(Result<MergeRequestByBranch>.Ok(_pullRequestOpened
             ? new MergeRequestByBranch(MergeRequestPresence.Open, PullRequestUrl)
             : new MergeRequestByBranch(MergeRequestPresence.None, null)));

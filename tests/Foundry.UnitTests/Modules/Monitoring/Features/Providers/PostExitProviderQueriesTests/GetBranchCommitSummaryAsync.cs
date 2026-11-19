@@ -232,6 +232,7 @@ public sealed class GetBranchCommitSummaryAsync : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
             return Task.FromResult(

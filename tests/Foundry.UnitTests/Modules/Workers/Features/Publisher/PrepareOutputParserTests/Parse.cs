@@ -1,5 +1,6 @@
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Shared;
 
 using Shouldly;
 

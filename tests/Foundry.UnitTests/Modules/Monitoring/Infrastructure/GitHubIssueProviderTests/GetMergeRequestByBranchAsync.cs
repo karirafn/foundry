@@ -53,6 +53,7 @@ public sealed class GetMergeRequestByBranchAsync
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -75,6 +76,7 @@ public sealed class GetMergeRequestByBranchAsync
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -97,6 +99,7 @@ public sealed class GetMergeRequestByBranchAsync
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
             ValidSlug,
             "feat/my-branch",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert

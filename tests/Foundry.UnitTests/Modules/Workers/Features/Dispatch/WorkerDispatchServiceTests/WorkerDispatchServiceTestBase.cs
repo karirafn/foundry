@@ -227,6 +227,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         Error? mergeRequestError = null,
         Error? hasCommitsError = null) : IPostExitProviderQueries
     {
+        public List<CommitSha?> PublishedHeadsLookedUp { get; } = [];
+
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
@@ -236,8 +238,11 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
+            PublishedHeadsLookedUp.Add(publishedHead);
+
             if (mergeRequestError is not null)
             {
                 return Task.FromResult(Result<MergeRequestByBranch>.Fail(mergeRequestError));
