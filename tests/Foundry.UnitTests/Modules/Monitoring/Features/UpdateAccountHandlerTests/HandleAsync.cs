@@ -68,8 +68,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IRepositoryEligibilityEvaluator? evaluator = null,
         ProviderHostGuard? hostGuard = null,
         IIssueProviderFactory? providerFactory = null,
-        IDomainEventDispatcher? domainEventDispatcher = null,
-        bool registerWebhooks = false)
+        IDomainEventDispatcher? domainEventDispatcher = null)
     {
         IRepositoryEligibilityEvaluator resolvedEvaluator = evaluator ?? new NoOpEligibilityEvaluator();
         RepositoryEligibilityDiffer differ = new(
@@ -98,15 +97,6 @@ public sealed class HandleAsync : IAsyncDisposable
             enforcer,
             NullLogger<OptedInBranchRuleApplier>.Instance);
 
-        AccountWebhookRegistrar webhookRegistrar = new(
-            _dbContext,
-            differ,
-            new WebhookRegistrar(
-                new WebhookIngress(new StubWebhookSettingsQueries("https://hooks.example.com")),
-                resolvedFactory,
-                NullLogger<WebhookRegistrar>.Instance),
-            NullLogger<AccountWebhookRegistrar>.Instance);
-
         return new UpdateAccount.Handler(
             _dbContext,
             tokenAccountResolver,
@@ -114,8 +104,7 @@ public sealed class HandleAsync : IAsyncDisposable
             branchRuleApplier,
             hostGuard ?? BuildPassingGuard(),
             domainEventDispatcher ?? new NullDomainEventDispatcher(),
-            TimeProvider.System,
-            registerWebhooks ? webhookRegistrar : null);
+            TimeProvider.System);
     }
 
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
@@ -961,38 +950,17 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAccountTokenRotated_RegistersTheNotRegisteredWebhooksWithTheNewToken()
+    public async Task WhenAccountTokenRotated_RegistersNoWebhooks()
     {
-        // Arrange
+        // Arrange — the scheduled poll registers the repository with the new token instead.
         GitHubCredential credential = await SeedCoveringCredentialAsync();
         await SeedRepoAsync("alice/one", applyBranchRules: false);
         RecordingBranchRulesProviderFactory factory = new();
         UpdateAccount.Handler handler = BuildHandler(
             validateToken: new StubValidateTokenHandler("alice"),
             deriver: AliceDeriver(),
-            providerFactory: factory,
-            registerWebhooks: true);
+            providerFactory: factory);
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        factory.ShouldSatisfyAllConditions(
-            () => factory.WebhookUpserts.Select(u => u.Slug).ShouldBe(["alice/one"]),
-            () => factory.TokensUsed.ShouldBe(["ghp_rotated"]));
-    }
-
-    [Fact]
-    public async Task WhenNoAccountTokenSupplied_RegistersNoWebhooks()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCoveringCredentialAsync();
-        await SeedRepoAsync("alice/one", applyBranchRules: false);
-        RecordingBranchRulesProviderFactory factory = new();
-        UpdateAccount.Handler handler = BuildHandler(providerFactory: factory, registerWebhooks: true);
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null);
 
         // Act
         UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);

@@ -8,6 +8,7 @@ using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Foundry.UnitTests.Modules.Monitoring.Features.Providers.Feedback;
 
 using Shouldly;
 
@@ -19,14 +20,17 @@ public sealed class RegisterAsync
 {
     private const string PublicBaseUrl = "https://hooks.example.com";
     private const string AccountToken = "github_pat_account";
+    private static readonly DateTimeOffset Now = new(2026, 11, 19, 10, 0, 0, TimeSpan.Zero);
 
     private static WebhookRegistrar BuildSut(
         RecordingBranchRulesProviderFactory factory,
-        string? publicBaseUrl = PublicBaseUrl) =>
+        string? publicBaseUrl = PublicBaseUrl,
+        TimeProvider? timeProvider = null) =>
         new(
             new WebhookIngress(
                 new StubWebhookSettingsQueries(publicBaseUrl)),
             factory,
+            timeProvider ?? TimeProvider.System,
             NullLogger<WebhookRegistrar>.Instance);
 
     private static MonitoredRepository NewRepository(string slug = "owner/repo") =>
@@ -103,7 +107,7 @@ public sealed class RegisterAsync
         RecordingBranchRulesProviderFactory factory = new();
         WebhookRegistrar sut = BuildSut(factory);
         MonitoredRepository repository = NewRepository();
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
         repository.RecordWebhookDelivery();
 
         // Act
@@ -237,5 +241,72 @@ public sealed class RegisterAsync
         // Assert
         outcome.Reason.ShouldBe(WebhookRegistrationOutcome.ProviderErrorReason);
         outcome.Detail.ShouldBe(WebhookRegistrar.UnreachableDetail);
+    }
+
+    [Fact]
+    public async Task WhenRegistered_StoresTheCurrentStampAndClearsAnEarlierFailure()
+    {
+        // Arrange
+        RecordingBranchRulesProviderFactory factory = new();
+        WebhookRegistrar sut = BuildSut(factory);
+        MonitoredRepository repository = NewRepository();
+        repository.RecordWebhookRegistrationFailed(Now);
+
+        // Act
+        await sut.RegisterAsync(repository, GitHubAccount(), CancellationToken.None);
+
+        // Assert
+        repository.WebhookSpecStamp.ShouldBe(WebhookSpecStamp.For(WebhookProvider.GitHub, PublicBaseUrl));
+        repository.WebhookRegistrationFailedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheProviderFails_RecordsTheAttemptTimeAndKeepsTheStamp()
+    {
+        // Arrange
+        RecordingBranchRulesProviderFactory factory = new RecordingBranchRulesProviderFactory()
+            .WithWebhookResult("owner/repo", Result<WebhookUpsertKind>.Fail(new Error("GitHub.ProviderError", "500")));
+        WebhookRegistrar sut = BuildSut(factory, timeProvider: new FakeTimeProvider(Now));
+        MonitoredRepository repository = NewRepository();
+        repository.MarkWebhookRegistered("old-stamp");
+
+        // Act
+        await sut.RegisterAsync(repository, GitHubAccount(), CancellationToken.None);
+
+        // Assert
+        repository.WebhookRegistrationFailedAt.ShouldBe(Now);
+        repository.WebhookSpecStamp.ShouldBe("old-stamp");
+    }
+
+    [Fact]
+    public async Task WhenPermissionIsMissing_RecordsTheAttemptTime()
+    {
+        // Arrange
+        RecordingBranchRulesProviderFactory factory = new RecordingBranchRulesProviderFactory()
+            .WithWebhookResult("owner/repo", Result<WebhookUpsertKind>.Fail(WebhookWriteErrors.InsufficientPermission("403")));
+        WebhookRegistrar sut = BuildSut(factory, timeProvider: new FakeTimeProvider(Now));
+        MonitoredRepository repository = NewRepository();
+
+        // Act
+        await sut.RegisterAsync(repository, GitHubAccount(), CancellationToken.None);
+
+        // Assert
+        repository.WebhookRegistrationFailedAt.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task WhenSkipped_RecordsNothing()
+    {
+        // Arrange
+        RecordingBranchRulesProviderFactory factory = new();
+        WebhookRegistrar sut = BuildSut(factory, timeProvider: new FakeTimeProvider(Now));
+        MonitoredRepository repository = NewRepository();
+
+        // Act
+        await sut.RegisterAsync(repository, GitHubAccount(accountToken: null), CancellationToken.None);
+
+        // Assert
+        repository.WebhookRegistrationFailedAt.ShouldBeNull();
+        repository.WebhookSpecStamp.ShouldBeNull();
     }
 }

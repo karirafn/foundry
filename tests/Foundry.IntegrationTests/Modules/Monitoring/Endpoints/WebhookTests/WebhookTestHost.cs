@@ -113,7 +113,7 @@ internal static class WebhookTestHost
 
         if (registered)
         {
-            repository.MarkWebhookRegistered();
+            repository.MarkWebhookRegistered("stamp");
         }
 
         dbContext.Set<MonitoredRepository>().Add(repository);

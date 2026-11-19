@@ -36,6 +36,10 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int DeleteBranchCallCount { get; private set; }
     public int ApplyBranchRulesCallCount { get; private set; }
     public int UpsertWebhookCallCount { get; private set; }
+
+    /// <summary>Slugs whose webhook registration the provider refuses with a provider error.</summary>
+    public HashSet<string> FailingWebhookSlugs { get; } = new(StringComparer.Ordinal);
+
     public int GetMergeRequestByBranchCallCount { get; private set; }
     public int GetBranchCommitSummaryCallCount { get; private set; }
     public int CanPushCallCount { get; private set; }
@@ -146,7 +150,9 @@ internal sealed class CountingIssueProvider : IIssueProvider
     {
         TotalCalls++;
         UpsertWebhookCallCount++;
-        return Task.FromResult(Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Updated));
+        return Task.FromResult(FailingWebhookSlugs.Contains(slug.FullPath)
+            ? Result<WebhookUpsertKind>.Fail(new Error("Test.ProviderError", "Refused by the test provider."))
+            : Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Updated));
     }
 
 

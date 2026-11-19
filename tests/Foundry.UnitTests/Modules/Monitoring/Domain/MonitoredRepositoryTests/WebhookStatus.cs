@@ -23,7 +23,7 @@ public sealed class WebhookStatus
     private static MonitoredRepository CreateActiveRepository()
     {
         MonitoredRepository repository = CreateRepository();
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
         repository.RecordWebhookDelivery();
         return repository;
     }
@@ -50,7 +50,7 @@ public sealed class WebhookStatus
         MonitoredRepository repository = CreateRepository();
 
         // Act
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
 
         // Assert
         repository.WebhookStatus.ShouldBe(WebhookStatusValue.Pending);
@@ -61,7 +61,7 @@ public sealed class WebhookStatus
     {
         // Arrange
         MonitoredRepository repository = CreateRepository();
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
 
         // Act
         bool changed = repository.RecordWebhookDelivery();
@@ -119,7 +119,7 @@ public sealed class WebhookStatus
     {
         // Arrange
         MonitoredRepository repository = CreateRepository();
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
 
         // Act
         bool changed = repository.RecordMissedChange();
@@ -136,7 +136,7 @@ public sealed class WebhookStatus
         MonitoredRepository repository = CreateActiveRepository();
 
         // Act
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
 
         // Assert
         repository.WebhookStatus.ShouldBe(WebhookStatusValue.Active);
@@ -175,7 +175,7 @@ public sealed class WebhookStatus
         MonitoredRepository repository = CreateRepository();
         if (status is WebhookStatusValue.Pending or WebhookStatusValue.Silent)
         {
-            repository.MarkWebhookRegistered();
+            repository.MarkWebhookRegistered("stamp");
         }
 
         if (status is WebhookStatusValue.Silent)
@@ -213,7 +213,7 @@ public sealed class WebhookStatus
     {
         // Arrange
         MonitoredRepository repository = CreateRepository(TimeSpan.FromHours(1));
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
         repository.RecordWebhookDelivery();
 
         // Act
