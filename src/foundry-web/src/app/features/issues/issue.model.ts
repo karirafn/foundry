@@ -97,7 +97,24 @@ export interface FailingCheck {
 export type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-kind';
 export type { RunKind } from '../../shared/utils/run-kind';
 
-export interface InputQuestion {
+/** A question a run asked: structured with lettered options, or a legacy free-text question stored before that. */
+export type InputQuestion = StructuredInputQuestion | LegacyInputQuestion;
+
+export interface StructuredInputQuestion {
+  $type: 'structured';
+  question: string;
+  problem: string;
+  impact: string;
+  /** Lettered by position: `a` for the first. */
+  options: string[];
+  /** The letter of the recommended option. */
+  recommendedOption: string;
+  recommendationReason: string;
+  evidence: string[];
+}
+
+export interface LegacyInputQuestion {
+  $type: 'legacy';
   question: string;
   context: string;
   recommendation?: string | null;

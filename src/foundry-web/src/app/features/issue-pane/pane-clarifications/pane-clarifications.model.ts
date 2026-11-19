@@ -43,12 +43,19 @@ export interface OpenRoundView {
   readonly reminder: ReminderView | null;
 }
 
+/** A question in the existing slots: its text, a secondary line, and the recommendation line. */
+export interface QuestionView {
+  readonly question: string;
+  readonly context: string | null;
+  readonly recommendation: string | null;
+}
+
 export interface ClarificationRoundView {
   /** 1-based, oldest round first. */
   readonly number: number;
   readonly status: RoundStatus;
   readonly statusLabel: string;
-  readonly questions: readonly InputQuestion[];
+  readonly questions: readonly QuestionView[];
   readonly askedAt: string;
   readonly answeredAt: string | null;
   readonly input: readonly InputPartView[];
@@ -76,7 +83,7 @@ export function buildClarifications(
       number: index + 1,
       status,
       statusLabel: STATUS_LABELS[status],
-      questions: round.questions,
+      questions: round.questions.map(questionView),
       askedAt: round.askedAt,
       answeredAt: round.answeredAt,
       input: (round.input ?? []).flatMap((part) => partView(part, providerName)),
@@ -162,4 +169,28 @@ function reminderView(awaiting: AwaitingInputDetails): ReminderView | null {
     return { status: 'due', at: awaiting.reminderDueAt };
   }
   return awaiting.postStatus === 'posted' ? null : { status: 'after_post' };
+}
+
+const LETTERS = 'abcd';
+
+// A structured question shows its problem as the secondary line and its recommended option, lettered, as the
+// recommendation. An unknown type, or a recommended letter naming no option, shows the question alone.
+export function questionView(q: InputQuestion): QuestionView {
+  switch (q.$type) {
+    case 'legacy':
+      return { question: q.question, context: q.context || null, recommendation: q.recommendation || null };
+    case 'structured': {
+      const index = LETTERS.indexOf(q.recommendedOption);
+      const option = index >= 0 && q.recommendedOption.length === 1 ? q.options[index] : undefined;
+      return option === undefined
+        ? { question: q.question, context: null, recommendation: null }
+        : {
+          question: q.question,
+          context: q.problem,
+          recommendation: `✅ ${q.recommendedOption}) ${option}: ${q.recommendationReason}`,
+        };
+    }
+    default:
+      return { question: (q as { question?: string }).question ?? '', context: null, recommendation: null };
+  }
 }
