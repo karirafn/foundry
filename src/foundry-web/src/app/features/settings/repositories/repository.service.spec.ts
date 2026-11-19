@@ -1,8 +1,11 @@
+import { vi } from 'vitest';
+import { Subject } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { RepositoryService } from './repository.service';
-import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { RepositoryService, RepositoryWebhookUpdate } from './repository.service';
+import { RepositoryWebhookChange, SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, RepositoryWebhookInfo, UpdateRepositoryRequest } from './repository.model';
 
 const ACCOUNT_ID = '00000000-0000-0000-0000-000000000001';
 const REPO_ID = '00000000-0000-0000-0000-000000000010';
@@ -71,17 +74,28 @@ const MOCK_AVAILABLE_RESPONSE: AvailableRepositoriesResponse = {
   noPushAccessExplanation: '',
 };
 
+function makeSignalRStub() {
+  return {
+    reconnected: new Subject<void>(),
+    repositoryWebhookChanged: new Subject<RepositoryWebhookChange>(),
+    repositoryWebhooksChanged: new Subject<void>(),
+  };
+}
+
 function setupService() {
+  const signalR = makeSignalRStub();
   TestBed.configureTestingModule({
     providers: [
       RepositoryService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      { provide: SystemSignalRService, useValue: signalR },
     ],
   });
   return {
     service: TestBed.inject(RepositoryService),
     httpMock: TestBed.inject(HttpTestingController),
+    signalR,
   };
 }
 
@@ -884,5 +898,177 @@ describe('RepositoryService', () => {
     // Assert
     expect(failed).toBe(true);
     expect(service.repositories()).toEqual([MOCK_REPOSITORY_2]);
+  });
+});
+
+describe('RepositoryService live webhook updates', () => {
+  const LIST_URL = `/api/accounts/${ACCOUNT_ID}/repositories`;
+  const WEBHOOK_URL = `${LIST_URL}/${REPO_ID}/webhook`;
+  const ACTIVE_INFO: RepositoryWebhookInfo = {
+    status: 'active',
+    payloadUrl: 'https://foundry.example.com/webhooks/github/abc',
+    contentType: 'application/json',
+    events: ['issues'],
+    backstopIntervalMinutes: 30,
+    provider: 'github',
+  };
+
+  let service: RepositoryService;
+  let httpMock: HttpTestingController;
+  let signalR: ReturnType<typeof makeSignalRStub>;
+  let updates: RepositoryWebhookUpdate[];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    ({ service, httpMock, signalR } = setupService());
+    updates = [];
+    service.webhookUpdates.subscribe((update) => updates.push(update));
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    vi.useRealTimers();
+  });
+
+  async function loadList(): Promise<void> {
+    const loaded = service.loadAllRepositories([ACCOUNT_ID]);
+    httpMock.expectOne(LIST_URL).flush([
+      { ...MOCK_REPOSITORY, webhookStatus: 'pending' },
+      { ...MOCK_REPOSITORY_2, webhookStatus: 'pending' },
+    ]);
+    await loaded;
+  }
+
+  function statusOf(id: string): string | undefined {
+    return service.repositories().find((r) => r.id === id)?.webhookStatus;
+  }
+
+  it('ignores a repository change before any list has been loaded', () => {
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    vi.advanceTimersByTime(300);
+
+    httpMock.expectNone(WEBHOOK_URL);
+    expect(updates).toEqual([]);
+  });
+
+  it('re-fetches a cached repository webhook and updates its row status', async () => {
+    await loadList();
+
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne(WEBHOOK_URL).flush(ACTIVE_INFO);
+
+    expect(statusOf(REPO_ID)).toBe('active');
+    expect(statusOf(REPO_ID_2)).toBe('pending');
+    expect(updates).toEqual([{ kind: 'repository', repositoryId: REPO_ID, info: ACTIVE_INFO }]);
+  });
+
+  it('ignores a change for a repository that is not cached', async () => {
+    await loadList();
+
+    signalR.repositoryWebhookChanged.next({ repositoryId: 'unknown' });
+    vi.advanceTimersByTime(300);
+
+    httpMock.expectNone(`${LIST_URL}/unknown/webhook`);
+    expect(updates).toEqual([]);
+  });
+
+  it('batches a burst for one repository into one request', async () => {
+    await loadList();
+
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    vi.advanceTimersByTime(100);
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    vi.advanceTimersByTime(300);
+
+    httpMock.expectOne(WEBHOOK_URL).flush(ACTIVE_INFO);
+  });
+
+  it('re-fetches each repository of a burst that names two', async () => {
+    await loadList();
+
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID_2 });
+    vi.advanceTimersByTime(300);
+
+    httpMock.expectOne(WEBHOOK_URL).flush(ACTIVE_INFO);
+    httpMock.expectOne(`${LIST_URL}/${REPO_ID_2}/webhook`).flush(ACTIVE_INFO);
+    expect(statusOf(REPO_ID)).toBe('active');
+    expect(statusOf(REPO_ID_2)).toBe('active');
+  });
+
+  it('keeps the last known status and keeps listening when a re-fetch fails', async () => {
+    await loadList();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne(WEBHOOK_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+    signalR.repositoryWebhookChanged.next({ repositoryId: REPO_ID });
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne(WEBHOOK_URL).flush(ACTIVE_INFO);
+
+    expect(consoleError).toHaveBeenCalled();
+    expect(statusOf(REPO_ID)).toBe('active');
+    consoleError.mockRestore();
+  });
+
+  it('reloads the list in the background when every repository changed', async () => {
+    await loadList();
+
+    signalR.repositoryWebhooksChanged.next();
+    vi.advanceTimersByTime(300);
+
+    expect(service.loading()).toBe(false);
+    httpMock.expectOne(LIST_URL).flush([{ ...MOCK_REPOSITORY, webhookStatus: 'active' }]);
+    expect(service.loading()).toBe(false);
+    expect(statusOf(REPO_ID)).toBe('active');
+    expect(updates).toEqual([{ kind: 'all' }]);
+  });
+
+  it('ignores a reconnect before any list has been loaded', () => {
+    signalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    httpMock.expectNone(LIST_URL);
+    expect(updates).toEqual([]);
+  });
+
+  it('reloads the list in the background on reconnect after a list was loaded', async () => {
+    await loadList();
+
+    signalR.reconnected.next();
+    vi.advanceTimersByTime(300);
+
+    httpMock.expectOne(LIST_URL).flush([{ ...MOCK_REPOSITORY, webhookStatus: 'active' }]);
+    expect(statusOf(REPO_ID)).toBe('active');
+    expect(updates).toEqual([{ kind: 'all' }]);
+  });
+
+  it('keeps the list and sets no load error when a background reload fails', async () => {
+    await loadList();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    signalR.repositoryWebhooksChanged.next();
+    vi.advanceTimersByTime(300);
+    httpMock.expectOne(LIST_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+
+    expect(service.repositories().map((r) => r.id)).toEqual([REPO_ID, REPO_ID_2]);
+    expect(service.loadError()).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it('drops a background reload sent before the operator reordered the list', async () => {
+    await loadList();
+
+    signalR.repositoryWebhooksChanged.next();
+    vi.advanceTimersByTime(300);
+    const reload = httpMock.expectOne(LIST_URL);
+    service.moveRepository(REPO_ID, 1).subscribe();
+    httpMock.expectOne(`/api/repositories/${REPO_ID}/position`).flush(null);
+    reload.flush([{ ...MOCK_REPOSITORY, webhookStatus: 'active' }, MOCK_REPOSITORY_2]);
+
+    expect(service.repositories().map((r) => r.id)).toEqual([REPO_ID_2, REPO_ID]);
+    expect(statusOf(REPO_ID)).toBe('pending');
   });
 });

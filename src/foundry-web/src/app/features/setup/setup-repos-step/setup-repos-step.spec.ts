@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { provideFakeHubs } from '../../../core/testing/fake-hub-transport';
 import { SetupReposStepComponent } from './setup-repos-step';
 import {
   AvailableRepository,
@@ -74,6 +75,7 @@ function setup(accountId = ACCOUNT_ID) {
     providers: [
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideFakeHubs(),
       provideRouter([{ path: 'issues', component: StubIssuesComponent }]),
     ],
   });

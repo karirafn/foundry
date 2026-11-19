@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { SystemSignalRService } from './system-signalr.service';
+import { RepositoryWebhookChange, SystemSignalRService } from './system-signalr.service';
 import { HubConnections } from './hub-connection';
 import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 import {
@@ -543,6 +543,34 @@ describe('SystemSignalRService', () => {
       expect(svc.notifications()).toEqual([
         { category: ACCOUNT_TOKEN_NOTIFICATION_CATEGORY, isActive: true, message: invalid },
       ]);
+    });
+  });
+
+  describe('repository webhook changes', () => {
+    it('emits the repository id when a RepositoryWebhookChanged message arrives', () => {
+      // Arrange
+      const { svc, hub } = setup();
+      const received: RepositoryWebhookChange[] = [];
+      svc.repositoryWebhookChanged.subscribe((change) => received.push(change));
+
+      // Act
+      hub.emit('RepositoryWebhookChanged', { repositoryId: 'repo-1' });
+
+      // Assert
+      expect(received).toEqual([{ repositoryId: 'repo-1' }]);
+    });
+
+    it('emits when a RepositoryWebhooksChanged message arrives', () => {
+      // Arrange
+      const { svc, hub } = setup();
+      let count = 0;
+      svc.repositoryWebhooksChanged.subscribe(() => count++);
+
+      // Act
+      hub.emit('RepositoryWebhooksChanged');
+
+      // Assert
+      expect(count).toBe(1);
     });
   });
 });

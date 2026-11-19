@@ -5,6 +5,7 @@ import { ApplyBranchRulesResponse, RepositorySummary } from '../repository.model
 import { RepositoryService } from '../repository.service';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { provideFakeHubs } from '../../../../core/testing/fake-hub-transport';
 
 const MOCK_REPO: RepositorySummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -201,6 +202,7 @@ describe('RepositoryListComponent', () => {
         RepositoryService,
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideFakeHubs(),
         provideRouter([]),
       ],
     }).compileComponents();

@@ -1,5 +1,8 @@
 import {
   ChangeDetectionStrategy,
+  ElementRef,
+  Injector,
+  afterNextRender,
   Component,
   Signal,
   WritableSignal,
@@ -9,8 +12,10 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs/operators';
 import { RouterLink } from '@angular/router';
-import { RepositoryService } from '../repository.service';
+import { RepositoryService, RepositoryWebhookUpdate } from '../repository.service';
 import {
   RepositoryWebhookInfo,
   isWebhookRegistered,
@@ -32,7 +37,8 @@ import {
   imports: [RouterLink],
   template: `
     <section class="repository-webhook" aria-labelledby="repository-webhook-heading">
-      <h2 id="repository-webhook-heading" class="repository-webhook__heading">Webhook</h2>
+      <h2 id="repository-webhook-heading" class="repository-webhook__heading" tabindex="-1">Webhook</h2>
+      <span class="sr-only" aria-live="polite" aria-atomic="true">{{ _announcement() }}</span>
 
       @if (_loadError()) {
         <p class="repository-webhook__error" role="alert">{{ _loadError() }}</p>
@@ -170,6 +176,8 @@ import {
 })
 export class RepositoryWebhookComponent {
   private readonly _repositoryService = inject(RepositoryService);
+  private readonly _host: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly _injector = inject(Injector);
 
   readonly accountId = input.required<string>();
   readonly repositoryId = input.required<string>();
@@ -182,6 +190,8 @@ export class RepositoryWebhookComponent {
   protected readonly _actionError: WritableSignal<string | null> = signal(null);
   protected readonly _registering: WritableSignal<boolean> = signal(false);
   protected readonly _registration: WritableSignal<{ registered: boolean; message: string } | null> = signal(null);
+
+  protected readonly _announcement: WritableSignal<string> = signal('');
 
   protected readonly _statusLabel: Signal<string> = computed(() => {
     const info = this._info();
@@ -200,6 +210,13 @@ export class RepositoryWebhookComponent {
         error: () => this._loadError.set("Couldn't load the webhook details."),
       });
     });
+
+    this._repositoryService.webhookUpdates
+      .pipe(
+        filter((update) => update.kind === 'all' || update.repositoryId === this.repositoryId()),
+        takeUntilDestroyed(),
+      )
+      .subscribe((update) => this._onLiveUpdate(update));
   }
 
   onRevealSecret(): void {
@@ -250,5 +267,49 @@ export class RepositoryWebhookComponent {
         this._actionError.set("Couldn't save. Please try again.");
       },
     });
+  }
+
+  /**
+   * Applies a live status change without re-running the load: the revealed secret, the registration
+   * outcome and any action error stay as they are.
+   */
+  private _onLiveUpdate(update: RepositoryWebhookUpdate): void {
+    if (update.kind === 'repository') {
+      this._applyLiveInfo(update.info);
+      return;
+    }
+
+    this._repositoryService.getWebhook(this.accountId(), this.repositoryId()).subscribe({
+      next: info => this._applyLiveInfo(info),
+      error: (err: unknown) => console.error(err),
+    });
+  }
+
+  private _applyLiveInfo(info: RepositoryWebhookInfo): void {
+    const previous = this._info();
+    const host = this._host.nativeElement;
+    const focusWasInside = host.contains(document.activeElement);
+
+    this._loadError.set(null);
+    this._info.set(info);
+
+    // Only a change is announced, so the echo of the operator's own action stays silent.
+    if (previous && previous.status !== info.status) {
+      this._announcement.set(`Webhook status changed to ${webhookStatusLabel(info.status)}`);
+    }
+
+    if (!focusWasInside) {
+      return;
+    }
+
+    // A status change can remove the focused control (e.g. "I've added the webhook" on becoming active).
+    afterNextRender(
+      () => {
+        if (document.activeElement === null || document.activeElement === document.body) {
+          host.querySelector<HTMLElement>('#repository-webhook-heading')?.focus();
+        }
+      },
+      { injector: this._injector },
+    );
   }
 }

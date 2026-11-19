@@ -7,6 +7,7 @@ import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { AccountSummary } from '../../accounts/account.model';
 import { CreateRepositoryResponse, RepositorySummary } from '../repository.model';
+import { provideFakeHubs } from '../../../../core/testing/fake-hub-transport';
 
 const ACCOUNT_1: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -86,6 +87,7 @@ function setup() {
       RepositoryService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideFakeHubs(),
       provideRouter([]),
     ],
   });
