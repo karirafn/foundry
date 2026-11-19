@@ -23,7 +23,10 @@ internal sealed partial class GitLabHttpClient
     private const int MaxFieldLength = 255;
     private const int MaxWebUrlLength = 2048;
 
-    /// <summary>Reads the log of CI job <paramref name="jobId"/> (<c>GET /projects/:id/jobs/:job_id/trace</c>).</summary>
+    /// <summary>
+    /// Reads the final <see cref="JobLogTailReader.JobLogTailBytes"/> of the log of CI job <paramref name="jobId"/>
+    /// (<c>GET /projects/:id/jobs/:job_id/trace</c>).
+    /// </summary>
     public async Task<Result<string>> GetJobTraceAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -44,7 +47,9 @@ internal sealed partial class GitLabHttpClient
         request.Headers.Add("PRIVATE-TOKEN", token);
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
 
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+        // A trace can run past the client's buffer cap, so its body is streamed and only its tail kept.
+        using HttpResponseMessage response = await httpClient.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -52,7 +57,7 @@ internal sealed partial class GitLabHttpClient
         }
 
         RecordRestHeadroom(response);
-        return Result<string>.Ok(await response.Content.ReadAsStringAsync(cancellationToken));
+        return Result<string>.Ok(await JobLogTailReader.ReadAsync(response.Content, false, cancellationToken));
     }
 
     /// <summary>
