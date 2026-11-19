@@ -227,5 +227,11 @@ public sealed class GetIssueDetailAsync_CatchUp : IAsyncDisposable
             Reads.Add((repositoryId, issueNumber));
             return Task.FromResult(Entry);
         }
+
+        public Task<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>> GetWaitingIssuesAsync(
+            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>>(
+                new HashSet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>());
     }
 }

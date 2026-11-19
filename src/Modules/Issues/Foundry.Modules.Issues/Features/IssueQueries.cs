@@ -338,6 +338,8 @@ internal sealed class IssueQueries(
             cancellationToken);
 
         IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync(issues, cancellationToken);
+        IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
+            await GetCatchUpWaitingAsync(issues, cancellationToken);
 
         return issues
             .Select(i => ToSummary(
@@ -345,7 +347,8 @@ internal sealed class IssueQueries(
                 displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates,
-                publishPhases))
+                publishPhases,
+                catchUpWaiting))
             .ToList();
     }
 
@@ -368,6 +371,24 @@ internal sealed class IssueQueries(
     }
 
     private static bool IsWorking(Issue issue) => issue is InProgressIssue or RevisionInProgressIssue;
+
+    // Only a merge-pending issue can wait in the catch-up queue, so the queue is read only when the batch holds one.
+    private async Task<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>> GetCatchUpWaitingAsync(
+        IReadOnlyCollection<Issue> issues,
+        CancellationToken cancellationToken)
+    {
+        HashSet<MonitoredRepositoryId> repositoryIds = issues
+            .OfType<MergePendingIssue>()
+            .Select(i => i.MonitoredRepositoryId)
+            .ToHashSet();
+
+        if (repositoryIds.Count == 0)
+        {
+            return new HashSet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>();
+        }
+
+        return await mergeQueueQueries.GetWaitingIssuesAsync(repositoryIds, cancellationToken);
+    }
 
     private static string? PublishPhaseName(
         Issue issue,
@@ -427,13 +448,16 @@ internal sealed class IssueQueries(
             cancellationToken);
 
         IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync([issue], cancellationToken);
+        IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
+            await GetCatchUpWaitingAsync([issue], cancellationToken);
 
         return ToSummary(
             issue,
             displayInfos.GetValueOrDefault(issue.MonitoredRepositoryId),
             eligibilityStatus,
             runAggregates,
-            publishPhases);
+            publishPhases,
+            catchUpWaiting);
     }
 
     private static IssueSummary ToSummary(
@@ -441,7 +465,8 @@ internal sealed class IssueQueries(
         RepositoryDisplayInfo? displayInfo,
         string? eligibilityStatus,
         IReadOnlyDictionary<Guid, RunAggregate> runAggregates,
-        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases)
+        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases,
+        IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting)
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
         MergeOutcome? mergeOutcome = GetMergeOutcome(issue);
@@ -463,7 +488,10 @@ internal sealed class IssueQueries(
             Stage: StageName(issue.Stage),
             NeedsAction: issue.NeedsAction,
             AwaitsDispatch: issue.AwaitsDispatch,
-            CodeStep: CodeStepName(issue.CodeStep, publishPhase),
+            CodeStep: CodeStepName(
+                issue.CodeStep,
+                publishPhase,
+                catchUpWaiting.Contains((issue.MonitoredRepositoryId, issue.IssueNumber))),
             RepositoryId: issue.MonitoredRepositoryId.Value,
             WaitsOnBlockers: issue.WaitsOnBlockers,
             EnteredStateAt: issue.EnteredStateAt,
@@ -506,12 +534,14 @@ internal sealed class IssueQueries(
             _ => throw new InvalidOperationException($"Unknown run kind: {runKind}"),
         };
 
-    // Publishing is a phase of the run, so a working issue's step comes from its run rather than its state.
-    private static string? CodeStepName(IssueCodeStep? codeStep, string? publishPhase) =>
+    // Publishing is a phase of the run, so a working issue's step comes from its run rather than its state. A
+    // merge-pending issue waiting in the catch-up queue runs no merge, so its step comes from its queue entry.
+    private static string? CodeStepName(IssueCodeStep? codeStep, string? publishPhase, bool waitsToCatchUp) =>
         (codeStep, publishPhase) switch
         {
             (IssueCodeStep.Rebasing, _) => IssueSummary.RebasingStep,
             (IssueCodeStep.Checks, _) => IssueSummary.ChecksStep,
+            (IssueCodeStep.Merging, _) when waitsToCatchUp => IssueSummary.CatchUpWaitingStep,
             (IssueCodeStep.Merging, _) => IssueSummary.MergingStep,
             (null, IssueSummary.PublishingPhase) => IssueSummary.PublishingStep,
             (null, IssueSummary.RetryingPhase) => IssueSummary.PublishRetryingStep,
@@ -1278,6 +1308,8 @@ internal sealed class IssueQueries(
         List<Issue> orderedIssues = [..eligibleQueued, ..ineligibleQueued, ..nonQueuedIssues];
 
         IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync(issues, cancellationToken);
+        IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
+            await GetCatchUpWaitingAsync(issues, cancellationToken);
 
         return orderedIssues
             .Select(i => ToSummary(
@@ -1285,7 +1317,8 @@ internal sealed class IssueQueries(
                 displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates,
-                publishPhases))
+                publishPhases,
+                catchUpWaiting))
             .ToList();
     }
 

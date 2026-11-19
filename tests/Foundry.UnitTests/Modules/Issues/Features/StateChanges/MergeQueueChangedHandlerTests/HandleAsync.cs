@@ -23,6 +23,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly StubMergeQueueQueries _mergeQueue = new();
     private readonly CapturingIssueBroadcaster _broadcaster = new();
     private readonly MergeQueueChangedHandler _sut;
 
@@ -44,7 +45,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            _mergeQueue);
         _sut = new MergeQueueChangedHandler(_dbContext, new IssueStateChangedHandler(issueQueries, _broadcaster));
     }
 
@@ -90,6 +91,20 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _broadcaster.Summaries.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenANamedIssueWaitsToCatchUp_ItsBroadcastCarriesTheCatchUpWaitingStep()
+    {
+        // Arrange
+        await SeedMergePendingAsync(RepositoryId, 41);
+        _mergeQueue.Waiting.Add((RepositoryId, 41));
+
+        // Act
+        await _sut.HandleAsync(new MergeQueueChanged(RepositoryId, [41]), TestContext.Current.CancellationToken);
+
+        // Assert
+        _broadcaster.Summaries.ShouldHaveSingleItem().CodeStep.ShouldBe(IssueSummary.CatchUpWaitingStep);
     }
 
     private sealed class CapturingIssueBroadcaster : IIssueBroadcaster

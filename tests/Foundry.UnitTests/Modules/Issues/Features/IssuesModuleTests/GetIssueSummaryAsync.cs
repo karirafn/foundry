@@ -25,6 +25,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly StubMergeQueueQueries _mergeQueue = new();
     private readonly StubWorkerRunQueries _workerRunQueries;
     private readonly StubRepositorySlugQueries _slugQueries;
     private readonly IIssueQueries _sut;
@@ -49,7 +50,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             _workerRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            _mergeQueue);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -843,5 +844,55 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             IReadOnlyCollection<Guid> issueIds,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<Guid>>(issueIds.Where(_publishPhases.ContainsKey).ToHashSet());
+    }
+
+    [Fact]
+    public async Task WhenMergePendingAndWaitingToCatchUp_CodeStepIsCatchUpWaiting()
+    {
+        // Arrange
+        MergePendingIssue issue = new IssueBuilder().MergePending();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        _mergeQueue.Waiting.Add((issue.MonitoredRepositoryId, issue.IssueNumber));
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().CodeStep.ShouldBe(IssueSummary.CatchUpWaitingStep);
+    }
+
+    [Fact]
+    public async Task WhenMergePendingAndNotWaiting_CodeStepIsMerging()
+    {
+        // Arrange
+        MergePendingIssue issue = new IssueBuilder().MergePending();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().CodeStep.ShouldBe(IssueSummary.MergingStep);
+        _mergeQueue.WaitingReads.ShouldHaveSingleItem().ShouldBe([issue.MonitoredRepositoryId]);
+    }
+
+    [Fact]
+    public async Task WhenNotMergePending_ReadsNoWaitingEntries()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        _mergeQueue.WaitingReads.ShouldBeEmpty();
     }
 }

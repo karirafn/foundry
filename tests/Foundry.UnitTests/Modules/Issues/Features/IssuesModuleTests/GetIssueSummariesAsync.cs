@@ -23,6 +23,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly StubMergeQueueQueries _mergeQueue = new();
     private readonly IIssueQueries _sut;
     private readonly StubRepositorySlugQueries _slugQueries;
 
@@ -45,7 +46,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            _mergeQueue);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -275,5 +276,65 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         // Assert
         IssueSummary summary = result.ShouldHaveSingleItem();
         summary.FailureClassification.ShouldBe(FailureCategory.NonZeroExitToken);
+    }
+
+    private MergePendingIssue SeedMergePendingIssue(MonitoredRepositoryId repositoryId, int issueNumber)
+    {
+        MergePendingIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .MergePending();
+        _dbContext.Set<Issue>().Add(issue);
+        _dbContext.SaveChanges();
+        return issue;
+    }
+
+    [Fact]
+    public async Task WhenAMergePendingIssueWaitsToCatchUp_ItsCodeStepIsCatchUpWaiting()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedMergePendingIssue(repositoryId, 41);
+        SeedMergePendingIssue(repositoryId, 42);
+        _mergeQueue.Waiting.Add((repositoryId, 42));
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetIssueSummariesAsync(
+            repositoryId: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.OrderBy(s => s.IssueNumber).Select(s => (s.IssueNumber, s.CodeStep)).ShouldBe(
+            [(41, IssueSummary.MergingStep), (42, IssueSummary.CatchUpWaitingStep)]);
+    }
+
+    [Fact]
+    public async Task WhenIssuesAreMergePending_ReadsWaitingEntriesOnceForTheirRepositories()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId otherRepositoryId = MonitoredRepositoryId.New();
+        SeedMergePendingIssue(repositoryId, 41);
+        SeedMergePendingIssue(repositoryId, 42);
+        await CreateAndPersistDetectedIssueAsync(otherRepositoryId, 43, DateTimeOffset.UtcNow);
+
+        // Act
+        await _sut.GetIssueSummariesAsync(repositoryId: null, TestContext.Current.CancellationToken);
+
+        // Assert
+        _mergeQueue.WaitingReads.ShouldHaveSingleItem().ShouldBe([repositoryId]);
+    }
+
+    [Fact]
+    public async Task WhenNoIssueIsMergePending_ReadsNoWaitingEntries()
+    {
+        // Arrange
+        await CreateAndPersistDetectedIssueAsync(MonitoredRepositoryId.New(), 41, DateTimeOffset.UtcNow);
+
+        // Act
+        await _sut.GetIssueSummariesAsync(repositoryId: null, TestContext.Current.CancellationToken);
+
+        // Assert
+        _mergeQueue.WaitingReads.ShouldBeEmpty();
     }
 }
