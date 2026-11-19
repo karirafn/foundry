@@ -97,7 +97,8 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
             .HasColumnName("merge_when_checks_pass");
 
         builder.Property(r => r.ReviewPullRequests)
-            .HasDefaultValue(false)
+            .HasDefaultValue(true)
+            .HasSentinel(true)
             .HasColumnName("review_pull_requests");
 
         builder.Property(r => r.MaxConcurrentWorkers)

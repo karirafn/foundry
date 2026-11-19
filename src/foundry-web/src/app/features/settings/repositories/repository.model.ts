@@ -40,6 +40,8 @@ export interface RepositorySummary {
   rebaseAfterRun: boolean;
   /** Whether Foundry merges the pull request it opened once every check passes (ADR 0105). */
   mergeWhenChecksPass: boolean;
+  /** Whether the review role reviews a green pull request before Foundry merges it or hands it to a person (ADR 0113). */
+  reviewPullRequests: boolean;
   lastPolledAt: string | null;
   eligibility: RepositoryEligibility | null;
   /** Effective webhook health (ADR 0085). Absent on responses from older servers. */
@@ -163,6 +165,8 @@ export interface CreateRepositoryRequest {
   rebaseAfterRun?: boolean;
   /** Whether Foundry merges the pull request it opened once every check passes. Server default: false. */
   mergeWhenChecksPass?: boolean;
+  /** Whether the review role reviews a green pull request first. Server default: true. */
+  reviewPullRequests?: boolean;
 }
 
 export type BranchRulesOutcomeKind = 'applied' | 'already-present' | 'not-requested' | 'skipped' | 'failed';
@@ -215,6 +219,8 @@ export interface UpdateRepositoryRequest {
   rebaseAfterRun?: boolean;
   /** Whether Foundry merges the pull request it opened once every check passes. Server default: false. Omitted leaves the setting unchanged. */
   mergeWhenChecksPass?: boolean;
+  /** Whether the review role reviews a green pull request first. Omitted leaves the setting unchanged. */
+  reviewPullRequests?: boolean;
 }
 
 export type RepositoryStatusTone = 'ineligible' | 'warning' | 'neutral';
@@ -304,6 +310,9 @@ export function repositorySettingTags(repo: RepositorySummary): string[] {
   const tags: string[] = [];
   if (repo.maxConcurrentWorkers !== 1) {
     tags.push(`${repo.maxConcurrentWorkers} workers`);
+  }
+  if (!repo.reviewPullRequests) {
+    tags.push('No review');
   }
   if (repo.mergeWhenChecksPass) {
     tags.push('Merges on pass');

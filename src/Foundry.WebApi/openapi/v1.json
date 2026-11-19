@@ -3559,6 +3559,12 @@
               "null",
               "boolean"
             ]
+          },
+          "reviewPullRequests": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -5477,6 +5483,10 @@
           "mergeWhenChecksPass": {
             "type": "boolean",
             "default": false
+          },
+          "reviewPullRequests": {
+            "type": "boolean",
+            "default": true
           }
         }
       },
@@ -6384,6 +6394,12 @@
             ]
           },
           "mergeWhenChecksPass": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "reviewPullRequests": {
             "type": [
               "null",
               "boolean"

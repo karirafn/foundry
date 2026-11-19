@@ -1144,6 +1144,7 @@ export interface components {
             applyBranchRules?: null | boolean;
             rebaseAfterRun?: null | boolean;
             mergeWhenChecksPass?: null | boolean;
+            reviewPullRequests?: null | boolean;
         };
         CreateRepositoryResponse: {
             repository: components["schemas"]["RepositorySummary"];
@@ -1576,6 +1577,8 @@ export interface components {
             rebaseAfterRun: boolean;
             /** @default false */
             mergeWhenChecksPass: boolean;
+            /** @default true */
+            reviewPullRequests: boolean;
         };
         RepositoryWebhookInfo: {
             status: string;
@@ -1795,6 +1798,7 @@ export interface components {
             maxConcurrentWorkers: number | string;
             rebaseAfterRun?: null | boolean;
             mergeWhenChecksPass?: null | boolean;
+            reviewPullRequests?: null | boolean;
         };
         UpdateWebhookSettingsRequestBody: {
             webhookPublicBaseUrl: null | string;

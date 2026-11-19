@@ -99,9 +99,9 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// <summary>
     /// Whether a pull request whose checks gate resolves green goes through the review role before Foundry merges it
     /// or hands it to a person (ADR 0113). Read when the checks verdict is recorded, never snapshotted. Defaults to
-    /// <see langword="false"/> while the review step ships dark; nothing sets it yet.
+    /// <see langword="true"/>: review is the safer path, so an operator opts out rather than in.
     /// </summary>
-    public bool ReviewPullRequests { get; private set; }
+    public bool ReviewPullRequests { get; private set; } = true;
 
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
@@ -175,7 +175,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         int maxConcurrentWorkers = DefaultMaxConcurrentWorkers,
         bool applyBranchRules = false,
         bool rebaseAfterRun = true,
-        bool mergeWhenChecksPass = false)
+        bool mergeWhenChecksPass = false,
+        bool reviewPullRequests = true)
     {
         if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
         {
@@ -206,6 +207,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             ApplyBranchRules = applyBranchRules,
             RebaseAfterRun = rebaseAfterRun,
             MergeWhenChecksPass = mergeWhenChecksPass,
+            ReviewPullRequests = reviewPullRequests,
             WebhookHookId = NewWebhookHookId(),
             WebhookSecret = NewWebhookSecret(),
             WebhookStatus = WebhookStatus.NotRegistered,
@@ -445,6 +447,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public void SetMergeWhenChecksPass(bool mergeWhenChecksPass)
     {
         MergeWhenChecksPass = mergeWhenChecksPass;
+    }
+
+    /// <summary>Sets the operator toggle for the review step on green pull requests (ADR 0113).</summary>
+    public void SetReviewPullRequests(bool reviewPullRequests)
+    {
+        ReviewPullRequests = reviewPullRequests;
     }
 
     public void MarkPolled(DateTimeOffset polledAt)

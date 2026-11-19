@@ -28,7 +28,8 @@ internal static class CreateRepository
         int? MaxConcurrentWorkers = null,
         bool ApplyBranchRules = true,
         bool RebaseAfterRun = true,
-        bool MergeWhenChecksPass = false) : ICommand<CreateRepositoryResponse>;
+        bool MergeWhenChecksPass = false,
+        bool ReviewPullRequests = true) : ICommand<CreateRepositoryResponse>;
 
     internal sealed class Validator : ICommandValidator<Command>
     {
@@ -112,7 +113,8 @@ internal static class CreateRepository
                 maxConcurrentWorkers,
                 command.ApplyBranchRules,
                 command.RebaseAfterRun,
-                command.MergeWhenChecksPass);
+                command.MergeWhenChecksPass,
+                command.ReviewPullRequests);
 
             if (createResult is Result<MonitoredRepository>.Failure createFailure)
             {
@@ -187,7 +189,8 @@ internal static class CreateRepository
             int? MaxConcurrentWorkers = null,
             bool? ApplyBranchRules = null,
             bool? RebaseAfterRun = null,
-            bool? MergeWhenChecksPass = null);
+            bool? MergeWhenChecksPass = null,
+            bool? ReviewPullRequests = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -204,7 +207,8 @@ internal static class CreateRepository
                         body.MaxConcurrentWorkers,
                         body.ApplyBranchRules ?? true,
                         body.RebaseAfterRun ?? true,
-                        body.MergeWhenChecksPass ?? false);
+                        body.MergeWhenChecksPass ?? false,
+                        body.ReviewPullRequests ?? true);
                     Result<CreateRepositoryResponse> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Created<CreateRepositoryResponse>, ProblemHttpResult>>(
