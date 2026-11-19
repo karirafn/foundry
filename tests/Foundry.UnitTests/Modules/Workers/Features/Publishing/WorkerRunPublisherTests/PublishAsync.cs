@@ -573,13 +573,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         PublishingRun publishing = active.BeginPublishing(
             new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
             containerOutput: null,
-<<<<<<< HEAD
             RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which database?")]),
-            new RunPullRequestText("Add retry", "Adds retry with backoff."));
-=======
-            RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]),
             new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Adds retry with backoff."], ["dotnet test: passed."], [], null)));
->>>>>>> 2fb036f6 (feat(workers): pull request text is structured, with one warning alert for what a reviewer must check)
         db.Set<WorkerRun>().Add(publishing);
         db.SaveChanges();
     }
