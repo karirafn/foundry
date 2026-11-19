@@ -483,11 +483,26 @@ fail_git() {
     publish_failed "$kind" "$1: $(last_error)"
 }
 
-# fail_push <context> — fails after a push: a provider refusal (a protected branch, a hook) is
-# permanent; a ref that moved under the push is transient (the retry merges); others are classified.
+# refusal_detail — " (<reason>): <message>" for a refused push: the parenthesised reason on git's
+# "[remote rejected]" line, then the provider's "remote:" lines in order, blank ones dropped. git's last line
+# ("failed to push some refs") names nothing, so it is left out.
+refusal_detail() {
+    reason="$(sed -n 's/.*\[remote rejected\][^(]*(\(.*\))[[:space:]]*$/\1/p' "$git_err" | head -n 1)"
+    message="$(sed -n 's/^remote:[[:space:]]*//p' "$git_err" | grep -v '^[[:space:]]*$' || true)"
+    if [ -n "$reason" ]; then
+        printf ' (%s)' "$reason"
+    fi
+    if [ -n "$message" ]; then
+        printf ': %s' "$message"
+    fi
+}
+
+# fail_push <context> — fails after a push: a provider refusal (a hook, a protected branch, a refusal that passes
+# minutes later) is transient, so Foundry's bounded retry gets a chance before an operator does; a ref that moved
+# under the push is transient (the retry merges); others are classified.
 fail_push() {
     if grep -q '\[remote rejected\]' "$git_err"; then
-        publish_failed permanent "$1: the provider refused the push: $(last_error)"
+        publish_failed transient "$1: the provider refused the push$(refusal_detail)"
     fi
     if grep -q '\[rejected\]' "$git_err"; then
         publish_failed transient "$1: the remote branch moved during publish: $(last_error)"
