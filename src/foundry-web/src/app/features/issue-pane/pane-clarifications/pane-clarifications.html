@@ -28,11 +28,28 @@
             @for (q of r.questions; track $index) {
               <li class="pane-clarifications__question">
                 <span class="pane-clarifications__question-text">{{ q.question }}</span>
-                @if (q.context) {
-                  <span class="pane-clarifications__secondary">{{ q.context }}</span>
-                }
-                @if (q.recommendation) {
-                  <span class="pane-clarifications__secondary"><strong>Recommended:</strong> {{ q.recommendation }}</span>
+                @switch (q.kind) {
+                  @case ('structured') {
+                    @if (r.open) {
+                      <ng-container *ngTemplateOutlet="full; context: { $implicit: q, nested: false }" />
+                    } @else {
+                      <span class="pane-clarifications__option pane-clarifications__option--recommended">
+                        <span aria-hidden="true">✅ </span><span class="sr-only">Recommended: </span>{{ q.recommended.letter }}) {{ q.recommended.text }}
+                      </span>
+                      <details class="pane-clarifications__disclosure">
+                        <summary>Details<span class="sr-only"> for question {{ $index + 1 }}</span></summary>
+                        <ng-container *ngTemplateOutlet="full; context: { $implicit: q, nested: true }" />
+                      </details>
+                    }
+                  }
+                  @case ('legacy') {
+                    @if (q.context) {
+                      <span class="pane-clarifications__secondary">{{ q.context }}</span>
+                    }
+                    @if (q.recommendation) {
+                      <span class="pane-clarifications__secondary"><strong>Recommended:</strong> {{ q.recommendation }}</span>
+                    }
+                  }
                 }
               </li>
             }
@@ -149,3 +166,36 @@
     </ol>
   </section>
 }
+
+<!-- A structured question's problem, impact, lettered options and evidence. Nested inside Details it lists
+     the evidence under a label, since a details element inside another is hard to scan. -->
+<ng-template #full let-q let-nested="nested">
+  <span class="pane-clarifications__secondary"><span class="pane-clarifications__field">Problem:</span> {{ q.problem }}</span>
+  <span class="pane-clarifications__secondary"><span class="pane-clarifications__field">Why it matters:</span> {{ q.impact }}</span>
+  <ul class="pane-clarifications__options" aria-label="Options">
+    @for (o of q.options; track o.letter) {
+      <li class="pane-clarifications__option" [class.pane-clarifications__option--recommended]="o.recommended">
+        @if (o.recommended) {<span aria-hidden="true">✅ </span><span class="sr-only">Recommended: </span>}{{ o.letter }}) {{ o.text }}@if (o.recommended) {<span class="pane-clarifications__reason">: {{ q.reason }}</span>}
+      </li>
+    }
+  </ul>
+  @if (q.evidence.length > 0) {
+    @if (nested) {
+      <p class="pane-clarifications__label">Evidence ({{ q.evidence.length }})</p>
+      <ul class="pane-clarifications__evidence">
+        @for (e of q.evidence; track $index) {
+          <li>{{ e }}</li>
+        }
+      </ul>
+    } @else {
+      <details class="pane-clarifications__disclosure">
+        <summary>Evidence ({{ q.evidence.length }})</summary>
+        <ul class="pane-clarifications__evidence">
+          @for (e of q.evidence; track $index) {
+            <li>{{ e }}</li>
+          }
+        </ul>
+      </details>
+    }
+  }
+</ng-template>

@@ -43,11 +43,30 @@ export interface OpenRoundView {
   readonly reminder: ReminderView | null;
 }
 
-/** A question in the existing slots: its text, a secondary line, and the recommendation line. */
-export interface QuestionView {
-  readonly question: string;
-  readonly context: string | null;
-  readonly recommendation: string | null;
+export type QuestionView =
+  | {
+    readonly kind: 'legacy';
+    readonly question: string;
+    readonly context: string | null;
+    readonly recommendation: string | null;
+  }
+  | {
+    readonly kind: 'structured';
+    readonly question: string;
+    readonly problem: string;
+    readonly impact: string;
+    /** In letter order, exactly one of them recommended. */
+    readonly options: readonly OptionView[];
+    readonly recommended: OptionView;
+    readonly reason: string;
+    readonly evidence: readonly string[];
+  };
+
+export interface OptionView {
+  /** By position: `a` for the first option. */
+  readonly letter: string;
+  readonly text: string;
+  readonly recommended: boolean;
 }
 
 export interface ClarificationRoundView {
@@ -173,24 +192,36 @@ function reminderView(awaiting: AwaitingInputDetails): ReminderView | null {
 
 const LETTERS = 'abcd';
 
-// A structured question shows its problem as the secondary line and its recommended option, lettered, as the
-// recommendation. An unknown type, or a recommended letter naming no option, shows the question alone.
+// An unknown type, or a recommended letter naming no option, shows the question alone, so a newer server
+// never breaks the section.
 export function questionView(q: InputQuestion): QuestionView {
   switch (q.$type) {
     case 'legacy':
-      return { question: q.question, context: q.context || null, recommendation: q.recommendation || null };
+      return { kind: 'legacy', question: q.question, context: q.context || null, recommendation: q.recommendation || null };
     case 'structured': {
-      const index = LETTERS.indexOf(q.recommendedOption);
-      const option = index >= 0 && q.recommendedOption.length === 1 ? q.options[index] : undefined;
-      return option === undefined
-        ? { question: q.question, context: null, recommendation: null }
+      const options: OptionView[] = q.options.map((text, index) => {
+        const letter = String.fromCharCode('a'.charCodeAt(0) + index);
+        return { letter, text, recommended: letter === q.recommendedOption };
+      });
+      const recommended = options.find((o) => o.recommended);
+      return recommended === undefined
+        ? questionOnly(q.question)
         : {
+          kind: 'structured',
           question: q.question,
-          context: q.problem,
-          recommendation: `✅ ${q.recommendedOption}) ${option}: ${q.recommendationReason}`,
+          problem: q.problem,
+          impact: q.impact,
+          options,
+          recommended,
+          reason: q.recommendationReason,
+          evidence: q.evidence,
         };
     }
     default:
-      return { question: (q as { question?: string }).question ?? '', context: null, recommendation: null };
+      return questionOnly((q as { question?: string }).question ?? '');
   }
+}
+
+function questionOnly(question: string): QuestionView {
+  return { kind: 'legacy', question, context: null, recommendation: null };
 }

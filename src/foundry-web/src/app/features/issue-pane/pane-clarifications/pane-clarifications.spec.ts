@@ -131,26 +131,167 @@ describe('PaneClarificationsComponent', () => {
     expect(Array.from(list.querySelectorAll('li > span')).map(text)).toEqual(['Which API?', 'Two exist.', 'Recommended: The v2 one.']);
   });
 
-  it('shows a structured question with its problem and lettered recommended option in the existing slots', () => {
-    // Arrange
+  describe('a structured question', () => {
     const structured: InputQuestion = {
       $type: 'structured',
       question: 'Which API?',
       problem: 'Two exist.',
       impact: 'Clients break.',
-      options: ['v1', 'v2'],
+      options: ['v1', 'v2', 'v3'],
       recommendedOption: 'b',
       recommendationReason: 'Clients moved.',
-      evidence: [],
+      evidence: ['src/api.ts:3 routes v2', 'src/client.ts:9 calls v1'],
     };
+    const answeredAt = '2026-02-01T14:00:00Z';
 
-    // Act
-    const { el } = setup(detail([round({ questions: [structured] })], 'awaiting_input', awaiting({ questions: [structured] })));
+    function openRound(q: InputQuestion = structured) {
+      return setup(detail([round({ questions: [q] })], 'awaiting_input', awaiting({ questions: [q] })));
+    }
 
-    // Assert
-    const list = el.querySelector('.pane-clarifications__questions')!;
-    expect(Array.from(list.querySelectorAll('li > span')).map(text))
-      .toEqual(['Which API?', 'Two exist.', 'Recommended: ✅ b) v2: Clients moved.']);
+    function closedRound(q: InputQuestion = structured) {
+      return setup(detail([round({ questions: [q], input: [{ kind: 'comments', text: 'ok' }], answeredAt })]));
+    }
+
+    function options(el: Element): string[] {
+      return Array.from(el.querySelectorAll('.pane-clarifications__options > li')).map(text);
+    }
+
+    it('shows its question, problem, why it matters and every option in letter order while awaiting an answer', () => {
+      // Act
+      const { el } = openRound();
+
+      // Assert
+      const li = el.querySelector('.pane-clarifications__question')!;
+      expect(text(li.querySelector('.pane-clarifications__question-text'))).toBe('Which API?');
+      expect(Array.from(li.querySelectorAll('.pane-clarifications__secondary')).map(text))
+        .toEqual(['Problem: Two exist.', 'Why it matters: Clients break.']);
+      expect(options(li)).toEqual(['a) v1', '✅ Recommended: b) v2: Clients moved.', 'c) v3']);
+    });
+
+    it.each([
+      ['first', ['v1', 'v2'], 'a', 0],
+      ['last', ['v1', 'v2', 'v3', 'v4'], 'd', 3],
+    ])('marks the recommended option when it is %s, with its reason on the same row', (_, opts, letter, index) => {
+      // Act
+      const { el } = openRound({ ...structured, options: opts, recommendedOption: letter });
+
+      // Assert
+      const rows = Array.from(el.querySelectorAll('.pane-clarifications__options > li'));
+      const marked = rows.filter((r) => r.classList.contains('pane-clarifications__option--recommended'));
+      expect(marked).toEqual([rows[index]]);
+      expect(text(marked[0].querySelector('.sr-only'))).toBe('Recommended:');
+      expect(marked[0].querySelector('[aria-hidden="true"]')?.textContent).toContain('✅');
+      expect(text(marked[0].querySelector('.pane-clarifications__reason'))).toBe(': Clients moved.');
+      expect(rows.map((r) => text(r).replace('✅ Recommended: ', '').slice(0, 2))).toEqual(['a)', 'b)', 'c)', 'd)'].slice(0, opts.length));
+    });
+
+    it('collapses its evidence behind a closed Evidence disclosure', () => {
+      // Act
+      const { el } = openRound();
+
+      // Assert
+      const disclosure = el.querySelector<HTMLDetailsElement>('.pane-clarifications__question details')!;
+      expect(text(disclosure.querySelector('summary'))).toBe('Evidence (2)');
+      expect(disclosure.open).toBe(false);
+      expect(Array.from(disclosure.querySelectorAll('.pane-clarifications__evidence li')).map(text))
+        .toEqual(['src/api.ts:3 routes v2', 'src/client.ts:9 calls v1']);
+    });
+
+    it('shows no Evidence disclosure when it has no evidence', () => {
+      // Act
+      const { el } = openRound({ ...structured, evidence: [] });
+
+      // Assert
+      expect(el.querySelector('.pane-clarifications__question details')).toBeNull();
+    });
+
+    it('shows only the question and the recommended option once answered, with the rest in one Details disclosure', () => {
+      // Act
+      const { el } = closedRound();
+
+      // Assert
+      const li = el.querySelector('.pane-clarifications__question')!;
+      expect(Array.from(li.querySelectorAll(':scope > span')).map(text)).toEqual(['Which API?', '✅ Recommended: b) v2']);
+      const disclosures = li.querySelectorAll<HTMLDetailsElement>('details');
+      expect(disclosures.length).toBe(1);
+      const details = disclosures[0];
+      expect(details.open).toBe(false);
+      expect(text(details.querySelector('summary'))).toBe('Details for question 1');
+      expect(Array.from(details.querySelectorAll('.pane-clarifications__secondary')).map(text))
+        .toEqual(['Problem: Two exist.', 'Why it matters: Clients break.']);
+      expect(options(details)).toEqual(['a) v1', '✅ Recommended: b) v2: Clients moved.', 'c) v3']);
+      expect(text(details.querySelector('.pane-clarifications__label'))).toBe('Evidence (2)');
+      expect(Array.from(details.querySelectorAll('.pane-clarifications__evidence li')).map(text))
+        .toEqual(['src/api.ts:3 routes v2', 'src/client.ts:9 calls v1']);
+    });
+
+    it('shows no Evidence label inside Details when it has no evidence', () => {
+      // Act
+      const { el } = closedRound({ ...structured, evidence: [] });
+
+      // Assert
+      const details = el.querySelector('.pane-clarifications__question details')!;
+      expect(details.querySelector('.pane-clarifications__label')).toBeNull();
+      expect(details.querySelector('.pane-clarifications__evidence')).toBeNull();
+    });
+
+    it('renders each question of a mixed log in its own markup, legacy unchanged', () => {
+      // Act
+      const { el } = setup(detail([round({ questions: [question, structured] })], 'awaiting_input', awaiting()));
+
+      // Assert
+      const [legacy, structuredLi] = Array.from(el.querySelectorAll('.pane-clarifications__question'));
+      expect(Array.from(legacy.querySelectorAll(':scope > span')).map(text))
+        .toEqual(['Which API?', 'Two exist.', 'Recommended: The v2 one.']);
+      expect(legacy.querySelector('ul, details')).toBeNull();
+      expect(options(structuredLi)).toEqual(['a) v1', '✅ Recommended: b) v2: Clients moved.', 'c) v3']);
+    });
+
+    it('renders text that looks like HTML or markdown literally', () => {
+      // Arrange
+      const tricky: InputQuestion = {
+        ...structured,
+        question: '<b>Which</b> `api`?',
+        options: ['<img src=x onerror="alert(1)">', '`v2`'],
+        evidence: ['<script>x</script> `file.ts:1`'],
+      };
+
+      // Act
+      const { el } = openRound(tricky);
+
+      // Assert
+      const li = el.querySelector('.pane-clarifications__question')!;
+      expect(li.querySelector('b, img, script, code')).toBeNull();
+      expect(li.querySelector('.pane-clarifications__question-text')!.textContent).toBe('<b>Which</b> `api`?');
+      expect(options(li)).toEqual(['a) <img src=x onerror="alert(1)">', '✅ Recommended: b) `v2`: Clients moved.']);
+      expect(li.querySelector('.pane-clarifications__evidence li')!.textContent).toBe('<script>x</script> `file.ts:1`');
+    });
+
+    describe('across the minute clock tick', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('keeps an open disclosure open', () => {
+        // Arrange
+        const { fixture, el } = closedRound();
+        const details = el.querySelector<HTMLDetailsElement>('.pane-clarifications__question details')!;
+        details.open = true;
+
+        // Act
+        vi.advanceTimersByTime(60_000);
+        fixture.detectChanges();
+
+        // Assert
+        const after = el.querySelector<HTMLDetailsElement>('.pane-clarifications__question details')!;
+        expect(after).toBe(details);
+        expect(after.open).toBe(true);
+      });
+    });
   });
 
   it('renders comment text as text, never as HTML', () => {

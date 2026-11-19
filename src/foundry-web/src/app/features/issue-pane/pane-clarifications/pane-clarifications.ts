@@ -12,7 +12,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { IssueDetail } from '../../issues/issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { ClarificationRoundView, RoundStatus, buildClarifications } from './pane-clarifications.model';
@@ -30,7 +30,7 @@ let nextId = 0;
 @Component({
   selector: 'fd-pane-clarifications',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, SafeHrefPipe],
+  imports: [DatePipe, NgTemplateOutlet, SafeHrefPipe],
   templateUrl: './pane-clarifications.html',
   styleUrl: './pane-clarifications.scss',
 })

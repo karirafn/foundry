@@ -1,9 +1,21 @@
 import { Component, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { IssueDetail } from '../../issues/issue.model';
+import { InputQuestion, IssueDetail } from '../../issues/issue.model';
 import { PaneClarificationsComponent } from './pane-clarifications';
 
 const LONG_WORD = 'x'.repeat(300);
+const LONG_PATH = `src/${'a'.repeat(290)}/x.ts:42`;
+
+const STRUCTURED: InputQuestion = {
+  $type: 'structured',
+  question: `Which API? ${LONG_WORD}`,
+  problem: `Two exist. ${LONG_WORD}`,
+  impact: 'Clients break.',
+  options: ['v1', `v2 ${LONG_WORD}`, 'v3'],
+  recommendedOption: 'b',
+  recommendationReason: `Clients moved. ${LONG_WORD}`,
+  evidence: [LONG_PATH, 'src/api.ts:3 routes v2'],
+};
 
 const DETAIL: IssueDetail = {
   id: 'abc',
@@ -49,7 +61,7 @@ const DETAIL: IssueDetail = {
   triage: null,
   clarifications: [
     {
-      questions: [{ $type: 'legacy', question: `Which API? ${LONG_WORD}`, context: 'Two exist.', recommendation: 'The v2 one.' }],
+      questions: [{ $type: 'legacy', question: `Which API? ${LONG_WORD}`, context: 'Two exist.', recommendation: 'The v2 one.' }, STRUCTURED],
       input: [
         { kind: 'comments', text: Array.from({ length: 20 }, (_, i) => `Line ${i} ${LONG_WORD}`).join('\n') },
         { kind: 'descriptionEdited' },
@@ -64,7 +76,7 @@ const DETAIL: IssueDetail = {
       answeredAt: '2026-01-02T00:00:00Z',
     },
     {
-      questions: [{ $type: 'legacy', question: 'And the schema?', context: '' }],
+      questions: [{ $type: 'legacy', question: 'And the schema?', context: '' }, STRUCTURED],
       input: null,
       askedAt: '2026-01-03T00:00:00Z',
       answeredAt: null,
@@ -94,6 +106,7 @@ describe('pane clarifications layout', () => {
   it.each([240, 332, 720])('keeps every box inside the pane with long unbroken text at %ipx', async (width) => {
     // Arrange
     const { host } = await setup(width);
+    host.querySelectorAll('details').forEach((d) => (d.open = true));
     const hostRight = host.getBoundingClientRect().right;
 
     // Act
@@ -121,5 +134,17 @@ describe('pane clarifications layout', () => {
     // Assert
     expect(Math.round(collapsed - paddings)).toBeLessThanOrEqual(Math.round(lineHeight * 6) + 1);
     expect(expanded).toBeGreaterThan(collapsed);
+  });
+
+  it('gives every disclosure summary at least a 32px target', async () => {
+    // Arrange
+    const { host } = await setup(332);
+
+    // Act
+    const heights = Array.from(host.querySelectorAll('summary')).map((s) => s.getBoundingClientRect().height);
+
+    // Assert
+    expect(heights.length).toBeGreaterThan(0);
+    expect(heights.filter((h) => h < 32)).toEqual([]);
   });
 });
