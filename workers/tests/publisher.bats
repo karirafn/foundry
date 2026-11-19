@@ -485,6 +485,46 @@ review_merge_base() {
     [ "$(grep '^FOUNDRY_REVIEW_PATH ' <<< "$output" | sort)" = "$(printf 'FOUNDRY_REVIEW_PATH A\tnew file.txt\nFOUNDRY_REVIEW_PATH D\tgone.txt\nFOUNDRY_REVIEW_PATH M\tedit.txt')" ]
 }
 
+@test "review: prepare prints one FOUNDRY_REVIEW_LINES line per hunk with the hunk's added-line range" {
+    add_review_branch feat/9-review
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(grep '^FOUNDRY_REVIEW_LINES ' <<< "$output" | sort)" = "$(printf 'FOUNDRY_REVIEW_LINES edit.txt 2-2\nFOUNDRY_REVIEW_LINES new file.txt 1-1')" ]
+}
+
+@test "review: a file changed in two places prints one added-line range per hunk" {
+    printf 'a\nb\nc\nd\ne\nf\ng\nh\n' > "$BATS_TEST_TMPDIR/seed/multi.txt"
+    add_review_branch feat/9-review
+    seed_git switch --quiet feat/9-review
+    printf 'a\nB\nc\nd\ne\nF\nG\nh\n' > "$BATS_TEST_TMPDIR/seed/multi.txt"
+    seed_git commit --quiet -am "two hunks"
+    seed_git push --quiet "$REMOTE" feat/9-review
+    REVIEW_COMMIT="$(remote_sha feat/9-review)"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(grep '^FOUNDRY_REVIEW_LINES multi.txt ' <<< "$output")" = "$(printf 'FOUNDRY_REVIEW_LINES multi.txt 2-2\nFOUNDRY_REVIEW_LINES multi.txt 6-7')" ]
+}
+
+@test "review: a hunk that only deletes lines prints no added-line range" {
+    add_review_branch feat/9-review
+    seed_git switch --quiet feat/9-review
+    printf 'one\n' > "$BATS_TEST_TMPDIR/seed/edit.txt"
+    seed_git commit --quiet -am "drop the edited line"
+    seed_git push --quiet "$REMOTE" feat/9-review
+    REVIEW_COMMIT="$(remote_sha feat/9-review)"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    grep -qx "$(printf 'FOUNDRY_REVIEW_PATH M\tedit.txt')" <<< "$output"
+    ! grep -q '^FOUNDRY_REVIEW_LINES edit.txt ' <<< "$output"
+    ! grep -q '^FOUNDRY_REVIEW_LINES gone.txt ' <<< "$output"
+}
+
 @test "review: a renamed file reports as a deletion and an addition" {
     add_review_branch feat/9-review
     seed_git switch --quiet feat/9-review

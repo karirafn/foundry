@@ -332,7 +332,7 @@ public sealed class Apply
         // Arrange — Foundry posts with the PAT owner's account, so the registered comment looks human
         ProviderComment posted = new ProviderCommentBuilder().WithId(500).WithAuthorLogin("octocat").WithBody("posted").WithCreatedAt(Since.AddHours(1)).Build();
         ProviderComment reply = new ProviderCommentBuilder().WithId(501).WithAuthorLogin("octocat").WithBody("reply").WithCreatedAt(Since.AddHours(2)).Build();
-        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(500).ValueOrThrow())]);
 
         ActionableFeedbackPolicy sut = BuildSut();
 
@@ -348,7 +348,7 @@ public sealed class Apply
     {
         // Arrange — a registered comment never becomes actionable, so it must not schedule a follow-up
         ProviderComment posted = new ProviderCommentBuilder().WithId(500).WithCreatedAt(Now.AddSeconds(-5)).Build();
-        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(500).ValueOrThrow())]);
 
         ActionableFeedbackPolicy sut = BuildSut();
 
@@ -368,7 +368,7 @@ public sealed class Apply
         // Arrange — GitHub numbers reviews and review comments apart from issue comments
         CommentOrigin origin = Enum.Parse<CommentOrigin>(originName);
         ProviderComment review = new ProviderCommentBuilder().WithId(500).WithOrigin(origin).WithCreatedAt(Since.AddHours(1)).Build();
-        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(500).ValueOrThrow())]);
 
         ActionableFeedbackPolicy sut = BuildSut();
 
@@ -379,12 +379,81 @@ public sealed class Apply
         result.Comments.Count.ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData(nameof(CommentOrigin.ReviewThread))]
+    [InlineData(nameof(CommentOrigin.ReviewSummary))]
+    public void WhenTheCommentsReviewIsInTheRegistry_SkipsIt(string originName)
+    {
+        // Arrange — Foundry's inline findings post as one GitHub review, whose ID is all the provider returns
+        CommentOrigin origin = Enum.Parse<CommentOrigin>(originName);
+        ProviderComment finding = new ProviderCommentBuilder().WithId(900).WithReviewId(500).WithOrigin(origin).WithCreatedAt(Since.AddHours(1)).Build();
+        PostedCommentIds registry = new([PostedCommentKey.Review(ProviderCommentId.Create(500).ValueOrThrow())]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([finding], Since, registry);
+
+        // Assert
+        result.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenAPersonRepliesInARegisteredReviewsThread_KeepsTheReply()
+    {
+        // Arrange — a reply on GitHub belongs to the replier's own review
+        ProviderComment finding = new ProviderCommentBuilder().WithId(900).WithReviewId(500).WithOrigin(CommentOrigin.ReviewThread).WithBody("finding").WithCreatedAt(Since.AddHours(1)).Build();
+        ProviderComment reply = new ProviderCommentBuilder().WithId(901).WithReviewId(501).WithOrigin(CommentOrigin.ReviewThread).WithBody("reply").WithCreatedAt(Since.AddHours(2)).Build();
+        PostedCommentIds registry = new([PostedCommentKey.Review(ProviderCommentId.Create(500).ValueOrThrow())]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([finding, reply], Since, registry);
+
+        // Assert
+        result.Comments.ShouldHaveSingleItem().Body.ShouldBe("reply");
+    }
+
+    [Fact]
+    public void WhenARegisteredReviewIdMatchesAConversationCommentsId_KeepsIt()
+    {
+        // Arrange
+        ProviderComment comment = new ProviderCommentBuilder().WithId(500).WithOrigin(CommentOrigin.Conversation).WithCreatedAt(Since.AddHours(1)).Build();
+        PostedCommentIds registry = new([PostedCommentKey.Review(ProviderCommentId.Create(500).ValueOrThrow())]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([comment], Since, registry);
+
+        // Assert
+        result.Comments.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenAReviewThreadNoteIsInTheRegistry_SkipsItButKeepsAPersonsReplyInItsThread()
+    {
+        // Arrange — GitLab returns each inline finding's own note ID; a reply is a separate note
+        ProviderComment finding = new ProviderCommentBuilder().WithId(700).WithOrigin(CommentOrigin.ReviewThread).WithBody("finding").WithCreatedAt(Since.AddHours(1)).Build();
+        ProviderComment reply = new ProviderCommentBuilder().WithId(701).WithOrigin(CommentOrigin.ReviewThread).WithBody("reply").WithCreatedAt(Since.AddHours(2)).Build();
+        PostedCommentIds registry = new([PostedCommentKey.ReviewNote(ProviderCommentId.Create(700).ValueOrThrow())]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([finding, reply], Since, registry);
+
+        // Assert
+        result.Comments.ShouldHaveSingleItem().Body.ShouldBe("reply");
+    }
+
     [Fact]
     public void WhenCommentHasNoId_KeepsIt()
     {
         // Arrange
         ProviderComment comment = new ProviderCommentBuilder().WithId(null).WithCreatedAt(Since.AddHours(1)).Build();
-        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(500).ValueOrThrow())]);
 
         ActionableFeedbackPolicy sut = BuildSut();
 
@@ -422,7 +491,7 @@ public sealed class Apply
             .WithOrigin(CommentOrigin.Conversation)
             .WithCreatedAt(Since.AddHours(2))
             .Build();
-        PostedCommentIds registry = new([ProviderCommentId.Create(101).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(101).ValueOrThrow())]);
 
         ActionableFeedbackPolicy sut = BuildSut();
 

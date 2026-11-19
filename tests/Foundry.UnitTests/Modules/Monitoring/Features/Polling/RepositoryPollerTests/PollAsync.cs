@@ -828,7 +828,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         _dbContext.Set<PostedComment>().Add(
-            PostedComment.Record(repository.Id, ProviderCommentId.Create(500).ValueOrThrow(), Now.AddHours(-1)));
+            PostedComment.Record(repository.Id, PostedCommentKey.Conversation(ProviderCommentId.Create(500).ValueOrThrow()), Now.AddHours(-1)));
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         string prUrl = "https://github.com/owner/repo/pull/99";

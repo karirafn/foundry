@@ -15,11 +15,15 @@ internal sealed class PostedCommentConfiguration : IEntityTypeConfiguration<Post
     {
         builder.ToTable("posted_comments");
 
-        builder.HasKey(c => new { c.MonitoredRepositoryId, c.CommentId });
+        builder.HasKey(c => new { c.MonitoredRepositoryId, c.Kind, c.CommentId });
 
         builder.Property(c => c.MonitoredRepositoryId)
             .HasConversion(new StronglyTypedIdValueConverter<MonitoredRepositoryId>())
             .HasColumnName("monitored_repository_id");
+
+        builder.Property(c => c.Kind)
+            .HasConversion<string>()
+            .HasColumnName("kind");
 
         builder.Property(c => c.CommentId)
             .HasConversion(id => id.Value, value => FromStored(value))

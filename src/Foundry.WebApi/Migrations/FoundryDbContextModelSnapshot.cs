@@ -732,6 +732,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("monitored_repository_id");
 
+                    b.Property<string>("Kind")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
                     b.Property<long>("CommentId")
                         .HasColumnType("INTEGER")
                         .HasColumnName("comment_id");
@@ -740,7 +744,7 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("posted_at");
 
-                    b.HasKey("MonitoredRepositoryId", "CommentId");
+                    b.HasKey("MonitoredRepositoryId", "Kind", "CommentId");
 
                     b.ToTable("posted_comments", (string)null);
                 });

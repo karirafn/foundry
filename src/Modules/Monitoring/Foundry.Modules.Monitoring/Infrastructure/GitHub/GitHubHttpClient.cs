@@ -118,6 +118,7 @@ internal sealed partial class GitHubHttpClient(
                       originalLine
                       createdAt
                       author { login __typename }
+                      pullRequestReview { databaseId }
                     }
                   }
                 }
@@ -880,7 +881,8 @@ internal sealed partial class GitHubHttpClient(
                     FilePath: sanitizedPath,
                     Line: line,
                     Origin: CommentOrigin.ReviewThread,
-                    ThreadResolved: threadResolved));
+                    ThreadResolved: threadResolved,
+                    ReviewId: ProviderCommentId.FromProvider(comment.PullRequestReview?.DatabaseId)));
             }
         }
 
@@ -947,7 +949,8 @@ internal sealed partial class GitHubHttpClient(
                 FilePath: null,
                 Line: null,
                 Origin: CommentOrigin.ReviewSummary,
-                ThreadResolved: false));
+                ThreadResolved: false,
+                ReviewId: ProviderCommentId.FromProvider(review.DatabaseId)));
         }
 
         return Result<IReadOnlyList<ProviderComment>>.Ok(providerComments);
@@ -2108,7 +2111,10 @@ internal sealed partial class GitHubHttpClient(
         int? Line,
         int? OriginalLine,
         DateTimeOffset CreatedAt,
-        GraphQlCommentAuthor? Author);
+        GraphQlCommentAuthor? Author,
+        GraphQlReviewReference? PullRequestReview);
+
+    private sealed record GraphQlReviewReference(long? DatabaseId);
 
     private sealed record GraphQlReviewConnection(IReadOnlyList<GraphQlReviewNode> Nodes);
 

@@ -193,6 +193,16 @@ internal sealed partial class GitHubIssueProvider(
         return httpClient.PostIssueCommentAsync(apiBaseUrl, slug, thread, body, token, cancellationToken);
     }
 
+    public Task<Result<InlineReviewPosting>> PostInlineReviewAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string commitSha,
+        string summary,
+        IReadOnlyList<InlineComment> comments,
+        CancellationToken cancellationToken) =>
+        httpClient.PostPullRequestReviewAsync(
+            apiBaseUrl, slug, pullRequestUrl, commitSha, summary, comments, token, cancellationToken);
+
     public Task<Result> AddBlockerAsync(
         RepositorySlug slug,
         int issueNumber,

@@ -13,13 +13,12 @@ internal sealed class PostedCommentRegistry(DbContext dbContext)
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
-        List<ProviderCommentId> ids = await dbContext.Set<PostedComment>()
+        List<PostedComment> entries = await dbContext.Set<PostedComment>()
             .AsNoTracking()
             .Where(c => c.MonitoredRepositoryId == repositoryId)
-            .Select(c => c.CommentId)
             .ToListAsync(cancellationToken);
 
-        return new PostedCommentIds(ids);
+        return new PostedCommentIds(entries.Select(c => new PostedCommentKey(c.Kind, c.CommentId)));
     }
 
     /// <summary>
@@ -27,16 +26,20 @@ internal sealed class PostedCommentRegistry(DbContext dbContext)
     /// with the state change that records the post, so at most one spurious read survives a failed save.
     /// Recording the same comment twice is a no-op.
     /// </summary>
-    public void Record(MonitoredRepositoryId repositoryId, ProviderCommentId commentId, DateTimeOffset postedAt)
+    public void Record(MonitoredRepositoryId repositoryId, ProviderCommentId commentId, DateTimeOffset postedAt) =>
+        Record(repositoryId, PostedCommentKey.Conversation(commentId), postedAt);
+
+    /// <inheritdoc cref="Record(MonitoredRepositoryId, ProviderCommentId, DateTimeOffset)"/>
+    public void Record(MonitoredRepositoryId repositoryId, PostedCommentKey key, DateTimeOffset postedAt)
     {
         PostedComment? staged = dbContext.Set<PostedComment>().Local
-            .FirstOrDefault(c => c.MonitoredRepositoryId == repositoryId && c.CommentId == commentId);
+            .FirstOrDefault(c => c.MonitoredRepositoryId == repositoryId && c.Kind == key.Kind && c.CommentId == key.Id);
 
         if (staged is not null)
         {
             return;
         }
 
-        dbContext.Set<PostedComment>().Add(PostedComment.Record(repositoryId, commentId, postedAt));
+        dbContext.Set<PostedComment>().Add(PostedComment.Record(repositoryId, key, postedAt));
     }
 }

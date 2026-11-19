@@ -18,6 +18,7 @@ internal sealed class ProviderCommentBuilder
     private int? _line;
     private CommentOrigin _origin = CommentOrigin.Conversation;
     private bool _threadResolved;
+    private ProviderCommentId? _reviewId;
 
     public ProviderCommentBuilder WithId(long? value) { _id = value is { } raw ? ProviderCommentId.Create(raw).ValueOrThrow() : null; return this; }
 
@@ -39,6 +40,8 @@ internal sealed class ProviderCommentBuilder
 
     public ProviderCommentBuilder WithThreadResolved(bool value) { _threadResolved = value; return this; }
 
+    public ProviderCommentBuilder WithReviewId(long value) { _reviewId = ProviderCommentId.Create(value).ValueOrThrow(); return this; }
+
     public ProviderComment Build() =>
         new(
             Id: _id,
@@ -50,5 +53,6 @@ internal sealed class ProviderCommentBuilder
             FilePath: _filePath,
             Line: _line,
             Origin: _origin,
-            ThreadResolved: _threadResolved);
+            ThreadResolved: _threadResolved,
+            ReviewId: _reviewId);
 }

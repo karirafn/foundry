@@ -112,7 +112,7 @@ public sealed class RunAsync : IAsyncDisposable
     private void SeedPostedRegistryEntry(long commentId)
     {
         _dbContext.Set<PostedComment>().Add(
-            PostedComment.Record(_repository.Id, ProviderCommentId.Create(commentId).ValueOrThrow(), PostedAt));
+            PostedComment.Record(_repository.Id, PostedCommentKey.Conversation(ProviderCommentId.Create(commentId).ValueOrThrow()), PostedAt));
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
     }

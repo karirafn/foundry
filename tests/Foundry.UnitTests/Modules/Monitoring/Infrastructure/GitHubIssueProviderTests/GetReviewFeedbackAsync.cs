@@ -222,13 +222,86 @@ public sealed class GetReviewFeedbackAsync
     }
 
     [Fact]
+    public async Task WhenTheReviewIsInPostedRegistry_SkipsItsThreadCommentAndSummaryButKeepsAPersonsReply()
+    {
+        // Arrange — Foundry's review 700 posted comment 7001 and summary; alice's reply 7002 belongs to her review 701
+        const string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "comments": { "nodes": [] },
+                    "reviewThreads": {
+                      "nodes": [
+                        {
+                          "isResolved": false,
+                          "comments": {
+                            "nodes": [
+                              {
+                                "databaseId": 7001,
+                                "body": "Retries forever. (correctness)",
+                                "path": "src/Retry.cs",
+                                "line": 12,
+                                "originalLine": 12,
+                                "createdAt": "2026-06-01T00:00:00Z",
+                                "author": { "login": "foundry-owner", "__typename": "User" },
+                                "pullRequestReview": { "databaseId": 700 }
+                              },
+                              {
+                                "databaseId": 7002,
+                                "body": "Bound it at three.",
+                                "path": "src/Retry.cs",
+                                "line": 12,
+                                "originalLine": 12,
+                                "createdAt": "2026-06-01T01:00:00Z",
+                                "author": { "login": "alice", "__typename": "User" },
+                                "pullRequestReview": { "databaseId": 701 }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "databaseId": 700,
+                          "body": "1 finding posted inline.",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "author": { "login": "foundry-owner", "__typename": "User" }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubIssueProvider sut = BuildSut(handler);
+        PostedCommentIds registry = new([PostedCommentKey.Review(ProviderCommentId.Create(700).ValueOrThrow())]);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(
+            ValidSlug,
+            ValidPrUrl,
+            Since,
+            registry,
+            CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().Comments.ShouldHaveSingleItem().Body.ShouldBe("Bound it at three.");
+    }
+
+    [Fact]
     public async Task WhenCommentIsInPostedRegistry_SkipsIt()
     {
         // Arrange — the fixture's conversation comment has databaseId 100
         string json = BuildGraphQlJson("Foundry's own question", "2026-06-01T00:00:00Z");
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubIssueProvider sut = BuildSut(handler);
-        PostedCommentIds registry = new([ProviderCommentId.Create(100).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(100).ValueOrThrow())]);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(

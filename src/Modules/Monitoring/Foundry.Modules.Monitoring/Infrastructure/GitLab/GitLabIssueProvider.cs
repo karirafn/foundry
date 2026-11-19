@@ -190,6 +190,17 @@ internal sealed partial class GitLabIssueProvider(
         return httpClient.PostNoteAsync(apiBaseUrl, slug, thread, body, token, cancellationToken);
     }
 
+    // GitLab discussions carry no review summary, so the summary is not posted.
+    public Task<Result<InlineReviewPosting>> PostInlineReviewAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string commitSha,
+        string summary,
+        IReadOnlyList<InlineComment> comments,
+        CancellationToken cancellationToken) =>
+        httpClient.PostMergeRequestDiscussionsAsync(
+            apiBaseUrl, slug, pullRequestUrl, commitSha, comments, token, cancellationToken);
+
     public Task<Result> AddBlockerAsync(
         RepositorySlug slug,
         int issueNumber,

@@ -61,7 +61,7 @@ public sealed class GetIssueFeedbackAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, ThreadJson);
         GitHubIssueProvider sut = BuildSut(handler);
-        PostedCommentIds registry = new([ProviderCommentId.Create(2).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(2).ValueOrThrow())]);
 
         // Act
         Result<IReadOnlyList<ProviderComment>> result = await sut.GetIssueFeedbackAsync(
