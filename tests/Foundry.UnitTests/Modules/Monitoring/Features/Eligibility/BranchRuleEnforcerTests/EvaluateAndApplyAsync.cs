@@ -19,7 +19,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Eligibility.BranchRuleEn
 
 public sealed class EvaluateAndApplyAsync
 {
-    private const string RulesToken = "rules_token";
+    private const string AccountToken = "ghp_account";
     private const string SettingsUrl = "https://github.com/owner/repo/settings/rules";
 
     private static readonly DateTimeOffset Now = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
@@ -36,18 +36,17 @@ public sealed class EvaluateAndApplyAsync
             "github.com",
             pollInterval: null).ValueOrThrow();
 
-    private static GitHubCredential CreateAccount(string? branchRulesToken = RulesToken) =>
+    private static GitHubCredential CreateAccount() =>
         GitHubCredential.Create(
             AccountName.Create("acct").ValueOrThrow(),
-            new IssuedToken("ghp_account", new TokenExpiry.NotChecked()),
-            BaseUrl.Create("https://github.com").ValueOrThrow(),
-            branchRulesToken);
+            new IssuedToken(AccountToken, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
     private static BranchRuleEnforcer CreateSut(ScriptedEvaluator evaluator, RecordingProviderFactory factory) =>
         new(evaluator, factory, NullLogger<BranchRuleEnforcer>.Instance);
 
     [Fact]
-    public async Task WhenOnlyBranchProtectionViolationsAndWriteTakesEffect_AppliesWithRulesTokenThenReReads()
+    public async Task WhenOnlyBranchProtectionViolationsAndWriteTakesEffect_AppliesWithAccountTokenThenReReads()
     {
         // Arrange
         ScriptedEvaluator evaluator = new(BranchProtectionViolations, reReadEligibility: new RepositoryEligibility.Eligible());
@@ -61,7 +60,7 @@ public sealed class EvaluateAndApplyAsync
 
         // Assert
         outcome.ShouldBe(new BranchRulesOutcome(BranchRulesOutcome.AppliedKind));
-        factory.TokensUsed.ShouldBe([RulesToken]);
+        factory.TokensUsed.ShouldBe([AccountToken]);
         factory.Provider.ApplyCalls.ShouldBe(1);
         evaluator.FullEvaluations.ShouldBe(1);
         evaluator.BranchRuleEvaluations.ShouldBe(1);
@@ -161,41 +160,25 @@ public sealed class EvaluateAndApplyAsync
     }
 
     [Fact]
-    public async Task WhenNoRulesToken_DoesNotWriteAndSkipsWithNoRulesToken()
+    public async Task WhenAccountTokenIsUnreadable_DoesNotWriteAndSkipsWithAccessFailure()
     {
         // Arrange
         ScriptedEvaluator evaluator = new(BranchProtectionViolations);
         RecordingProviderFactory factory = new(Result.Ok());
         BranchRuleEnforcer sut = CreateSut(evaluator, factory);
-
-        // Act
-        BranchRulesOutcome outcome = await sut.EvaluateAndApplyAsync(
-            CreateRepository(), CreateAccount(branchRulesToken: null), applyBranchRules: true, Now, CancellationToken.None);
-
-        // Assert
-        outcome.ShouldBe(new BranchRulesOutcome(
-            BranchRulesOutcome.SkippedKind,
-            BranchRulesOutcome.NoRulesTokenReason,
-            SettingsUrl));
-        factory.TokensUsed.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenRulesTokenIsUnreadable_DoesNotWriteAndSkipsWithNoRulesToken()
-    {
-        // Arrange
-        ScriptedEvaluator evaluator = new(BranchProtectionViolations);
-        RecordingProviderFactory factory = new(Result.Ok());
-        BranchRuleEnforcer sut = CreateSut(evaluator, factory);
-        GitHubCredential account = CreateAccount();
-        Credential.ApplyUnreadableBranchRulesToken(account);
+        GitHubCredential account = GitHubCredential.CreateWithUnreadableToken(
+            AccountName.Create("acct").ValueOrThrow(),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
         // Act
         BranchRulesOutcome outcome = await sut.EvaluateAndApplyAsync(
             CreateRepository(), account, applyBranchRules: true, Now, CancellationToken.None);
 
         // Assert
-        outcome.Reason.ShouldBe(BranchRulesOutcome.NoRulesTokenReason);
+        outcome.ShouldBe(new BranchRulesOutcome(
+            BranchRulesOutcome.SkippedKind,
+            BranchRulesOutcome.AccessFailureReason,
+            SettingsUrl));
         factory.TokensUsed.ShouldBeEmpty();
     }
 

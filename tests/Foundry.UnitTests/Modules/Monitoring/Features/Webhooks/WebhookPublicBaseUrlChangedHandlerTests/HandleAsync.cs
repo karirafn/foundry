@@ -21,7 +21,7 @@ public sealed class HandleAsync : IAsyncDisposable
 {
     private const string OldBaseUrl = "https://old.example.com";
     private const string NewBaseUrl = "https://new.example.com";
-    private const string ServerToken = "github_pat_server_side";
+    private const string AccountToken = "ghp_account";
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -60,9 +60,8 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("alice").ValueOrThrow(),
-            new IssuedToken("ghp_account", new TokenExpiry.NotChecked()),
-            BaseUrl.Create("https://github.com").ValueOrThrow(),
-            ServerToken);
+            new IssuedToken(AccountToken, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("alice").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -113,7 +112,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert — processed in position order, each matched against its previous payload URL.
         factory.WebhookUpserts.Select(u => u.Slug).ShouldBe(["alice/pending", "alice/active", "alice/silent"]);
-        factory.TokensUsed.ShouldAllBe(t => t == ServerToken);
+        factory.TokensUsed.ShouldAllBe(t => t == AccountToken);
         factory.WebhookUpserts[0].Spec.ShouldSatisfyAllConditions(
             s => s.PayloadUrl.ShouldBe($"{NewBaseUrl}/webhooks/github/{pending.WebhookHookId}"),
             s => s.PreviousPayloadUrls.ShouldBe([$"{OldBaseUrl}/webhooks/github/{pending.WebhookHookId}"]));

@@ -130,7 +130,7 @@ internal sealed partial class GitHubHttpClient
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return BranchRuleWriteErrors.InsufficientPermission(
-                $"Writing branch rules on {slug} returned 403 — the branch-rules token needs the " +
+                $"Writing branch rules on {slug} returned 403 — the account token needs the " +
                 $"Administration (read and write) permission." +
                 (providerMessage is null ? string.Empty : $" GitHub: {providerMessage}"));
         }

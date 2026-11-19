@@ -26,8 +26,7 @@ public sealed class GitHubCredential : Credential
     public static GitHubCredential Create(
         AccountName name,
         IssuedToken? token,
-        BaseUrl baseUrl,
-        string? branchRulesToken = null)
+        BaseUrl baseUrl)
     {
         GitHubCredential credential = new(CredentialId.New())
         {
@@ -39,11 +38,6 @@ public sealed class GitHubCredential : Credential
         if (token is not null)
         {
             credential.SetAccountToken(token);
-        }
-
-        if (branchRulesToken is not null)
-        {
-            credential.SetBranchRulesToken(branchRulesToken);
         }
 
         return credential;

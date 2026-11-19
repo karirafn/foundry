@@ -27,15 +27,12 @@ internal static partial class UpdateAccount
     internal sealed record Command(
         CredentialId Id,
         string BaseUrl,
-        string? Token,
-        string? BranchRulesToken = null,
-        bool ClearBranchRulesToken = false) : ICommand<CredentialUpdateResult>;
+        string? Token) : ICommand<CredentialUpdateResult>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string TokenInvalidCharsCode = "UpdateAccount.TokenInvalidChars";
         internal const string TokenTooLongCode = "UpdateAccount.TokenTooLong";
-        internal const string BranchRulesTokenConflictCode = "UpdateAccount.BranchRulesTokenConflict";
 
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
         private static partial Regex ValidTokenCharactersRegex();
@@ -62,14 +59,7 @@ internal static partial class UpdateAccount
                     "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
             }
 
-            if (command.ClearBranchRulesToken && command.BranchRulesToken is not null)
-            {
-                return new Error(
-                    BranchRulesTokenConflictCode,
-                    "Supply either a branch-rules token or a request to clear it, not both.");
-            }
-
-            return BranchRulesTokenRules.Validate(command.BranchRulesToken);
+            return Result.Ok();
         }
     }
 
@@ -132,10 +122,6 @@ internal static partial class UpdateAccount
 
             bool isGitLab = credential is GitLabCredential;
             AccountName accountName = credential.Name;
-
-            // Applied before either save path below (rotation or plain save) so it commits with them.
-            // Leaving both fields unset preserves the stored branch-rules token, including across rotation.
-            ApplyBranchRulesTokenChange(credential, command);
 
             IReadOnlyList<AffectedRepository> affectedRepositories = [];
 
@@ -204,16 +190,15 @@ internal static partial class UpdateAccount
             credential.ClearDomainEvents();
             await domainEventDispatcher.DispatchAsync(events, cancellationToken);
 
-            // The rules writes run after the commit and never fail it. Only a newly
-            // supplied branch-rules token triggers them — a clear or an untouched token never does.
-            if (command.BranchRulesToken is not null)
+            // The writes run after the commit and never fail it. Only a newly supplied account token
+            // triggers them: it may hold the permissions the previous token lacked (ADR 0115).
+            if (command.Token is not null)
             {
                 affectedRepositories = await branchRuleApplier.ApplyAsync(
                     credential,
                     affectedRepositories,
                     cancellationToken);
 
-                // The same token registers the webhooks of the account's NotRegistered repositories.
                 if (webhookRegistrar is not null)
                 {
                     await webhookRegistrar.RegisterNotRegisteredAsync(credential, cancellationToken);
@@ -226,18 +211,6 @@ internal static partial class UpdateAccount
                 await DeniedRepositories.ForAccountAsync(dbContext, credential.Id, cancellationToken));
 
             return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));
-        }
-
-        private static void ApplyBranchRulesTokenChange(Credential credential, Command command)
-        {
-            if (command.ClearBranchRulesToken)
-            {
-                credential.ClearBranchRulesToken();
-            }
-            else if (command.BranchRulesToken is not null)
-            {
-                credential.SetBranchRulesToken(command.BranchRulesToken);
-            }
         }
 
         private static void UpdateCredential(Credential credential, AccountName accountName, IssuedToken? token, BaseUrlVo baseUrl)
@@ -259,13 +232,9 @@ internal static partial class UpdateAccount
 
     internal static class Endpoint
     {
-        /// <param name="BranchRulesToken">Write-only. <see langword="null"/> keeps the stored token.</param>
-        /// <param name="ClearBranchRulesToken">When <see langword="true"/>, removes the stored branch-rules token.</param>
         private sealed record RequestBody(
             string BaseUrl,
-            string? Token,
-            string? BranchRulesToken = null,
-            bool? ClearBranchRulesToken = null);
+            string? Token);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -280,9 +249,7 @@ internal static partial class UpdateAccount
                     Command command = new(
                         credentialId,
                         body.BaseUrl,
-                        body.Token,
-                        body.BranchRulesToken,
-                        body.ClearBranchRulesToken ?? false);
+                        body.Token);
 
                     Result validation = validator.Validate(command);
                     if (validation is Result.Failure validationFailure)

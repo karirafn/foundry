@@ -30,7 +30,6 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateRepository
 public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
 {
     private const string AccountToken = "ghp_account_token";
-    private const string RulesToken = "ghp_rules_token";
 
     private readonly ProviderState _state = new();
     private readonly FoundryWebAppFactory _factory;
@@ -65,13 +64,12 @@ public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<Guid> SeedAccountAsync(string? branchRulesToken = RulesToken)
+    private async Task<Guid> SeedAccountAsync()
     {
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(
             _factory,
             name: "Rules Org",
-            token: AccountToken,
-            branchRulesToken: branchRulesToken);
+            token: AccountToken);
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         return accountId;
     }
@@ -103,7 +101,7 @@ public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOnlyBranchRulesAreMissing_AppliesThemWithTheRulesTokenAndRepoBecomesEligible()
+    public async Task WhenOnlyBranchRulesAreMissing_AppliesThemWithTheAccountTokenAndRepoBecomesEligible()
     {
         // Arrange
         Guid accountId = await SeedAccountAsync();
@@ -118,7 +116,7 @@ public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
         body.ShouldNotBeNull();
         body.BranchRules.ShouldBe(new BranchRulesOutcome(BranchRulesOutcome.AppliedKind));
         body.Repository.Eligibility.ShouldNotBeNull().Status.ShouldBe("eligible");
-        _state.ApplyTokens.ShouldBe([RulesToken]);
+        _state.ApplyTokens.ShouldBe([AccountToken]);
         (await ReadStoredIntentAsync(body.Repository.Id)).ShouldBeTrue();
     }
 
@@ -162,26 +160,6 @@ public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
         body.Repository.Eligibility.ShouldNotBeNull().Status.ShouldBe("ineligible");
         _state.ApplyTokens.ShouldBeEmpty();
         (await ReadStoredIntentAsync(body.Repository.Id)).ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task WhenAccountHasNoRulesToken_SkipsWithNoRulesToken()
-    {
-        // Arrange
-        Guid accountId = await SeedAccountAsync(branchRulesToken: null);
-
-        // Act
-        (HttpStatusCode status, CreateRepositoryResponse? body) = await PostAsync(
-            accountId,
-            new { slug = "owner/repo" });
-
-        // Assert
-        status.ShouldBe(HttpStatusCode.Created);
-        body.ShouldNotBeNull();
-        body.BranchRules.ShouldSatisfyAllConditions(
-            o => o.Kind.ShouldBe(BranchRulesOutcome.SkippedKind),
-            o => o.Reason.ShouldBe(BranchRulesOutcome.NoRulesTokenReason));
-        _state.ApplyTokens.ShouldBeEmpty();
     }
 
     private sealed class ProviderState

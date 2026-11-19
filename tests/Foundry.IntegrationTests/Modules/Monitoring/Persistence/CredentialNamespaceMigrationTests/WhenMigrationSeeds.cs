@@ -185,7 +185,7 @@ public sealed class WhenMigrationSeeds : IAsyncLifetime, IAsyncDisposable
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Bring the schema up to date before reading through the current EF model, which maps
-        // columns added by later migrations (e.g. accounts.branch_rules_token).
+        // columns added by later migrations (e.g. accounts.token_expiry_kind).
         await _dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
 
         // Assert — the credential loaded with its namespaces resolves "acme/platform"

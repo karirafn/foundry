@@ -102,7 +102,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenHookGoesSilent_ReRegistersItOnceWithTheServerSideToken()
+    public async Task WhenHookGoesSilent_ReRegistersItOnceWithTheAccountToken()
     {
         // Arrange
         MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
@@ -111,7 +111,6 @@ public sealed class WebhookBackstop : IAsyncDisposable
         MonitoringService service = BuildService(BuildServiceProvider(
             provider,
             ingressConfigured: true,
-            serverToken: "server_side_token",
             registerWebhooks: true,
             factory: factory));
 
@@ -120,27 +119,8 @@ public sealed class WebhookBackstop : IAsyncDisposable
 
         // Assert — the re-registration succeeded, so the hook waits for its next delivery.
         provider.UpsertWebhookCallCount.ShouldBe(1);
-        factory.Tokens.ShouldContain("server_side_token");
+        factory.Tokens.ShouldContain("ghp_test_token");
         (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Pending);
-    }
-
-    [Fact]
-    public async Task WhenHookGoesSilentWithoutServerSideToken_MakesNoRegistrationCallAndStaysSilent()
-    {
-        // Arrange
-        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
-        CountingIssueProvider provider = new([NewIssue(5)]);
-        MonitoringService service = BuildService(BuildServiceProvider(
-            provider,
-            ingressConfigured: true,
-            registerWebhooks: true));
-
-        // Act
-        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
-
-        // Assert
-        provider.UpsertWebhookCallCount.ShouldBe(0);
-        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Silent);
     }
 
     [Fact]
@@ -152,7 +132,6 @@ public sealed class WebhookBackstop : IAsyncDisposable
         MonitoringService service = BuildService(BuildServiceProvider(
             provider,
             ingressConfigured: true,
-            serverToken: "server_side_token",
             registerWebhooks: true));
 
         // Act
@@ -396,7 +375,6 @@ public sealed class WebhookBackstop : IAsyncDisposable
             BuildServiceProvider(
                 provider,
                 ingressConfigured: true,
-                serverToken: "server_side_token",
                 registerWebhooks: true),
             startupCatchUp: true);
 
@@ -503,7 +481,6 @@ public sealed class WebhookBackstop : IAsyncDisposable
         bool gitLab = false,
         RepositoryEligibility? eligibilityAfterEvaluation = null,
         IReadOnlySet<int>? dispatchCandidates = null,
-        string? serverToken = null,
         bool registerWebhooks = false,
         FixedProviderFactory? factory = null)
     {
@@ -522,7 +499,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
 
         Credential credential = gitLab
             ? GitLabCredential.Create(AccountName.Create("my-group").ValueOrThrow(), new IssuedToken("glpat_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow())
-            : GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
+            : GitHubCredential.Create(AccountName.Create("my-org").ValueOrThrow(), new IssuedToken("ghp_test_token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
         services.AddScoped<ICredentialResolver>(_ => new StubCredentialResolverWithFixedCredential(credential));
         services.AddSingleton(new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance));
         services.AddScoped<PostedCommentRegistry>();

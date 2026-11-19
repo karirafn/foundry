@@ -31,8 +31,7 @@ internal static partial class CreateAccount
         string ProviderType,
         string BaseUrl,
         string Token,
-        IReadOnlyList<string>? TakeoverNamespaces = null,
-        string? BranchRulesToken = null) : ICommand<CredentialCreationResult>;
+        IReadOnlyList<string>? TakeoverNamespaces = null) : ICommand<CredentialCreationResult>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
@@ -69,12 +68,6 @@ internal static partial class CreateAccount
                 return new Error(
                     TokenInvalidCharsCode,
                     "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
-            }
-
-            Result branchRulesTokenValidation = BranchRulesTokenRules.Validate(command.BranchRulesToken);
-            if (branchRulesTokenValidation is Result.Failure branchRulesTokenFailure)
-            {
-                return branchRulesTokenFailure.Error;
             }
 
             bool isKnownProvider = ProviderTypes.IsKnown(command.ProviderType);
@@ -177,8 +170,8 @@ internal static partial class CreateAccount
 
             IssuedToken issuedToken = new(command.Token, identity.TokenExpiry);
             Credential credential = isGitLab
-                ? GitLabCredential.Create(identity.Name, issuedToken, baseUrl, command.BranchRulesToken)
-                : GitHubCredential.Create(identity.Name, issuedToken, baseUrl, command.BranchRulesToken);
+                ? GitLabCredential.Create(identity.Name, issuedToken, baseUrl)
+                : GitHubCredential.Create(identity.Name, issuedToken, baseUrl);
 
             NamespaceDerivationOutcome derivationOutcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
             IReadOnlyCollection<Namespace> derivedNamespaces;
@@ -469,8 +462,7 @@ internal static partial class CreateAccount
             string ProviderType,
             string BaseUrl,
             string Token,
-            IReadOnlyList<string>? TakeoverNamespaces = null,
-            string? BranchRulesToken = null);
+            IReadOnlyList<string>? TakeoverNamespaces = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -484,8 +476,7 @@ internal static partial class CreateAccount
                         body.ProviderType,
                         body.BaseUrl,
                         body.Token,
-                        body.TakeoverNamespaces,
-                        body.BranchRulesToken);
+                        body.TakeoverNamespaces);
 
                     Result validation = validator.Validate(command);
                     if (validation is Result.Failure validationFailure)

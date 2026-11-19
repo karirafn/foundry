@@ -38,11 +38,6 @@ internal static class GetAccounts
                 {
                     logger.LogWarning(CredentialWarnings.UnreadableToken, credential.Id.Value);
                 }
-
-                if (credential.IsBranchRulesTokenUnreadable)
-                {
-                    logger.LogWarning(CredentialWarnings.UnreadableBranchRulesToken, credential.Id.Value);
-                }
             }
 
             IReadOnlyDictionary<CredentialId, IReadOnlyList<DeniedRepositorySummary>> deniedByAccount =

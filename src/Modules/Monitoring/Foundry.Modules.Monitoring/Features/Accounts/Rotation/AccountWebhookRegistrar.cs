@@ -10,8 +10,8 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 
 /// <summary>
 /// Registers the webhook of every repository an account covers whose Webhook Status is
-/// <see cref="WebhookStatus.NotRegistered"/>, after the account's server-side (branch-rules) token is
-/// set or replaced.
+/// <see cref="WebhookStatus.NotRegistered"/>, after the account token is replaced
+/// (ADR 0115).
 /// </summary>
 /// <remarks>
 /// Repositories are processed sequentially — the DbContext is not thread-safe and the provider
@@ -38,7 +38,7 @@ internal sealed class AccountWebhookRegistrar(
                 await dbContext.SaveChangesAsync(cancellationToken);
 
                 logger.LogInformation(
-                    "Webhook for repository {Slug} after the server-side token was saved: {Kind} ({Reason}).",
+                    "Webhook for repository {Slug} after the account token was saved: {Kind} ({Reason}).",
                     repository.Slug,
                     outcome.Kind,
                     outcome.Reason);
@@ -49,7 +49,7 @@ internal sealed class AccountWebhookRegistrar(
             {
                 logger.LogError(
                     ex,
-                    "Registering the webhook for repository {Slug} after the server-side token was saved threw.",
+                    "Registering the webhook for repository {Slug} after the account token was saved threw.",
                     repository.Slug);
             }
         }

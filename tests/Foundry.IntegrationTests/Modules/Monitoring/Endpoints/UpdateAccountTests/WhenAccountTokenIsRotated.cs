@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -27,31 +28,48 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 
 /// <summary>
-/// Saving a branch-rules token through PUT /api/accounts/{id} applies the branch rules to the
-/// account's opted-in repositories, and the response's affected repositories report the
-/// post-enforcement eligibility.
+/// Saving a new account token through PUT /api/accounts/{id} applies the branch rules to the
+/// account's opted-in repositories with that token, and the response's affected repositories report
+/// the post-enforcement eligibility.
 /// </summary>
-public sealed class WhenBranchRulesTokenIsSaved : IAsyncDisposable
+public sealed class WhenAccountTokenIsRotated : IAsyncDisposable
 {
     private const string AccountToken = "ghp_account_token";
-    private const string RulesToken = "ghp_rules_token";
+    private const string RotatedToken = "ghp_rotated_token";
+
+    private const string ListingJson = """
+        [
+          { "full_name": "owner/opted-in", "private": false, "permissions": { "push": true } },
+          { "full_name": "owner/opted-out", "private": false, "permissions": { "push": true } }
+        ]
+        """;
 
     private readonly ProviderState _state = new();
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenBranchRulesTokenIsSaved()
+    public WhenAccountTokenIsRotated()
     {
+        Dictionary<string, string> tokenToListing = new()
+        {
+            [AccountToken] = ListingJson,
+            [RotatedToken] = ListingJson,
+        };
+
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IIssueProviderFactory>();
             services.AddSingleton(_state);
             services.AddScoped<IIssueProviderFactory, StatefulProviderFactory>();
 
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler());
+
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new ProbeGrantedFakeHandler()),
+                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)),
                     NullLogger<GitHubHttpClient>.Instance,
                     new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
                     new InMemoryProviderRateBudget(),
@@ -67,13 +85,12 @@ public sealed class WhenBranchRulesTokenIsSaved : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<Guid> SeedAccountWithoutRulesTokenAsync()
+    private async Task<Guid> SeedAccountAsync()
     {
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(
             _factory,
             name: "Rules Org",
-            token: AccountToken,
-            branchRulesToken: null);
+            token: AccountToken);
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         return accountId;
     }
@@ -103,36 +120,41 @@ public sealed class WhenBranchRulesTokenIsSaved : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTokenSaved_AppliesRulesToOptedInReposOnlyAndReportsThemEligible()
+    public async Task WhenTokenRotated_AppliesRulesToOptedInReposOnlyWithTheNewTokenAndReportsThemEligible()
     {
-        // Arrange — both repos land ineligible: the account has no rules token yet.
-        Guid accountId = await SeedAccountWithoutRulesTokenAsync();
+        // Arrange — the original token may not write branch rules, so both repos land ineligible.
+        _state.ApplyResult = Result.Fail(BranchRuleWriteErrors.InsufficientPermission("needs Administration"));
+        Guid accountId = await SeedAccountAsync();
         CreateRepositoryResponse optedIn = await AddRepositoryAsync(accountId, "owner/opted-in", applyBranchRules: true);
         await AddRepositoryAsync(accountId, "owner/opted-out", applyBranchRules: false);
-        optedIn.BranchRules.Reason.ShouldBe(BranchRulesOutcome.NoRulesTokenReason);
+        optedIn.BranchRules.Reason.ShouldBe(BranchRulesOutcome.InsufficientPermissionReason);
+        _state.ApplyResult = Result.Ok();
+        _state.Applied.Clear();
 
         // Act
         CredentialUpdateResult result = await PutAsync(
             accountId,
-            new { baseUrl = "https://github.com", token = (string?)null, branchRulesToken = RulesToken });
+            new { baseUrl = "https://github.com", token = RotatedToken });
 
         // Assert
-        _state.Applied.ShouldBe([("owner/opted-in", RulesToken)]);
+        _state.Applied.ShouldBe([("owner/opted-in", RotatedToken)]);
         result.AffectedRepositories.ShouldBe(
             [new AffectedRepository(optedIn.Repository.Id, "owner/opted-in", "ineligible", "eligible")]);
     }
 
     [Fact]
-    public async Task WhenTokenCleared_RunsNoEnforcement()
+    public async Task WhenOnlyTheBaseUrlIsSaved_RunsNoEnforcement()
     {
         // Arrange
-        Guid accountId = await SeedAccountWithoutRulesTokenAsync();
+        _state.ApplyResult = Result.Fail(BranchRuleWriteErrors.InsufficientPermission("needs Administration"));
+        Guid accountId = await SeedAccountAsync();
         await AddRepositoryAsync(accountId, "owner/opted-in", applyBranchRules: true);
+        _state.Applied.Clear();
 
         // Act
         CredentialUpdateResult result = await PutAsync(
             accountId,
-            new { baseUrl = "https://github.com", token = (string?)null, clearBranchRulesToken = true });
+            new { baseUrl = "https://github.com", token = (string?)null });
 
         // Assert
         _state.Applied.ShouldBeEmpty();
@@ -140,21 +162,22 @@ public sealed class WhenBranchRulesTokenIsSaved : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenWriteIsForbidden_UpdateSucceedsAndEligibilityIsUnchanged()
+    public async Task WhenWriteIsStillForbidden_UpdateSucceedsAndEligibilityIsUnchanged()
     {
         // Arrange
         _state.ApplyResult = Result.Fail(BranchRuleWriteErrors.InsufficientPermission("needs Administration"));
-        Guid accountId = await SeedAccountWithoutRulesTokenAsync();
+        Guid accountId = await SeedAccountAsync();
         await AddRepositoryAsync(accountId, "owner/opted-in", applyBranchRules: true);
+        _state.Applied.Clear();
 
         // Act
         CredentialUpdateResult result = await PutAsync(
             accountId,
-            new { baseUrl = "https://github.com", token = (string?)null, branchRulesToken = RulesToken });
+            new { baseUrl = "https://github.com", token = RotatedToken });
 
         // Assert
-        result.Credential.BranchRulesTokenStatus.ShouldBe("present");
-        _state.Applied.Count.ShouldBe(1);
+        result.Credential.TokenStatus.ShouldBe("present");
+        _state.Applied.ShouldBe([("owner/opted-in", RotatedToken)]);
         result.AffectedRepositories.ShouldBeEmpty();
     }
 

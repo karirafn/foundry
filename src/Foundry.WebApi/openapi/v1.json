@@ -1686,7 +1686,7 @@
         "tags": [
           "Repositories"
         ],
-        "summary": "Creates or updates the repository's webhook on the provider with the account's server-side token",
+        "summary": "Creates or updates the repository's webhook on the provider with the account token",
         "operationId": "RegisterRepositoryWebhook",
         "parameters": [
           {
@@ -3449,12 +3449,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "branchRulesToken": {
-            "type": [
-              "null",
-              "string"
-            ]
           }
         }
       },
@@ -3558,7 +3552,6 @@
           "hasToken",
           "tokenStatus",
           "namespaces",
-          "branchRulesTokenStatus",
           "tokenInvalidSince",
           "tokenExpiry",
           "deniedRepositories"
@@ -3589,9 +3582,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "branchRulesTokenStatus": {
-            "type": "string"
           },
           "tokenInvalidSince": {
             "type": [
@@ -6081,18 +6071,6 @@
             "type": [
               "null",
               "string"
-            ]
-          },
-          "branchRulesToken": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "clearBranchRulesToken": {
-            "type": [
-              "null",
-              "boolean"
             ]
           }
         }

@@ -15,20 +15,6 @@ internal static class AccountsDatabaseHelpers
     internal const int TokenMaxLength = 500;
 
     /// <summary>
-    /// Maps a <see cref="ProviderToken"/> to its wire string.
-    /// Materialization via <see cref="Infrastructure.Configurations.ProviderTokenConverter"/>
-    /// is required before calling this — a SQL-projected <c>Token != null</c> check cannot
-    /// distinguish <see cref="ProviderToken.Present"/> from <see cref="ProviderToken.Unreadable"/>.
-    /// </summary>
-    internal static string ToTokenStatus(ProviderToken? token) =>
-        token switch
-        {
-            ProviderToken.Present => TokenStatuses.Present,
-            ProviderToken.Unreadable => TokenStatuses.Unreadable,
-            _ => TokenStatuses.Absent,
-        };
-
-    /// <summary>
     /// Maps the account token's <see cref="Credential.TokenUsability"/> to its wire string. An
     /// unreadable token reports <c>unreadable</c> even when the account is also Invalid.
     /// </summary>
@@ -46,8 +32,8 @@ internal static class AccountsDatabaseHelpers
     }
 
     /// <summary>
-    /// Projects a materialized <see cref="Credential"/> to its wire summary. Token values —
-    /// including the branch-rules token — are never included; only their statuses. The token expiry
+    /// Projects a materialized <see cref="Credential"/> to its wire summary. The token value is
+    /// never included; only its status. The token expiry
     /// is judged at <paramref name="now"/>.
     /// </summary>
     internal static CredentialSummary ToSummary(
@@ -62,7 +48,6 @@ internal static class AccountsDatabaseHelpers
             credential.Token is not null,
             ToAccountTokenStatus(credential),
             credential.Namespaces.Select(n => n.Value).ToList(),
-            ToTokenStatus(credential.BranchRulesToken),
             credential.TokenUsability is TokenUsability.Invalid
                 && credential.TokenValidity is TokenValidity.Invalid invalid
                     ? invalid.DetectedAt

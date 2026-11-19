@@ -49,7 +49,9 @@ public sealed class HandleAsync : IAsyncDisposable
             _dbContext,
             new BranchRuleEnforcer(
                 _evaluator,
-                new ThrowingProviderFactory(),
+                new RecordingBranchRulesProviderFactory().WithResult(
+                    "owner/repo",
+                    Result.Fail(new Error(BranchRuleWriteErrors.InsufficientPermissionCode, "forbidden"))),
                 NullLogger<BranchRuleEnforcer>.Instance),
             new StubGlobalSettingsQueries([]));
 
@@ -89,7 +91,7 @@ public sealed class HandleAsync : IAsyncDisposable
     [Fact]
     public async Task WhenRepoWasOptedOut_FlipsThePersistedIntentToTrueAndReturnsTheEnforcerOutcome()
     {
-        // Arrange — no branch-rules token, so the enforcer skips without a provider call
+        // Arrange — the provider refuses the account token's write, so the rules are not re-read
         Guid accountId = await SeedAccountAsync();
         Guid repositoryId = await SeedRepositoryAsync(applyBranchRules: false);
         ApplyBranchRules.Handler sut = BuildHandler();
@@ -102,8 +104,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         ApplyBranchRulesResponse response = ((Result<ApplyBranchRulesResponse>.Success)result).Value;
         response.BranchRules.ShouldSatisfyAllConditions(
-            o => o.Kind.ShouldBe(BranchRulesOutcome.SkippedKind),
-            o => o.Reason.ShouldBe(BranchRulesOutcome.NoRulesTokenReason),
+            o => o.Kind.ShouldBe(BranchRulesOutcome.FailedKind),
+            o => o.Reason.ShouldBe(BranchRulesOutcome.InsufficientPermissionReason),
             o => o.SettingsUrl.ShouldBe("https://github.com/owner/repo/settings/rules"));
         response.Repository.ShouldSatisfyAllConditions(
             r => r.Id.ShouldBe(repositoryId),
@@ -186,12 +188,6 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         ((Result<ApplyBranchRulesResponse>.Failure)result).Error.Code.ShouldBe(RepositoryErrors.NotFoundCode);
         _evaluator.FullEvaluations.ShouldBe(0);
-    }
-
-    private sealed class ThrowingProviderFactory : IIssueProviderFactory
-    {
-        public IIssueProvider CreateProvider(Credential credential, string token) =>
-            throw new InvalidOperationException("No provider call is expected.");
     }
 
     private sealed class ScriptedEvaluator : IRepositoryEligibilityEvaluator

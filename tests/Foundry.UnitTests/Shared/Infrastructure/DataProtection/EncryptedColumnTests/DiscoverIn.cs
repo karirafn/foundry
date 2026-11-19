@@ -34,7 +34,6 @@ public sealed class DiscoverIn
             .ThenBy(column => column.Column)
             .ShouldBe(
             [
-                ("accounts", "branch_rules_token", "id"),
                 ("accounts", "token", "id"),
                 ("claude_account", "api_key", "id"),
                 ("monitored_repositories", "webhook_secret", "id"),
