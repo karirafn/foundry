@@ -22,8 +22,11 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTe
 
 public sealed class UpsertWebhookAsync
 {
-    private const string PayloadUrl = "https://hooks.example.com/webhooks/gitlab/abc";
-    private const string OldPayloadUrl = "https://old.example.com/webhooks/gitlab/abc";
+    private const string HookId = "0123456789abcdef0123456789abcdef";
+    private const string PayloadUrl = "https://new.example/webhooks/gitlab/" + HookId;
+    private const string OldPayloadUrl = "https://old.example/webhooks/gitlab/" + HookId;
+    private const string OlderPayloadUrl = "https://older.example/webhooks/gitlab/" + HookId;
+    private const string OtherInstallUrl = "https://new.example/webhooks/gitlab/ffffffffffffffffffffffffffffffff";
     private const string Secret = "s3cr3t-value";
 
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
@@ -31,7 +34,8 @@ public sealed class UpsertWebhookAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("group/project").ValueOrThrow();
 
-    private static WebhookHookSpec Spec(params string[] previous) => new(PayloadUrl, Secret, previous);
+    private static WebhookHookSpec Spec() =>
+        new(PayloadUrl, Secret, WebhookHookPath.For(WebhookProvider.GitLab, HookId));
 
     private static GitLabHttpClient CreateSut(HttpClient httpClient) =>
         new(
@@ -107,26 +111,149 @@ public sealed class UpsertWebhookAsync
     }
 
     [Fact]
-    public async Task WhenAHookHasAPreviousPayloadUrl_RepointsIt()
+    public async Task WhenHooksAtOlderBaseUrlsCarryTheHookId_UpdatesTheFirstAndDeletesTheRest()
     {
         // Arrange
-        string listJson = $$"""[{ "id": 42, "url": "{{OldPayloadUrl}}" }]""";
+        string listJson = $$"""
+            [
+              { "id": 41, "url": "{{OldPayloadUrl}}" },
+              { "id": 42, "url": "{{OlderPayloadUrl}}" }
+            ]
+            """;
         SequentialFakeHandler handler = new(
         [
             (HttpStatusCode.OK, listJson),
-            (HttpStatusCode.OK, """{ "id": 42 }"""),
+            (HttpStatusCode.OK, """{ "id": 41 }"""),
+            (HttpStatusCode.NoContent, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
         GitLabHttpClient sut = CreateSut(httpClient);
 
         // Act
         Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
-            ValidBaseUrl, ValidSlug, Spec(OldPayloadUrl), "server_token", CancellationToken.None);
+            ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
         result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        handler.Requests.Count.ShouldBe(3);
+        handler.Requests[1].ShouldSatisfyAllConditions(
+            r => r.Method.ShouldBe(HttpMethod.Put),
+            r => r.RequestUri!.AbsoluteUri.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fproject/hooks/41"));
         using JsonDocument body = JsonDocument.Parse(handler.RequestBodies[1]!);
         body.RootElement.GetProperty("url").GetString().ShouldBe(PayloadUrl);
+        handler.Requests[2].ShouldSatisfyAllConditions(
+            r => r.Method.ShouldBe(HttpMethod.Delete),
+            r => r.RequestUri!.AbsoluteUri.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fproject/hooks/42"),
+            r => r.Headers.GetValues("PRIVATE-TOKEN").ShouldBe(["server_token"]));
+    }
+
+    [Fact]
+    public async Task WhenOneMatchHasTheExactPayloadUrl_UpdatesThatOneAndDeletesTheOther()
+    {
+        // Arrange
+        string listJson = $$"""
+            [
+              { "id": 41, "url": "{{OldPayloadUrl}}" },
+              { "id": 42, "url": "{{PayloadUrl}}" }
+            ]
+            """;
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, listJson),
+            (HttpStatusCode.OK, """{ "id": 42 }"""),
+            (HttpStatusCode.NoContent, string.Empty),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        await sut.UpsertWebhookAsync(ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
+
+        // Assert
+        handler.Requests[1].RequestUri!.AbsoluteUri.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fproject/hooks/42");
+        handler.Requests[2].ShouldSatisfyAllConditions(
+            r => r.Method.ShouldBe(HttpMethod.Delete),
+            r => r.RequestUri!.AbsoluteUri.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fproject/hooks/41"));
+    }
+
+    [Fact]
+    public async Task WhenAHookBelongsToAnotherInstall_NeitherUpdatesNorDeletesIt()
+    {
+        // Arrange
+        string listJson = $$"""[{ "id": 99, "url": "{{OtherInstallUrl}}" }]""";
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, listJson),
+            (HttpStatusCode.Created, """{ "id": 100 }"""),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+            ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Created);
+        handler.Requests.Count.ShouldBe(2);
+        handler.Requests[1].ShouldSatisfyAllConditions(
+            r => r.Method.ShouldBe(HttpMethod.Post),
+            r => r.RequestUri!.AbsoluteUri.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fproject/hooks"));
+    }
+
+    [Fact]
+    public async Task WhenDeletingADuplicateFails_TheUpsertStillSucceeds()
+    {
+        // Arrange
+        string listJson = $$"""
+            [
+              { "id": 41, "url": "{{OldPayloadUrl}}" },
+              { "id": 42, "url": "{{OlderPayloadUrl}}" }
+            ]
+            """;
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, listJson),
+            (HttpStatusCode.OK, """{ "id": 41 }"""),
+            (HttpStatusCode.InternalServerError, """{ "message": "boom" }"""),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+            ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        handler.Requests.Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task WhenTheUpdateFails_DeletesNothing()
+    {
+        // Arrange
+        string listJson = $$"""
+            [
+              { "id": 41, "url": "{{OldPayloadUrl}}" },
+              { "id": 42, "url": "{{OlderPayloadUrl}}" }
+            ]
+            """;
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, listJson),
+            (HttpStatusCode.UnprocessableEntity, """{ "message": "Invalid url" }"""),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+            ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>();
+        handler.Requests.Count.ShouldBe(2);
     }
 
     [Fact]

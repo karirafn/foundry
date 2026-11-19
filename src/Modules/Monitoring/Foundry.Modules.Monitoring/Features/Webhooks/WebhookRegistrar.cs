@@ -9,8 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Monitoring.Features.Webhooks;
 
 /// <summary>
-/// Registers a repository's webhook on the provider — create, or update in place when a hook with the
-/// same payload URL exists — with the account token (ADR 0085, ADR 0115).
+/// Registers a repository's webhook on the provider — create, or update in place when a hook carrying
+/// the repository's hook id exists, deleting any duplicates — with the account token (ADR 0085,
+/// ADR 0115, ADR 0116).
 /// </summary>
 /// <remarks>
 /// No provider call is made when webhook ingress is not configured or the account token is absent or
@@ -28,21 +29,13 @@ internal sealed class WebhookRegistrar(
 
     internal const string UnreachableDetail = "The provider could not be reached while registering the webhook.";
 
-    /// <summary>Creates or updates the repository's hook at the current payload URL.</summary>
-    public Task<WebhookRegistrationOutcome> RegisterAsync(
-        MonitoredRepository repository,
-        Credential account,
-        CancellationToken cancellationToken)
-        => RegisterAsync(repository, account, previousPublicBaseUrl: null, cancellationToken);
-
     /// <summary>
-    /// Creates or updates the repository's hook. <paramref name="previousPublicBaseUrl"/> is the Webhook
-    /// Public Base URL before a change: a hook still pointing at it is re-pointed rather than duplicated.
+    /// Creates or updates the repository's hook at the current payload URL. Any provider hook whose URL
+    /// path carries the repository's hook id is adopted, whatever its base URL.
     /// </summary>
     public async Task<WebhookRegistrationOutcome> RegisterAsync(
         MonitoredRepository repository,
         Credential account,
-        string? previousPublicBaseUrl,
         CancellationToken cancellationToken)
     {
         WebhookIngressState ingress = await webhookIngress.GetStateAsync(cancellationToken);
@@ -63,16 +56,10 @@ internal sealed class WebhookRegistrar(
 
         string payloadUrl = ingress.PayloadUrl(provider, repository.WebhookHookId)!;
 
-        List<string> previousUrls = [];
-        if (!string.IsNullOrEmpty(previousPublicBaseUrl)
-            && new WebhookIngressState(true, previousPublicBaseUrl, ingress.BackstopInterval)
-                .PayloadUrl(provider, repository.WebhookHookId) is { } previousUrl
-            && !string.Equals(previousUrl, payloadUrl, StringComparison.Ordinal))
-        {
-            previousUrls.Add(previousUrl);
-        }
-
-        WebhookHookSpec spec = new(payloadUrl, repository.EnsureWebhookSecret(), previousUrls);
+        WebhookHookSpec spec = new(
+            payloadUrl,
+            repository.EnsureWebhookSecret(),
+            WebhookHookPath.For(provider, repository.WebhookHookId));
 
         Result<WebhookUpsertKind> result = await UpsertAsync(repository.Slug, account, accountToken, spec, cancellationToken);
 

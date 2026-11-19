@@ -96,7 +96,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task RepointsEveryRegisteredHookAndSkipsNotRegisteredOnes()
+    public async Task RegistersEveryRepositoryNotRegisteredIncluded()
     {
         // Arrange
         await SeedCredentialAsync();
@@ -110,12 +110,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await sut.HandleAsync(new WebhookPublicBaseUrlChanged(OldBaseUrl, NewBaseUrl), CancellationToken.None);
 
-        // Assert — processed in position order, each matched against its previous payload URL.
-        factory.WebhookUpserts.Select(u => u.Slug).ShouldBe(["alice/pending", "alice/active", "alice/silent"]);
+        // Assert — processed in position order, each matched by its hook id.
+        factory.WebhookUpserts.Select(u => u.Slug).ShouldBe(["alice/pending", "alice/active", "alice/silent", "alice/unregistered"]);
         factory.TokensUsed.ShouldAllBe(t => t == AccountToken);
         factory.WebhookUpserts[0].Spec.ShouldSatisfyAllConditions(
             s => s.PayloadUrl.ShouldBe($"{NewBaseUrl}/webhooks/github/{pending.WebhookHookId}"),
-            s => s.PreviousPayloadUrls.ShouldBe([$"{OldBaseUrl}/webhooks/github/{pending.WebhookHookId}"]));
+            s => s.HookPath.Suffix.ShouldBe($"/webhooks/github/{pending.WebhookHookId}"));
     }
 
     [Fact]

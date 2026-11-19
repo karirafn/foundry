@@ -18,7 +18,7 @@ public sealed record WebhookRegistrationOutcome(
     /// <summary>Foundry created a new hook on the provider.</summary>
     public const string CreatedKind = "created";
 
-    /// <summary>Foundry updated an existing hook with the same payload URL in place.</summary>
+    /// <summary>Foundry updated an existing hook carrying the repository's hook id in place.</summary>
     public const string UpdatedKind = "updated";
 
     /// <summary>Foundry made no provider call; see <see cref="Reason"/>.</summary>

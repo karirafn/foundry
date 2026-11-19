@@ -131,7 +131,7 @@ export class SettingsRepositoriesComponent implements OnInit {
   protected readonly _pendingDeleteRepository: WritableSignal<RepositorySummary | null> = signal(null);
   protected readonly _deleteRepositoryMessage: Signal<string> = computed(() => {
     const repository = this._pendingDeleteRepository();
-    return repository ? `Delete repository "${repository.slug}"? Foundry will stop monitoring it.` : '';
+    return repository ? `Delete repository "${repository.slug}"? Foundry will stop monitoring it and remove its webhook.` : '';
   });
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
   private readonly _accountIdsKey: Signal<string> = computed(() =>

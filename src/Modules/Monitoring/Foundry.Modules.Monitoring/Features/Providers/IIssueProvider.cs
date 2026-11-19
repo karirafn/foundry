@@ -270,11 +270,11 @@ internal interface IIssueProvider
 
     /// <summary>
     /// Creates or updates the repository webhook described by <paramref name="spec"/> with exactly
-    /// Foundry's mapped event list, JSON payloads and the repository's secret. A hook whose payload
-    /// URL matches <see cref="WebhookHookSpec.PayloadUrl"/> (or one of
-    /// <see cref="WebhookHookSpec.PreviousPayloadUrls"/>) is updated in place — events, secret, URL and
-    /// active flag — and adopted; otherwise a new hook is created. Callers pass a provider built with
-    /// the account token. A missing permission fails with
+    /// Foundry's mapped event list, JSON payloads and the repository's secret. Every hook whose URL
+    /// carries the repository's hook id (<see cref="WebhookHookSpec.Matches"/>) belongs to the
+    /// repository: one is updated in place — events, secret, URL and active flag — preferring an exact
+    /// payload-URL match, and the others are deleted; with none, a new hook is created. Callers pass a
+    /// provider built with the account token. A missing permission fails with
     /// <see cref="WebhookWriteErrors.InsufficientPermissionCode"/>.
     /// </summary>
     /// <remarks>Providers without webhook support keep this default, which fails with
@@ -284,6 +284,19 @@ internal interface IIssueProvider
         WebhookHookSpec spec,
         CancellationToken cancellationToken)
         => Task.FromResult(Result<WebhookUpsertKind>.Fail(WebhookWriteErrors.NotSupported()));
+
+    /// <summary>
+    /// Deletes every repository hook whose URL carries <paramref name="hookId"/>
+    /// (<see cref="WebhookHookPath"/>) and returns how many were deleted. A missing permission fails
+    /// with <see cref="WebhookWriteErrors.InsufficientPermissionCode"/>.
+    /// </summary>
+    /// <remarks>Providers without webhook support keep this default, which fails with
+    /// <see cref="WebhookWriteErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<int>> DeleteWebhooksAsync(
+        RepositorySlug slug,
+        string hookId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<int>.Fail(WebhookWriteErrors.NotSupported()));
 
     Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
