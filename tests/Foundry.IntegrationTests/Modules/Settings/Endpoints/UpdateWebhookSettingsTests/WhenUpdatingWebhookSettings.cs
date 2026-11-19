@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.IntegrationTests.Shared;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

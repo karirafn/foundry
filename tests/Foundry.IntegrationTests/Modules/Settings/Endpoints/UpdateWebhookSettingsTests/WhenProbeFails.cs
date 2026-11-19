@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.IntegrationTests.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.AspNetCore.Mvc;

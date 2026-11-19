@@ -1,6 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 
-namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWebhookSettingsTests;
+namespace Foundry.IntegrationTests.Shared;
 
 /// <summary>Stands in for the webhook ingress self-probe: answers a fixed result and records each URL it verifies.</summary>
 internal sealed class StubWebhookIngressProbe(int port, WebhookProbeResult result) : IWebhookIngressProbe
