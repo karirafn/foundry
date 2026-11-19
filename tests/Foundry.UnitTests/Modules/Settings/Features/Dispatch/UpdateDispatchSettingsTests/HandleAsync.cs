@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.Dispatch.UpdateDispatchSettingsTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -55,7 +57,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateDispatchSettings.Command command = new(
             AutoResumeOnUsageReset: false,
             ProbeIntervalMinutes: 30,
@@ -84,7 +86,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateDispatchSettings.Command command = new(
             AutoResumeOnUsageReset: true,
             ProbeIntervalMinutes: 30,
@@ -114,7 +116,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateDispatchSettings.Handler sut = new(dbContext);
+            UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
             UpdateDispatchSettings.Command command = new(
                 AutoResumeOnUsageReset: false,
                 ProbeIntervalMinutes: 45,
@@ -138,7 +140,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateDispatchSettings.Command command = new(
             AutoResumeOnUsageReset: true,
             ProbeIntervalMinutes: 30,
@@ -167,7 +169,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateDispatchSettings.Command command = new(
             AutoResumeOnUsageReset: true,
             ProbeIntervalMinutes: 1,
@@ -196,7 +198,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateDispatchSettings.Command command = new(
             AutoResumeOnUsageReset: true,
             ProbeIntervalMinutes: 30,
@@ -225,7 +227,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateDispatchSettings.Command command = new(
             AutoResumeOnUsageReset: true,
             ProbeIntervalMinutes: 30,

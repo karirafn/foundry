@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateClaudeCodeSettingsTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -61,7 +63,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateClaudeCodeSettings.Handler sut = new(dbContext);
+        UpdateClaudeCodeSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateClaudeCodeSettings.Command command = CreateCommand(additionalDenyRules: ValidRule);
 
         // Act
@@ -79,7 +81,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await SeedSettingsAsync();
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateClaudeCodeSettings.Handler sut = new(dbContext);
+            UpdateClaudeCodeSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
             // Act
             await sut.HandleAsync(
@@ -100,7 +102,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateClaudeCodeSettings.Handler sut = new(dbContext);
+        UpdateClaudeCodeSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -118,7 +120,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateClaudeCodeSettings.Handler sut = new(dbContext);
+        UpdateClaudeCodeSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateClaudeCodeSettings.Command command = CreateCommand(additionalDenyRules: "not-a-rule");
 
         // Act
@@ -135,7 +137,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateClaudeCodeSettings.Handler sut = new(dbContext);
+        UpdateClaudeCodeSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateClaudeCodeSettings.Command command = CreateCommand(additionalDenyRules: [null!]);
 
         // Act
@@ -154,7 +156,7 @@ public sealed class HandleAsync : IAsyncLifetime
         DateTimeOffset updatedAtBefore = await ReadUpdatedAtAsync();
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateClaudeCodeSettings.Handler sut = new(dbContext);
+            UpdateClaudeCodeSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
             UpdateClaudeCodeSettings.Command command = CreateCommand();
 
             // Act

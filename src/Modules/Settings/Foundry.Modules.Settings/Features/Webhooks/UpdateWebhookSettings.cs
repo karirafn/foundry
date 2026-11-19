@@ -1,5 +1,7 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -13,8 +15,10 @@ namespace Foundry.Modules.Settings.Features.Webhooks;
 
 /// <summary>
 /// Updates the webhook ingress settings (ADR 0085): the Webhook Public Base URL and the
-/// Backstop Interval. Validation failures carry a field-keyed error code
-/// (<c>Settings.InvalidWebhookPublicBaseUrl</c>, <c>Settings.InvalidBackstopInterval</c>).
+/// Backstop Interval. A changed URL is saved only once the self-probe reaches this Foundry through it
+/// (ADR 0116). Failures carry a field-keyed error code
+/// (<c>Settings.InvalidWebhookPublicBaseUrl</c>, <c>Settings.WebhookPublicBaseUrlUnreachable</c>,
+/// <c>Settings.InvalidBackstopInterval</c>).
 /// </summary>
 internal static class UpdateWebhookSettings
 {
@@ -23,7 +27,8 @@ internal static class UpdateWebhookSettings
 
     internal sealed class Handler(
         DbContext dbContext,
-        IIntegrationEventDispatcher integrationEventDispatcher)
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IWebhookIngressProbe ingressProbe)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
@@ -38,7 +43,25 @@ internal static class UpdateWebhookSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
+            Result<WebhookPublicBaseUrl> validated =
+                GlobalSettings.ValidateWebhookSettings(command.PublicBaseUrl, command.BackstopIntervalMinutes);
+            if (validated is Result<WebhookPublicBaseUrl>.Failure invalid)
+            {
+                return Result<GlobalSettingsSummary>.Fail(invalid.Error);
+            }
+
+            WebhookPublicBaseUrl publicBaseUrl = ((Result<WebhookPublicBaseUrl>.Success)validated).Value;
             string? previousPublicBaseUrl = settings.WebhookPublicBaseUrl?.Value;
+            bool urlChanged = !string.Equals(previousPublicBaseUrl, publicBaseUrl.Value, StringComparison.Ordinal);
+
+            // Only a changed URL is probed (ADR 0116), so saving the backstop interval never needs the tunnel.
+            if (urlChanged
+                && await ingressProbe.VerifyAsync(publicBaseUrl.Value, cancellationToken)
+                    is WebhookProbeResult.Unreachable unreachable)
+            {
+                return Result<GlobalSettingsSummary>.Fail(
+                    SettingsErrors.WebhookPublicBaseUrlUnreachable(unreachable.Failure, publicBaseUrl, ingressProbe.Port));
+            }
 
             Result updateResult = settings.UpdateWebhookSettings(command.PublicBaseUrl, command.BackstopIntervalMinutes);
             if (updateResult is Result.Failure failure)
@@ -46,18 +69,17 @@ internal static class UpdateWebhookSettings
                 return Result<GlobalSettingsSummary>.Fail(failure.Error);
             }
 
-            // A new, non-empty URL re-points every registered hook; the event commits with the change.
-            if (settings.WebhookPublicBaseUrl?.Value is { } publicBaseUrl
-                && !string.Equals(previousPublicBaseUrl, publicBaseUrl, StringComparison.Ordinal))
+            // A new URL re-points every registered hook; the event commits with the change.
+            if (urlChanged)
             {
                 await integrationEventDispatcher.DispatchAsync(
-                    [new WebhookPublicBaseUrlChanged(previousPublicBaseUrl, publicBaseUrl)],
+                    [new WebhookPublicBaseUrlChanged(previousPublicBaseUrl, publicBaseUrl.Value)],
                     cancellationToken);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

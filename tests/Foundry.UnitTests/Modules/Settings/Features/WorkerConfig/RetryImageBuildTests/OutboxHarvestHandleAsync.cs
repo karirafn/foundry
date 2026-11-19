@@ -13,6 +13,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.RetryImageBuildTests;
 
 /// <summary>
@@ -77,7 +79,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        RetryImageBuild.Handler sut = new(dbContext, integrationEventDispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), integrationEventDispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -112,7 +114,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        RetryImageBuild.Handler sut = new(dbContext, integrationEventDispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), integrationEventDispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

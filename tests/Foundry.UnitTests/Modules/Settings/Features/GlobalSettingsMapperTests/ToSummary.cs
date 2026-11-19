@@ -8,6 +8,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsMapperTests;
 
 public sealed class ToSummary
@@ -26,7 +28,7 @@ public sealed class ToSummary
         settings.PauseHost("gitlab.com", pausedAt);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.PausedHosts.ShouldBe([new PausedHost("gitlab.com", pausedAt, 0, pausedAt.AddMinutes(1))]);
@@ -35,7 +37,7 @@ public sealed class ToSummary
     [Fact]
     public void WhenNoHostIsPaused_SummaryHasNoPausedHosts()
     {
-        GlobalSettingsMapper.ToSummary(CreateDefaultSettings()).PausedHosts.ShouldBeEmpty();
+        GlobalSettingsMapper.ToSummary(CreateDefaultSettings(), StubWebhookIngressProbe.DefaultPort).PausedHosts.ShouldBeEmpty();
     }
 
     [Fact]
@@ -45,7 +47,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.NestedDockerEnabled.ShouldBeFalse();
@@ -59,7 +61,7 @@ public sealed class ToSummary
         settings.UpdateNestedDocker(true);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.NestedDockerEnabled.ShouldBeTrue();
@@ -72,7 +74,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle);
@@ -86,7 +88,7 @@ public sealed class ToSummary
         settings.BeginImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ImageBuildStatus.ShouldBe(ImageBuildStatus.Building);
@@ -101,7 +103,7 @@ public sealed class ToSummary
         settings.FailImageBuild("Something went wrong", nextRetryAt: null, attempt: 0);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -116,7 +118,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.LastImageBuildError.ShouldBeNull();
@@ -133,7 +135,7 @@ public sealed class ToSummary
         settings.CompleteImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -148,7 +150,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.HasUsableImage.ShouldBeFalse();
@@ -163,7 +165,7 @@ public sealed class ToSummary
         settings.CompleteImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.HasUsableImage.ShouldBeTrue();
@@ -180,7 +182,7 @@ public sealed class ToSummary
         settings.FailImageBuild("new error", nextRetryAt: null, attempt: 0);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.HasUsableImage.ShouldBeTrue();
@@ -196,7 +198,7 @@ public sealed class ToSummary
         settings.FailImageBuild("error", nextRetryAt, attempt: 1);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.NextRetryAt.ShouldBe(nextRetryAt);
@@ -211,7 +213,7 @@ public sealed class ToSummary
         settings.FailImageBuild("error", nextRetryAt: null, attempt: 3);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.Attempt.ShouldBe(3);
@@ -224,7 +226,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.NextRetryAt.ShouldBeNull();
@@ -237,7 +239,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.Attempt.ShouldBe(0);
@@ -251,7 +253,7 @@ public sealed class ToSummary
         settings.BeginImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.NextRetryAt.ShouldBeNull();
@@ -265,7 +267,7 @@ public sealed class ToSummary
         settings.BeginImageBuild();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.Attempt.ShouldBe(0);
@@ -278,7 +280,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.AllowedProviderHosts.ShouldBeEmpty();
@@ -292,7 +294,7 @@ public sealed class ToSummary
         settings.UpdateAllowedProviderHosts(["github.com", "gitlab.com"]);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.AllowedProviderHosts.ShouldBe(["github.com", "gitlab.com"]);
@@ -305,7 +307,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ProbeIntervalMinutes.ShouldBe(GlobalSettings.DefaultProbeIntervalMinutes);
@@ -319,7 +321,7 @@ public sealed class ToSummary
         settings.UpdateProbeInterval(15);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ProbeIntervalMinutes.ShouldBe(15);
@@ -332,7 +334,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.PollIntervalSeconds.ShouldBe(GlobalSettings.DefaultPollIntervalSeconds);
@@ -346,7 +348,7 @@ public sealed class ToSummary
         settings.UpdatePollInterval(120);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.PollIntervalSeconds.ShouldBe(120);
@@ -362,7 +364,7 @@ public sealed class ToSummary
         settings.UpdateWorkerEnvironment(limits);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -378,7 +380,7 @@ public sealed class ToSummary
         GlobalSettings settings = CreateDefaultSettings();
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -399,7 +401,7 @@ public sealed class ToSummary
         settings.UpdateClaudeCodeSettings(claudeCode);
 
         // Act
-        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
 
         // Assert
         result.AdditionalDenyRules.ShouldBe(settings.ClaudeCodeSettings.AdditionalDenyRules);

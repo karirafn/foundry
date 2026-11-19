@@ -12,6 +12,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsQueriesTests;
 
 public sealed class GetWorkerResourceLimitsAsync : IAsyncDisposable
@@ -59,7 +61,7 @@ public sealed class GetWorkerResourceLimitsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         WorkerResourceLimitsSnapshot result = await sut.GetWorkerResourceLimitsAsync(TestContext.Current.CancellationToken);
@@ -73,7 +75,7 @@ public sealed class GetWorkerResourceLimitsAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         WorkerResourceLimitsSnapshot result = await sut.GetWorkerResourceLimitsAsync(TestContext.Current.CancellationToken);

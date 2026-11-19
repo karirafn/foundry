@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GetSettingsTests;
 
 public sealed class HandleAsync : IAsyncDisposable
@@ -51,7 +53,7 @@ public sealed class HandleAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GetSettings.Handler sut = new(dbContext);
+        GetSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -70,7 +72,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GetSettings.Handler sut = new(dbContext);
+        GetSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

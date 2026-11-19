@@ -81,17 +81,17 @@ The worker image tag and build toggle live in **Global Settings** (database), co
 With building enabled (the default), the WebApi builds the worker Docker image at startup; the first run is slower due to the Docker image build, and subsequent runs use the Docker layer cache.
 With building disabled, Foundry inspects the configured tag on the Docker host at startup — if the image exists, the build state becomes `Idle`; if it is absent, the state becomes `Failed` and dispatch is blocked until the image is made available and the operator retries.
 
-## Webhooks (optional)
+## Webhooks
 
-By default Foundry polls every repository. GitHub and GitLab webhooks make it react within seconds and let repositories with a healthy webhook drop to a slower **backstop** poll (15 minutes by default). Webhook deliveries only *nudge* the existing poll passes — they never change state directly (ADR 0085).
+GitHub and GitLab webhooks make Foundry react within seconds and let repositories with a healthy webhook drop to a slower **backstop** poll (15 minutes by default). Webhook deliveries only *nudge* the existing poll passes — they never change state directly (ADR 0085). Webhook ingress is required and verified (ADR 0116).
 
-1. **Enable the webhook port.** Set `Webhooks:Port` in the AppHost configuration, for example with user secrets:
+1. **The webhook port.** The WebApi always binds a second, plain-HTTP endpoint on port **5099** that serves **only** `/webhooks/*` — every other path returns 404 there, and `/webhooks/*` returns 404 on the main port. Set `Webhooks:Port` in the AppHost configuration only to use another port, for example with user secrets:
 
    ```bash
-   dotnet user-secrets --project src/Foundry.AppHost set "Webhooks:Port" "5099"
+   dotnet user-secrets --project src/Foundry.AppHost set "Webhooks:Port" "6099"
    ```
 
-   The WebApi then binds a second, plain-HTTP endpoint on that port that serves **only** `/webhooks/*` — every other path returns 404 there, and `/webhooks/*` returns 404 on the main port. Without the setting no webhook endpoint exists.
+   An occupied port fails startup. **Settings → Dispatch → Webhooks** shows the port Foundry listens on.
 
 2. **Expose that port publicly** through a tunnel or reverse proxy that terminates TLS, and forward only that port. The WebApi itself is unauthenticated, so never expose the main port. For example:
 
@@ -100,11 +100,13 @@ By default Foundry polls every repository. GitHub and GitLab webhooks make it re
    cloudflared tunnel --url http://localhost:5099
    # ngrok
    ngrok http 5099
+   # Tailscale Funnel
+   tailscale funnel --bg 5099
    ```
 
-   With a reverse proxy (Caddy, nginx, Traefik), route `https://hooks.example.com/webhooks/*` to `http://<foundry-host>:5099`.
+   With a reverse proxy (Caddy, nginx, Traefik), route `https://hooks.example.com/webhooks/*` to `http://<foundry-host>:5099`. A quick tunnel gets a new address each time it starts; for a lasting setup use a named tunnel or a fixed domain.
 
-3. **Set the public base URL.** In **Settings → Dispatch → Webhooks**, enter the public `https` URL the tunnel or proxy serves (e.g. `https://hooks.example.com`) and adjust the backstop interval if needed.
+3. **Set the public base URL** in the setup wizard or in **Settings → Dispatch → Webhooks**: the public `https` URL the tunnel or proxy serves, without `/webhooks` (e.g. `https://hooks.example.com`). The URL is required and can be changed but not cleared. `localhost` and loopback, link-local or unspecified IP addresses are rejected; private addresses and any other host name are accepted. **Saving a changed URL verifies it**: Foundry sends a one-time code to `<URL>/webhooks/probe/<code>` and saves only when that request arrives back at this Foundry, within 10 seconds. Otherwise nothing is saved and the page names the cause (the host did not resolve, the certificate was rejected, no answer in time, another server answered, or an unexpected HTTP status). A LAN reverse proxy behind a router without NAT loopback can time out although GitHub could deliver; split DNS or a hosts entry on the Foundry host resolves it. Saving only the backstop interval makes no check.
 
 4. **Register the webhook per repository.** If the repository's account has a [branch-rules token](#branch-rules-token-optional) with the webhook permission above, Foundry registers the webhook itself: when the repository is added, when that token is saved (for the account's not-yet-registered repositories), when the public base URL changes (every registered hook is re-pointed), and once whenever a hook turns **Silent**. It creates the hook — or updates a hook with the same payload URL in place, adopting one you added by hand — with the payload URL, the secret, JSON content type and exactly the events below, and the status becomes *Waiting for first delivery*. The repository's Webhook panel also has a **Register webhook** button that runs the same create-or-update. Without the token, or when the token lacks the permission (GitHub answers 403/404 on `/hooks`, GitLab 403 below Maintainer), nothing changes and you register the hook manually as below; polling is never blocked.
 

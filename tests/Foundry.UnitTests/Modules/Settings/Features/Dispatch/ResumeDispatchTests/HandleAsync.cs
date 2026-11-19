@@ -12,6 +12,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.Dispatch.ResumeDispatchTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -58,7 +60,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+        ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
         ResumeDispatch.Command command = new();
 
         // Act
@@ -87,7 +89,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             CapturingIntegrationEventDispatcher dispatcher = new();
-            ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+            ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
             ResumeDispatch.Command command = new();
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -114,7 +116,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+        ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
         ResumeDispatch.Command command = new();
 
         // Act
@@ -130,7 +132,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+        ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
         ResumeDispatch.Command command = new();
 
         // Act
@@ -150,7 +152,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+        ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
         ResumeDispatch.Command command = new();
 
         // Act
@@ -175,7 +177,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+        ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
         ResumeDispatch.Command command = new();
 
         // Act
@@ -201,7 +203,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             CapturingIntegrationEventDispatcher dispatcher = new();
-            ResumeDispatch.Handler sut = new(dbContext, dispatcher);
+            ResumeDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
             ResumeDispatch.Command command = new();
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }

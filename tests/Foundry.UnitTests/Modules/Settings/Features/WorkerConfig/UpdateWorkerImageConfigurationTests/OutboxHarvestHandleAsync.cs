@@ -14,6 +14,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateWorkerImageConfigurationTests;
 
 /// <summary>
@@ -77,7 +79,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:v2",
@@ -121,7 +123,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:local",

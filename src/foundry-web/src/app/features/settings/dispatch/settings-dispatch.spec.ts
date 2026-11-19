@@ -510,19 +510,47 @@ describe('SettingsDispatchComponent', () => {
     return { fixture, httpMock, el, saveBtn, component };
   }
 
+  const STORED_URL = 'https://hooks.example.com';
+  const UNREACHABLE_PROBLEM = {
+    type: 'tag:foundry,2026:problems/Settings.WebhookPublicBaseUrlUnreachable',
+    detail: 'new.example.com didn\'t answer within 10 seconds.',
+  };
+
   it('should initialize the webhook fields from loaded settings', () => {
     // Arrange & Act
-    const { fixture } = setupWebhooks({ webhookPublicBaseUrl: 'https://hooks.example.com', backstopIntervalMinutes: 20 });
+    const { fixture } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL, backstopIntervalMinutes: 20 });
 
     // Assert
-    expect(fixture.debugElement.query(By.css('#webhookPublicBaseUrl')).injector.get(NgModel).model).toBe('https://hooks.example.com');
+    expect(fixture.debugElement.query(By.css('#webhookPublicBaseUrl')).injector.get(NgModel).model).toBe(STORED_URL);
     expect(fixture.debugElement.query(By.css('#backstopIntervalMinutes')).injector.get(NgModel).model).toBe(20);
   });
 
-  it('should send the webhook settings, sending null for an empty URL', () => {
+  it('should show the webhook port, labelled, from the settings', () => {
+    // Arrange & Act
+    const { el } = setupWebhooks({ webhookPort: 6001 });
+
+    // Assert
+    const value = el.querySelector('.general-settings__readonly-value')!;
+    expect(value.textContent?.trim()).toBe('6001');
+    expect(value.getAttribute('aria-labelledby')).toBe('webhook-port-label');
+    expect(el.querySelector('#webhook-port-label')?.textContent?.trim()).toBe('Webhook port');
+  });
+
+  it('should offer the tunnel and proxy examples for the port in a closed disclosure', () => {
+    // Arrange & Act
+    const { el } = setupWebhooks({ webhookPort: 6001 });
+
+    // Assert
+    const details = el.querySelector('details.general-settings__disclosure') as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.querySelector('summary')?.textContent?.trim()).toBe('Tunnel and proxy examples');
+    expect(details.querySelector('fd-webhook-expose-guide')?.textContent).toContain('ngrok http 6001');
+  });
+
+  it('should send the trimmed URL with the backstop interval', () => {
     // Arrange
-    const { fixture, httpMock, saveBtn, component } = setupWebhooks();
-    component._webhookUrlValue.set('  ');
+    const { fixture, httpMock, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._webhookUrlValue.set('  https://new.example.com ');
     component._backstopValue.set(30);
     fixture.detectChanges();
 
@@ -532,8 +560,23 @@ describe('SettingsDispatchComponent', () => {
     // Assert
     const req = httpMock.expectOne('/api/settings/webhooks');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ webhookPublicBaseUrl: null, backstopIntervalMinutes: 30 });
+    expect(req.request.body).toEqual({ webhookPublicBaseUrl: 'https://new.example.com', backstopIntervalMinutes: 30 });
     req.flush(API_KEY_RESPONSE);
+  });
+
+  it('should require a URL and never send an empty one', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+
+    // Act
+    component._webhookUrlValue.set('  ');
+    fixture.detectChanges();
+    saveBtn.click();
+
+    // Assert
+    expect(el.querySelector('#webhook-url-error')?.textContent).toBe('Enter the public https URL your tunnel or proxy serves.');
+    expect(saveBtn.disabled).toBe(true);
+    httpMock.expectNone('/api/settings/webhooks');
   });
 
   it('should show a field error and disable Save for a non-https URL', () => {
@@ -545,15 +588,134 @@ describe('SettingsDispatchComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    expect(el.querySelector('#webhook-url-error')?.textContent).toContain('https');
+    expect(el.querySelector('#webhook-url-error')?.textContent).toBe('Use an absolute https URL, for example https://hooks.example.com.');
     expect(el.querySelector('#webhookPublicBaseUrl')?.getAttribute('aria-invalid')).toBe('true');
     expect(saveBtn.disabled).toBe(true);
+  });
+
+  it('should accept a localhost URL on the client, leaving host rules to the server', () => {
+    // Arrange
+    const { fixture, el, saveBtn, component } = setupWebhooks();
+
+    // Act
+    component._webhookUrlValue.set('https://localhost');
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('#webhook-url-error')?.textContent).toBe('');
+    expect(saveBtn.disabled).toBe(false);
+  });
+
+  it('should label Save "Verify and save" when the URL differs from the stored one, and "Save" otherwise', () => {
+    // Arrange
+    const { fixture, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    expect(saveBtn.textContent?.trim()).toBe('Save');
+
+    // Act
+    component._webhookUrlValue.set('https://new.example.com');
+    fixture.detectChanges();
+
+    // Assert
+    expect(saveBtn.textContent?.trim()).toBe('Verify and save');
+  });
+
+  it('should show the probing status and keep Save focusable but inert while verifying a changed URL', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._webhookUrlValue.set('https://new.example.com');
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+    fixture.detectChanges();
+    saveBtn.click();
+
+    // Assert
+    expect(saveBtn.textContent?.trim()).toBe('Verifying…');
+    expect(saveBtn.disabled).toBe(false);
+    expect(saveBtn.getAttribute('aria-disabled')).toBe('true');
+    expect((el.querySelector('#webhookPublicBaseUrl') as HTMLInputElement).readOnly).toBe(true);
+    expect(el.querySelector('#webhooks-probe-status')?.textContent?.trim())
+      .toBe('Checking that new.example.com reaches this Foundry. This can take up to 10 seconds.');
+    expect(el.querySelector('.general-settings__dispatch-form[aria-busy="true"]')).toBeTruthy();
+    httpMock.expectOne('/api/settings/webhooks').flush({ ...API_KEY_RESPONSE, webhookPublicBaseUrl: 'https://new.example.com' });
+  });
+
+  it('should show "Saving…" and no probing status when only the backstop interval changed', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._backstopValue.set(30);
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(saveBtn.textContent?.trim()).toBe('Saving…');
+    expect(el.querySelector('#webhooks-probe-status')?.textContent?.trim()).toBe('');
+    httpMock.expectOne('/api/settings/webhooks').flush({ ...API_KEY_RESPONSE, webhookPublicBaseUrl: STORED_URL });
+  });
+
+  it('should confirm a verified URL change', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._webhookUrlValue.set('https://new.example.com');
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+    httpMock.expectOne('/api/settings/webhooks').flush({ ...API_KEY_RESPONSE, webhookPublicBaseUrl: 'https://new.example.com' });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.textContent).toContain('Webhook URL verified and saved. Registered webhooks are being re-pointed to it.');
+    expect(saveBtn.textContent?.trim()).toBe('Save');
+  });
+
+  it('should confirm a backstop-only save with the unchanged message', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._backstopValue.set(30);
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+    httpMock.expectOne('/api/settings/webhooks').flush({ ...API_KEY_RESPONSE, webhookPublicBaseUrl: STORED_URL, backstopIntervalMinutes: 30 });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.textContent).toContain('Webhook settings saved successfully');
+  });
+
+  it('should show an unreachable error under the URL field, mark it invalid and focus it', async () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._webhookUrlValue.set('https://new.example.com');
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+    httpMock.expectOne('/api/settings/webhooks').flush(UNREACHABLE_PROBLEM, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert
+    const verifyError = el.querySelector('#webhook-url-verify-error')!;
+    expect(verifyError.textContent).toBe(UNREACHABLE_PROBLEM.detail);
+    expect(verifyError.getAttribute('role')).toBeNull();
+    expect(el.querySelector('#webhook-url-error')?.textContent).toBe('');
+    expect(el.querySelector('#webhooks-error')?.textContent?.trim()).toBe('');
+    const input = el.querySelector('#webhookPublicBaseUrl') as HTMLInputElement;
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toBe('webhook-url-hint webhook-url-error webhook-url-verify-error');
+    expect(document.activeElement).toBe(input);
   });
 
   it('should key a server validation error to the URL field', () => {
     // Arrange
     const { fixture, httpMock, el, saveBtn, component } = setupWebhooks();
-    component._webhookUrlValue.set('https://hooks.example.com');
+    component._webhookUrlValue.set('https://localhost');
     fixture.detectChanges();
 
     // Act
@@ -565,8 +727,45 @@ describe('SettingsDispatchComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    expect(el.querySelector('#webhook-url-error')?.textContent).toContain('Bad URL from server');
+    expect(el.querySelector('#webhook-url-verify-error')?.textContent).toBe('Bad URL from server');
     expect(el.querySelector('#webhooks-error')?.textContent?.trim()).toBe('');
+  });
+
+  it('should hide a server URL error once the URL is edited', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._webhookUrlValue.set('https://new.example.com');
+    fixture.detectChanges();
+    saveBtn.click();
+    httpMock.expectOne('/api/settings/webhooks').flush(UNREACHABLE_PROBLEM, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    // Act
+    component._webhookUrlValue.set('https://newer.example.com');
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('#webhook-url-verify-error')?.textContent).toBe('');
+    expect(el.querySelector('#webhookPublicBaseUrl')?.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('should show an error not keyed to a field in the general error', () => {
+    // Arrange
+    const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
+    component._webhookUrlValue.set('https://new.example.com');
+    fixture.detectChanges();
+
+    // Act
+    saveBtn.click();
+    httpMock.expectOne('/api/settings/webhooks').flush(
+      { type: 'tag:foundry,2026:problems/Settings.NotFound', detail: 'Settings not found' },
+      { status: 404, statusText: 'Not Found' },
+    );
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('#webhooks-error')?.textContent?.trim()).toBe('Settings not found');
+    expect(el.querySelector('#webhook-url-verify-error')?.textContent).toBe('');
   });
 
   it('should report hasUnsavedChanges() as true when the backstop interval differs from saved value', () => {

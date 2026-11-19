@@ -1,6 +1,11 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 using Shouldly;
 
@@ -67,9 +72,60 @@ public sealed class WhenPortGuardApplies : IAsyncDisposable
         (await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookStatus
             .ShouldBe(Foundry.Modules.Monitoring.Domain.ValueObjects.WebhookStatus.Pending);
     }
+
+    [Fact]
+    public async Task WhenUnknownProbeCodeOnWebhookPort_Returns404WithNoBody()
+    {
+        // Act
+        HttpContext response = await WebhookTestHost.SendAsync(
+            _factory,
+            HttpMethods.Get,
+            "/webhooks/probe/" + new string('a', 64),
+            WebhookTestHost.WebhookPort);
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        response.Response.ContentLength.GetValueOrDefault().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenProbeArrivesOnWebhookPort_Reaches()
+    {
+        // Arrange
+        await using FoundryWebAppFactory factory = WebhookTestHost.CreateFactory(services =>
+            services.AddHttpClient(WebhookIngressProbe.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<IServer>() is TestServer server
+                    ? server.CreateHandler(context => context.Connection.LocalPort = WebhookTestHost.WebhookPort)
+                    : throw new InvalidOperationException("The test host runs on a TestServer.")));
+        IWebhookIngressProbe probe = factory.Services.GetRequiredService<IWebhookIngressProbe>();
+
+        // Act
+        WebhookProbeResult result = await probe.VerifyAsync("https://hooks.example.com", TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<WebhookProbeResult.Reached>();
+    }
+
+    [Fact]
+    public async Task WhenProbeArrivesOnMainPort_FailsAsOtherInstance()
+    {
+        // Arrange
+        await using FoundryWebAppFactory factory = WebhookTestHost.CreateFactory(services =>
+            services.AddHttpClient(WebhookIngressProbe.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<IServer>() is TestServer server
+                    ? server.CreateHandler(context => context.Connection.LocalPort = WebhookTestHost.MainPort)
+                    : throw new InvalidOperationException("The test host runs on a TestServer.")));
+        IWebhookIngressProbe probe = factory.Services.GetRequiredService<IWebhookIngressProbe>();
+
+        // Act
+        WebhookProbeResult result = await probe.VerifyAsync("https://hooks.example.com", TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<WebhookProbeResult.Unreachable>().Failure.ShouldBeOfType<WebhookProbeFailure.OtherInstance>();
+    }
 }
 
-/// <summary>Without a configured webhook port, no webhook endpoint exists on any port.</summary>
+/// <summary>Without <c>Webhooks:Port</c> the webhook port is still bound, on the default port (ADR 0116).</summary>
 public sealed class WhenWebhookPortNotConfigured : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory = new();
@@ -79,10 +135,18 @@ public sealed class WhenWebhookPortNotConfigured : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    [Theory]
-    [InlineData(WebhookTestHost.MainPort)]
-    [InlineData(WebhookTestHost.WebhookPort)]
-    public async Task WhenDeliveryArrives_Returns404(int port)
+    [Fact]
+    public void ProbePort_IsTheDefault()
+    {
+        // Act
+        int port = _factory.Services.GetRequiredService<IWebhookIngressProbe>().Port;
+
+        // Assert
+        port.ShouldBe(5099);
+    }
+
+    [Fact]
+    public async Task WhenDeliveryArrivesOnDefaultPort_IsServed()
     {
         // Arrange
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, registered: true);
@@ -92,11 +156,11 @@ public sealed class WhenWebhookPortNotConfigured : IAsyncDisposable
             _factory,
             repository.WebhookHookId,
             "ping",
-            """{"repository":{"full_name":"owner/repo"}}""",
+            """{"zen":"Design for failure.","repository":{"full_name":"owner/repo"}}""",
             repository.WebhookSecret,
-            port);
+            WebhookTestHost.WebhookPort);
 
         // Assert
-        response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
     }
 }

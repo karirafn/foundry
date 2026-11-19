@@ -253,33 +253,40 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     }
 
     /// <summary>
-    /// Updates the webhook ingress settings. The public base URL is optional: a blank value clears it,
-    /// any other value must pass <see cref="ValueObjects.WebhookPublicBaseUrl.Create"/>.
+    /// Updates the webhook ingress settings. The public base URL is required (ADR 0116): it can be changed
+    /// but never cleared, and must pass <see cref="ValueObjects.WebhookPublicBaseUrl.Create"/>.
     /// </summary>
     public Result UpdateWebhookSettings(string? publicBaseUrl, int backstopIntervalMinutes)
     {
-        if (backstopIntervalMinutes < MinBackstopIntervalMinutes || backstopIntervalMinutes > MaxBackstopIntervalMinutes)
+        Result<WebhookPublicBaseUrl> validated = ValidateWebhookSettings(publicBaseUrl, backstopIntervalMinutes);
+        if (validated is Result<WebhookPublicBaseUrl>.Failure failure)
         {
-            return SettingsErrors.InvalidBackstopInterval(backstopIntervalMinutes);
+            return failure.Error;
         }
 
-        WebhookPublicBaseUrl? url = null;
-        if (!string.IsNullOrWhiteSpace(publicBaseUrl))
-        {
-            switch (ValueObjects.WebhookPublicBaseUrl.Create(publicBaseUrl))
-            {
-                case Result<WebhookPublicBaseUrl>.Failure failure:
-                    return failure.Error;
-                case Result<WebhookPublicBaseUrl>.Success success:
-                    url = success.Value;
-                    break;
-            }
-        }
-
-        WebhookPublicBaseUrl = url;
+        WebhookPublicBaseUrl = ((Result<WebhookPublicBaseUrl>.Success)validated).Value;
         BackstopIntervalMinutes = backstopIntervalMinutes;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
+    }
+
+    /// <summary>
+    /// Checks webhook settings without applying them, returning the URL they would store, so a caller can
+    /// verify that URL before <see cref="UpdateWebhookSettings"/> changes anything.
+    /// </summary>
+    public static Result<WebhookPublicBaseUrl> ValidateWebhookSettings(string? publicBaseUrl, int backstopIntervalMinutes)
+    {
+        if (backstopIntervalMinutes < MinBackstopIntervalMinutes || backstopIntervalMinutes > MaxBackstopIntervalMinutes)
+        {
+            return Result<WebhookPublicBaseUrl>.Fail(SettingsErrors.InvalidBackstopInterval(backstopIntervalMinutes));
+        }
+
+        if (string.IsNullOrWhiteSpace(publicBaseUrl))
+        {
+            return Result<WebhookPublicBaseUrl>.Fail(SettingsErrors.WebhookPublicBaseUrlRequired);
+        }
+
+        return ValueObjects.WebhookPublicBaseUrl.Create(publicBaseUrl);
     }
 
     public bool UpdateWorkerImageConfiguration(WorkerImageConfiguration config)

@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateWorkerLimitsTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -55,7 +57,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerLimits.Handler sut = new(dbContext);
+        UpdateWorkerLimits.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateWorkerLimits.Command command = new(5, 60);
 
         // Act
@@ -84,7 +86,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateWorkerLimits.Handler sut = new(dbContext);
+            UpdateWorkerLimits.Handler sut = new(dbContext, new StubWebhookIngressProbe());
             UpdateWorkerLimits.Command command = new(8, 240);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -104,7 +106,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerLimits.Handler sut = new(dbContext);
+        UpdateWorkerLimits.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateWorkerLimits.Command command = new(5, 60);
 
         // Act
@@ -130,7 +132,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerLimits.Handler sut = new(dbContext);
+        UpdateWorkerLimits.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateWorkerLimits.Command command = new(MaxConcurrent: 0, TimeoutMinutes: 60);
 
         // Act

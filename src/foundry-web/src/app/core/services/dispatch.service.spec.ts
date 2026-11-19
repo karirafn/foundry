@@ -27,6 +27,7 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     pidsLimit: 512,
     additionalDenyRules: [],
     pausedHosts: [],
+    webhookPort: 5099,
     ...overrides,
   };
 }

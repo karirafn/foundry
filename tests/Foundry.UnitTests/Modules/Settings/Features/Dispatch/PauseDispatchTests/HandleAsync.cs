@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.Dispatch.PauseDispatchTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -55,7 +57,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        PauseDispatch.Handler sut = new(dbContext);
+        PauseDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         PauseDispatch.Command command = new();
 
         // Act
@@ -82,7 +84,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            PauseDispatch.Handler sut = new(dbContext);
+            PauseDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe());
             PauseDispatch.Command command = new();
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -100,7 +102,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        PauseDispatch.Handler sut = new(dbContext);
+        PauseDispatch.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         PauseDispatch.Command command = new();
 
         // Act

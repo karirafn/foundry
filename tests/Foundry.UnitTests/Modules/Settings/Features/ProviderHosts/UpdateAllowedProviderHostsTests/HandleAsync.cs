@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.ProviderHosts.UpdateAllowedProviderHostsTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -55,7 +57,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAllowedProviderHosts.Handler sut = new(dbContext);
+        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateAllowedProviderHosts.Command command = new(["github.com", "gitlab.com"]);
 
         // Act
@@ -82,7 +84,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateAllowedProviderHosts.Handler sut = new(dbContext);
+            UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
             UpdateAllowedProviderHosts.Command command = new(["git.example.com"]);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -100,7 +102,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAllowedProviderHosts.Handler sut = new(dbContext);
+        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateAllowedProviderHosts.Command command = new(["github.com"]);
 
         // Act
@@ -126,7 +128,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAllowedProviderHosts.Handler sut = new(dbContext);
+        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateAllowedProviderHosts.Command command = new(["https://github.com"]);
 
         // Act

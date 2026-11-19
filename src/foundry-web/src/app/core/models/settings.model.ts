@@ -101,6 +101,8 @@ export interface GlobalSettingsResponse {
   pidsLimit: number;
   additionalDenyRules: string[];
   pausedHosts: PausedHost[];
+  /** The port Foundry serves /webhooks/* on, always bound (ADR 0116). */
+  webhookPort: number;
   /** Public https base URL the operator's tunnel forwards to the webhook port (ADR 0085). */
   webhookPublicBaseUrl?: string | null;
   /** Poll interval for repositories whose webhook is active. */

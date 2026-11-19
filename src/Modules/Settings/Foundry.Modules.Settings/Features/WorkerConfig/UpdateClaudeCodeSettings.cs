@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
@@ -16,7 +17,7 @@ internal static class UpdateClaudeCodeSettings
 {
     internal sealed record Command(IReadOnlyList<string> AdditionalDenyRules) : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext)
+    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
@@ -47,7 +48,7 @@ internal static class UpdateClaudeCodeSettings
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

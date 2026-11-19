@@ -1,16 +1,22 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
   Signal,
   WritableSignal,
+  afterNextRender,
   computed,
   effect,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
 import { UnsavedChanges } from '../guards/unsaved-changes.guard';
+import { WebhookExposeGuideComponent } from './webhook-expose-guide/webhook-expose-guide';
+import { validateWebhookPublicBaseUrl, webhookUrlClientErrorMessage, webhookUrlHost } from './webhook-url';
 
 const MAX_CONCURRENT_MIN = 1;
 const MAX_CONCURRENT_MAX = 20;
@@ -25,27 +31,13 @@ const BACKSTOP_INTERVAL_DEFAULT = 15;
 const REMINDER_DELAY_MIN = 1;
 const REMINDER_DELAY_MAX = 8760;
 const REMINDER_DELAY_DEFAULT = 72;
-const WEBHOOK_URL_ERROR_CODE = 'Settings.InvalidWebhookPublicBaseUrl';
+const WEBHOOK_URL_ERROR_CODES: readonly string[] = ['Settings.InvalidWebhookPublicBaseUrl', 'Settings.WebhookPublicBaseUrlUnreachable'];
 const BACKSTOP_ERROR_CODE = 'Settings.InvalidBackstopInterval';
-
-/** Client-side mirror of the server rule: optional, otherwise an absolute https URL without query or fragment. */
-export function isValidWebhookPublicBaseUrl(value: string): boolean {
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    return true;
-  }
-  try {
-    const url = new URL(trimmed);
-    return url.protocol === 'https:' && url.search === '' && url.hash === '' && url.username === '' && url.password === '';
-  } catch {
-    return false;
-  }
-}
 
 @Component({
   selector: 'fd-settings-dispatch',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, WebhookExposeGuideComponent],
   template: `
     <div class="general-settings">
       <section class="general-settings__section">
@@ -170,26 +162,41 @@ export function isValidWebhookPublicBaseUrl(value: string): boolean {
       <section class="general-settings__section">
         <h2 class="general-settings__section-title">Webhooks</h2>
         <p class="general-settings__section-description">
-          GitHub webhooks nudge polling so changes show up within seconds. Repositories whose webhook is active poll
-          only at the backstop interval. Webhooks also need the host's <code>Webhooks:Port</code> setting; expose that
-          port through a tunnel or reverse proxy at the public base URL below.
+          GitHub and GitLab send webhook deliveries so Foundry reacts within seconds. Repositories whose webhook is
+          active poll only at the backstop interval.
         </p>
 
-        <div class="general-settings__dispatch-form">
+        <div class="general-settings__dispatch-form" [attr.aria-busy]="settingsService.savingWebhooks() ? 'true' : null">
+          @if (_webhookPort(); as port) {
+            <div class="general-settings__webhook-port">
+              <span class="general-settings__field-label" id="webhook-port-label">Webhook port</span>
+              <code class="general-settings__readonly-value" aria-labelledby="webhook-port-label">{{ port }}</code>
+              <span class="general-settings__field-hint">Foundry serves /webhooks/* on this port over plain HTTP. Expose it through a tunnel or reverse proxy that terminates TLS, at the public base URL below. Set by Webhooks:Port in the host configuration.</span>
+            </div>
+
+            <details class="general-settings__disclosure">
+              <summary>Tunnel and proxy examples</summary>
+              <fd-webhook-expose-guide [port]="port" />
+            </details>
+          }
+
           <div class="general-settings__field">
             <label class="general-settings__field-label" for="webhookPublicBaseUrl">Webhook public base URL</label>
             <input
+              #webhookUrlInput
               class="general-settings__text-input"
               type="url"
               id="webhookPublicBaseUrl"
               placeholder="https://hooks.example.com"
+              [readonly]="settingsService.savingWebhooks()"
               [ngModel]="_webhookUrlValue()"
               (ngModelChange)="_webhookUrlValue.set($event)"
-              aria-describedby="webhook-url-hint webhook-url-error"
-              [attr.aria-invalid]="_webhookUrlError() ? true : null"
+              aria-describedby="webhook-url-hint webhook-url-error webhook-url-verify-error"
+              [attr.aria-invalid]="_webhookUrlError() || _webhookUrlVerifyError() ? true : null"
             />
-            <span id="webhook-url-hint" class="general-settings__field-hint">Optional. An absolute https URL; leave empty to turn webhooks off.</span>
+            <span id="webhook-url-hint" class="general-settings__field-hint">The public https address your tunnel or proxy serves, without /webhooks — for example https://hooks.example.com. Changing it re-checks the address and re-points every registered webhook.</span>
             <span id="webhook-url-error" class="general-settings__field-error" role="alert">{{ _webhookUrlError() ?? '' }}</span>
+            <span id="webhook-url-verify-error" class="general-settings__field-error">{{ _webhookUrlVerifyError() ?? '' }}</span>
           </div>
 
           <div class="general-settings__field">
@@ -210,16 +217,19 @@ export function isValidWebhookPublicBaseUrl(value: string): boolean {
             <span id="backstop-error" class="general-settings__field-error" role="alert">{{ _backstopError() ?? '' }}</span>
           </div>
 
+          <div id="webhooks-probe-status" role="status" class="general-settings__probe-status">{{ _webhooksProbeStatus() }}</div>
+
           <div id="webhooks-error" role="alert" class="general-settings__save-error">{{ _webhooksGeneralError() ?? '' }}</div>
 
-          <div role="status" class="general-settings__save-success">{{ settingsService.saveWebhooksSuccess() ? 'Webhook settings saved successfully' : '' }}</div>
+          <div role="status" class="general-settings__save-success">{{ _webhooksSuccessMessage() }}</div>
 
           <button
             class="general-settings__save-btn"
             type="button"
-            [disabled]="settingsService.savingWebhooks() || !isWebhooksFormValid()"
+            [disabled]="!settingsService.savingWebhooks() && !isWebhooksFormValid()"
+            [attr.aria-disabled]="settingsService.savingWebhooks() ? 'true' : null"
             (click)="saveWebhooks()"
-          >{{ settingsService.savingWebhooks() ? 'Saving...' : 'Save' }}</button>
+          >{{ _webhooksSaveLabel() }}</button>
         </div>
       </section>
 
@@ -310,14 +320,58 @@ export class SettingsDispatchComponent implements UnsavedChanges {
     return this._reminderDelayValue() !== (saved.awaitingInputReminderDelayHours ?? REMINDER_DELAY_DEFAULT);
   });
 
-  /** Field-keyed error for the URL: client-side rule first, then the server's keyed error code. */
+  private readonly _injector = inject(Injector);
+  private readonly _webhookUrlInput = viewChild<ElementRef<HTMLInputElement>>('webhookUrlInput');
+
+  /** The URL and whether it differed from the stored one, as last submitted; null before the first save. */
+  private readonly _webhooksSubmission: WritableSignal<{ url: string; urlChanged: boolean } | null> = signal(null);
+
+  protected readonly _webhookPort: Signal<number | null> = computed(() => this.settingsService.settings()?.webhookPort ?? null);
+
+  private readonly _webhookUrlChanged: Signal<boolean> = computed(
+    () => this._webhookUrlValue().trim() !== (this.settingsService.settings()?.webhookPublicBaseUrl ?? ''),
+  );
+
+  /** The client-side shape error for the URL; host rules and reachability are the server's. */
   protected readonly _webhookUrlError: Signal<string | null> = computed(() => {
-    if (!isValidWebhookPublicBaseUrl(this._webhookUrlValue())) {
-      return 'Must be an absolute https URL without query or fragment';
+    const kind = validateWebhookPublicBaseUrl(this._webhookUrlValue());
+    return kind === null ? null : webhookUrlClientErrorMessage(kind);
+  });
+
+  /** The server's URL error, shown only while the input still holds the URL it was about. */
+  protected readonly _webhookUrlVerifyError: Signal<string | null> = computed(() => {
+    const submission = this._webhooksSubmission();
+    if (
+      submission === null ||
+      !WEBHOOK_URL_ERROR_CODES.includes(this.settingsService.saveWebhooksErrorCode() ?? '') ||
+      this._webhookUrlValue().trim() !== submission.url
+    ) {
+      return null;
     }
-    return this.settingsService.saveWebhooksErrorCode() === WEBHOOK_URL_ERROR_CODE
-      ? this.settingsService.saveWebhooksError()
-      : null;
+    return this.settingsService.saveWebhooksError();
+  });
+
+  protected readonly _webhooksProbeStatus: Signal<string> = computed(() => {
+    const submission = this._webhooksSubmission();
+    return this.settingsService.savingWebhooks() && submission?.urlChanged
+      ? `Checking that ${webhookUrlHost(submission.url)} reaches this Foundry. This can take up to 10 seconds.`
+      : '';
+  });
+
+  protected readonly _webhooksSuccessMessage: Signal<string> = computed(() => {
+    if (!this.settingsService.saveWebhooksSuccess()) {
+      return '';
+    }
+    return this._webhooksSubmission()?.urlChanged
+      ? 'Webhook URL verified and saved. Registered webhooks are being re-pointed to it.'
+      : 'Webhook settings saved successfully';
+  });
+
+  protected readonly _webhooksSaveLabel: Signal<string> = computed(() => {
+    if (this.settingsService.savingWebhooks()) {
+      return this._webhooksSubmission()?.urlChanged ? 'Verifying…' : 'Saving…';
+    }
+    return this._webhookUrlChanged() ? 'Verify and save' : 'Save';
   });
 
   protected readonly _backstopError: Signal<string | null> = computed(() => {
@@ -333,7 +387,7 @@ export class SettingsDispatchComponent implements UnsavedChanges {
   /** A save error not keyed to either field. */
   protected readonly _webhooksGeneralError: Signal<string | null> = computed(() => {
     const code = this.settingsService.saveWebhooksErrorCode();
-    return code === WEBHOOK_URL_ERROR_CODE || code === BACKSTOP_ERROR_CODE
+    return (code !== null && WEBHOOK_URL_ERROR_CODES.includes(code)) || code === BACKSTOP_ERROR_CODE
       ? null
       : this.settingsService.saveWebhooksError();
   });
@@ -401,6 +455,17 @@ export class SettingsDispatchComponent implements UnsavedChanges {
       }
     });
 
+    // A server URL error is announced by moving focus to the field; its message span is not a live region.
+    effect(() => {
+      const failedOnUrl =
+        this._webhooksSubmission() !== null &&
+        !this.settingsService.savingWebhooks() &&
+        WEBHOOK_URL_ERROR_CODES.includes(this.settingsService.saveWebhooksErrorCode() ?? '');
+      if (failedOnUrl) {
+        afterNextRender(() => this._webhookUrlInput()?.nativeElement.focus(), { injector: this._injector });
+      }
+    });
+
     effect(() => {
       const settings = this.settingsService.settings();
       if (settings !== null && !this._awaitingInputInitialized) {
@@ -441,15 +506,19 @@ export class SettingsDispatchComponent implements UnsavedChanges {
   isWebhooksFormValid(): boolean {
     const backstop = this._backstopValue();
     return (
-      isValidWebhookPublicBaseUrl(this._webhookUrlValue()) &&
+      validateWebhookPublicBaseUrl(this._webhookUrlValue()) === null &&
       backstop >= BACKSTOP_INTERVAL_MIN &&
       backstop <= BACKSTOP_INTERVAL_MAX
     );
   }
 
   saveWebhooks(): void {
+    if (this.settingsService.savingWebhooks() || !this.isWebhooksFormValid()) {
+      return;
+    }
     const url = this._webhookUrlValue().trim();
-    this.settingsService.updateWebhookSettings(url === '' ? null : url, this._backstopValue());
+    this._webhooksSubmission.set({ url, urlChanged: this._webhookUrlChanged() });
+    this.settingsService.updateWebhookSettings(url, this._backstopValue());
   }
 
   saveAwaitingInput(): void {

@@ -6,7 +6,7 @@ namespace Foundry.Modules.Settings.Features;
 
 internal static class GlobalSettingsMapper
 {
-    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings)
+    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings, int webhookPort)
     {
         // Capture the failed state once; derive both status and failure fields from a single pattern.
         ImageBuildState.Failed? failedState = settings.ImageBuildState as ImageBuildState.Failed;
@@ -39,6 +39,7 @@ internal static class GlobalSettingsMapper
             settings.WorkerResourceLimits.PidsLimit,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
             [.. settings.HostPauses.Select(HostPauseMapper.ToPausedHost)],
+            webhookPort,
             settings.WebhookPublicBaseUrl?.Value,
             settings.BackstopIntervalMinutes,
             settings.AwaitingInputReminderDelayHours);

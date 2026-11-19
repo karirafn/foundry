@@ -14,6 +14,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateNestedDockerTests;
 
 /// <summary>
@@ -72,7 +74,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         await using AsyncServiceScope scope = _serviceProvider.CreateAsyncScope();
         FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-        UpdateNestedDocker.Handler sut = new(dbContext);
+        UpdateNestedDocker.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         return await sut.HandleAsync(new UpdateNestedDocker.Command(enabled), TestContext.Current.CancellationToken);
     }

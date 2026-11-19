@@ -1,0 +1,48 @@
+@use '../../../../../styles/breakpoints' as *;
+
+:host {
+  display: block;
+}
+
+.webhook-expose-guide__list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  margin: 0;
+  font-size: 0.8125rem;
+
+  @media (min-width: $compact-breakpoint) {
+    grid-template-columns: max-content 1fr;
+    align-items: baseline;
+  }
+
+  dt {
+    color: var(--fd-text-secondary);
+    font-weight: 500;
+  }
+
+  dd {
+    margin: 0;
+
+    @media (max-width: #{$compact-breakpoint - 1px}) {
+      margin-block-end: var(--fd-spacing-sm);
+    }
+  }
+
+  code {
+    font-family: var(--fd-font-mono);
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    padding: 2px var(--fd-spacing-xs);
+    color: var(--fd-text-primary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.webhook-expose-guide__note {
+  margin: var(--fd-spacing-xs) 0 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+}

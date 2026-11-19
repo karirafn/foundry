@@ -10,6 +10,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsQueriesTests;
 
 public sealed class GetImageBuildStatusAsync : IAsyncDisposable
@@ -43,7 +45,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         ImageBuildStatus result = await sut.GetImageBuildStatusAsync(TestContext.Current.CancellationToken);
@@ -65,7 +67,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         ImageBuildStatus result = await sut.GetImageBuildStatusAsync(TestContext.Current.CancellationToken);
@@ -88,7 +90,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         ImageBuildStatus result = await sut.GetImageBuildStatusAsync(TestContext.Current.CancellationToken);

@@ -10,6 +10,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsQueriesTests;
 
 public sealed class GetWorkerImageTagAsync : IAsyncDisposable
@@ -55,7 +57,7 @@ public sealed class GetWorkerImageTagAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         string result = await sut.GetWorkerImageTagAsync(TestContext.Current.CancellationToken);
@@ -69,7 +71,7 @@ public sealed class GetWorkerImageTagAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         string result = await sut.GetWorkerImageTagAsync(TestContext.Current.CancellationToken);

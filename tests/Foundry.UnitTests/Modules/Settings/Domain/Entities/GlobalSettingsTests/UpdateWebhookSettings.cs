@@ -39,18 +39,21 @@ public sealed class UpdateWebhookSettings
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void WhenUrlBlank_ClearsUrl(string? url)
+    public void WhenUrlBlank_RejectsAndKeepsStoredUrl(string? url)
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
         settings.UpdateWebhookSettings("https://hooks.example.com", 15);
 
         // Act
-        Result result = settings.UpdateWebhookSettings(url, 15);
+        Result result = settings.UpdateWebhookSettings(url, 20);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        settings.WebhookPublicBaseUrl.ShouldBeNull();
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("Settings.InvalidWebhookPublicBaseUrl");
+        failure.Error.Message.ShouldBe("Enter the public https URL your tunnel or proxy serves.");
+        settings.WebhookPublicBaseUrl?.Value.ShouldBe("https://hooks.example.com");
+        settings.BackstopIntervalMinutes.ShouldBe(15);
     }
 
     [Fact]
@@ -77,7 +80,7 @@ public sealed class UpdateWebhookSettings
         GlobalSettings settings = GlobalSettings.Create();
 
         // Act
-        Result result = settings.UpdateWebhookSettings(null, minutes);
+        Result result = settings.UpdateWebhookSettings("https://hooks.example.com", minutes);
 
         // Assert
         Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
