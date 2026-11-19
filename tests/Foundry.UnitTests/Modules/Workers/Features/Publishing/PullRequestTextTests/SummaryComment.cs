@@ -41,4 +41,27 @@ public sealed class SummaryComment
         // Assert
         comment.ShouldBe(PullRequestText.NoChangesListedSentence);
     }
+
+    [Fact]
+    public void WhenTheDescriptionMentionsSomeoneOrHoldsHtml_BothAreNeutralizedAndMarkdownIsKept()
+    {
+        // Arrange
+        PullRequestDescription description = PullRequestDescription.TryCreate("## Changes\n\n- asks @alice\n- closes </details>")!;
+
+        // Act
+        string comment = PullRequestText.SummaryComment(description, [], [], []);
+
+        // Assert
+        comment.ShouldBe("## Changes\n\n- asks @\u200Balice\n- closes &lt;/details&gt;");
+    }
+
+    [Fact]
+    public void WhenACommitSubjectMentionsSomeoneOrHoldsHtml_BothAreNeutralized()
+    {
+        // Act
+        string comment = PullRequestText.SummaryComment(null, ["fix: thank @alice", "# <img src=x>"], [], []);
+
+        // Assert
+        comment.ShouldBe("## Changes\n\n- fix: thank @\u200Balice\n- \\# &lt;img src=x&gt;");
+    }
 }

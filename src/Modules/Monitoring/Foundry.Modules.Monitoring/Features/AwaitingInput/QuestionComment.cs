@@ -2,6 +2,7 @@ using System.Text;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared.Markdown;
 
 namespace Foundry.Modules.Monitoring.Features.AwaitingInput;
 
@@ -24,16 +25,16 @@ internal static class QuestionComment
         for (int i = 0; i < questions.Count; i++)
         {
             InputQuestion question = questions[i];
-            body.Append(i + 1).Append(". **").Append(question.Question.Trim()).AppendLine("**");
+            body.Append(i + 1).Append(". **").Append(ModelMarkdown.Inline(question.Question.Trim())).AppendLine("**");
 
             if (!string.IsNullOrWhiteSpace(question.Context))
             {
-                body.Append("   ").AppendLine(question.Context.Trim().ReplaceLineEndings(" "));
+                body.Append("   ").AppendLine(ModelMarkdown.Inline(question.Context.Trim().ReplaceLineEndings(" ")));
             }
 
             if (!string.IsNullOrWhiteSpace(question.Recommendation))
             {
-                body.Append("   **Recommended:** ").AppendLine(question.Recommendation.Trim().ReplaceLineEndings(" "));
+                body.Append("   **Recommended:** ").AppendLine(ModelMarkdown.Inline(question.Recommendation.Trim().ReplaceLineEndings(" ")));
             }
         }
 
