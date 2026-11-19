@@ -456,6 +456,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
         // Assert
         provider.GetIssuesCallCount.ShouldBe(1);
         provider.UpsertWebhookCallCount.ShouldBe(0);
+        provider.TestWebhookCallCount.ShouldBe(0);
     }
 
     [Fact]
@@ -473,6 +474,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
 
         // Assert
         provider.UpsertWebhookCallCount.ShouldBe(1);
+        provider.TestWebhookCallCount.ShouldBe(1);
         MonitoredRepository repo = await LoadAsync(repoId);
         repo.WebhookSpecStamp.ShouldBe(CurrentStamp);
         repo.WebhookStatus.ShouldBe(WebhookStatus.Pending);

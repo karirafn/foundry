@@ -1,9 +1,13 @@
+import { Subject } from 'rxjs';
+import { vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { RepositoryWebhookComponent } from './repository-webhook';
 import { RepositoryWebhookInfo } from '../repository.model';
+import { RepositoryService, RepositoryWebhookUpdate } from '../repository.service';
+import { SystemSignalRService } from '../../../../core/services/system-signalr.service';
 
 const ACCOUNT_ID = '00000000-0000-0000-0000-000000000001';
 const REPO_ID = '00000000-0000-0000-0000-000000000010';
@@ -27,10 +31,23 @@ const GITLAB_NOT_REGISTERED: RepositoryWebhookInfo = {
   provider: 'gitlab',
 };
 
-function setup(info: RepositoryWebhookInfo) {
+function setup(info: RepositoryWebhookInfo | 'load-error') {
+  const webhookUpdates = new Subject<RepositoryWebhookUpdate>();
   TestBed.configureTestingModule({
     imports: [RepositoryWebhookComponent],
-    providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    providers: [
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      provideRouter([]),
+      {
+        provide: SystemSignalRService,
+        useValue: { reconnected: new Subject<void>(), repositoryWebhookChanged: new Subject(), repositoryWebhooksChanged: new Subject<void>() },
+      },
+      {
+        provide: RepositoryService,
+        useFactory: () => Object.assign(new RepositoryService(), { webhookUpdates: webhookUpdates.asObservable() }),
+      },
+    ],
   });
 
   const fixture = TestBed.createComponent(RepositoryWebhookComponent);
@@ -39,11 +56,15 @@ function setup(info: RepositoryWebhookInfo) {
   const httpMock = TestBed.inject(HttpTestingController);
 
   fixture.detectChanges();
-  httpMock.expectOne(BASE).flush(info);
+  if (info === 'load-error') {
+    httpMock.expectOne(BASE).flush('boom', { status: 500, statusText: 'Server Error' });
+  } else {
+    httpMock.expectOne(BASE).flush(info);
+  }
   fixture.detectChanges();
 
   const el = fixture.nativeElement as HTMLElement;
-  return { fixture, httpMock, el };
+  return { fixture, httpMock, el, webhookUpdates };
 }
 
 describe('RepositoryWebhookComponent', () => {
@@ -275,5 +296,128 @@ describe('RepositoryWebhookComponent', () => {
 
     // Assert
     expect(registerButton(el)).toBeUndefined();
+  });
+
+  describe('live updates', () => {
+    const PENDING: RepositoryWebhookInfo = { ...NOT_REGISTERED, status: 'pending' };
+    const ACTIVE: RepositoryWebhookInfo = { ...NOT_REGISTERED, status: 'active' };
+
+    function announcement(el: HTMLElement): string {
+      return el.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? '';
+    }
+
+    function statusText(el: HTMLElement): string | undefined {
+      return el.querySelector('.repository-webhook__status-value')?.textContent?.trim();
+    }
+
+    it('renders a re-fetched status for this repository and announces the change', () => {
+      const { fixture, el, webhookUpdates } = setup(PENDING);
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: REPO_ID, info: ACTIVE });
+      fixture.detectChanges();
+
+      expect(statusText(el)).toBe('Active');
+      expect(announcement(el)).toBe('Webhook status changed to Active');
+    });
+
+    it('leaves the announcement empty on first load', () => {
+      const { el } = setup(PENDING);
+
+      expect(announcement(el)).toBe('');
+    });
+
+    it('does not announce an update that keeps the status', () => {
+      const { fixture, el, webhookUpdates } = setup(PENDING);
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: REPO_ID, info: PENDING });
+      fixture.detectChanges();
+
+      expect(announcement(el)).toBe('');
+    });
+
+    it('ignores an update for another repository', () => {
+      const { fixture, el, webhookUpdates } = setup(PENDING);
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: 'other', info: ACTIVE });
+      fixture.detectChanges();
+
+      expect(statusText(el)).toBe('Waiting for first delivery');
+    });
+
+    it('keeps the revealed secret when a live update arrives', () => {
+      const { fixture, httpMock, el, webhookUpdates } = setup(NOT_REGISTERED);
+      Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('Reveal secret'))!.click();
+      httpMock.expectOne(`${BASE}/secret`).flush({ secret: 's3cr3t' });
+      fixture.detectChanges();
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: REPO_ID, info: { ...NOT_REGISTERED, status: 'silent' } });
+      fixture.detectChanges();
+
+      expect(el.querySelector('.repository-webhook__secret')?.textContent?.trim()).toBe('s3cr3t');
+    });
+
+    it('re-fetches its own webhook when every repository changed', () => {
+      const { fixture, httpMock, el, webhookUpdates } = setup(PENDING);
+
+      webhookUpdates.next({ kind: 'all' });
+      httpMock.expectOne(BASE).flush(ACTIVE);
+      fixture.detectChanges();
+
+      expect(statusText(el)).toBe('Active');
+    });
+
+    it('keeps the last known details without a message when a re-fetch fails', () => {
+      const { fixture, httpMock, el, webhookUpdates } = setup(PENDING);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      webhookUpdates.next({ kind: 'all' });
+      httpMock.expectOne(BASE).flush('boom', { status: 500, statusText: 'Server Error' });
+      fixture.detectChanges();
+
+      expect(statusText(el)).toBe('Waiting for first delivery');
+      expect(el.querySelector('[role="alert"]')?.textContent?.trim()).toBe('');
+      consoleError.mockRestore();
+    });
+
+    it('clears a load error when a live update brings the details', () => {
+      const { fixture, el, webhookUpdates } = setup('load-error');
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: REPO_ID, info: ACTIVE });
+      fixture.detectChanges();
+
+      expect(el.textContent).not.toContain("Couldn't load the webhook details.");
+      expect(statusText(el)).toBe('Active');
+    });
+
+    it('moves focus to the heading when the focused control disappears', async () => {
+      const { fixture, el, webhookUpdates } = setup(NOT_REGISTERED);
+      document.body.appendChild(el);
+      const marked = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes("I've added the webhook"))!;
+      marked.focus();
+      expect(document.activeElement).toBe(marked);
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: REPO_ID, info: ACTIVE });
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(document.activeElement).toBe(el.querySelector('#repository-webhook-heading'));
+      el.remove();
+    });
+
+    it('leaves focus alone when it was outside the panel', async () => {
+      const { fixture, el, webhookUpdates } = setup(NOT_REGISTERED);
+      document.body.appendChild(el);
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+
+      webhookUpdates.next({ kind: 'repository', repositoryId: REPO_ID, info: ACTIVE });
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
+      el.remove();
+    });
   });
 });

@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
@@ -28,7 +29,8 @@ internal static class CreateRepository
         int? MaxConcurrentWorkers = null,
         bool ApplyBranchRules = true,
         bool RebaseAfterRun = true,
-        bool MergeWhenChecksPass = false) : ICommand<CreateRepositoryResponse>;
+        bool MergeWhenChecksPass = false,
+        bool ReviewPullRequests = true) : ICommand<CreateRepositoryResponse>;
 
     internal sealed class Validator : ICommandValidator<Command>
     {
@@ -56,6 +58,24 @@ internal static class CreateRepository
         // index name on unique-constraint violations, so both forms must be checked.
         private const string SlugIndexName = "ix_monitored_repositories_host_slug";
         private const string SlugColumnReference = "monitored_repositories.slug";
+
+        private static Result<MonitoredRepository> RestoreRemoved(
+            MonitoredRepository removed,
+            TimeSpan? pollInterval,
+            int position,
+            int maxConcurrentWorkers,
+            Command command) =>
+            removed.Restore(
+                    pollInterval,
+                    position,
+                    maxConcurrentWorkers,
+                    command.ApplyBranchRules,
+                    command.RebaseAfterRun,
+                    command.MergeWhenChecksPass,
+                    command.ReviewPullRequests)
+                .Match(
+                    () => Result<MonitoredRepository>.Ok(removed),
+                    Result<MonitoredRepository>.Fail);
 
         private static bool IsSlugConstraintViolation(DbUpdateException ex, RepositorySlug slug)
         {
@@ -104,15 +124,25 @@ internal static class CreateRepository
 
             int maxConcurrentWorkers = command.MaxConcurrentWorkers ?? MonitoredRepository.DefaultMaxConcurrentWorkers;
 
-            Result<MonitoredRepository> createResult = MonitoredRepository.Create(
-                repositorySlug,
-                credential.BaseUrl.Value.Host,
-                pollInterval,
-                position,
-                maxConcurrentWorkers,
-                command.ApplyBranchRules,
-                command.RebaseAfterRun,
-                command.MergeWhenChecksPass);
+            string host = credential.BaseUrl.Value.Host;
+
+            // A removed repository keeps its row and its (Host, Slug) unique key, so adding it again restores it.
+            MonitoredRepository? removed = await dbContext.Set<MonitoredRepository>()
+                .IgnoreQueryFilters([MonitoredRepositoryConfiguration.RemovedRepositoryFilter])
+                .FirstOrDefaultAsync(r => r.Host == host && r.Slug == repositorySlug && r.RemovedAt != null, cancellationToken);
+
+            Result<MonitoredRepository> createResult = removed is null
+                ? MonitoredRepository.Create(
+                    repositorySlug,
+                    host,
+                    pollInterval,
+                    position,
+                    maxConcurrentWorkers,
+                    command.ApplyBranchRules,
+                    command.RebaseAfterRun,
+                    command.MergeWhenChecksPass,
+                    command.ReviewPullRequests)
+                : RestoreRemoved(removed, pollInterval, position, maxConcurrentWorkers, command);
 
             if (createResult is Result<MonitoredRepository>.Failure createFailure)
             {
@@ -121,7 +151,10 @@ internal static class CreateRepository
 
             MonitoredRepository repository = ((Result<MonitoredRepository>.Success)createResult).Value;
 
-            dbContext.Set<MonitoredRepository>().Add(repository);
+            if (removed is null)
+            {
+                dbContext.Set<MonitoredRepository>().Add(repository);
+            }
 
             try
             {
@@ -187,7 +220,8 @@ internal static class CreateRepository
             int? MaxConcurrentWorkers = null,
             bool? ApplyBranchRules = null,
             bool? RebaseAfterRun = null,
-            bool? MergeWhenChecksPass = null);
+            bool? MergeWhenChecksPass = null,
+            bool? ReviewPullRequests = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -204,7 +238,8 @@ internal static class CreateRepository
                         body.MaxConcurrentWorkers,
                         body.ApplyBranchRules ?? true,
                         body.RebaseAfterRun ?? true,
-                        body.MergeWhenChecksPass ?? false);
+                        body.MergeWhenChecksPass ?? false,
+                        body.ReviewPullRequests ?? true);
                     Result<CreateRepositoryResponse> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Created<CreateRepositoryResponse>, ProblemHttpResult>>(

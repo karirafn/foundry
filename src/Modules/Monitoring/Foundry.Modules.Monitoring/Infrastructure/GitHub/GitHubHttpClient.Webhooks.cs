@@ -34,7 +34,7 @@ internal sealed partial class GitHubHttpClient
     /// A failed delete of a duplicate is logged and does not fail the upsert: the duplicate only
     /// receives deliveries the endpoint already verifies and coalesces.
     /// </remarks>
-    public async Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+    public async Task<Result<WebhookUpsert>> UpsertWebhookAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         WebhookHookSpec spec,
@@ -43,7 +43,7 @@ internal sealed partial class GitHubHttpClient
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<WebhookUpsertKind>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<WebhookUpsert>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         string owner = Uri.EscapeDataString(slug.Owner);
@@ -54,7 +54,7 @@ internal sealed partial class GitHubHttpClient
         Result<List<GitHubHookDto>> listed = await ListHooksAsync(baseUri, owner, repo, slug, token, RegisteringAction, cancellationToken);
         if (listed is not Result<List<GitHubHookDto>>.Success { Value: { } hooks })
         {
-            return Result<WebhookUpsertKind>.Fail(((Result<List<GitHubHookDto>>.Failure)listed).Error);
+            return Result<WebhookUpsert>.Fail(((Result<List<GitHubHookDto>>.Failure)listed).Error);
         }
 
         List<GitHubHookDto> matches = [.. hooks.Where(h => spec.Matches(h.Config?.Url))];
@@ -78,11 +78,17 @@ internal sealed partial class GitHubHttpClient
 
         if (!writeResponse.IsSuccessStatusCode)
         {
-            return Result<WebhookUpsertKind>.Fail(
+            return Result<WebhookUpsert>.Fail(
                 await ErrorFromWebhookFailureAsync(writeResponse, slug, RegisteringAction, cancellationToken));
         }
 
         RecordRestHeadroom(writeResponse);
+
+        if ((existing?.Id ?? await ReadCreatedHookIdAsync(writeResponse, cancellationToken)) is not { } providerHookId)
+        {
+            return Result<WebhookUpsert>.Fail(
+                GitHubErrors.ProviderError($"{RegisteringAction} on {slug} returned no hook id."));
+        }
 
         foreach (GitHubHookDto duplicate in matches.Where(h => h.Id != existing?.Id))
         {
@@ -97,7 +103,7 @@ internal sealed partial class GitHubHttpClient
             }
         }
 
-        return Result<WebhookUpsertKind>.Ok(kind);
+        return Result<WebhookUpsert>.Ok(new WebhookUpsert(kind, providerHookId));
     }
 
     /// <summary>
@@ -141,9 +147,56 @@ internal sealed partial class GitHubHttpClient
         return Result<int>.Ok(deletedCount);
     }
 
+    /// <summary>
+    /// Asks GitHub to send a <c>ping</c> delivery to the hook (<c>POST /repos/{owner}/{repo}/hooks/{hook_id}/pings</c>,
+    /// 204 on success).
+    /// </summary>
+    public async Task<Result> TestWebhookAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        long providerHookId,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        Uri pingUri = new(EnsureTrailingSlash(apiBaseUrl), $"repos/{owner}/{repo}/hooks/{providerHookId}/pings");
+
+        using HttpRequestMessage request = CreateRulesetRequest(HttpMethod.Post, pingUri, token);
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result.Fail(await ErrorFromWebhookFailureAsync(response, slug, TestingAction, cancellationToken));
+        }
+
+        RecordRestHeadroom(response);
+        return Result.Ok();
+    }
+
     private const string RegisteringAction = "Registering the webhook";
 
     private const string DeletingAction = "Deleting the webhooks";
+
+    private const string TestingAction = "Sending a test delivery to the webhook";
+
+    private static async Task<long?> ReadCreatedHookIdAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        try
+        {
+            return JsonSerializer.Deserialize<GitHubHookDto>(body, JsonOptions) is { Id: > 0 } created ? created.Id : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static Uri HookUri(Uri baseUri, string owner, string repo, long hookId) =>
         new(baseUri, $"repos/{owner}/{repo}/hooks/{hookId}");

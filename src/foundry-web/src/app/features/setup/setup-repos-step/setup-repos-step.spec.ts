@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { provideFakeHubs } from '../../../core/testing/fake-hub-transport';
 import { SetupReposStepComponent } from './setup-repos-step';
 import {
   AvailableRepository,
@@ -34,6 +35,7 @@ function createdResponse(
       maxConcurrentWorkers: 1,
       rebaseAfterRun: true,
       mergeWhenChecksPass: false,
+      reviewPullRequests: true,
       lastPolledAt: null,
       eligibility: { status: 'eligible', violations: [], reason: null },
     },
@@ -73,6 +75,7 @@ function setup(accountId = ACCOUNT_ID) {
     providers: [
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideFakeHubs(),
       provideRouter([{ path: 'issues', component: StubIssuesComponent }]),
     ],
   });

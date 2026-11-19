@@ -30,6 +30,7 @@ using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Features.TriageFailed;
 using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.StatusBroadcast;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -169,7 +170,11 @@ public static class MonitoringModule
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
         services.AddScoped<WebhookRegistrar>();
         services.AddScoped<RepositoryWebhookDeleter>();
+        services.AddScoped<RepositoryRemoval>();
+        services.AddScoped<IDomainEventHandler<MonitoredRepositoryRemovedDomainEvent>, MonitoredRepositoryRemovedBridge>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
+        services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedBroadcastHandler>();
+        services.AddScoped<WebhookStatusBroadcastInterceptor>();
         // The self-probe (ADR 0116) sends exactly one request: the default resilience handler (retries and its own
         // timeouts) is cleared, redirects are not followed, and the probe applies its own 10 s timeout.
         services.AddHttpClient(WebhookIngressProbe.HttpClientName)

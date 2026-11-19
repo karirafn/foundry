@@ -7,6 +7,7 @@ import {
   formatPollInterval,
   repositorySettingTags,
   repositoryStatusTag,
+  repositoryDeletionMessage,
   repositoryUpdatesLine,
   splitRepositorySlug,
 } from './repository.model';
@@ -126,6 +127,7 @@ function repo(overrides: Partial<RepositorySummary> = {}): RepositorySummary {
     maxConcurrentWorkers: 1,
     rebaseAfterRun: true,
     mergeWhenChecksPass: false,
+    reviewPullRequests: true,
     lastPolledAt: null,
     eligibility: { status: 'eligible', violations: [], reason: null },
     webhookStatus: 'not-configured',
@@ -198,12 +200,32 @@ describe('repositorySettingTags', () => {
     expect(repositorySettingTags(repo({ mergeWhenChecksPass: true }))).toEqual(['Merges on pass']);
   });
 
+  it('tags review off', () => {
+    expect(repositorySettingTags(repo({ reviewPullRequests: false }))).toEqual(['No review']);
+  });
+
   it('tags rebase off', () => {
     expect(repositorySettingTags(repo({ rebaseAfterRun: false }))).toEqual(['No rebase']);
   });
 
   it('returns every non-default tag in order', () => {
-    expect(repositorySettingTags(repo({ maxConcurrentWorkers: 3, mergeWhenChecksPass: true, rebaseAfterRun: false })))
-      .toEqual(['3 workers', 'Merges on pass', 'No rebase']);
+    expect(repositorySettingTags(repo({
+      maxConcurrentWorkers: 3,
+      reviewPullRequests: false,
+      mergeWhenChecksPass: true,
+      rebaseAfterRun: false,
+    }))).toEqual(['3 workers', 'No review', 'Merges on pass', 'No rebase']);
+  });
+});
+
+describe('repositoryDeletionMessage', () => {
+  it('should state every consequence of deleting the repository', () => {
+    // Act
+    const message = repositoryDeletionMessage('acme/api');
+
+    // Assert
+    expect(message).toBe(
+      'Foundry will stop monitoring "acme/api", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.'
+    );
   });
 });

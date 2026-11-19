@@ -231,3 +231,14 @@ describe('issue-closed failure category (#909)', () => {
     expect(display?.cssClass).toBe('badge--failure-pr-closed');
   });
 });
+
+describe('repository-removed failure category', () => {
+  it('should map repository_removed to "REPOSITORY REMOVED" with the discarded-run badge', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('repository_removed');
+
+    // Assert
+    expect(display?.label).toBe('REPOSITORY REMOVED');
+    expect(display?.cssClass).toBe('badge--failure-cancelled');
+  });
+});

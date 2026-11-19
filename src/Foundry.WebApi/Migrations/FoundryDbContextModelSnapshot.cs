@@ -462,10 +462,14 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("rebase_after_run");
 
+                    b.Property<DateTimeOffset?>("RemovedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("removed_at");
+
                     b.Property<bool>("ReviewPullRequests")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
-                        .HasDefaultValue(false)
+                        .HasDefaultValue(true)
                         .HasColumnName("review_pull_requests");
 
                     b.Property<string>("RootListingETag")
@@ -541,7 +545,8 @@ namespace Foundry.WebApi.Migrations
 
                     b.HasIndex("Position")
                         .IsUnique()
-                        .HasDatabaseName("ix_monitored_repositories_position");
+                        .HasDatabaseName("ix_monitored_repositories_position")
+                        .HasFilter("removed_at IS NULL");
 
                     b.HasIndex("WebhookHookId")
                         .IsUnique()

@@ -64,3 +64,9 @@ internal enum WebhookUpsertKind
     /// <summary>A hook carrying the repository's hook id was updated in place.</summary>
     Updated,
 }
+
+/// <summary>
+/// What <see cref="IIssueProvider.UpsertWebhookAsync"/> did on the provider, and the provider's id of the
+/// hook it created or updated — the id <see cref="IIssueProvider.TestWebhookAsync"/> addresses.
+/// </summary>
+internal sealed record WebhookUpsert(WebhookUpsertKind Kind, long ProviderHookId);

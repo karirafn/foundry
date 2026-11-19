@@ -25,6 +25,7 @@ import {
   CreateRepositoryRequest,
   CreateRepositoryResponse,
   UpdateRepositoryRequest,
+  repositoryDeletionMessage,
 } from '../repository.model';
 
 type RepositoryView = { kind: 'list' } | { kind: 'add' };
@@ -131,7 +132,7 @@ export class SettingsRepositoriesComponent implements OnInit {
   protected readonly _pendingDeleteRepository: WritableSignal<RepositorySummary | null> = signal(null);
   protected readonly _deleteRepositoryMessage: Signal<string> = computed(() => {
     const repository = this._pendingDeleteRepository();
-    return repository ? `Delete repository "${repository.slug}"? Foundry will stop monitoring it and remove its webhook.` : '';
+    return repository ? repositoryDeletionMessage(repository.slug) : '';
   });
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
   private readonly _accountIdsKey: Signal<string> = computed(() =>

@@ -59,11 +59,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Created);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Created, 42));
         handler.Requests.Count.ShouldBe(2);
         handler.Requests[0].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Get),
@@ -88,6 +88,27 @@ public sealed class UpsertWebhookAsync
     }
 
     [Fact]
+    public async Task WhenTheCreateResponseCarriesNoHookId_FailsWithAProviderError()
+    {
+        // Arrange
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, """[{ "id": 7, "config": { "url": "https://elsewhere.example.com/hook" } }]"""),
+            (HttpStatusCode.Created, "{}"),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = CreateSut(httpClient);
+
+        // Act
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
+            ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>()
+            .Error.Message.ShouldContain("returned no hook id");
+    }
+
+    [Fact]
     public async Task WhenAHookHasThePayloadUrl_UpdatesItInPlaceWithPatch()
     {
         // Arrange
@@ -106,11 +127,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Updated, 42));
         handler.Requests.Count.ShouldBe(2);
         handler.Requests[1].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Patch),
@@ -142,11 +163,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Updated, 41));
         handler.Requests.Count.ShouldBe(3);
         handler.Requests[1].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Patch),
@@ -202,11 +223,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Created);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Created, 100));
         handler.Requests.Count.ShouldBe(2);
         handler.Requests[1].ShouldSatisfyAllConditions(
             r => r.Method.ShouldBe(HttpMethod.Post),
@@ -233,11 +254,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBe(WebhookUpsertKind.Updated);
+        result.ValueOrThrow().ShouldBe(new WebhookUpsert(WebhookUpsertKind.Updated, 41));
         handler.Requests.Count.ShouldBe(3);
     }
 
@@ -260,11 +281,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>();
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>();
         handler.Requests.Count.ShouldBe(2);
     }
 
@@ -282,11 +303,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>()
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>()
             .Error.Code.ShouldBe(WebhookWriteErrors.InsufficientPermissionCode);
         handler.Requests.Count.ShouldBe(1);
     }
@@ -304,11 +325,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             ValidBaseUrl, ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        Error error = result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>().Error;
+        Error error = result.ShouldBeOfType<Result<WebhookUpsert>.Failure>().Error;
         error.Code.ShouldNotBe(WebhookWriteErrors.InsufficientPermissionCode);
         error.Message.ShouldContain("422");
         error.Message.ShouldNotContain(Secret);
@@ -323,11 +344,11 @@ public sealed class UpsertWebhookAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<WebhookUpsertKind> result = await sut.UpsertWebhookAsync(
+        Result<WebhookUpsert> result = await sut.UpsertWebhookAsync(
             new Uri("http://api.github.com"), ValidSlug, Spec(), "server_token", CancellationToken.None);
 
         // Assert
-        result.ShouldBeOfType<Result<WebhookUpsertKind>.Failure>();
+        result.ShouldBeOfType<Result<WebhookUpsert>.Failure>();
         handler.Requests.ShouldBeEmpty();
     }
 }

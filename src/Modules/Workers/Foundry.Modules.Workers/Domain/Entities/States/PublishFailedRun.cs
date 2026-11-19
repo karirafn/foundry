@@ -85,4 +85,7 @@ public sealed class PublishFailedRun : UnpublishedRun, IDiscardableRun
 
     /// <remarks>Even while retries remain: once the issue is closed, a later attempt would publish work nobody wants.</remarks>
     public FailedRun DiscardOnIssueClosed() => DiscardWith(new FailureReason.IssueClosed());
+
+    /// <remarks>Even while retries remain: once the repository is removed, a later attempt would publish work nobody wants.</remarks>
+    public FailedRun DiscardOnRepositoryRemoved() => DiscardWith(new FailureReason.RepositoryRemoved());
 }

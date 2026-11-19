@@ -1,14 +1,33 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, forkJoin } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+import { EMPTY, Observable, Subject, forkJoin, merge, of } from 'rxjs';
+import { catchError, debounceTime, filter, groupBy, map, mergeMap, switchMap, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { LoadOutcome } from '../../../core/models/load-outcome';
+import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
+
+export const LIVE_UPDATE_DEBOUNCE_MS = 300;
+
+/** A live webhook update: one repository's re-fetched info, or every repository may have changed. */
+export type RepositoryWebhookUpdate =
+  | { kind: 'repository'; repositoryId: string; info: RepositoryWebhookInfo }
+  | { kind: 'all' };
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryService {
   private readonly _http = inject(HttpClient);
+  private readonly _signalR = inject(SystemSignalRService);
+
+  private readonly _webhookUpdates = new Subject<RepositoryWebhookUpdate>();
+  readonly webhookUpdates: Observable<RepositoryWebhookUpdate> = this._webhookUpdates.asObservable();
+
+  /** The accounts of the last foreground load; null until a list has been loaded once. */
+  private _loadedAccountIds: string[] | null = null;
+
+  /** Moves on every list change the operator makes, so a background reload sent before it is dropped. */
+  private _listVersion = 0;
 
   private readonly _repositoriesSignal: WritableSignal<RepositorySummary[]> = signal([]);
   readonly repositories: Signal<RepositorySummary[]> = this._repositoriesSignal.asReadonly();
@@ -49,7 +68,35 @@ export class RepositoryService {
   private readonly _loadAvailableErrorSignal: WritableSignal<string | null> = signal(null);
   readonly loadAvailableError: Signal<string | null> = this._loadAvailableErrorSignal.asReadonly();
 
+  constructor() {
+    this._signalR.repositoryWebhookChanged
+      .pipe(
+        filter(() => this._loadedAccountIds !== null),
+        groupBy((change) => change.repositoryId),
+        mergeMap((changes) =>
+          changes.pipe(
+            debounceTime(LIVE_UPDATE_DEBOUNCE_MS),
+            switchMap(({ repositoryId }) => this._refreshWebhook(repositoryId)),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe();
+
+    merge(this._signalR.repositoryWebhooksChanged, this._signalR.reconnected)
+      .pipe(
+        filter(() => this._loadedAccountIds !== null),
+        debounceTime(LIVE_UPDATE_DEBOUNCE_MS),
+        tap(() => this._webhookUpdates.next({ kind: 'all' })),
+        switchMap(() => this._refreshRepositories()),
+        takeUntilDestroyed(),
+      )
+      .subscribe();
+  }
+
   loadRepositories(accountId: string): void {
+    this._loadedAccountIds = [accountId];
+    this._listVersion++;
     this._loadErrorSignal.set(null);
     this._loadingSignal.set(true);
 
@@ -67,6 +114,8 @@ export class RepositoryService {
   }
 
   loadAllRepositories(accountIds: string[]): Promise<LoadOutcome> {
+    this._loadedAccountIds = [...accountIds];
+    this._listVersion++;
     this._loadErrorSignal.set(null);
     this._loadingSignal.set(true);
 
@@ -126,6 +175,7 @@ export class RepositoryService {
 
     return this._http.post<CreateRepositoryResponse>(this._repositoriesUrl(accountId), request).pipe(
       tap((response) => {
+        this._listVersion++;
         this._repositoriesSignal.update(repositories => [...repositories, response.repository]);
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
@@ -147,6 +197,7 @@ export class RepositoryService {
 
     return this._http.put<RepositorySummary>(`${this._repositoriesUrl(accountId)}/${id}`, request).pipe(
       tap((updated) => {
+        this._listVersion++;
         this._repositoriesSignal.update(repositories =>
           repositories.map(r => r.id === updated.id ? updated : r)
         );
@@ -164,8 +215,10 @@ export class RepositoryService {
   }
 
   moveRepository(id: string, position: number): Observable<void> {
+    this._listVersion++;
     return this._http.patch<void>(`/api/repositories/${id}/position`, { position }).pipe(
       tap(() => {
+        this._listVersion++;
         this._repositoriesSignal.update(repositories => {
           const currentIndex = repositories.findIndex(r => r.id === id);
           if (currentIndex === -1) {
@@ -187,6 +240,7 @@ export class RepositoryService {
   recheckEligibility(accountId: string, id: string): Observable<RepositorySummary> {
     return this._http.post<RepositorySummary>(`${this._repositoriesUrl(accountId)}/${id}/recheck`, {}).pipe(
       tap((updated) => {
+        this._listVersion++;
         this._repositoriesSignal.update(repositories =>
           repositories.map(r => r.id === updated.id ? updated : r)
         );
@@ -201,6 +255,7 @@ export class RepositoryService {
   applyBranchRules(accountId: string, id: string): Observable<ApplyBranchRulesResponse> {
     return this._http.post<ApplyBranchRulesResponse>(`${this._repositoriesUrl(accountId)}/${id}/apply-branch-rules`, {}).pipe(
       tap((response) => {
+        this._listVersion++;
         this._repositoriesSignal.update(repositories =>
           repositories.map(r => r.id === response.repository.id ? response.repository : r)
         );
@@ -224,14 +279,20 @@ export class RepositoryService {
   /** Records the operator's "I've added the webhook" action; the hook then waits for its first delivery. */
   markWebhookRegistered(accountId: string, id: string): Observable<RepositoryWebhookInfo> {
     return this._http.post<RepositoryWebhookInfo>(`${this._repositoriesUrl(accountId)}/${id}/webhook/registered`, {}).pipe(
-      tap((info) => this._setWebhookStatus(id, info.status)),
+      tap((info) => {
+        this._listVersion++;
+        this._setWebhookStatus(id, info.status);
+      }),
     );
   }
 
   /** Creates or updates the webhook on the provider with the account token. */
   registerWebhook(accountId: string, id: string): Observable<RegisterWebhookResponse> {
     return this._http.post<RegisterWebhookResponse>(`${this._repositoriesUrl(accountId)}/${id}/webhook/register`, {}).pipe(
-      tap((response) => this._setWebhookStatus(id, response.webhook.status)),
+      tap((response) => {
+        this._listVersion++;
+        this._setWebhookStatus(id, response.webhook.status);
+      }),
     );
   }
 
@@ -241,6 +302,7 @@ export class RepositoryService {
 
     return this._http.delete<void>(`${this._repositoriesUrl(accountId)}/${id}`).pipe(
       tap(() => {
+        this._listVersion++;
         this._repositoriesSignal.update(repositories => repositories.filter(r => r.id !== id));
         this._deletingSignal.set(false);
       }),
@@ -249,6 +311,50 @@ export class RepositoryService {
         this._deleteErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._deletingSignal.set(false);
         throw err;
+      }),
+    );
+  }
+
+  /** Re-reads one cached repository's webhook and updates only its row status; never touches the loading state. */
+  private _refreshWebhook(repositoryId: string): Observable<unknown> {
+    const repository = this._repositoriesSignal().find(r => r.id === repositoryId);
+    if (!repository) {
+      return EMPTY;
+    }
+
+    return this.getWebhook(repository.accountId, repositoryId).pipe(
+      tap((info) => {
+        this._setWebhookStatus(repositoryId, info.status);
+        this._webhookUpdates.next({ kind: 'repository', repositoryId, info });
+      }),
+      catchError((err: unknown) => {
+        console.error(err);
+        return EMPTY;
+      }),
+    );
+  }
+
+  /**
+   * Reloads the list for the last-loaded accounts and writes only the repositories. The loading and
+   * error signals stay untouched, so the list keeps its rows, reorder mode and any open edit form.
+   */
+  private _refreshRepositories(): Observable<unknown> {
+    const accountIds = this._loadedAccountIds ?? [];
+    const version = this._listVersion;
+    const request: Observable<RepositorySummary[][]> = accountIds.length === 0
+      ? of([])
+      : forkJoin(accountIds.map(accountId => this._http.get<RepositorySummary[]>(this._repositoriesUrl(accountId))));
+
+    return request.pipe(
+      map(results => results.flat().sort((a, b) => a.position - b.position)),
+      tap((repositories) => {
+        if (version === this._listVersion) {
+          this._repositoriesSignal.set(repositories);
+        }
+      }),
+      catchError((err: unknown) => {
+        console.error(err);
+        return EMPTY;
       }),
     );
   }

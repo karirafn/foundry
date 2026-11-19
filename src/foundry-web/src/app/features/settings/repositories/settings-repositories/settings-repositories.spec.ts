@@ -7,6 +7,7 @@ import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { AccountSummary } from '../../accounts/account.model';
 import { CreateRepositoryResponse, RepositorySummary } from '../repository.model';
+import { provideFakeHubs } from '../../../../core/testing/fake-hub-transport';
 
 const ACCOUNT_1: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -48,6 +49,7 @@ const REPO_1: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -71,6 +73,7 @@ const REPO_2: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -84,6 +87,7 @@ function setup() {
       RepositoryService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideFakeHubs(),
       provideRouter([]),
     ],
   });
@@ -300,7 +304,7 @@ describe('SettingsRepositoriesComponent', () => {
     // Assert — the shared dialog asks, not the native confirm
     expect(dialog.open).toBe(true);
     expect(dialog.querySelector('.confirm-dialog__message')?.textContent?.trim()).toBe(
-      `Delete repository "${REPO_1.slug}"? Foundry will stop monitoring it and remove its webhook.`
+      `Foundry will stop monitoring "${REPO_1.slug}", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.`
     );
     expect(nativeConfirm).not.toHaveBeenCalled();
     httpMock.expectNone(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);

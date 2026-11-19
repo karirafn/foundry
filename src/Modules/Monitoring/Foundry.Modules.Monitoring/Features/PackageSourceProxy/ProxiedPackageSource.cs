@@ -12,7 +12,8 @@ namespace Foundry.Modules.Monitoring.Features.PackageSourceProxy;
 /// </summary>
 /// <remarks>
 /// A request reaches upstream only under the service index's directory, so the credential Foundry sends never reaches
-/// another API path on the provider host.
+/// another API path on the provider host. The one exception is a GitLab group feed's project download path
+/// (<see cref="GitLabGroupFeed"/>), which the caller forwards only once the feed's registration index lists it.
 /// </remarks>
 internal sealed class ProxiedPackageSource
 {
@@ -25,6 +26,7 @@ internal sealed class ProxiedPackageSource
     private readonly Uri _serviceIndexUrl;
     private readonly string _directoryPath;
     private readonly string _proxyBase;
+    private readonly GitLabGroupFeed? _groupFeed;
 
     /// <param name="sourceId">The source's id, the proxy path segment that names it.</param>
     /// <param name="serviceIndexUrl">The source's service-index URL.</param>
@@ -38,17 +40,19 @@ internal sealed class ProxiedPackageSource
         string path = serviceIndexUrl.AbsolutePath;
         _directoryPath = path[..(path.LastIndexOf('/') + 1)];
         _proxyBase = $"{proxyBaseUrl.AbsoluteUri.TrimEnd('/')}/{sourceId.Value}";
+        _groupFeed = GitLabGroupFeed.Recognize(serviceIndexUrl);
     }
 
     /// <summary>The source's service-index URL on the proxy: the URL a worker's NuGet reads the source at.</summary>
     public string ServiceIndexProxyUrl => _proxyBase + _serviceIndexUrl.PathAndQuery;
 
     /// <summary>
-    /// The upstream URL for a proxied request whose path below the source id is <paramref name="escapedPath"/> (starting
-    /// with <c>/</c>) and whose query is <paramref name="escapedQuery"/>; <see langword="null"/> when it falls outside the
-    /// service index's directory. The check runs on the URL as it will be sent, after dot segments are resolved.
+    /// The upstream request for a proxied request whose path below the source id is <paramref name="escapedPath"/>
+    /// (starting with <c>/</c>) and whose query is <paramref name="escapedQuery"/>; <see langword="null"/> when it is
+    /// neither under the service index's directory nor a group feed's project download path. The check runs on the URL
+    /// as it will be sent, after dot segments are resolved.
     /// </summary>
-    public Uri? UpstreamUrlFor(string escapedPath, string escapedQuery)
+    public ProxiedRequest? UpstreamUrlFor(string escapedPath, string escapedQuery)
     {
         ArgumentNullException.ThrowIfNull(escapedPath);
         ArgumentNullException.ThrowIfNull(escapedQuery);
@@ -61,13 +65,20 @@ internal sealed class ProxiedPackageSource
             return null;
         }
 
-        return IsUnderDirectory(url) ? url : null;
+        if (IsUnderDirectory(url))
+        {
+            return new ProxiedRequest.UnderDirectory(url);
+        }
+
+        return _groupFeed?.PackageIdOfDownload(url) is { } packageId
+            ? new ProxiedRequest.GroupFeedDownload(url, packageId)
+            : null;
     }
 
     /// <summary>
-    /// Rewrites every string in a JSON document that is an upstream URL under the service index's directory to the
-    /// same path and query on the proxy. Returns <see langword="null"/> when <paramref name="json"/> is not JSON, so the
-    /// caller passes the body through as it came.
+    /// Rewrites every string in a JSON document that is an upstream URL under the service index's directory, or a group
+    /// feed's project download path, to the same path and query on the proxy. Returns <see langword="null"/> when
+    /// <paramref name="json"/> is not JSON, so the caller passes the body through as it came.
     /// </summary>
     public byte[]? RewriteJson(ReadOnlyMemory<byte> json)
     {
@@ -98,7 +109,7 @@ internal sealed class ProxiedPackageSource
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
             || url.Scheme is not ("http" or "https")
-            || !IsUnderDirectory(url))
+            || !(IsUnderDirectory(url) || _groupFeed?.PackageIdOfDownload(url) is not null))
         {
             return null;
         }
@@ -106,7 +117,8 @@ internal sealed class ProxiedPackageSource
         return _proxyBase + url.PathAndQuery;
     }
 
-    private bool IsUnderDirectory(Uri url) =>
+    /// <summary>Whether <paramref name="url"/> is on the source's origin under the service index's directory.</summary>
+    internal bool IsUnderDirectory(Uri url) =>
         PackageSourceUpstreamClient.SameOrigin(url, _serviceIndexUrl)
         && url.AbsolutePath.StartsWith(_directoryPath, StringComparison.Ordinal);
 

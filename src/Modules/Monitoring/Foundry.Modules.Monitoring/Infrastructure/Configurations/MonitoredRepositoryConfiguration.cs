@@ -17,6 +17,12 @@ namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider dataProtectionProvider)
     : IEntityTypeConfiguration<MonitoredRepository>
 {
+    /// <summary>
+    /// The named query filter hiding removed repositories (ADR 0117). A lookup that must see a removed repository
+    /// bypasses it by this name.
+    /// </summary>
+    internal const string RemovedRepositoryFilter = nameof(RemovedRepositoryFilter);
+
     private const int SlugMaxLength = 500;
     private const int HostMaxLength = 253;
     private const int EligibilityStatusMaxLength = 20;
@@ -59,6 +65,8 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
 
         builder.HasKey(r => r.Id);
 
+        builder.HasQueryFilter(RemovedRepositoryFilter, r => r.RemovedAt == null);
+
         builder.Property(r => r.Id)
             .HasConversion(new StronglyTypedIdValueConverter<MonitoredRepositoryId>())
             .HasColumnName("id");
@@ -97,7 +105,8 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
             .HasColumnName("merge_when_checks_pass");
 
         builder.Property(r => r.ReviewPullRequests)
-            .HasDefaultValue(false)
+            .HasDefaultValue(true)
+            .HasSentinel(true)
             .HasColumnName("review_pull_requests");
 
         builder.Property(r => r.MaxConcurrentWorkers)
@@ -110,6 +119,8 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
 
         builder.HasIndex(r => r.Position)
             .IsUnique()
+            // A removed repository keeps its last Position but is out of the order the survivors are renumbered in.
+            .HasFilter("removed_at IS NULL")
             .HasDatabaseName("ix_monitored_repositories_position");
 
         builder.Property(r => r.LastPolledAt)
@@ -117,6 +128,9 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
 
         builder.Property(r => r.UntrackSuppressedSince)
             .HasColumnName("untrack_suppressed_since");
+
+        builder.Property(r => r.RemovedAt)
+            .HasColumnName("removed_at");
 
         ValueConverter<RepositoryEligibility?, string?> eligibilityConverter = new(
             eligibility => eligibility == null

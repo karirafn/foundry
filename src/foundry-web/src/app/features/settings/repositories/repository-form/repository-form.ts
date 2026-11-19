@@ -275,6 +275,24 @@ const MAX_WORKER_LIMIT = 20;
             <input
               class="repository-form__toggle"
               type="checkbox"
+              id="repository-review-pull-requests"
+              aria-describedby="repository-review-pull-requests-hint"
+              [checked]="_reviewPullRequests()"
+              [disabled]="saving()"
+              (change)="_reviewPullRequests.set($any($event.target).checked)"
+            />
+            <label class="repository-form__field-label" for="repository-review-pull-requests">Review pull requests</label>
+          </div>
+          <span class="repository-form__field-hint" id="repository-review-pull-requests-hint">
+            When every check passes, the review role reviews the pull request before Foundry merges it or hands it to you. If the review can't finish, the issue waits in your review.
+          </span>
+        </div>
+
+        <div class="repository-form__field">
+          <div class="repository-form__checkbox-row">
+            <input
+              class="repository-form__toggle"
+              type="checkbox"
               id="repository-merge-when-checks-pass"
               aria-describedby="repository-merge-when-checks-pass-hint"
               [checked]="_mergeWhenChecksPass()"
@@ -364,6 +382,7 @@ export class RepositoryFormComponent implements OnInit {
   protected readonly _applyBranchRules: WritableSignal<boolean> = signal(true);
   protected readonly _rebaseAfterRun: WritableSignal<boolean> = signal(true);
   protected readonly _mergeWhenChecksPass: WritableSignal<boolean> = signal(false);
+  protected readonly _reviewPullRequests: WritableSignal<boolean> = signal(true);
   protected readonly _pickerOpen: WritableSignal<boolean> = signal(false);
   protected readonly _activeOptionIndex: WritableSignal<number> = signal(-1);
   protected readonly _filterText: WritableSignal<string> = signal('');
@@ -467,6 +486,7 @@ export class RepositoryFormComponent implements OnInit {
       this._isActive.set(repo.isActive);
       this._rebaseAfterRun.set(repo.rebaseAfterRun ?? true);
       this._mergeWhenChecksPass.set(repo.mergeWhenChecksPass ?? false);
+      this._reviewPullRequests.set(repo.reviewPullRequests ?? true);
     }
   }
 
@@ -565,6 +585,7 @@ export class RepositoryFormComponent implements OnInit {
         maxConcurrentWorkers,
         rebaseAfterRun: this._rebaseAfterRun(),
         mergeWhenChecksPass: this._mergeWhenChecksPass(),
+        reviewPullRequests: this._reviewPullRequests(),
       };
       this.save.emit(request);
     } else {
@@ -575,6 +596,7 @@ export class RepositoryFormComponent implements OnInit {
         applyBranchRules: this._applyBranchRules(),
         rebaseAfterRun: this._rebaseAfterRun(),
         mergeWhenChecksPass: this._mergeWhenChecksPass(),
+        reviewPullRequests: this._reviewPullRequests(),
       };
       this.save.emit(request);
     }

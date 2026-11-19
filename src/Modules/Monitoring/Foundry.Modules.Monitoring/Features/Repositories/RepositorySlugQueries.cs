@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,8 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
 
         List<MonitoredRepository> repositories = await db.Set<MonitoredRepository>()
             .AsNoTracking()
+            // History keeps showing a removed repository's slug for its completed issues.
+            .IgnoreQueryFilters([MonitoredRepositoryConfiguration.RemovedRepositoryFilter])
             .Where(r => repositoryIds.Contains(r.Id))
             .ToListAsync(cancellationToken);
 

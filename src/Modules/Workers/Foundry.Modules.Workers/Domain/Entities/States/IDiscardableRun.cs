@@ -17,4 +17,10 @@ public interface IDiscardableRun
     /// is pushed.
     /// </summary>
     FailedRun DiscardOnIssueClosed();
+
+    /// <summary>
+    /// The run's repository was removed from Foundry (ADR 0117): its work can never be published, so it is deleted and
+    /// nothing is pushed.
+    /// </summary>
+    FailedRun DiscardOnRepositoryRemoved();
 }

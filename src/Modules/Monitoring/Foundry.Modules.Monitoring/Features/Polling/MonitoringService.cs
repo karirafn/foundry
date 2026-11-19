@@ -572,7 +572,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     /// whose <see cref="MonitoredRepository.WebhookSpecStamp"/> is not the current
     /// <see cref="WebhookSpecStamp"/> (<see cref="MonitoredRepository.IsDueForWebhookRegistration"/>).
     /// Each repository runs in its own scope, outside <see cref="RepositoryPoller.PollDetectingChangesAsync"/>,
-    /// so a current stamp costs no provider call and one repository's failure never reaches the others.
+    /// so a current stamp costs no provider call — a stale one costs the registration plus its test delivery —
+    /// and one repository's failure never reaches the others.
     /// </summary>
     private async Task RegisterStaleWebhooksAsync(
         IReadOnlyList<MonitoredRepositoryId> repoIds,

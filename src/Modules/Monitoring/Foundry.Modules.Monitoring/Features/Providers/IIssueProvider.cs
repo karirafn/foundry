@@ -279,11 +279,24 @@ internal interface IIssueProvider
     /// </summary>
     /// <remarks>Providers without webhook support keep this default, which fails with
     /// <see cref="WebhookWriteErrors.NotSupportedCode"/> without any provider call.</remarks>
-    Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+    Task<Result<WebhookUpsert>> UpsertWebhookAsync(
         RepositorySlug slug,
         WebhookHookSpec spec,
         CancellationToken cancellationToken)
-        => Task.FromResult(Result<WebhookUpsertKind>.Fail(WebhookWriteErrors.NotSupported()));
+        => Task.FromResult(Result<WebhookUpsert>.Fail(WebhookWriteErrors.NotSupported()));
+
+    /// <summary>
+    /// Asks the provider to send its own test delivery to the hook <paramref name="providerHookId"/>
+    /// (<see cref="WebhookUpsert.ProviderHookId"/>): GitHub's ping, GitLab's test push event. The delivery
+    /// arrives at the webhook endpoint like any other, so a reachable hook turns <c>Active</c>.
+    /// </summary>
+    /// <remarks>Providers without webhook support keep this default, which fails with
+    /// <see cref="WebhookWriteErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result> TestWebhookAsync(
+        RepositorySlug slug,
+        long providerHookId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result.Fail(WebhookWriteErrors.NotSupported()));
 
     /// <summary>
     /// Deletes every repository hook whose URL carries <paramref name="hookId"/>

@@ -213,6 +213,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void RepositoryRemoved_ValueIsRepositoryRemoved()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.RepositoryRemoved;
+
+        // Assert
+        category.Value.ShouldBe("repository_removed");
+    }
+
+    [Fact]
     public void WhenTwoInstancesHaveSameToken_AreEqual()
     {
         // Arrange

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -71,6 +72,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public DateTimeOffset? UntrackSuppressedSince { get; private set; }
 
+    /// <summary>
+    /// When the repository was removed from Foundry, or <see langword="null"/> while it is monitored. A removed
+    /// repository is kept so its completed issues and runs stay attached to its identity (ADR 0117).
+    /// </summary>
+    public DateTimeOffset? RemovedAt { get; private set; }
+
     public RepositoryEligibility? Eligibility { get; private set; }
 
     public string? EligibilityStatus { get; private set; }
@@ -99,9 +106,9 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// <summary>
     /// Whether a pull request whose checks gate resolves green goes through the review role before Foundry merges it
     /// or hands it to a person (ADR 0113). Read when the checks verdict is recorded, never snapshotted. Defaults to
-    /// <see langword="false"/> while the review step ships dark; nothing sets it yet.
+    /// <see langword="true"/>: review is the safer path, so an operator opts out rather than in.
     /// </summary>
-    public bool ReviewPullRequests { get; private set; }
+    public bool ReviewPullRequests { get; private set; } = true;
 
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
@@ -175,21 +182,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         int maxConcurrentWorkers = DefaultMaxConcurrentWorkers,
         bool applyBranchRules = false,
         bool rebaseAfterRun = true,
-        bool mergeWhenChecksPass = false)
+        bool mergeWhenChecksPass = false,
+        bool reviewPullRequests = true)
     {
-        if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
+        if (ValidateSettings(pollInterval, maxConcurrentWorkers) is Result.Failure failure)
         {
-            return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.InvalidMaxConcurrentWorkers(maxConcurrentWorkers));
-        }
-
-        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds <= 0)
-        {
-            return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.PollIntervalNotPositive());
-        }
-
-        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds > MaxPollIntervalSeconds)
-        {
-            return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.PollIntervalTooLarge(MaxPollIntervalSeconds));
+            return Result<MonitoredRepository>.Fail(failure.Error);
         }
 
         return new MonitoredRepository(MonitoredRepositoryId.New())
@@ -206,10 +204,91 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             ApplyBranchRules = applyBranchRules,
             RebaseAfterRun = rebaseAfterRun,
             MergeWhenChecksPass = mergeWhenChecksPass,
+            ReviewPullRequests = reviewPullRequests,
             WebhookHookId = NewWebhookHookId(),
             WebhookSecret = NewWebhookSecret(),
             WebhookStatus = WebhookStatus.NotRegistered,
         };
+    }
+
+    /// <summary>
+    /// Removes the repository from Foundry: every query stops seeing it except the lookups that bypass the
+    /// removed-repository filter by name (the History slug lookup and the re-add lookup).
+    /// </summary>
+    public Result Remove(DateTimeOffset now)
+    {
+        if (RemovedAt is not null)
+        {
+            return MonitoredRepositoryErrors.AlreadyRemoved();
+        }
+
+        RemovedAt = now;
+        AddDomainEvent(new MonitoredRepositoryRemovedDomainEvent(Id, now));
+        return Result.Ok();
+    }
+
+    /// <summary>
+    /// Restores a removed repository that is added again: the add request supplies every operator setting and
+    /// the operational state starts as <see cref="Create"/> leaves it. The identity, hook id and webhook secret
+    /// are kept, so completed history stays attached and a hook left on the provider is adopted.
+    /// </summary>
+    public Result Restore(
+        TimeSpan? pollInterval,
+        int position,
+        int maxConcurrentWorkers,
+        bool applyBranchRules,
+        bool rebaseAfterRun,
+        bool mergeWhenChecksPass,
+        bool reviewPullRequests)
+    {
+        if (RemovedAt is null)
+        {
+            return MonitoredRepositoryErrors.NotRemoved();
+        }
+
+        if (ValidateSettings(pollInterval, maxConcurrentWorkers) is Result.Failure failure)
+        {
+            return failure;
+        }
+
+        RemovedAt = null;
+        PollInterval = pollInterval;
+        IsActive = true;
+        MaxConcurrentWorkers = maxConcurrentWorkers;
+        SetPosition(position);
+        ApplyBranchRules = applyBranchRules;
+        RebaseAfterRun = rebaseAfterRun;
+        MergeWhenChecksPass = mergeWhenChecksPass;
+        ReviewPullRequests = reviewPullRequests;
+        SetEligibility(new RepositoryEligibility.Unreachable());
+        WriteProbeVerdict = new WriteProbeVerdict.Unknown();
+        WebhookStatus = WebhookStatus.NotRegistered;
+        WebhookSpecStamp = null;
+        WebhookRegistrationFailedAt = null;
+        LastPolledAt = null;
+        UntrackSuppressedSince = null;
+        RecordRootListing(new RootNuGetConfig.Absent(), listingETag: null);
+        return Result.Ok();
+    }
+
+    private static Result ValidateSettings(TimeSpan? pollInterval, int maxConcurrentWorkers)
+    {
+        if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
+        {
+            return MonitoredRepositoryErrors.InvalidMaxConcurrentWorkers(maxConcurrentWorkers);
+        }
+
+        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds <= 0)
+        {
+            return MonitoredRepositoryErrors.PollIntervalNotPositive();
+        }
+
+        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds > MaxPollIntervalSeconds)
+        {
+            return MonitoredRepositoryErrors.PollIntervalTooLarge(MaxPollIntervalSeconds);
+        }
+
+        return Result.Ok();
     }
 
     public void SetPosition(int position)
@@ -405,19 +484,9 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public Result Update(TimeSpan? pollInterval, bool isActive, int maxConcurrentWorkers)
     {
-        if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
+        if (ValidateSettings(pollInterval, maxConcurrentWorkers) is Result.Failure failure)
         {
-            return MonitoredRepositoryErrors.InvalidMaxConcurrentWorkers(maxConcurrentWorkers);
-        }
-
-        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds <= 0)
-        {
-            return MonitoredRepositoryErrors.PollIntervalNotPositive();
-        }
-
-        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds > MaxPollIntervalSeconds)
-        {
-            return MonitoredRepositoryErrors.PollIntervalTooLarge(MaxPollIntervalSeconds);
+            return failure;
         }
 
         PollInterval = pollInterval;
@@ -445,6 +514,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public void SetMergeWhenChecksPass(bool mergeWhenChecksPass)
     {
         MergeWhenChecksPass = mergeWhenChecksPass;
+    }
+
+    /// <summary>Sets the operator toggle for the review step on green pull requests (ADR 0113).</summary>
+    public void SetReviewPullRequests(bool reviewPullRequests)
+    {
+        ReviewPullRequests = reviewPullRequests;
     }
 
     public void MarkPolled(DateTimeOffset polledAt)

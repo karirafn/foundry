@@ -61,6 +61,7 @@ function repository(overrides: Partial<RepositorySummary> = {}): RepositorySumma
     maxConcurrentWorkers: 1,
     rebaseAfterRun: true,
     mergeWhenChecksPass: false,
+    reviewPullRequests: true,
     lastPolledAt: null,
     eligibility: { status: 'ineligible', violations: [], reason: null },
     ...overrides,
