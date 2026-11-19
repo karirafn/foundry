@@ -1609,7 +1609,7 @@ The probe container mirrors the login/credential-helper containers: transient (`
 
 - `Available` → `RestoreSpend()`; if changed, publish `CreditsRestored` (outbox) → Issues re-queues.
 - `CreditsStillBlocked` (money-based 429, no reset time) → `RearmProbe(now + ProbeIntervalMinutes)`; no issue state changes.
-- `UsageLimited(resetsAt)` (time-based 429, reset time parses) → set `GlobalSettings.UsageLimitResetsAt` and clear the credit block (the money path is proven fine, so the usage-limit pause takes over) rather than blindly re-arming the probe.
+- `UsageLimited(resetsAt)` (time-based 429, reset time parses) → publish `UsageLimitReached(resetsAt)` (outbox), which the Workers `UsageLimitReachedHandler` applies to `GlobalSettings.UsageLimitResetsAt` (broadcasting `DispatchPaused` when the reset time changed), and clear the credit block (the money path is proven fine, so the usage-limit pause takes over) rather than blindly re-arming the probe.
 - `InfrastructureFailure` (container start error, timeout, or unclassifiable output) → `RearmProbe(now + ProbeIntervalMinutes)` with no `SpendState`/issue change; the banner deliberately does not report a credit problem for an infrastructure fault.
 
 The operator can force an immediate probe regardless of `NextProbeAt` via `POST /api/credentials/probe` ("Check now"), which returns an in-flight indicator (`202`) when a probe is already running. `NextProbeAt` is exposed on the `/api/credentials` payload so the dashboard `credits` banner renders a live countdown. Container hardening for this new container type is deferred to #60.

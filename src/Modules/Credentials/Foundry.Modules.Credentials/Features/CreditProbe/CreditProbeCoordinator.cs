@@ -5,15 +5,12 @@ using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-
-using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
 
 namespace Foundry.Modules.Credentials.Features.CreditProbe;
 
@@ -23,7 +20,7 @@ namespace Foundry.Modules.Credentials.Features.CreditProbe;
 /// <para>
 /// Singleton lifetime: <see cref="_semaphore"/> provides process-wide single-flight state.
 /// Scoped dependencies (<see cref="DbContext"/>, <see cref="IIntegrationEventDispatcher"/>,
-/// <see cref="IGlobalSettingsQueries"/>, <see cref="IIntegrationEventProcessor"/>) are resolved
+/// <see cref="IGlobalSettingsQueries"/>) are resolved
 /// per-invocation via <see cref="IServiceScopeFactory"/>.
 /// </para>
 /// </summary>
@@ -71,8 +68,6 @@ internal sealed class CreditProbeCoordinator(
             scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         ISystemNotificationBroadcaster broadcaster =
             scope.ServiceProvider.GetRequiredService<ISystemNotificationBroadcaster>();
-        IIntegrationEventProcessor integrationEventProcessor =
-            scope.ServiceProvider.GetRequiredService<IIntegrationEventProcessor>();
 
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
             .FirstOrDefaultAsync(cancellationToken);
@@ -133,7 +128,7 @@ internal sealed class CreditProbeCoordinator(
             ProbeOutcome.CreditsStillBlocked => await HandleStillBlockedAsync(
                 account, dbContext, nextArm, broadcaster, cancellationToken),
             ProbeOutcome.UsageLimited usageLimited => await HandleUsageLimitedAsync(
-                account, dbContext, dispatcher, integrationEventProcessor, usageLimited.ResetsAt, cancellationToken),
+                account, dbContext, dispatcher, usageLimited.ResetsAt, cancellationToken),
             ProbeOutcome.InfrastructureFailure => await HandleInfrastructureFailureAsync(
                 account, dbContext, nextArm, broadcaster, cancellationToken),
             _ => throw new System.Diagnostics.UnreachableException(
@@ -180,40 +175,10 @@ internal sealed class CreditProbeCoordinator(
         ClaudeAccount account,
         DbContext dbContext,
         IIntegrationEventDispatcher dispatcher,
-        IIntegrationEventProcessor integrationEventProcessor,
         DateTimeOffset resetsAt,
         CancellationToken cancellationToken)
     {
-        // Mirror PersistUsageLimitIfNeededAsync in WorkerOutcomeApplier:
-        // load GlobalSettings, call SetUsageLimitResetsAt, save, then deliver DispatchPaused
-        // directly (ephemeral broadcast — no outbox row needed).
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (settings is not null)
-        {
-            DateTimeOffset? resetsAtBefore = settings.UsageLimitResetsAt;
-            settings.SetUsageLimitResetsAt(resetsAt);
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-            bool resetsAtChanged = settings.UsageLimitResetsAt != resetsAtBefore;
-            if (resetsAtChanged)
-            {
-                // DispatchPaused has only a SignalR broadcast consumer — no durable DB side-effect.
-                // Route via IIntegrationEventProcessor for direct in-process delivery (no outbox row,
-                // no relay latency on a transient notification).
-                await TryDeliverDirectAsync(
-                    integrationEventProcessor,
-                    new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
-                    cancellationToken);
-            }
-        }
-        else
-        {
-            logger.LogWarning(
-                "Credit probe detected a usage limit but no GlobalSettings row exists; " +
-                "DispatchPaused could not be persisted.");
-        }
+        await dispatcher.DispatchAsync([new UsageLimitReached(resetsAt)], cancellationToken);
 
         // Design decision: UsageLimited proves the spend/money path works — the time-based usage
         // limit is now the operative constraint, not credit exhaustion. Clear the credit block so
@@ -264,29 +229,4 @@ internal sealed class CreditProbeCoordinator(
         => broadcaster.SendAsync(
             new SystemNotification(NotificationCategories.Credits, IsActive: true, Message: string.Empty),
             cancellationToken);
-
-    /// <summary>
-    /// Delivers an ephemeral event directly via <see cref="IIntegrationEventProcessor"/> without
-    /// writing an outbox row. Use only for pure SignalR broadcast notifications with no durable
-    /// DB consumer.
-    /// </summary>
-    private async Task TryDeliverDirectAsync(
-        IIntegrationEventProcessor integrationEventProcessor,
-        IIntegrationEvent @event,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await integrationEventProcessor.ProcessAsync(Guid.NewGuid(), @event, cancellationToken);
-        }
-#pragma warning disable CA1031 // Direct broadcast delivery failures (e.g. SignalR connection error) must not crash the coordinator; the warning is sufficient for triage.
-        catch (Exception ex) when (ex is not OperationCanceledException)
-#pragma warning restore CA1031
-        {
-            logger.LogWarning(
-                ex,
-                "Failed to deliver ephemeral integration event {EventType} directly.",
-                @event.GetType().Name);
-        }
-    }
 }

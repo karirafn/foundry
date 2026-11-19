@@ -1,9 +1,11 @@
+using System.Text.Json;
+
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
@@ -126,15 +128,6 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         FoundryDbContext db = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         ClaudeAccount account = ClaudeAccount.Create();
         db.Set<ClaudeAccount>().Add(account);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-    }
-
-    private async Task SeedGlobalSettingsAsync()
-    {
-        await using AsyncServiceScope scope = _serviceProvider.CreateAsyncScope();
-        FoundryDbContext db = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-        GlobalSettings settings = GlobalSettings.Create();
-        db.Set<GlobalSettings>().Add(settings);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
@@ -360,11 +353,43 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenUsageLimited_SetsResetsAtAndDeliversDispatchPausedAndClearsCreditBlock()
+    public async Task WhenUsageLimited_EnqueuesUsageLimitReachedWithResetsAt()
     {
         // Arrange
         await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
-        await SeedGlobalSettingsAsync();
+
+        DateTimeOffset resetsAt = DateTimeOffset.UtcNow.AddHours(2);
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator: new FakeCredentialsOrchestrator().WithCreditProbeLogs("rate limited"),
+            classifier: new FakeProbeOutcomeClassifier(new ProbeOutcome.UsageLimited(resetsAt)),
+            eventProcessor: new CapturingIntegrationEventProcessor(),
+            probeIntervalMinutes: 60,
+            isLoginActive: false);
+        await using (sp)
+        {
+            CreditProbeCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            await sut.TryRunProbeAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Assert
+        List<OutboxMessage> outbox = await ReadOutboxAsync();
+        OutboxMessage message = outbox
+            .Where(m => m.Type.Contains(nameof(UsageLimitReached), StringComparison.Ordinal))
+            .ShouldHaveSingleItem();
+        UsageLimitReached? @event = JsonSerializer.Deserialize<UsageLimitReached>(
+            message.Payload, OutboxSerializerOptions.Default);
+        @event.ShouldNotBeNull();
+        @event.ResetsAt.ShouldBe(resetsAt);
+    }
+
+    [Fact]
+    public async Task WhenUsageLimited_DeliversNothingDirectlyAndClearsCreditBlock()
+    {
+        // Arrange
+        await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
 
         DateTimeOffset resetsAt = DateTimeOffset.UtcNow.AddHours(2);
         CapturingIntegrationEventProcessor processor = new();
@@ -386,8 +411,8 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CreditProbeResult.UsageLimited typedResult = result.ShouldBeOfType<CreditProbeResult.UsageLimited>();
             typedResult.ResetsAt.ShouldBe(resetsAt, tolerance: TimeSpan.FromSeconds(1));
 
-            // Assert — DispatchPaused delivered directly (ephemeral broadcast)
-            processor.Captured.ShouldContain(e => e is Foundry.Modules.Workers.Contracts.DispatchPaused);
+            // Assert — the pause is applied by Workers from the outbox, not delivered here
+            processor.Captured.ShouldBeEmpty();
         }
 
         // Assert — credit block is cleared (account is Available)
@@ -405,7 +430,6 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
     {
         // Arrange
         await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
-        await SeedGlobalSettingsAsync();
 
         DateTimeOffset resetsAt = DateTimeOffset.UtcNow.AddHours(2);
         CapturingIntegrationEventProcessor processor = new();
@@ -793,7 +817,6 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
     {
         // Arrange
         await SeedBlockedAccountAsync(DateTimeOffset.UtcNow.AddHours(1));
-        await SeedGlobalSettingsAsync();
 
         CapturingSystemNotificationBroadcaster broadcaster = new();
         DateTimeOffset resetsAt = DateTimeOffset.UtcNow.AddHours(2);
