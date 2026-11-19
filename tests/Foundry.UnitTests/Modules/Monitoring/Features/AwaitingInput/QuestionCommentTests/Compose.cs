@@ -53,4 +53,33 @@ public sealed class Compose
             () => body.ShouldNotContain("Recommended:"),
             () => body.ShouldEndWith(LegacySentence));
     }
+
+    [Fact]
+    public void WhenModelTextMentionsSomeone_TheMentionIsNeutralizedInEveryField()
+    {
+        // Act
+        string body = QuestionComment.Compose(
+            [new InputQuestion("Ask @alice?", "@org/team owns it.", "Ping @bob.")]);
+
+        // Assert
+        body.ShouldSatisfyAllConditions(
+            () => body.ShouldContain("Ask @\u200Balice?"),
+            () => body.ShouldContain("@\u200Borg/team owns it."),
+            () => body.ShouldContain("Ping @\u200Bbob."));
+    }
+
+    [Fact]
+    public void WhenModelTextHoldsAnHtmlTag_TheTagIsWrittenAsText()
+    {
+        // Act
+        string body = QuestionComment.Compose(
+            [new InputQuestion("Close </details>?", "<img src=x>", "Keep <b>.")]);
+
+        // Assert
+        body.ShouldSatisfyAllConditions(
+            () => body.ShouldContain("Close &lt;/details&gt;?"),
+            () => body.ShouldContain("&lt;img src=x&gt;"),
+            () => body.ShouldContain("Keep &lt;b&gt;."),
+            () => body.ShouldNotContain("<"));
+    }
 }
