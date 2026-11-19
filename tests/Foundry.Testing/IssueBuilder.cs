@@ -47,6 +47,7 @@ public sealed class IssueBuilder
     private DateTimeOffset? _newestCommentAt;
     private DateTimeOffset _runStartedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _transitionedAt = DateTimeOffset.UtcNow;
+    private bool _autoMerge;
     private IReadOnlyList<FailingCheck> _failingChecks =
     [
         new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
@@ -107,6 +108,8 @@ public sealed class IssueBuilder
     public IssueBuilder WithRunStartedAt(DateTimeOffset value) { _runStartedAt = value; return this; }
 
     /// <summary>The time every transition the builder replays happens at, so each built state entered it then.</summary>
+    public IssueBuilder WithAutoMerge(bool value) { _autoMerge = value; return this; }
+
     public IssueBuilder WithTransitionedAt(DateTimeOffset value) { _transitionedAt = value; return this; }
 
     public IssueBuilder WithFailingChecks(IEnumerable<FailingCheck> value) { _failingChecks = [.. value]; return this; }
@@ -238,8 +241,32 @@ public sealed class IssueBuilder
         (MergePendingIssue)ChecksPending().ResolveVerdict(
             new ChecksOutcome.Passed(),
             autoMerge: true,
+            reviewPullRequests: false,
             _verifiedHeadSha,
             _transitionedAt);
+
+    /// <summary>
+    /// Builds a <see cref="ReviewQueuedIssue"/> (ADR 0113): the checks gate resolved the configured outcome
+    /// (<see cref="WithChecksOutcome"/>, passed by default) on a repository with Review Pull Requests on, reviewing the
+    /// configured verified head; <see cref="WithAutoMerge"/> sets the repository's Merge When Checks Pass.
+    /// </summary>
+    public ReviewQueuedIssue ReviewQueued() =>
+        (ReviewQueuedIssue)ChecksPending().ResolveVerdict(
+            _checksOutcome,
+            _autoMerge,
+            reviewPullRequests: true,
+            _verifiedHeadSha,
+            _transitionedAt);
+
+    public ReviewInProgressIssue ReviewInProgress() => ReviewQueued().Claim(_workerRunId, _transitionedAt);
+
+    /// <summary>Builds a <see cref="ReviewFailedIssue"/>: the review run failed transiently on its first attempt.</summary>
+    public ReviewFailedIssue ReviewFailed() =>
+        (ReviewFailedIssue)ReviewInProgress().MarkRunFailed(
+            _failureReason,
+            FailureCategory.TransientApiError,
+            consecutiveAutoRetryableFailures: 1,
+            _failedAt);
 
     /// <summary>
     /// Builds a <see cref="RebasePendingIssue"/> catching up (ADR 0111): the merge-pending issue's merge was refused

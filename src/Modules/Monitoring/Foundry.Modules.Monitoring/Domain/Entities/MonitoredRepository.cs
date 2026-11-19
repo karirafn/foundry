@@ -90,6 +90,13 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// </summary>
     public bool MergeWhenChecksPass { get; private set; }
 
+    /// <summary>
+    /// Whether a pull request whose checks gate resolves green goes through the review role before Foundry merges it
+    /// or hands it to a person (ADR 0113). Read when the checks verdict is recorded, never snapshotted. Defaults to
+    /// <see langword="false"/> while the review step ships dark; nothing sets it yet.
+    /// </summary>
+    public bool ReviewPullRequests { get; private set; }
+
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
     /// <summary>

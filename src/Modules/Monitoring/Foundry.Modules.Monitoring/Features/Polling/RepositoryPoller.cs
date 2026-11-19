@@ -212,6 +212,7 @@ internal sealed class RepositoryPoller(
         CancellationToken cancellationToken)
     {
         bool changed = await DetectReviewStatusChangesAsync(repository, provider, issueNumber, cancellationToken);
+        changed |= await DetectReviewStepClosuresAsync(repository, provider, issueNumber, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
@@ -613,6 +614,63 @@ internal sealed class RepositoryPoller(
         return changed;
     }
 
+    /// <summary>
+    /// For every issue in the review step (ADR 0113), or only <paramref name="issueNumber"/> when supplied: records a
+    /// closed issue (a person merged the pull request with a closing keyword) or a pull request closed without merging.
+    /// The reviewer's verdict, not the provider, moves such an issue on otherwise, so feedback and heads are not read.
+    /// </summary>
+    private async Task<bool> DetectReviewStepClosuresAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        int? issueNumber,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ReviewStepIssueInfo> reviewStepIssues = await issueQueries.GetReviewStepIssuesAsync(
+            repository.Id,
+            cancellationToken);
+
+        bool changed = false;
+
+        foreach (ReviewStepIssueInfo reviewStepIssue in reviewStepIssues)
+        {
+            if (issueNumber is { } targetNumber && reviewStepIssue.IssueNumber != targetNumber)
+            {
+                continue;
+            }
+
+            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+                repository.Slug,
+                reviewStepIssue.IssueNumber,
+                cancellationToken);
+
+            if (isClosedResult is not Result<bool>.Success isClosedSuccess)
+            {
+                continue;
+            }
+
+            if (isClosedSuccess.Value)
+            {
+                repository.RecordIntegrationEvent(new ProviderIssueClosed(repository.Id, reviewStepIssue.IssueNumber));
+                changed = true;
+                continue;
+            }
+
+            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
+                repository.Slug,
+                reviewStepIssue.PullRequestUrl,
+                cancellationToken);
+
+            if (prStatusResult is Result<PullRequestStatus>.Success { Value: { IsClosed: true, IsMerged: false } })
+            {
+                repository.RecordIntegrationEvent(
+                    new ProviderPullRequestClosed(repository.Id, reviewStepIssue.IssueNumber));
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
     private async Task<bool> DetectChecksPendingStatusChangesAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
@@ -709,7 +767,8 @@ internal sealed class RepositoryPoller(
                 outcome,
                 failingChecks,
                 prStatusSuccess.Value.HeadSha,
-                repository.MergeWhenChecksPass));
+                repository.MergeWhenChecksPass,
+                repository.ReviewPullRequests));
 
             // Only a provider-driven verdict counts as a webhook-mapped change; the grace-window and
             // upper-bound exits are time-based (deadline nudges), never announced by a delivery.

@@ -153,8 +153,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     [Fact]
     public async Task WhenQueuedIssuesAcrossTiers_OrderedByDispatchKey_TierRankFirst()
     {
-        // Arrange: RevisionQueued (rank 0) should come before ContinuationQueued (rank 1)
-        // and FreshQueuedIssue (rank 2), even if detected later.
+        // Arrange: RevisionQueued (rank 0) should come before ContinuationQueued (rank 2)
+        // and FreshQueuedIssue (rank 4), even if detected later.
         MonitoredRepositoryId repoA = MonitoredRepositoryId.New();
 
         SeedQueuedIssue(repoA, issueNumber: 1, detectedAt: Now.AddHours(-3));

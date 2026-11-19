@@ -8,6 +8,8 @@ namespace Foundry.Modules.Monitoring.Contracts;
 /// existed still deserialize; a null stores no Verified Head, and the review pass re-checks the issue once.
 /// <paramref name="AutoMerge"/> is the repository's live Merge When Checks Pass setting when the verdict was
 /// recorded (ADR 0105); rows written before it existed deserialize as <see langword="false"/> and route to review.
+/// <paramref name="ReviewPullRequests"/> is the repository's live Review Pull Requests setting when the verdict was
+/// recorded (ADR 0113); rows written before it existed deserialize as <see langword="false"/> and skip the review step.
 /// </summary>
 public sealed record ChecksVerdictResolved(
     MonitoredRepositoryId RepositoryId,
@@ -15,4 +17,5 @@ public sealed record ChecksVerdictResolved(
     string Outcome,
     IReadOnlyList<FailingCheck> FailingChecks,
     string? HeadSha,
-    bool AutoMerge = false) : IIntegrationEvent;
+    bool AutoMerge = false,
+    bool ReviewPullRequests = false) : IIntegrationEvent;

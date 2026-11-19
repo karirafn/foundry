@@ -63,6 +63,12 @@ public sealed class ReviewIssue : Issue
     /// </summary>
     public MergeOutcome? MergeOutcome { get; private set; }
 
+    /// <summary>
+    /// Why the review step did not judge the pull request (ADR 0113): <see cref="ValueObjects.ReviewOutcome.Skipped"/>
+    /// when the review run failed with no automatic retry left, and <see langword="null"/> otherwise.
+    /// </summary>
+    public ReviewOutcome? ReviewOutcome { get; private set; }
+
     internal static ReviewIssue FromChecksPending(
         ChecksPendingIssue source,
         ChecksOutcome checksOutcome,
@@ -103,6 +109,30 @@ public sealed class ReviewIssue : Issue
         review.RebaseConflictAttempts = source.RebaseConflictAttempts;
         review.VerifiedHeadSha = source.CatchUpHeadSha;
         review.MergeOutcome = new MergeOutcome.Skipped(MergeSkipReasons.CatchUpFailed);
+        return review;
+    }
+
+    /// <summary>
+    /// The review step handed the pull request to a person: the reviewer approved it for a person, requested changes,
+    /// approved it without auto-merge, or its run failed open with <paramref name="reviewOutcome"/> recorded. The
+    /// reviewed commit is the Verified Head, so a person's push since sends the issue back through the checks gate.
+    /// </summary>
+    internal static ReviewIssue FromReviewInProgress(
+        ReviewInProgressIssue source,
+        ReviewOutcome? reviewOutcome,
+        DateTimeOffset transitionedAt)
+    {
+        ReviewIssue review = new(source.Id, transitionedAt);
+        review.CopySharedPropertiesFrom(source);
+        review.WorkerRunId = source.WorkerRunId;
+        review.BranchName = source.BranchName;
+        review.PullRequestUrl = source.PullRequestUrl;
+        review.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        review.ChecksOutcome = source.ChecksOutcome;
+        review.RebaseOutcome = source.RebaseOutcome;
+        review.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        review.VerifiedHeadSha = source.ReviewedCommit;
+        review.ReviewOutcome = reviewOutcome;
         return review;
     }
 

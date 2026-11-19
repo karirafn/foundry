@@ -93,13 +93,14 @@ internal sealed class IssueQueries(
         // GetUntrackableIssueNumbersAsync.cs asserts that both sets agree, so any future drift
         // between this expression and Issue.IsRestingState() fails a test.
         // QueuedIssue covers all queued variants — EF Core translates `i is QueuedIssue`
-        // to `state IN ('queued', 'revision_queued', 'continuation_queued')` via TPH discriminators.
+        // to `state IN ('queued', 'revision_queued', 'continuation_queued', ...)` via TPH discriminators.
+        // A queued review is not resting: its pull request is open, and its closure completes it (ADR 0113).
         List<int> numbers = await db.Set<Issue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
             .Where(i =>
                 i is DetectedIssue ||
-                i is QueuedIssue ||
+                (i is QueuedIssue && !(i is ReviewQueuedIssue)) ||
                 i is BlockedIssue ||
                 i is TriageBlockedIssue ||
                 i is FailedIssue ||
@@ -143,6 +144,32 @@ internal sealed class IssueQueries(
                 i.VerifiedHeadSha,
                 i.ChecksOutcome is ChecksOutcome.Passed))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        // Each review-step state maps pull_request_url on its own type, so the three are read separately.
+        List<ReviewStepIssueInfo> queued = await db.Set<ReviewQueuedIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ReviewStepIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .ToListAsync(cancellationToken);
+
+        List<ReviewStepIssueInfo> inProgress = await db.Set<ReviewInProgressIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ReviewStepIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .ToListAsync(cancellationToken);
+
+        List<ReviewStepIssueInfo> failed = await db.Set<ReviewFailedIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ReviewStepIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .ToListAsync(cancellationToken);
+
+        return [.. queued, .. inProgress, .. failed];
     }
 
     public async Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
@@ -457,6 +484,7 @@ internal sealed class IssueQueries(
         {
             IssueStage.Triage => IssueSummary.TriageStage,
             IssueStage.Implement => IssueSummary.ImplementStage,
+            IssueStage.Review => IssueSummary.ReviewStage,
             IssueStage.AwaitingReview => IssueSummary.AwaitingReviewStage,
             IssueStage.Done => IssueSummary.DoneStage,
             _ => throw new InvalidOperationException($"Unknown issue stage: {stage}"),
@@ -472,6 +500,7 @@ internal sealed class IssueQueries(
             RunKind.ChecksFix => IssueSummary.ChecksFixRunKind,
             RunKind.ConflictFix => IssueSummary.ConflictFixRunKind,
             RunKind.InputResume => IssueSummary.InputResumeRunKind,
+            RunKind.Review => IssueSummary.ReviewRunKind,
             null => null,
             _ => throw new InvalidOperationException($"Unknown run kind: {runKind}"),
         };
@@ -496,6 +525,7 @@ internal sealed class IssueQueries(
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
             RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
             TriageFailedIssue triageFailed => triageFailed.FailureCategory.Value,
+            ReviewFailedIssue reviewFailed => reviewFailed.FailureCategory.Value,
             _ => null,
         };
 
@@ -694,6 +724,9 @@ internal sealed class IssueQueries(
             PublishFailedIssue => "publish_failed",
             PublishBlockedIssue => "publish_blocked",
             BranchDivergedIssue => "branch_diverged",
+            ReviewQueuedIssue => "review_queued",
+            ReviewInProgressIssue => "review_in_progress",
+            ReviewFailedIssue => "review_failed",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -1068,6 +1101,28 @@ internal sealed class IssueQueries(
                 SideBranchName: diverged.SideBranchName,
                 SideBranchUrl: ProviderWebUrl.Branch(diverged.Url, diverged.SideBranchName),
                 DivergenceReason: BranchDivergenceReasonTokens.ToToken(diverged.DivergenceReason)),
+
+            ReviewFailedIssue reviewFailed => new IssueStateDetails(
+                WorkerRunId: reviewFailed.WorkerRunId.Value,
+                BranchName: reviewFailed.BranchName,
+                FeedbackCutoffAt: reviewFailed.FeedbackCutoffAt,
+                FailureReason: reviewFailed.FailureReason,
+                FailedAt: reviewFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: transientRetry,
+                ChecksOutcome: reviewFailed.ChecksOutcome.Discriminator),
+
+            IReviewStepState reviewStep => new IssueStateDetails(
+                WorkerRunId: reviewStep.WorkerRunId.Value,
+                BranchName: reviewStep.BranchName,
+                FeedbackCutoffAt: reviewStep.FeedbackCutoffAt,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                ChecksOutcome: reviewStep.ChecksOutcome.Discriminator),
 
             _ => null
         };

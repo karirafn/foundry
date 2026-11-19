@@ -7,6 +7,7 @@ namespace Foundry.Modules.Issues.Contracts;
 [JsonDerivedType(typeof(Revision), "revision")]
 [JsonDerivedType(typeof(Continuation), "continuation")]
 [JsonDerivedType(typeof(Triage), "triage")]
+[JsonDerivedType(typeof(Review), "review")]
 public abstract record DispatchContext
 {
     private DispatchContext()
@@ -44,5 +45,14 @@ public abstract record DispatchContext
     public sealed record Triage : DispatchContext
     {
         public override DispatchRole Role => DispatchRole.Triage;
+    }
+
+    /// <summary>
+    /// A review run (ADR 0113): it judges the pull request at <paramref name="ReviewedCommit"/> on
+    /// <paramref name="BranchName"/> and returns a verdict. It pushes nothing, so the run itself gets no branch.
+    /// </summary>
+    public sealed record Review(string BranchName, string PullRequestUrl, string ReviewedCommit) : DispatchContext
+    {
+        public override DispatchRole Role => DispatchRole.Review;
     }
 }

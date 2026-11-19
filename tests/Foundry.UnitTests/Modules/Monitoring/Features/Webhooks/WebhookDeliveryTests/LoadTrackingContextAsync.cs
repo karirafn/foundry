@@ -61,6 +61,9 @@ public sealed class LoadTrackingContextAsync
             CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
 
+        public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<ReviewStepIssueInfo>>([]);
+
         public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken) =>

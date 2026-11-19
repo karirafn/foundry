@@ -30,7 +30,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
     {
     }
 
-    public override int TierRank => 3;
+    public override int TierRank => 4;
 
     public override BranchName? DispatchBranchName => GeneratedBranchName;
 

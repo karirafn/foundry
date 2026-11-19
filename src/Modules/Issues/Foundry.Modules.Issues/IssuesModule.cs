@@ -60,6 +60,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerRunFalsePositivesConfirmed, WorkerRunFalsePositivesConfirmedHandler>();
         services.AddIntegrationEventHandler<WorkerRunPublishPhaseChanged, WorkerRunPublishPhaseChangedHandler>();
         services.AddIntegrationEventHandler<TriageRunCompleted, TriageRunCompletedHandler>();
+        services.AddIntegrationEventHandler<ReviewRunCompleted, ReviewRunCompletedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
@@ -98,6 +99,9 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueTriageQueued>(services);
         AddIssueStateChangedHandler<IssueTriageInProgress>(services);
         AddIssueStateChangedHandler<IssueTriageFailed>(services);
+        AddIssueStateChangedHandler<IssueReviewQueued>(services);
+        AddIssueStateChangedHandler<IssueReviewInProgress>(services);
+        AddIssueStateChangedHandler<IssueReviewFailed>(services);
         AddIssueStateChangedHandler<IssuePublishFailed>(services);
         AddIssueStateChangedHandler<IssuePublishBlocked>(services);
         AddIssueStateChangedHandler<IssueBranchDiverged>(services);

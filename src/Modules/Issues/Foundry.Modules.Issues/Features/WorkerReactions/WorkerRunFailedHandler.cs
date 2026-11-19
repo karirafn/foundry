@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -14,6 +15,7 @@ namespace Foundry.Modules.Issues.Features.WorkerReactions;
 internal sealed class WorkerRunFailedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    IWorkerRunQueries workerRunQueries,
     ILogger<WorkerRunFailedHandler> logger) : IIntegrationEventHandler<WorkerRunFailed>
 {
     public async Task HandleAsync(WorkerRunFailed @event, CancellationToken cancellationToken)
@@ -181,6 +183,32 @@ internal sealed class WorkerRunFailedHandler(
 
             TriageFailedIssue triageFailed = triaging.MarkFailed(@event.ReasonDescription, category, failedAt);
             await db.TransitionAsync(triaging, triageFailed, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
+        // A failed review never merges (ADR 0113): it retries while its transient schedule lasts, then fails open to a
+        // person's review. The streak is read here so the failed state only ever holds an issue with a retry left.
+        if (issue is ReviewInProgressIssue reviewing)
+        {
+            if (@event.WorkerRunId != reviewing.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunFailed for issue {IssueId} has run id {EventRunId} which does not match current run id {CurrentRunId}; ignoring stale event.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    reviewing.WorkerRunId);
+                return;
+            }
+
+            int streak = category.AutomaticRetry is { } schedule
+                ? await workerRunQueries.CountConsecutiveTransientRunsAsync(
+                    @event.IssueId,
+                    schedule.MaxRetries,
+                    cancellationToken)
+                : 0;
+
+            Issue next = reviewing.MarkRunFailed(@event.ReasonDescription, category, streak, failedAt);
+            await db.TransitionAsync(reviewing, next, domainEventDispatcher, cancellationToken);
             return;
         }
 

@@ -124,6 +124,9 @@ public sealed class ChecksPendingIssue : Issue
     /// <summary>
     /// Routes the checks verdict to the next state:
     /// <list type="bullet">
+    /// <item><b>Review step:</b> <see cref="ChecksOutcome.Passed"/> or <see cref="ChecksOutcome.NoneDetected"/> with
+    /// <paramref name="reviewPullRequests"/> on and a known <paramref name="headSha"/> → <see cref="ReviewQueuedIssue"/>,
+    /// reviewing that head (ADR 0113). The review's verdict then decides between merge and review.</item>
     /// <item><b>Merge:</b> <see cref="ChecksOutcome.Passed"/> with <paramref name="autoMerge"/> on and a known
     /// <paramref name="headSha"/> → <see cref="MergePendingIssue"/>, pinned to that head (ADR 0105).</item>
     /// <item><b>Fix:</b> <see cref="ChecksOutcome.StillFailing"/> naming a failing check whose script ran, under the
@@ -137,9 +140,17 @@ public sealed class ChecksPendingIssue : Issue
     public Issue ResolveVerdict(
         ChecksOutcome checksOutcome,
         bool autoMerge,
+        bool reviewPullRequests,
         string? headSha,
         DateTimeOffset transitionedAt)
     {
+        if (reviewPullRequests
+            && checksOutcome is (ChecksOutcome.Passed or ChecksOutcome.NoneDetected)
+            && !string.IsNullOrWhiteSpace(headSha))
+        {
+            return QueueReview(checksOutcome, headSha, autoMerge, transitionedAt);
+        }
+
         if (checksOutcome is ChecksOutcome.Passed passed
             && autoMerge
             && !HasPersonFeedback
@@ -154,6 +165,22 @@ public sealed class ChecksPendingIssue : Issue
         }
 
         return ToReview(checksOutcome, headSha, transitionedAt);
+    }
+
+    private ReviewQueuedIssue QueueReview(
+        ChecksOutcome checksOutcome,
+        string headSha,
+        bool autoMerge,
+        DateTimeOffset transitionedAt)
+    {
+        ReviewQueuedIssue queued = ReviewQueuedIssue.FromChecksPending(
+            this,
+            checksOutcome,
+            headSha,
+            autoMerge,
+            transitionedAt);
+        AddDomainEvent(new Events.IssueReviewQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 
     private MergePendingIssue MarkMergePending(ChecksOutcome.Passed passed, string headSha, DateTimeOffset transitionedAt)

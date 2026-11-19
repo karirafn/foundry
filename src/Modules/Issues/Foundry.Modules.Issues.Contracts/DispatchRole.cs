@@ -9,4 +9,5 @@ public enum DispatchRole
 {
     Implement = 0,
     Triage = 1,
+    Review = 2,
 }

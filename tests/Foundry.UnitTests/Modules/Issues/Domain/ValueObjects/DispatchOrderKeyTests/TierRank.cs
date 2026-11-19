@@ -27,7 +27,20 @@ public sealed class TierRank
     }
 
     [Fact]
-    public void WhenContinuationQueued_TierRankIsOne()
+    public void WhenReviewQueued_TierRankIsOneBetweenRevisionAndContinuation()
+    {
+        // Arrange
+        ReviewQueuedIssue queued = new IssueBuilder().ReviewQueued();
+
+        // Act
+        int tierRank = queued.TierRank;
+
+        // Assert
+        tierRank.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenContinuationQueued_TierRankIsTwo()
     {
         // Arrange
         ContinuationQueuedIssue continuationQueued = new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow);
@@ -36,11 +49,11 @@ public sealed class TierRank
         int tierRank = continuationQueued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(1);
+        tierRank.ShouldBe(2);
     }
 
     [Fact]
-    public void WhenFreshQueued_TierRankIsThree()
+    public void WhenFreshQueued_TierRankIsFour()
     {
         // Arrange
         FreshQueuedIssue queued = new IssueBuilder().FreshQueued();
@@ -49,11 +62,11 @@ public sealed class TierRank
         int tierRank = queued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(3);
+        tierRank.ShouldBe(4);
     }
 
     [Fact]
-    public void WhenTriageQueued_TierRankIsTwoBetweenContinuationAndFresh()
+    public void WhenTriageQueued_TierRankIsThreeBetweenContinuationAndFresh()
     {
         // Arrange
         TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
@@ -62,6 +75,6 @@ public sealed class TierRank
         int tierRank = queued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(2);
+        tierRank.ShouldBe(3);
     }
 }

@@ -22,6 +22,14 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The repository's issues in the review step (ADR 0113): queued for, running, or waiting to retry a review. The
+    /// review pass reads only whether their issue or pull request closed.
+    /// </summary>
+    Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);

@@ -539,6 +539,66 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAReviewStepIssueIsClosedOnProvider_RaisesProviderIssueClosed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewStepIssues: [new ReviewStepIssueInfo(42, "https://github.com/owner/repo/pull/99")]);
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(true),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldHaveSingleItem().IssueNumber.ShouldBe(42);
+    }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public async Task WhenAReviewStepIssuePullRequestIsRead_RaisesProviderPullRequestClosedOnlyWhenClosedUnmerged(
+        bool isClosed,
+        bool isMerged,
+        bool expectClosed)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewStepIssues: [new ReviewStepIssueInfo(42, prUrl)]);
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: isClosed, IsMerged: isMerged, HeadSha: null)),
+        };
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        await sut.PollAsync(repository, provider, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().Any().ShouldBe(expectClosed);
+    }
+
+    [Fact]
     public async Task WhenReviewIssueIsOpenAndPullRequestIsOpen_RaisesNoReviewStatusEvents()
     {
         // Arrange
@@ -2287,6 +2347,7 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlySet<int> _untrackableNumbers;
         private readonly IReadOnlySet<int> _unpublishedRunNumbers;
         private readonly IReadOnlySet<int> _dispatchCandidateNumbers;
+        private readonly IReadOnlyList<ReviewStepIssueInfo> _reviewStepIssues;
 
         public StubIssueQueries()
             : this(new HashSet<int>(), new Dictionary<int, IssueSnapshot>())
@@ -2304,8 +2365,10 @@ public sealed class PollAsync : IAsyncDisposable
             IReadOnlySet<int>? dispatchCandidateNumbers,
             IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
             IReadOnlySet<int>? untrackableNumbers = null,
-            IReadOnlySet<int>? unpublishedRunNumbers = null)
+            IReadOnlySet<int>? unpublishedRunNumbers = null,
+            IReadOnlyList<ReviewStepIssueInfo>? reviewStepIssues = null)
         {
+            _reviewStepIssues = reviewStepIssues ?? [];
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _dispatchCandidateNumbers = dispatchCandidateNumbers ?? new HashSet<int>();
@@ -2335,6 +2398,9 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
+
+        public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult(_reviewStepIssues);
 
         public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
             MonitoredRepositoryId repositoryId,

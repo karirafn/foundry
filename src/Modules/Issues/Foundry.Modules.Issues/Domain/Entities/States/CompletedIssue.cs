@@ -45,6 +45,17 @@ public sealed class CompletedIssue : Issue
         return completed;
     }
 
+    internal static CompletedIssue FromReviewStep<TSource>(TSource source, DateTimeOffset completedAt)
+        where TSource : Issue, IReviewStepState
+    {
+        CompletedIssue completed = new(source.Id, completedAt);
+        completed.CopySharedPropertiesFrom(source);
+        completed.BranchName = source.BranchName;
+        completed.PullRequestUrl = source.PullRequestUrl;
+        completed.CompletedAt = completedAt;
+        return completed;
+    }
+
     internal static CompletedIssue FromRebasePending(RebasePendingIssue source, DateTimeOffset completedAt)
     {
         CompletedIssue completed = new(source.Id, completedAt);

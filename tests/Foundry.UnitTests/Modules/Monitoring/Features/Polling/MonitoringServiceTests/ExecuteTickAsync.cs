@@ -539,6 +539,9 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             return Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
         }
 
+        public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<ReviewStepIssueInfo>>([]);
+
         public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

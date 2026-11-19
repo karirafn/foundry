@@ -19,7 +19,7 @@ public sealed class PolymorphicMembers
     // TierRank
 
     [Fact]
-    public void WhenQueuedIssue_TierRankIsThree()
+    public void WhenQueuedIssue_TierRankIsFour()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -29,7 +29,7 @@ public sealed class PolymorphicMembers
         int tierRank = queued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(3);
+        tierRank.ShouldBe(4);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class PolymorphicMembers
     }
 
     [Fact]
-    public void WhenContinuationQueuedIssue_TierRankIsOne()
+    public void WhenContinuationQueuedIssue_TierRankIsTwo()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -67,11 +67,11 @@ public sealed class PolymorphicMembers
         int tierRank = continuationQueued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(1);
+        tierRank.ShouldBe(2);
     }
 
     [Fact]
-    public void WhenTriageQueuedIssue_TierRankIsTwo()
+    public void WhenTriageQueuedIssue_TierRankIsThree()
     {
         // Arrange
         TriageQueuedIssue triageQueued = new IssueBuilder().TriageQueued();
@@ -80,7 +80,7 @@ public sealed class PolymorphicMembers
         int tierRank = triageQueued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(2);
+        tierRank.ShouldBe(3);
     }
 
     // DispatchBranchName

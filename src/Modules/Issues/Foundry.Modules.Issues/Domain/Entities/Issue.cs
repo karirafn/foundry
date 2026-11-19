@@ -140,12 +140,13 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// the issue is under active review. The terminal state completed returns false — completion wins over
     /// provider closure. publish_failed and publish_blocked return false — their run still holds unpublished work. All other states
     /// (including unchanged) return true and are hard-deleted on untrack.
-    /// QueuedIssue covers all queued variants (queued, triage_queued, revision_queued, continuation_queued) — any future
-    /// queued tier added under QueuedIssue is included by default, which is the correct safe default.
+    /// QueuedIssue covers the queued variants (queued, triage_queued, revision_queued, continuation_queued) — any future
+    /// queued tier added under QueuedIssue is included by default, which is the correct safe default. review_queued is the
+    /// exception: its pull request is open, so like review its provider closure completes it rather than deleting it.
     /// </summary>
     public bool IsRestingState() =>
         this is DetectedIssue
-            or QueuedIssue
+            or QueuedIssue and not ReviewQueuedIssue
             or BlockedIssue
             or TriageBlockedIssue
             or FailedIssue

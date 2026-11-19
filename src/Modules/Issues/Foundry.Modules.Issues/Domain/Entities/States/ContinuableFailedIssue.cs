@@ -147,6 +147,24 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         return failed;
     }
 
+    internal static ContinuableFailedIssue FromReviewStep<TSource>(
+        TSource source,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+        where TSource : Issue, IReviewStepState
+    {
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
+        failed.CopySharedPropertiesFrom(source);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.BranchName = source.BranchName;
+        failed.PullRequestUrl = source.PullRequestUrl;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
     internal static ContinuableFailedIssue FromPublishBlocked(
         PublishBlockedIssue source,
         string failureReason,

@@ -245,6 +245,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<PublishFailedIssue>("publish_failed")
             .HasValue<PublishBlockedIssue>("publish_blocked")
             .HasValue<BranchDivergedIssue>("branch_diverged")
+            .HasValue<ReviewQueuedIssue>("review_queued")
+            .HasValue<ReviewInProgressIssue>("review_in_progress")
+            .HasValue<ReviewFailedIssue>("review_failed")
             .IsComplete(true);
 
         builder.Property<string>("state")

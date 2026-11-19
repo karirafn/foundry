@@ -81,6 +81,29 @@ public sealed class MergePendingIssue : Issue
         return mergePending;
     }
 
+    /// <summary>
+    /// The reviewer approved a pull request whose checks passed, on a repository with Merge When Checks Pass on
+    /// (ADR 0113): the merge is pinned to the reviewed commit, so a push since the review is refused as moved.
+    /// </summary>
+    internal static MergePendingIssue FromReviewInProgress(
+        ReviewInProgressIssue source,
+        ChecksOutcome.Passed checksOutcome,
+        DateTimeOffset transitionedAt)
+    {
+        MergePendingIssue mergePending = new(source.Id, transitionedAt);
+        mergePending.CopySharedPropertiesFrom(source);
+        mergePending.WorkerRunId = source.WorkerRunId;
+        mergePending.BranchName = source.BranchName;
+        mergePending.PullRequestUrl = source.PullRequestUrl;
+        mergePending.HeadSha = source.ReviewedCommit;
+        mergePending.ChecksOutcome = checksOutcome;
+        mergePending.RebaseOutcome = source.RebaseOutcome;
+        mergePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        mergePending.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        mergePending.EnteredMergePendingAt = transitionedAt;
+        return mergePending;
+    }
+
     /// <summary>The pull request merged: the issue is done.</summary>
     public CompletedIssue Complete(DateTimeOffset completedAt)
     {

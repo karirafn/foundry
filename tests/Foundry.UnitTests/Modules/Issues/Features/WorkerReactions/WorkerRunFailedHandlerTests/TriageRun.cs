@@ -36,6 +36,7 @@ public sealed class TriageRun : IAsyncDisposable
         _sut = new WorkerRunFailedHandler(
             _dbContext,
             new CapturingDomainEventDispatcher(),
+            new NullWorkerRunQueries(),
             NullLogger<WorkerRunFailedHandler>.Instance);
     }
 

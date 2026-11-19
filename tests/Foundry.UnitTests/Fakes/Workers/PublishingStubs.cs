@@ -91,6 +91,9 @@ internal sealed class StubIssueQueries(int issueNumber = 42, string title = "Add
     public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
+    public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ReviewStepIssueInfo>>([]);
+
     public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 

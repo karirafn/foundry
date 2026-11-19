@@ -75,7 +75,7 @@ public sealed class CatchUp
             .ShouldBeOfType<ChecksPendingIssue>();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, "9e8d", DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, "9e8d", DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<MergePendingIssue>().HeadSha.ShouldBe("9e8d");
@@ -127,7 +127,7 @@ public sealed class CatchUp
         MergePendingIssue mergePending = atCap
             .ResolveRebase(new RebaseOutcome.Conflict(), DateTimeOffset.UtcNow)
             .ShouldBeOfType<ChecksPendingIssue>()
-            .ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, Head, DateTimeOffset.UtcNow)
+            .ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow)
             .ShouldBeOfType<MergePendingIssue>();
         RebasePendingIssue rebasePending = mergePending.CatchUp(DateTimeOffset.UtcNow);
 
