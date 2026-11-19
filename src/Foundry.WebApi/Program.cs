@@ -8,8 +8,10 @@ using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
 using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.StatusBroadcast;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
@@ -65,7 +67,8 @@ builder.Services.AddDbContext<FoundryDbContext>((sp, options) =>
 {
     options.UseSqlite(foundryConnectionString);
     options.AddInterceptors(
-        sp.GetRequiredService<OutboxSaveChangesInterceptor>());
+        sp.GetRequiredService<OutboxSaveChangesInterceptor>(),
+        sp.GetRequiredService<WebhookStatusBroadcastInterceptor>());
 });
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
@@ -144,6 +147,7 @@ builder.Services.AddSignalR()
         options.PayloadSerializerOptions.Converters.Add(new WorkerRunIdJsonConverter()));
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 builder.Services.AddSingleton<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
+builder.Services.AddSingleton<IRepositoryWebhookBroadcaster, SignalRRepositoryWebhookBroadcaster>();
 builder.Services.AddSingleton<ILoginSessionBroadcaster, SignalRLoginSessionBroadcaster>();
 builder.Services.AddScoped<IWorkerActivityBroadcaster, SignalRWorkerActivityBroadcaster>();
 builder.Services.AddSingleton<IAgentActivityBroadcaster, SignalRAgentActivityBroadcaster>();

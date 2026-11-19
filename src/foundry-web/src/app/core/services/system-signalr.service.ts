@@ -15,6 +15,11 @@ import { LoginSessionUpdate } from '../models/settings.model';
 import { UsageSnapshot } from '../models/usage.model';
 import { HubConnections, SharedHubConnection } from './hub-connection';
 
+/** A repository's webhook status changed; the payload carries only its id, so clients re-read the status. */
+export interface RepositoryWebhookChange {
+  repositoryId: string;
+}
+
 const RELOAD_TRIGGER_CATEGORIES: ReadonlySet<string> = new Set([
   DISPATCH_NOTIFICATION_CATEGORY,
   IMAGE_BUILD_NOTIFICATION_CATEGORY,
@@ -44,6 +49,12 @@ export class SystemSignalRService {
   private readonly _usageSnapshotUpdated = new Subject<UsageSnapshot | null>();
   readonly usageSnapshotUpdated: Observable<UsageSnapshot | null> = this._usageSnapshotUpdated.asObservable();
 
+  private readonly _repositoryWebhookChanged = new Subject<RepositoryWebhookChange>();
+  readonly repositoryWebhookChanged: Observable<RepositoryWebhookChange> = this._repositoryWebhookChanged.asObservable();
+
+  private readonly _repositoryWebhooksChanged = new Subject<void>();
+  readonly repositoryWebhooksChanged: Observable<void> = this._repositoryWebhooksChanged.asObservable();
+
   constructor() {
     this._hub.on('SystemNotificationReceived', (notification: SystemNotification) => {
       if (RELOAD_TRIGGER_CATEGORIES.has(notification.category)) {
@@ -63,6 +74,14 @@ export class SystemSignalRService {
 
     this._hub.on('UsageSnapshotUpdated', (snapshot: UsageSnapshot | null) => {
       this._usageSnapshotUpdated.next(snapshot);
+    });
+
+    this._hub.on('RepositoryWebhookChanged', (change: RepositoryWebhookChange) => {
+      this._repositoryWebhookChanged.next(change);
+    });
+
+    this._hub.on('RepositoryWebhooksChanged', () => {
+      this._repositoryWebhooksChanged.next();
     });
 
     this._hub.onConnected(() => {

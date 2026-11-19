@@ -9,6 +9,7 @@ import { RepositoryService } from '../repository.service';
 import { AccountService } from '../../accounts/account.service';
 import { RepositorySummary, UpdateRepositoryRequest } from '../repository.model';
 import { AccountSummary } from '../../accounts/account.model';
+import { provideFakeHubs } from '../../../../core/testing/fake-hub-transport';
 
 const ACCOUNT_1: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -62,6 +63,7 @@ function setup(repositoryId: string = REPO_1.id) {
       RepositoryService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideFakeHubs(),
       {
         provide: ActivatedRoute,
         useValue: {
@@ -773,6 +775,7 @@ describe('RepositoryPageComponent', () => {
           RepositoryService,
           provideHttpClient(),
           provideHttpClientTesting(),
+          provideFakeHubs(),
           provideRouter([
             {
               path: 'repositories/:repositoryId',

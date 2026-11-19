@@ -12,7 +12,14 @@ import { AccountService } from '../../settings/accounts/account.service';
 import { AccountSummary } from '../../settings/accounts/account.model';
 import { API_KEY_RESPONSE, flushSettings } from '../../settings/testing/settings-page-harness';
 
-const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
+const mockSystemSignalR = {
+  reconnected: NEVER,
+  reloadTrigger: NEVER,
+  loginSessionUpdate: NEVER,
+  repositoryWebhookChanged: NEVER,
+  repositoryWebhooksChanged: NEVER,
+  notifications: signal([]).asReadonly(),
+};
 
 @Component({ template: '', standalone: true })
 class StubIssuesComponent {}
