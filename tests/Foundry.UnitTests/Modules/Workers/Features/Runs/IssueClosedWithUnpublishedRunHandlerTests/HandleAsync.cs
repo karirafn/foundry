@@ -209,7 +209,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new RunExit(0, OomKilled: false, RunStopReason.Exited, PublishingRunFixture.ExitedAt),
             containerOutput: "log tail",
             RunVerdict.Done(),
-            new RunPullRequestText("Add retry", "Body"),
+            new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Body"], ["dotnet test: passed."], [], null)),
             transcript);
 
     private static PublishBlockedRun Blocked(PublishingRun publishing) =>

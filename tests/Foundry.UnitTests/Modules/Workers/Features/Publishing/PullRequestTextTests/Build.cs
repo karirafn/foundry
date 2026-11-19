@@ -11,8 +11,7 @@ public sealed class Build
 {
     private const string IssueTitle = "Retry webhook delivery";
     private static readonly PullRequestSummary Summary = PullRequestSummary.TryCreate("add retry to webhook delivery")!;
-    private static readonly PullRequestDescription Description =
-        PullRequestDescription.TryCreate("## Summary\n\nAdds retry to webhook delivery.")!;
+    private static readonly PullRequestDescription Description = Descriptions.Create();
 
     [Theory]
     [InlineData(nameof(PullRequestKind.Feature), "feat")]
@@ -79,24 +78,77 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenTheVerdictHasADescription_TheBodyIsTheDescriptionThenTheClosesLine()
+    public void AFreshPullRequestWithNothingToCheck_HasNoAlertAndListsChangesAndVerificationThenTheClosesLine()
     {
+        // Arrange
+        PullRequestDescription description = Descriptions.Create(
+            changes: ["Retries webhook delivery with backoff.", "Logs each attempt."],
+            verification: ["dotnet test: 12 passed."]);
+
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, Summary, Description, IssueTitle, 42, ["feat: add retry"], [], []);
+        PullRequestText text = PullRequestText.Build(
+            PullRequestKind.Feature, Summary, description, IssueTitle, 42, ["feat: add retry"], [], []);
 
         // Assert
-        text.Body.ShouldBe("## Summary\n\nAdds retry to webhook delivery.\n\nCloses #42");
+        text.Body.ShouldBe("""
+            **Changes**
+            - Retries webhook delivery with backoff.
+            - Logs each attempt.
+
+            **Verified**
+            - dotnet test: 12 passed.
+
+            Closes #42
+            """);
     }
 
     [Fact]
-    public void WhenTheDescriptionIsMissing_TheBodyListsTheCommitSubjectsThenTheClosesLine()
+    public void APullRequestBody_HasNoRunKindHeading()
+    {
+        // Arrange
+        PullRequestDescription description = Descriptions.Create(cause: "The retry loop never backed off.");
+
+        // Act
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Bug, Summary, description, IssueTitle, 42, [], [], []);
+
+        // Assert
+        text.Body.ShouldStartWith("**Cause:** The retry loop never backed off.\n\n**Changes**\n");
+    }
+
+    [Fact]
+    public void WhenTheDescriptionHasNotes_TheyFollowTheVerificationCollapsed()
+    {
+        // Arrange
+        PullRequestDescription description = Descriptions.Create(notes: "## Migration\n\n- drops `pull_request_body`");
+
+        // Act
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, Summary, description, IssueTitle, 42, [], [], []);
+
+        // Assert
+        text.Body.ShouldEndWith("""
+            - dotnet test: 12 passed.
+
+            <details><summary>Implementation notes</summary>
+
+            ## Migration
+
+            - drops `pull_request_body`
+
+            </details>
+
+            Closes #42
+            """);
+    }
+
+    [Fact]
+    public void WhenTheDescriptionIsMissing_TheBodyListsTheCommitSubjectsAsChangesThenTheClosesLine()
     {
         // Act
         PullRequestText text = PullRequestText.Build(
             PullRequestKind.Feature, Summary, null, IssueTitle, 7, ["feat: add retry", "  ", " test: cover retry "], [], []);
 
         // Assert
-        text.Body.ShouldBe("## Changes\n\n- feat: add retry\n- test: cover retry\n\nCloses #7");
+        text.Body.ShouldBe("**Changes**\n- feat: add retry\n- test: cover retry\n\nCloses #7");
     }
 
     [Fact]

@@ -36,7 +36,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
         """;
 
     private const string DoneLog =
-        """{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"done","pullRequest":{"summary":"add retry","body":"Adds retry."}}}""";
+        """{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"done","pullRequest":{"summary":"add retry","changes":["Adds retry."],"verification":["dotnet test: passed."]}}}""";
 
     private const string MissingLog =
         """{"type":"result","subtype":"success","is_error":false,"result":"Done"}""";

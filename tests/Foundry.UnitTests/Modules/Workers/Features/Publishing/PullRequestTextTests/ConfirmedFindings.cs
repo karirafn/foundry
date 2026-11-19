@@ -10,7 +10,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Publishing.PullRequestTextT
 
 public sealed class ConfirmedFindings
 {
-    private static readonly PullRequestDescription Description = PullRequestDescription.TryCreate("Adds the store.")!;
+    private static readonly PullRequestDescription Description = Descriptions.Create();
 
     private static readonly FalsePositiveConfirmation Confirmation = new(
         [
@@ -19,62 +19,62 @@ public sealed class ConfirmedFindings
         ],
         new DateTimeOffset(2026, 11, 13, 16, 17, 0, TimeSpan.FromHours(1)));
 
-    private static readonly RevertedFile[] Reverted = [new("tools/protoc.exe", RevertedFileReason.Binary, 940)];
-
     private const string Section = """
-        ## Secret findings confirmed as false positives
+        <details><summary>Confirmed false positives (2)</summary>
 
-        Foundry's diff gate flagged these lines as possible secrets. An operator confirmed them as false positives on 2026-11-13 15:17 UTC, so Foundry published them.
+        An operator confirmed these possible secrets as false positives on 2026-11-13 15:17 UTC, so Foundry published them.
 
         - `src/store.ts` line 3: rule `generic-api-key`
         - `src/mix.service.spec.ts` line 41: rule `generic-api-key`
+
+        </details>
         """;
 
     [Fact]
-    public void AConfirmedRun_ListsTheConfirmedFindingsAfterTheRevertedFilesAndBeforeTheClosesLine()
+    public void AConfirmedRun_ListsTheConfirmedFindingsCollapsedBeforeTheClosesLine()
     {
         // Act
-        PullRequestText text = PullRequestText.Build(
-            PullRequestKind.Feature,
-            null,
-            Description,
-            "Store",
-            42,
-            [],
-            Reverted,
-            [],
-            Confirmation);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, "Store", 42, [], [], [], Confirmation);
 
         // Assert
-        text.Body.ShouldEndWith($"(940 B)\n\n{Section}\n\nCloses #42");
-        text.Body.ShouldStartWith("Adds the store.\n\n## Files reverted by Foundry");
+        text.Body.ShouldEndWith($"- dotnet test: 12 passed.\n\n{Section}\n\nCloses #42");
     }
 
     [Fact]
     public void AConfirmedRevision_ListsTheConfirmedFindingsInTheSummaryComment()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], [], Confirmation);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], [], Confirmation);
 
         // Assert
-        comment.ShouldBe($"Adds the store.\n\n{Section}");
+        comment.ShouldEndWith($"- dotnet test: 12 passed.\n\n{Section}");
+    }
+
+    [Fact]
+    public void ConfirmedFindings_RaiseNoAlert()
+    {
+        // Act
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], [], Confirmation);
+
+        // Assert
+        comment.ShouldNotContain("[!WARNING]");
     }
 
     [Fact]
     public void ARunNeverConfirmed_HasNoConfirmedSection()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], [], confirmation: null);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], [], confirmation: null);
 
         // Assert
-        comment.ShouldBe("Adds the store.");
+        comment.ShouldNotContain("Confirmed false positives");
     }
 
     [Fact]
     public void TheSection_NeverCarriesTheFindingsCommit()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], [], Confirmation);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], [], Confirmation);
 
         // Assert
         comment.ShouldNotContain("3333333");

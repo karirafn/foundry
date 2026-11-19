@@ -232,7 +232,7 @@ internal sealed class WorkerRunPublisher(
         PullRequestText text = PullRequestText.Build(
             KindOf(issue.Kind.Kind),
             PullRequestSummary.TryCreate(run.PullRequestSummary),
-            PullRequestDescription.TryCreate(run.PullRequestBody),
+            PullRequestDescription.TryCreate(run.PullRequestDescriptionDraft),
             issue.Title,
             issue.IssueNumber,
             run.PublishedCommitSubjects,
@@ -262,8 +262,16 @@ internal sealed class WorkerRunPublisher(
     // A later run on a branch with an open pull request never overwrites the body a reviewer may have edited.
     private async Task<Result> PostSummaryAsync(PublishingRun run, string pullRequestUrl, CancellationToken cancellationToken)
     {
+        // The run publishes before its completion moves the issue on, so the issue still reports this run's kind.
+        Result<IssueDetail> issueResult = await issueQueries.GetIssueDetailAsync(run.IssueId, cancellationToken);
+        if (issueResult is not Result<IssueDetail>.Success { Value: { } issue })
+        {
+            return Result.Fail(RunPublishingErrors.Transient("Reading the issue for the run summary failed."));
+        }
+
         string body = PullRequestText.SummaryComment(
-            PullRequestDescription.TryCreate(run.PullRequestBody),
+            issue.RunKind,
+            PullRequestDescription.TryCreate(run.PullRequestDescriptionDraft),
             run.PublishedCommitSubjects,
             run.RevertedFiles,
             run.GenericFindings,

@@ -608,7 +608,8 @@ internal sealed class IssueQueries(
             StateDetails: stateDetails,
             Kind: BuildKindDetails(issue),
             Triage: BuildTriageDetails(issue),
-            Clarifications: BuildClarificationDetails(issue));
+            Clarifications: BuildClarificationDetails(issue),
+            RunKind: RunKindName(issue.RunKind));
     }
 
     /// <summary>

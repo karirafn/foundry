@@ -158,8 +158,7 @@ public sealed class RepositoryRoles
 
         // Act
         JsonNode pullRequest = schema["properties"]![ImplementVerdict.PullRequestProperty]!;
-        JsonNode summary = pullRequest["properties"]![ImplementVerdict.SummaryProperty]!;
-        JsonNode body = pullRequest["properties"]![ImplementVerdict.BodyProperty]!;
+        JsonNode Property(string name) => pullRequest["properties"]![name]!;
         string[] required = [.. pullRequest["required"]!.AsArray().Select(node => node!.GetValue<string>())];
         string[] properties = [.. pullRequest["properties"]!.AsObject().Select(pair => pair.Key)];
 
@@ -167,15 +166,43 @@ public sealed class RepositoryRoles
         pullRequest.ShouldSatisfyAllConditions(
             () => pullRequest["type"]!.GetValue<string>().ShouldBe("object"),
             () => pullRequest["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
-            () => required.ShouldBe([ImplementVerdict.SummaryProperty, ImplementVerdict.BodyProperty], ignoreOrder: true),
-            () => properties.ShouldBe([ImplementVerdict.SummaryProperty, ImplementVerdict.BodyProperty], ignoreOrder: true),
-            () => summary["type"]!.GetValue<string>().ShouldBe("string"),
-            () => summary["minLength"]!.GetValue<int>().ShouldBe(1),
-            () => summary["maxLength"]!.GetValue<int>().ShouldBe(PullRequestSummary.MaxLength),
-            () => summary["pattern"]!.GetValue<string>().ShouldBe(@"^[^\r\n]+$"),
-            () => body["type"]!.GetValue<string>().ShouldBe("string"),
-            () => body["minLength"]!.GetValue<int>().ShouldBe(1),
-            () => body["maxLength"]!.GetValue<int>().ShouldBe(PullRequestDescription.MaxLength));
+            () => required.ShouldBe(
+                [ImplementVerdict.SummaryProperty, ImplementVerdict.ChangesProperty, ImplementVerdict.VerificationProperty],
+                ignoreOrder: true),
+            () => properties.ShouldBe(
+                [
+                    ImplementVerdict.SummaryProperty,
+                    ImplementVerdict.ChangesProperty,
+                    ImplementVerdict.VerificationProperty,
+                    ImplementVerdict.CauseProperty,
+                    ImplementVerdict.AttentionProperty,
+                    ImplementVerdict.NotesProperty,
+                ],
+                ignoreOrder: true),
+            () => AssertString(Property(ImplementVerdict.SummaryProperty), PullRequestSummary.MaxLength, singleLine: true),
+            () => AssertLines(Property(ImplementVerdict.ChangesProperty), 1, PullRequestDescription.MaxChanges, PullRequestDescription.ItemMaxLength),
+            () => AssertLines(
+                Property(ImplementVerdict.VerificationProperty), 1, PullRequestDescription.MaxVerification, PullRequestDescription.ItemMaxLength),
+            () => AssertLines(
+                Property(ImplementVerdict.AttentionProperty), 0, PullRequestDescription.MaxAttention, PullRequestDescription.AttentionItemMaxLength),
+            () => AssertString(Property(ImplementVerdict.CauseProperty), PullRequestDescription.CauseMaxLength, singleLine: false),
+            () => AssertString(Property(ImplementVerdict.NotesProperty), PullRequestDescription.NotesMaxLength, singleLine: false));
+    }
+
+    private static void AssertString(JsonNode property, int maxLength, bool singleLine)
+    {
+        property["type"]!.GetValue<string>().ShouldBe("string");
+        property["minLength"]!.GetValue<int>().ShouldBe(1);
+        property["maxLength"]!.GetValue<int>().ShouldBe(maxLength);
+        (property["pattern"]?.GetValue<string>()).ShouldBe(singleLine ? @"^[^\r\n]+$" : null);
+    }
+
+    private static void AssertLines(JsonNode property, int minItems, int maxItems, int itemMaxLength)
+    {
+        property["type"]!.GetValue<string>().ShouldBe("array");
+        property["minItems"]!.GetValue<int>().ShouldBe(minItems);
+        property["maxItems"]!.GetValue<int>().ShouldBe(maxItems);
+        AssertString(property["items"]!, itemMaxLength, singleLine: true);
     }
 
     [Fact]
@@ -245,7 +272,7 @@ public sealed class RepositoryRoles
     }
 
     [Theory]
-    [InlineData("""{"outcome":"done","pullRequest":{"summary":"add retry to webhook delivery","body":"Adds retry."}}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"done","pullRequest":{"summary":"add retry to webhook delivery","changes":["Adds retry."],"verification":["dotnet test: passed."]}}""", RunVerdictStatus.Done)]
     [InlineData("""{"outcome":"done"}""", RunVerdictStatus.Invalid)]
     [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""", RunVerdictStatus.NeedsInput)]
     public void ASampleMatchingTheImplementVerdictSchema_ParsesWithTheImplementVerdictParser(string sample, RunVerdictStatus expected)

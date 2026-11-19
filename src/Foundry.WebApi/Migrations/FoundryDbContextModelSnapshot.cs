@@ -3454,10 +3454,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("published_commit_subjects");
 
-                    b.Property<string>("PullRequestBody")
+                    b.Property<string>("PullRequestDescriptionDraft")
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
-                        .HasColumnName("pull_request_body");
+                        .HasColumnName("pull_request_description");
 
                     b.Property<DateTimeOffset?>("PullRequestSettledAt")
                         .HasColumnType("TEXT")

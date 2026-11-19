@@ -71,7 +71,7 @@ public sealed class Begin
             new RunExit(0, OomKilled: false, RunStopReason.Exited, PublishingRunFixture.ExitedAt),
             containerOutput: "log tail",
             RunVerdict.Done(),
-            new RunPullRequestText("Add retry", "Body"));
+            new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Body"], ["dotnet test: passed."], [], null)));
 
         // Assert
         active.SourceTokenHash.ShouldBe(minted);

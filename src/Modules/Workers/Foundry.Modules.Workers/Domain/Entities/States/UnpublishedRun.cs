@@ -45,7 +45,7 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         ExitedAt = exit.ExitedAt;
         ContainerOutput = containerOutput;
         PullRequestSummary = pullRequestText?.Summary;
-        PullRequestBody = pullRequestText?.Body;
+        PullRequestDescriptionDraft = pullRequestText?.Description;
         PendingTranscript = transcript?.Transcript;
         PendingTranscriptCapturedAt = transcript?.CapturedAt;
         CarryDispatchFactsFrom(active);
@@ -78,8 +78,8 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
     /// <summary>The verdict's <c>pullRequest.summary</c> as the run wrote it, scrubbed only when it is used.</summary>
     public string? PullRequestSummary { get; private set; }
 
-    /// <summary>The verdict's <c>pullRequest.body</c> as the run wrote it, scrubbed only when it is used.</summary>
-    public string? PullRequestBody { get; private set; }
+    /// <summary>The verdict's <c>pullRequest</c> description fields as the run wrote them, scrubbed only when they are used.</summary>
+    public RunPullRequestDescription? PullRequestDescriptionDraft { get; private set; }
 
     /// <summary>Failed publish attempts since the run last started publishing from an operator's request or its exit.</summary>
     public int FailedPublishAttempts { get; private protected set; }
@@ -114,7 +114,9 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
             : null;
 
     public RunPullRequestText? PullRequestText =>
-        PullRequestSummary is null && PullRequestBody is null ? null : new RunPullRequestText(PullRequestSummary, PullRequestBody);
+        PullRequestSummary is null && PullRequestDescriptionDraft is null
+            ? null
+            : new RunPullRequestText(PullRequestSummary, PullRequestDescriptionDraft);
 
     /// <summary>Ends the run without publishing: its unpublished work is discarded for <paramref name="reason"/>.</summary>
     private protected FailedRun DiscardWith(FailureReason reason)
@@ -166,7 +168,7 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         ExitedAt = source.ExitedAt;
         ContainerOutput = source.ContainerOutput;
         PullRequestSummary = source.PullRequestSummary;
-        PullRequestBody = source.PullRequestBody;
+        PullRequestDescriptionDraft = source.PullRequestDescriptionDraft;
         FailedPublishAttempts = source.FailedPublishAttempts;
         PublishedCommitSubjects = source.PublishedCommitSubjects;
         PublishedAt = source.PublishedAt;
