@@ -1,27 +1,76 @@
 {
   "$defs": {
     "questions": {
-      "description": "Questions a person must answer before the work can continue. Each names one decision and the context it needs.",
+      "description": "Questions a person must answer before the work can continue. Each names one decision, why it matters, and the options for it.",
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question", "context", "recommendation"],
+        "required": ["question", "problem", "impact", "options", "recommendation", "evidence"],
         "properties": {
           "question": {
-            "description": "One question, answerable on its own.",
+            "description": "One question, answerable on its own, on one line.",
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[^\\r\\n]+$"
           },
-          "context": {
-            "description": "What you found that raises the question, and the options you see.",
-            "type": "string"
+          "problem": {
+            "description": "What is wrong or undecided.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "impact": {
+            "description": "What goes wrong if it is left as it is.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "options": {
+            "description": "The choices a person can make, each a short choice without a letter: Foundry adds the letters a, b, c and d in this order.",
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[^\\r\\n]+$"
+            }
           },
           "recommendation": {
-            "description": "The one option you recommend, with its reason.",
-            "type": "string",
-            "minLength": 1
+            "description": "The one option you recommend, and why.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["option", "reason"],
+            "properties": {
+              "option": {
+                "description": "The letter of the recommended option: a for the first option, b for the second.",
+                "type": "string",
+                "enum": ["a", "b", "c", "d"]
+              },
+              "reason": {
+                "description": "Why this option is the one to take, on one line.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^[^\\r\\n]+$"
+              }
+            }
+          },
+          "evidence": {
+            "description": "file:line references and the facts read from them, one per item.",
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\r\\n]+$"
+            }
           }
         }
       }

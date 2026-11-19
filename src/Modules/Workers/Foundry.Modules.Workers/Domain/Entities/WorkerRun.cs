@@ -51,7 +51,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     public RunVerdictStatus? VerdictStatus { get; private set; }
 
     /// <summary>The questions of a <see cref="RunVerdictStatus.NeedsInput"/> verdict; <see langword="null"/> otherwise.</summary>
-    public IReadOnlyList<RunVerdictQuestion>? VerdictQuestions { get; private set; }
+    public IReadOnlyList<InputQuestion>? VerdictQuestions { get; private set; }
 
     /// <summary>The run's recorded verdict, or <see langword="null"/> when none was recorded.</summary>
     public RunVerdict? Verdict => VerdictStatus is { } status ? RunVerdict.FromStored(status, VerdictQuestions) : null;

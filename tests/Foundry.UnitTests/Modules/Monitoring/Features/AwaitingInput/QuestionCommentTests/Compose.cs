@@ -16,11 +16,29 @@ public sealed class Compose
         "Reply in a comment on this thread. The work resumes once replies have been quiet for two minutes.";
 
     [Fact]
+    public void WhenEveryQuestionIsLegacy_WritesTodaysText()
+    {
+        // Act
+        string body = QuestionComment.Compose(
+            [
+                new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres."),
+                new InputQuestion.Legacy("Keep v1?", string.Empty, "Yes."),
+            ]);
+
+        // Assert
+        body.ReplaceLineEndings("\n").ShouldBe(
+            "Foundry needs input before the work on this issue can continue.\n\n"
+            + "1. **Which database?**\n   Two are configured.\n   **Recommended:** Postgres.\n"
+            + "2. **Keep v1?**\n   **Recommended:** Yes.\n\n"
+            + AcceptRecommendationsSentence);
+    }
+
+    [Fact]
     public void WhenAQuestionHasARecommendation_WritesItAfterTheContextLine()
     {
         // Act
         string body = QuestionComment.Compose(
-            [new InputQuestion("Which database?", "Two are configured.", "Postgres, since production runs it.")]);
+            [new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres, since production runs it.")]);
 
         // Assert
         body.ReplaceLineEndings("\n").ShouldContain(
@@ -34,8 +52,8 @@ public sealed class Compose
         // Act
         string body = QuestionComment.Compose(
             [
-                new InputQuestion("Which database?", "Two are configured.", "Postgres."),
-                new InputQuestion("Keep v1?", string.Empty, "Yes, clients still call it."),
+                new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres."),
+                new InputQuestion.Legacy("Keep v1?", string.Empty, "Yes, clients still call it."),
             ]);
 
         // Assert
@@ -46,7 +64,7 @@ public sealed class Compose
     public void WhenNoQuestionHasARecommendation_WritesNoRecommendedLineAndEndsWithTheLegacySentence()
     {
         // Act
-        string body = QuestionComment.Compose([new InputQuestion("Which database?", "Two are configured.", null)]);
+        string body = QuestionComment.Compose([new InputQuestion.Legacy("Which database?", "Two are configured.", null)]);
 
         // Assert
         body.ShouldSatisfyAllConditions(
@@ -59,7 +77,7 @@ public sealed class Compose
     {
         // Act
         string body = QuestionComment.Compose(
-            [new InputQuestion("Ask @alice?", "@org/team owns it.", "Ping @bob.")]);
+            [new InputQuestion.Legacy("Ask @alice?", "@org/team owns it.", "Ping @bob.")]);
 
         // Assert
         body.ShouldSatisfyAllConditions(
@@ -73,7 +91,7 @@ public sealed class Compose
     {
         // Act
         string body = QuestionComment.Compose(
-            [new InputQuestion("Close </details>?", "<img src=x>", "Keep <b>.")]);
+            [new InputQuestion.Legacy("Close </details>?", "<img src=x>", "Keep <b>.")]);
 
         // Assert
         body.ShouldSatisfyAllConditions(

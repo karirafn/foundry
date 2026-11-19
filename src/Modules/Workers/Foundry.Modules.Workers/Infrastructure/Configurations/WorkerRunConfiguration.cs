@@ -51,18 +51,16 @@ file static class WorkerRunValueConverters
 
 file static class RunVerdictValueConverters
 {
-    private static readonly JsonSerializerOptions QuestionsJsonOptions = new(JsonSerializerDefaults.Web);
-
     // Stored as the verdict schema's own tokens so the column reads the same as the run's structured_output.
     internal static readonly ValueConverter<RunVerdictStatus, string> StatusConverter = new(
         status => ToStored(status),
         value => FromStored(value));
 
-    internal static readonly ValueConverter<IReadOnlyList<RunVerdictQuestion>?, string> QuestionsConverter = new(
-        questions => JsonSerializer.Serialize(questions, QuestionsJsonOptions),
+    internal static readonly ValueConverter<IReadOnlyList<InputQuestion>?, string> QuestionsConverter = new(
+        questions => InputQuestionJson.Serialize(questions!),
         json => DeserializeQuestions(json));
 
-    internal static readonly ValueComparer<IReadOnlyList<RunVerdictQuestion>?> QuestionsComparer = new(
+    internal static readonly ValueComparer<IReadOnlyList<InputQuestion>?> QuestionsComparer = new(
         (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
         questions => questions == null ? 0 : questions.Aggregate(0, (hash, question) => HashCode.Combine(hash, question)),
         questions => questions == null ? null : questions.ToList());
@@ -85,9 +83,7 @@ file static class RunVerdictValueConverters
         _ => throw new InvalidOperationException($"Unknown stored verdict status: {value}"),
     };
 
-    private static List<RunVerdictQuestion> DeserializeQuestions(string json) =>
-        JsonSerializer.Deserialize<List<RunVerdictQuestion>>(json, QuestionsJsonOptions)
-            ?? throw new InvalidOperationException("Failed to deserialize the verdict questions.");
+    private static IReadOnlyList<InputQuestion> DeserializeQuestions(string json) => InputQuestionJson.Deserialize(json);
 }
 
 public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>

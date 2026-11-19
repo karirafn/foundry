@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -24,13 +25,45 @@ public sealed class Clarifications
     {
         // Arrange
         IReadOnlyList<Clarification> log =
-            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Postgres.")], AskedAt)];
+            [Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")], AskedAt)];
 
         // Act
         IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
 
         // Assert
-        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion("Which database?", "Two are configured.", "Postgres.")]);
+        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")]);
+    }
+
+    [Fact]
+    public void AStructuredQuestion_RoundTripsEveryField()
+    {
+        // Arrange
+        InputQuestion question = StructuredQuestionBuilder.Build(
+            options: ["SQLite", "Postgres", "Both"],
+            recommendedOption: "a",
+            evidence: ["src/Db.cs:12 opens SQLite", "appsettings.json:4 names Postgres"]);
+        IReadOnlyList<Clarification> log = [Clarification.Ask([question], AskedAt)];
+
+        // Act
+        IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
+
+        // Assert
+        read.ShouldHaveSingleItem().Questions.ShouldBe([question]);
+    }
+
+    // The shape the clarification log held before questions were structured, as the converter wrote it.
+    [Fact]
+    public void AQuestionStoredBeforeQuestionsWereStructured_ReadsAsLegacy()
+    {
+        // Arrange
+        const string Stored =
+            """[{"questions":[{"question":"Which database?","context":"Two are configured.","recommendation":"Postgres."}],"input":null,"askedAt":"2026-11-11T10:00:00+00:00","answeredAt":null}]""";
+
+        // Act
+        IReadOnlyList<Clarification> read = Deserialize(Stored);
+
+        // Assert
+        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")]);
     }
 
     [Fact]
@@ -44,7 +77,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Stored);
 
         // Assert
-        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion("Which database?", "Two are configured.", null)]);
+        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", null)]);
     }
 
     [Fact]
@@ -53,7 +86,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(ClarificationInput.FromComments("Use Postgres."), AskedAt.AddHours(1)),
         ];
 
@@ -72,7 +105,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(ClarificationInput.FromComments("Use Postgres."), AskedAt.AddHours(1)),
         ];
 
@@ -89,7 +122,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(
                     new ClarificationInput([new InputPart.Comments("See the description."), new InputPart.DescriptionEdited()]),
                     AskedAt.AddHours(1)),
@@ -110,7 +143,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.DescriptionEdited()]), AskedAt.AddHours(1)),
         ];
 
@@ -127,7 +160,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3)),
         ];
 
@@ -146,7 +179,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3)),
         ];
 
@@ -163,7 +196,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.BranchUpdated("aaa111", "bbb222")]), AskedAt.AddHours(1)),
         ];
 
@@ -184,7 +217,7 @@ public sealed class Clarifications
         // Arrange
         IReadOnlyList<Clarification> log =
         [
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(
                     new ClarificationInput([new InputPart.Comments("Pushed it."), new InputPart.BranchUpdated(fromSha, "bbb222")]),
                     AskedAt.AddHours(1)),
@@ -202,7 +235,7 @@ public sealed class Clarifications
     {
         // Arrange
         IReadOnlyList<Clarification> log =
-            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)];
+            [Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)];
 
         // Act
         string json = Serialize(log);

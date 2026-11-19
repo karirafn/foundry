@@ -1,7 +1,9 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Verdicts;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -37,10 +39,10 @@ public sealed class Parse
     {
         // Act
         RunVerdict verdict = _sut.Parse(Json(
-            """{"outcome":"needs_input","kind":"feature","questions":[{"question":"Which page?","context":"None is named.","recommendation":"The home page."}]}"""));
+            """{"outcome":"needs_input","kind":"feature","questions":[{"question":"Which page?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}"""));
 
         // Assert
-        verdict.ShouldBe(RunVerdict.NeedsInput([new RunVerdictQuestion("Which page?", "None is named.", "The home page.")]));
+        verdict.ShouldBe(RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which page?")]));
     }
 
     [Fact]

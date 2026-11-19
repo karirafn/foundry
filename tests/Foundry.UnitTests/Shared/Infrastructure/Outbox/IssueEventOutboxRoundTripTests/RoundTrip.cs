@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -52,7 +53,7 @@ public sealed class RoundTrip
             null,
             WorkerRunMergeState.None,
             Now,
-            new WorkerInputRequest([new InputQuestion("Which database?", "Two are configured.", "Postgres.")], BranchHasCommits: true));
+            new WorkerInputRequest([StructuredQuestionBuilder.Build()], BranchHasCommits: true));
 
         // Act
         WorkerRunCompleted? deserialized = RoundTripThroughOutbox(original);
@@ -68,7 +69,7 @@ public sealed class RoundTrip
     public void WhenAClaimCarriesAClarificationLog_RoundTripsThroughOutbox()
     {
         // Arrange
-        Clarification answered = Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Postgres.")], Now)
+        Clarification answered = Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")], Now)
             .Answer(ClarificationInput.FromComments("Use Postgres."), Now.AddHours(1));
         IssueClaimed original = new(new ClaimedIssueDispatch(
             IssueId.New(),

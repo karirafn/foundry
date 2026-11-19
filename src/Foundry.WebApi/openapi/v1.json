@@ -4062,12 +4062,38 @@
       },
       "InputQuestion": {
         "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/InputQuestionInputQuestionStructured"
+          },
+          {
+            "$ref": "#/components/schemas/InputQuestionInputQuestionLegacy"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "structured": "#/components/schemas/InputQuestionInputQuestionStructured",
+            "legacy": "#/components/schemas/InputQuestionInputQuestionLegacy"
+          }
+        }
+      },
+      "InputQuestionInputQuestionLegacy": {
+        "required": [
           "question",
           "context",
           "recommendation"
         ],
-        "type": "object",
         "properties": {
+          "$type": {
+            "enum": [
+              "legacy"
+            ],
+            "type": "string"
+          },
           "question": {
             "type": "string"
           },
@@ -4079,6 +4105,52 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "InputQuestionInputQuestionStructured": {
+        "required": [
+          "question",
+          "problem",
+          "impact",
+          "options",
+          "recommendedOption",
+          "recommendationReason",
+          "evidence"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "structured"
+            ],
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recommendedOption": {
+            "type": "string"
+          },
+          "recommendationReason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

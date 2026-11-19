@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 
 namespace Foundry.Testing;
 
@@ -306,7 +307,7 @@ public sealed class IssueBuilder
 
     /// <summary>The default questions an awaiting-input terminal asks.</summary>
     public static IReadOnlyList<InputQuestion> DefaultQuestions { get; } =
-        [new InputQuestion("Which database?", "Two are configured.", "Postgres.")];
+        [StructuredQuestionBuilder.Build()];
 
     /// <summary>An implement run that opened a pull request and then asked: resumes as a revision.</summary>
     public AwaitingInputIssue AwaitingInput() =>

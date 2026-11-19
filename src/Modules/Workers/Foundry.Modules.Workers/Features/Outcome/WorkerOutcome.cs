@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -66,7 +67,7 @@ internal abstract record WorkerOutcome
         BranchName BranchName,
         PullRequestUrl? PullRequestUrl,
         bool BranchHasCommits,
-        IReadOnlyList<RunVerdictQuestion> Questions,
+        IReadOnlyList<InputQuestion> Questions,
         string? ContainerOutput,
         RunResultSummary? Summary) : WorkerOutcome;
 

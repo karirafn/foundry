@@ -138,7 +138,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         WorkerRunId workerRunId = WorkerRunId.New();
         TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
-        IReadOnlyList<InputQuestion> questions = [new InputQuestion("Which endpoint?", "Two match.", "The v2 one.")];
+        IReadOnlyList<InputQuestion> questions = [new InputQuestion.Legacy("Which endpoint?", "Two match.", "The v2 one.")];
 
         // Act
         await _sut.HandleAsync(

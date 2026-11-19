@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Contracts;
+
 namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
@@ -19,17 +21,10 @@ public enum RunVerdictStatus
     Invalid,
 }
 
-/// <summary>
-/// One question a run asks a person, with the context it needs and the one option it recommends (the shared
-/// <c>questions</c> definition). <paramref name="Recommendation"/> is null only for a question recorded before runs
-/// returned recommendations.
-/// </summary>
-public sealed record RunVerdictQuestion(string Question, string Context, string? Recommendation);
-
 /// <summary>The verdict a worker run returned, as Foundry recorded it.</summary>
 public sealed record RunVerdict
 {
-    private RunVerdict(RunVerdictStatus status, IReadOnlyList<RunVerdictQuestion> questions)
+    private RunVerdict(RunVerdictStatus status, IReadOnlyList<InputQuestion> questions)
     {
         Status = status;
         Questions = questions;
@@ -38,7 +33,7 @@ public sealed record RunVerdict
     public RunVerdictStatus Status { get; }
 
     /// <summary>The run's questions; non-empty only for <see cref="RunVerdictStatus.NeedsInput"/>.</summary>
-    public IReadOnlyList<RunVerdictQuestion> Questions { get; }
+    public IReadOnlyList<InputQuestion> Questions { get; }
 
     public static RunVerdict Done() => new(RunVerdictStatus.Done, []);
 
@@ -46,7 +41,7 @@ public sealed record RunVerdict
 
     public static RunVerdict Invalid() => new(RunVerdictStatus.Invalid, []);
 
-    public static RunVerdict NeedsInput(IReadOnlyList<RunVerdictQuestion> questions)
+    public static RunVerdict NeedsInput(IReadOnlyList<InputQuestion> questions)
     {
         ArgumentNullException.ThrowIfNull(questions);
 
@@ -59,7 +54,7 @@ public sealed record RunVerdict
     }
 
     /// <summary>Rehydrates a verdict recorded on a worker run.</summary>
-    internal static RunVerdict FromStored(RunVerdictStatus status, IReadOnlyList<RunVerdictQuestion>? questions) =>
+    internal static RunVerdict FromStored(RunVerdictStatus status, IReadOnlyList<InputQuestion>? questions) =>
         new(status, questions is null ? [] : [.. questions]);
 
     public bool Equals(RunVerdict? other) =>

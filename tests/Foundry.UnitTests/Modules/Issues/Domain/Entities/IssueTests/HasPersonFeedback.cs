@@ -175,7 +175,7 @@ public sealed class HasPersonFeedback
     private static Issue AnswerQuestion(RevisionInProgressIssue inProgress)
     {
         AwaitingInputIssue awaiting = inProgress.MarkAwaitingInput(
-            [new InputQuestion("Which name?", "Two candidates.", null)],
+            [new InputQuestion.Legacy("Which name?", "Two candidates.", null)],
             Now,
             Now);
         awaiting.RecordQuestionPosted(1, Now, null);

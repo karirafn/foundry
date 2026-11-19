@@ -1,7 +1,9 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Verdicts;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -74,7 +76,7 @@ public sealed class TryParse
     {
         // Act
         ImplementVerdict? verdict = ImplementVerdict.TryParse(Json(
-            """{"outcome":"needs_input","questions":[{"question":"Which database?","context":"Both are named.","recommendation":"Postgres."},{"question":"Keep v1?","context":"","recommendation":"Yes."}]}"""));
+            """{"outcome":"needs_input","questions":[{"question":"Which database?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]},{"question":"Keep v1?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}"""));
 
         // Assert
         verdict.ShouldNotBeNull().ShouldSatisfyAllConditions(
@@ -82,8 +84,8 @@ public sealed class TryParse
             () => verdict!.PullRequest.ShouldBeNull(),
             () => verdict!.Questions.ShouldBe(
             [
-                new RunVerdictQuestion("Which database?", "Both are named.", "Postgres."),
-                new RunVerdictQuestion("Keep v1?", string.Empty, "Yes."),
+                StructuredQuestionBuilder.Build(question: "Which database?"),
+                StructuredQuestionBuilder.Build(question: "Keep v1?"),
             ]));
     }
 
@@ -102,9 +104,9 @@ public sealed class TryParse
     [InlineData("""{"outcome":"needs_input"}""")]
     [InlineData("""{"outcome":"needs_input","questions":[]}""")]
     [InlineData("""{"outcome":"needs_input","questions":"Which database?"}""")]
-    [InlineData("""{"outcome":"needs_input","questions":[{"question":"","context":"x"}]}""")]
+    [InlineData("""{"outcome":"needs_input","questions":[{"question":"","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""")]
     [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which?"}]}""")]
-    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which?","context":"x","extra":1}]}""")]
+    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"],"extra":1}]}""")]
     [InlineData("""{"outcome":"needs_input","questions":["Which?"]}""")]
     [InlineData("""{"outcome":"done","questions":[],"pullRequest":{"summary":"add retry","body":"Adds retry."}}""")]
     [InlineData("""{"outcome":"done","summary":"extra property","pullRequest":{"summary":"add retry","body":"Adds retry."}}""")]

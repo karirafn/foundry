@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,8 +67,8 @@ public sealed class WhenRunTransitions : IAsyncDisposable
         WorkerRunId runId = WorkerRunId.New();
         RunVerdict verdict = RunVerdict.NeedsInput(
         [
-            new RunVerdictQuestion("Which database?", "The issue names both SQLite and Postgres.", "Postgres."),
-            new RunVerdictQuestion("Keep the v1 endpoint?", string.Empty, "Yes."),
+            StructuredQuestionBuilder.Build(question: "Which database?"),
+            StructuredQuestionBuilder.Build(question: "Keep the v1 endpoint?"),
         ]);
         ActiveRun active = StartingRun.Begin(IssueId.New(), runId, WorkerRole.Implement, image: null).Activate(
             ContainerId.From("container-verdict"),
