@@ -14,6 +14,7 @@ internal static class VerdictServiceCollectionExtensions
     {
         services.AddSingleton<IWorkerVerdictParser, ImplementVerdictParser>();
         services.AddSingleton<IWorkerVerdictParser, TriageVerdictParser>();
+        services.AddSingleton<IWorkerVerdictParser, ReviewVerdictParser>();
         services.AddSingleton<RunVerdictReader>();
         services.AddSingleton<IVerdictOutcomeResolver, TriageOutcomeResolver>();
         services.AddSingleton<IVerdictOutcomeResolver, ReviewOutcomeResolver>();
