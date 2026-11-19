@@ -29,7 +29,6 @@ public sealed class LegacyCiphertextReEncryptionTests : IDisposable
     private const string ConfiguredLegacyName = @"C:\dev\foundry\src\Foundry.WebApi\";
     private const string GitHubUrl = "https://github.com";
     private const string Token = "ghp_account_token";
-    private const string BranchRulesToken = "ghp_branch_rules_token";
     private const string ApiKey = "sk-ant-legacy";
 
     private readonly TemporaryKeyRing _keys = new();
@@ -103,8 +102,7 @@ public sealed class LegacyCiphertextReEncryptionTests : IDisposable
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("legacy-account").ValueOrThrow(),
             new IssuedToken(Token, new TokenExpiry.NotChecked()),
-            BaseUrl.Create(GitHubUrl).ValueOrThrow(),
-            BranchRulesToken);
+            BaseUrl.Create(GitHubUrl).ValueOrThrow());
         MonitoredRepository repository = new MonitoredRepositoryBuilder().Build();
         string webhookSecret = repository.EnsureWebhookSecret();
         ClaudeAccount account = new ClaudeAccountBuilder().WithApiKey(ApiKey).Build();
@@ -128,7 +126,6 @@ public sealed class LegacyCiphertextReEncryptionTests : IDisposable
             .SingleAsync(TestContext.Current.CancellationToken);
 
         credential.Token.ShouldBe(new ProviderToken.Present(Token));
-        credential.BranchRulesToken.ShouldBe(new ProviderToken.Present(BranchRulesToken));
         repository.EnsureWebhookSecret().ShouldBe(seeded.WebhookSecret);
         account.AuthMode.ShouldBe(new AuthMode.ApiKey(new ApiKeyCredential.Present(ApiKey)));
     }

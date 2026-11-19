@@ -96,14 +96,6 @@ internal sealed class CredentialConfiguration(
 
         builder.Ignore(a => a.TokenExpiry);
 
-        // Same encryption mechanism as the account token; the column is nullable because the
-        // branch-rules token is optional.
-        builder.Property(a => a.BranchRulesToken)
-            .HasConversion(providerTokenConverter)
-            .HasMaxLength(TokenMaxLength)
-            .IsUnicode(false)
-            .HasColumnName("branch_rules_token");
-
         builder.Property(a => a.BaseUrl)
             .HasConversion(
                 url => url.Value.ToString(),

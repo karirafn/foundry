@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.AccountTokenHealth;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
@@ -67,7 +68,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IRepositoryEligibilityEvaluator? evaluator = null,
         ProviderHostGuard? hostGuard = null,
         IIssueProviderFactory? providerFactory = null,
-        IDomainEventDispatcher? domainEventDispatcher = null)
+        IDomainEventDispatcher? domainEventDispatcher = null,
+        bool registerWebhooks = false)
     {
         IRepositoryEligibilityEvaluator resolvedEvaluator = evaluator ?? new NoOpEligibilityEvaluator();
         RepositoryEligibilityDiffer differ = new(
@@ -83,9 +85,11 @@ public sealed class HandleAsync : IAsyncDisposable
             validateToken ?? new StubValidateTokenHandler("updated-user"),
             deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])));
 
+        IIssueProviderFactory resolvedFactory = providerFactory ?? new RecordingBranchRulesProviderFactory();
+
         BranchRuleEnforcer enforcer = new(
             resolvedEvaluator,
-            providerFactory ?? new RecordingBranchRulesProviderFactory(),
+            resolvedFactory,
             NullLogger<BranchRuleEnforcer>.Instance);
 
         OptedInBranchRuleApplier branchRuleApplier = new(
@@ -94,6 +98,15 @@ public sealed class HandleAsync : IAsyncDisposable
             enforcer,
             NullLogger<OptedInBranchRuleApplier>.Instance);
 
+        AccountWebhookRegistrar webhookRegistrar = new(
+            _dbContext,
+            differ,
+            new WebhookRegistrar(
+                new WebhookIngress(new StubWebhookSettingsQueries("https://hooks.example.com")),
+                resolvedFactory,
+                NullLogger<WebhookRegistrar>.Instance),
+            NullLogger<AccountWebhookRegistrar>.Instance);
+
         return new UpdateAccount.Handler(
             _dbContext,
             tokenAccountResolver,
@@ -101,7 +114,8 @@ public sealed class HandleAsync : IAsyncDisposable
             branchRuleApplier,
             hostGuard ?? BuildPassingGuard(),
             domainEventDispatcher ?? new NullDomainEventDispatcher(),
-            TimeProvider.System);
+            TimeProvider.System,
+            registerWebhooks ? webhookRegistrar : null);
     }
 
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
@@ -815,66 +829,19 @@ public sealed class HandleAsync : IAsyncDisposable
 
     // Stubs and fakes
 
-
-    private async Task<ProviderToken?> ReloadBranchRulesTokenAsync(CredentialId id)
-    {
-        _dbContext.ChangeTracker.Clear();
-        Credential reloaded = await _dbContext.Set<Credential>()
-            .SingleAsync(c => c.Id == id, TestContext.Current.CancellationToken);
-        return reloaded.BranchRulesToken;
-    }
-
-    [Fact]
-    public async Task WhenBranchRulesTokenSuppliedWithoutAccountToken_PersistsItAndReportsPresent()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCredentialAsync();
-        UpdateAccount.Handler handler = BuildHandler();
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_rules");
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("present");
-        (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBe(new ProviderToken.Present("github_pat_rules"));
-    }
-
-    [Fact]
-    public async Task WhenClearRequested_RemovesBranchRulesToken()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCredentialAsync();
-        credential.SetBranchRulesToken("github_pat_rules");
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        UpdateAccount.Handler handler = BuildHandler();
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, ClearBranchRulesToken: true);
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("absent");
-        (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBeNull();
-    }
-
     private static readonly RepositoryEligibility BranchProtectionViolations = new RepositoryEligibility.Ineligible(
     [
         EligibilityViolation.AllowDirectPushes(),
         EligibilityViolation.AllowForcePushes(),
     ]);
 
-    private async Task<GitHubCredential> SeedCoveringCredentialAsync(string? branchRulesToken = null)
+    private static StubNamespaceDeriver AliceDeriver() =>
+        new(new NamespaceDerivationOutcome.Derived([Namespace.Create("alice").ValueOrThrow()], []));
+
+    private async Task<GitHubCredential> SeedCoveringCredentialAsync()
     {
         GitHubCredential credential = await SeedCredentialAsync("alice");
         credential.SetNamespaces([Namespace.Create("alice").ValueOrThrow()]);
-        if (branchRulesToken is not null)
-        {
-            credential.SetBranchRulesToken(branchRulesToken);
-        }
-
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         return credential;
     }
@@ -894,79 +861,16 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBranchRulesTokenSaved_AppliesRulesToOptedInCoveredReposOnly()
+    public async Task WhenAccountTokenRotated_AppliesRulesToOptedInCoveredReposOnlyWithTheNewToken()
     {
         // Arrange
         GitHubCredential credential = await SeedCoveringCredentialAsync();
-        MonitoredRepository optedIn = await SeedRepoAsync("alice/opted-in", applyBranchRules: true);
+        await SeedRepoAsync("alice/opted-in", applyBranchRules: true);
         await SeedRepoAsync("alice/opted-out", applyBranchRules: false);
         RecordingBranchRulesProviderFactory factory = new();
         UpdateAccount.Handler handler = BuildHandler(
-            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
-            providerFactory: factory);
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_rules");
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        factory.ShouldSatisfyAllConditions(
-            () => factory.AppliedSlugs.ShouldBe(["alice/opted-in"]),
-            () => factory.TokensUsed.ShouldBe(["github_pat_rules"]));
-        updated.Value.AffectedRepositories.ShouldBe(
-            [new AffectedRepository(optedIn.Id.Value, "alice/opted-in", "ineligible", "eligible")]);
-    }
-
-    [Fact]
-    public async Task WhenBranchRulesTokenReplaced_AppliesWithTheNewToken()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCoveringCredentialAsync(branchRulesToken: "github_pat_old");
-        await SeedRepoAsync("alice/one", applyBranchRules: true);
-        RecordingBranchRulesProviderFactory factory = new();
-        UpdateAccount.Handler handler = BuildHandler(
-            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
-            providerFactory: factory);
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_new");
-
-        // Act
-        await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        factory.TokensUsed.ShouldBe(["github_pat_new"]);
-    }
-
-    [Fact]
-    public async Task WhenBranchRulesTokenCleared_RunsNoEnforcement()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCoveringCredentialAsync(branchRulesToken: "github_pat_rules");
-        await SeedRepoAsync("alice/one", applyBranchRules: true);
-        RecordingBranchRulesProviderFactory factory = new();
-        UpdateAccount.Handler handler = BuildHandler(
-            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
-            providerFactory: factory);
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, ClearBranchRulesToken: true);
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        factory.AppliedSlugs.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenBranchRulesTokenUntouched_RunsNoEnforcement()
-    {
-        // Arrange — a stored rules token, but the update only changes the account token.
-        GitHubCredential credential = await SeedCoveringCredentialAsync(branchRulesToken: "github_pat_rules");
-        await SeedRepoAsync("alice/one", applyBranchRules: true);
-        RecordingBranchRulesProviderFactory factory = new();
-        UpdateAccount.Handler handler = BuildHandler(
-            deriver: new StubNamespaceDeriver(
-                new NamespaceDerivationOutcome.Derived([Namespace.Create("alice").ValueOrThrow()], [])),
+            validateToken: new StubValidateTokenHandler("alice"),
+            deriver: AliceDeriver(),
             evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
             providerFactory: factory);
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
@@ -976,11 +880,33 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.ShouldSatisfyAllConditions(
+            () => factory.AppliedSlugs.ShouldBe(["alice/opted-in"]),
+            () => factory.TokensUsed.ShouldBe(["ghp_rotated"]));
+    }
+
+    [Fact]
+    public async Task WhenNoAccountTokenSupplied_RunsNoEnforcement()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCoveringCredentialAsync();
+        await SeedRepoAsync("alice/one", applyBranchRules: true);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null);
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
         factory.AppliedSlugs.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task WhenBranchRulesTokenSavedWithRotation_AffectedReflectsPostEnforcementEligibility()
+    public async Task WhenAccountTokenRotated_AffectedReflectsPostEnforcementEligibility()
     {
         // Arrange — the repo starts unreachable; rotation evaluates it ineligible, enforcement makes it eligible.
         GitHubCredential credential = await SeedCredentialAsync("alice");
@@ -995,11 +921,10 @@ public sealed class HandleAsync : IAsyncDisposable
         RecordingBranchRulesProviderFactory factory = new();
         UpdateAccount.Handler handler = BuildHandler(
             validateToken: new StubValidateTokenHandler("alice"),
-            deriver: new StubNamespaceDeriver(
-                new NamespaceDerivationOutcome.Derived([Namespace.Create("alice").ValueOrThrow()], [])),
+            deriver: AliceDeriver(),
             evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
             providerFactory: factory);
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated", "github_pat_rules");
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
 
         // Act
         UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -1017,63 +942,64 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         GitHubCredential credential = await SeedCoveringCredentialAsync();
         await SeedRepoAsync("alice/broken", applyBranchRules: true);
-        MonitoredRepository healthy = await SeedRepoAsync("alice/healthy", applyBranchRules: true);
+        await SeedRepoAsync("alice/healthy", applyBranchRules: true);
         RecordingBranchRulesProviderFactory factory = new RecordingBranchRulesProviderFactory()
             .WithException("alice/broken", new HttpRequestException("boom"));
         UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("alice"),
+            deriver: AliceDeriver(),
             evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
             providerFactory: factory);
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_rules");
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("present");
-        factory.AppliedSlugs.ShouldBe(["alice/broken", "alice/healthy"], ignoreOrder: true);
-        updated.Value.AffectedRepositories.ShouldBe(
-            [new AffectedRepository(healthy.Id.Value, "alice/healthy", "ineligible", "eligible")]);
-    }
-
-    [Fact]
-    public async Task WhenAccountTokenRotatedWithoutBranchRulesFields_PreservesBranchRulesToken()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCredentialAsync();
-        credential.SetBranchRulesToken("github_pat_rules");
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        UpdateAccount.Handler handler = BuildHandler();
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
 
         // Act
         UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
-        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("present");
-        (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBe(new ProviderToken.Present("github_pat_rules"));
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.AppliedSlugs.ShouldBe(["alice/broken", "alice/healthy"], ignoreOrder: true);
     }
 
     [Fact]
-    public async Task WhenAccountTokenRotatedWithNewBranchRulesToken_PersistsBoth()
+    public async Task WhenAccountTokenRotated_RegistersTheNotRegisteredWebhooksWithTheNewToken()
     {
         // Arrange
-        GitHubCredential credential = await SeedCredentialAsync();
-        UpdateAccount.Handler handler = BuildHandler();
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated", "github_pat_rules");
+        GitHubCredential credential = await SeedCoveringCredentialAsync();
+        await SeedRepoAsync("alice/one", applyBranchRules: false);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("alice"),
+            deriver: AliceDeriver(),
+            providerFactory: factory,
+            registerWebhooks: true);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
 
         // Act
         UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
         outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        _dbContext.ChangeTracker.Clear();
-        Credential reloaded = await _dbContext.Set<Credential>()
-            .SingleAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.Token.ShouldBe(new ProviderToken.Present("ghp_rotated")),
-            () => reloaded.BranchRulesToken.ShouldBe(new ProviderToken.Present("github_pat_rules")));
+        factory.ShouldSatisfyAllConditions(
+            () => factory.WebhookUpserts.Select(u => u.Slug).ShouldBe(["alice/one"]),
+            () => factory.TokensUsed.ShouldBe(["ghp_rotated"]));
+    }
+
+    [Fact]
+    public async Task WhenNoAccountTokenSupplied_RegistersNoWebhooks()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCoveringCredentialAsync();
+        await SeedRepoAsync("alice/one", applyBranchRules: false);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(providerFactory: factory, registerWebhooks: true);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null);
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.WebhookUpserts.ShouldBeEmpty();
     }
 
     private sealed class StubValidateTokenHandler(string accountName)

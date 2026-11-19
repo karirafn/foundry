@@ -24,7 +24,7 @@ export type DeniedRepositorySummary = Schemas['DeniedRepositorySummary'];
 // ProviderType refines CredentialSummary.provider.
 // AffectedRepositoryStatus refines AffectedRepository.previousStatus and AffectedRepository.newStatus.
 // TokenValidationKind refines ValidateTokenResponse.kind.
-// TokenStatus refines CredentialSummary.tokenStatus and CredentialSummary.branchRulesTokenStatus.
+// TokenStatus refines CredentialSummary.tokenStatus.
 // Update these unions when the corresponding C# contract values change.
 export type ProviderType = 'GitHub' | 'GitLab';
 export type AffectedRepositoryStatus =
@@ -49,13 +49,6 @@ const KNOWN_TOKEN_STATUSES: ReadonlySet<TokenStatus> = new Set<TokenStatus>([
   'invalid',
 ]);
 
-// The branch-rules token has no Invalid state, so a stray 'invalid' falls back to absent.
-const KNOWN_BRANCH_RULES_TOKEN_STATUSES: ReadonlySet<TokenStatus> = new Set<TokenStatus>([
-  'present',
-  'absent',
-  'unreadable',
-]);
-
 /**
  * Narrows the open-string wire field to a known TokenStatus, falling back to
  * hasToken for a response predating the field (defensive during rollout).
@@ -66,15 +59,6 @@ export function resolveTokenStatus(account: AccountSummary): TokenStatus {
     return raw as TokenStatus;
   }
   return account.hasToken ? 'present' : 'absent';
-}
-
-/** Narrows the open-string branch-rules token status; a response predating the field reads as absent. */
-export function resolveBranchRulesTokenStatus(account: AccountSummary): TokenStatus {
-  const raw = (account as { branchRulesTokenStatus?: string }).branchRulesTokenStatus;
-  if (raw && KNOWN_BRANCH_RULES_TOKEN_STATUSES.has(raw as TokenStatus)) {
-    return raw as TokenStatus;
-  }
-  return 'absent';
 }
 
 type TokenExpiryWire = AccountSummary['tokenExpiry'];

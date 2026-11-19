@@ -30,7 +30,6 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.ApplyBranchRules
 public sealed class WhenRepositoryExists : IAsyncDisposable
 {
     private const string AccountToken = "ghp_account_token";
-    private const string RulesToken = "ghp_rules_token";
 
     private readonly ProviderState _state = new();
     private readonly FoundryWebAppFactory _factory;
@@ -65,13 +64,12 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<Guid> SeedAccountAsync(string? branchRulesToken = RulesToken)
+    private async Task<Guid> SeedAccountAsync()
     {
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(
             _factory,
             name: "Rules Org",
-            token: AccountToken,
-            branchRulesToken: branchRulesToken);
+            token: AccountToken);
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         return accountId;
     }
@@ -116,7 +114,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOptedOutAtAddAndOnlyBranchRulesAreMissing_AppliesThemAndFlipsTheIntent()
+    public async Task WhenOptedOutAtAddAndOnlyBranchRulesAreMissing_AppliesThemWithTheAccountTokenAndFlipsTheIntent()
     {
         // Arrange — added with applyBranchRules=false: ineligible, nothing written
         Guid accountId = await SeedAccountAsync();
@@ -133,7 +131,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
         body.BranchRules.ShouldBe(new BranchRulesOutcome(BranchRulesOutcome.AppliedKind));
         body.Repository.Id.ShouldBe(repositoryId);
         body.Repository.Eligibility.ShouldNotBeNull().Status.ShouldBe("eligible");
-        _state.ApplyTokens.ShouldBe([RulesToken]);
+        _state.ApplyTokens.ShouldBe([AccountToken]);
         (await ReadStoredIntentAsync(repositoryId)).ShouldBeTrue();
     }
 
@@ -179,25 +177,6 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAccountHasNoRulesToken_SkipsWithNoRulesToken()
-    {
-        // Arrange
-        Guid accountId = await SeedAccountAsync(branchRulesToken: null);
-        Guid repositoryId = await SeedRepositoryAsync(accountId, applyBranchRules: false);
-
-        // Act
-        (HttpStatusCode status, ApplyBranchRulesResponse? body) = await ApplyAsync(accountId, repositoryId);
-
-        // Assert
-        status.ShouldBe(HttpStatusCode.OK);
-        body.ShouldNotBeNull();
-        body.BranchRules.ShouldSatisfyAllConditions(
-            o => o.Kind.ShouldBe(BranchRulesOutcome.SkippedKind),
-            o => o.Reason.ShouldBe(BranchRulesOutcome.NoRulesTokenReason));
-        _state.ApplyTokens.ShouldBeEmpty();
-    }
-
-    [Fact]
     public async Task WhenAccountDoesNotServeTheRepository_ReturnsNotFoundWithoutWriting()
     {
         // Arrange — a second account on the same host that does not cover "owner"
@@ -206,8 +185,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
         Guid otherAccountId = await AccountSeeder.SeedGitHubAccountAsync(
             _factory,
             name: "Other Org",
-            token: "ghp_other",
-            branchRulesToken: "ghp_other_rules");
+            token: "ghp_other");
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, otherAccountId, "other");
 
         // Act

@@ -952,6 +952,17 @@ describe('SetupReposStepComponent', () => {
       httpMock.expectNone(`/api/accounts/${ACCOUNT_ID}/repositories`);
     });
 
+    it('should say the batch-level branch rules are added with the account token', () => {
+      // Arrange / Act
+      const { el, httpMock } = selectAlphaAndBeta();
+
+      // Assert
+      expect(el.querySelector('#setup-apply-branch-rules-hint')?.textContent?.trim()).toBe(
+        'Applies to every repository added in this step. Where the default branch is missing the rules eligibility requires, Foundry adds them using the account token.',
+      );
+      httpMock.expectNone(`/api/accounts/${ACCOUNT_ID}/repositories`);
+    });
+
     it('should send applyBranchRules: true on every create in the batch by default', () => {
       // Arrange
       const { fixture, el, httpMock } = selectAlphaAndBeta();

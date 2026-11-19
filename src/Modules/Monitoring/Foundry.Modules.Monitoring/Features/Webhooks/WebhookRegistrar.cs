@@ -10,12 +10,11 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 
 /// <summary>
 /// Registers a repository's webhook on the provider — create, or update in place when a hook with the
-/// same payload URL exists — with the account's server-side (branch-rules) token, which is never
-/// injected into workers (ADR 0084, ADR 0085). The worker token is never used.
+/// same payload URL exists — with the account token (ADR 0085, ADR 0115).
 /// </summary>
 /// <remarks>
-/// No provider call is made when webhook ingress is not configured or the account has no readable
-/// server-side token. A successful registration moves the Webhook Status to <c>Pending</c> (an
+/// No provider call is made when webhook ingress is not configured or the account token is absent or
+/// unreadable. A successful registration moves the Webhook Status to <c>Pending</c> (an
 /// <c>Active</c> hook stays active); a failure leaves it unchanged, so a <c>NotRegistered</c>
 /// repository keeps showing the manual instructions. The caller saves the repository afterwards — a
 /// first registration may also generate the webhook secret.
@@ -52,12 +51,9 @@ internal sealed class WebhookRegistrar(
             return Skipped(WebhookRegistrationOutcome.NotConfiguredReason);
         }
 
-        switch (account.BranchRulesToken)
+        if (account.ReadableTokenValue is not { } accountToken)
         {
-            case null:
-                return Skipped(WebhookRegistrationOutcome.NoServerTokenReason);
-            case ProviderToken.Unreadable:
-                return Skipped(WebhookRegistrationOutcome.ServerTokenUnreadableReason);
+            return Skipped(WebhookRegistrationOutcome.TokenUnreadableReason);
         }
 
         if (WebhookProviders.From(account) is not { } provider)
@@ -65,7 +61,6 @@ internal sealed class WebhookRegistrar(
             return Failed(WebhookRegistrationOutcome.ProviderErrorReason, UnsupportedProviderDetail);
         }
 
-        string serverToken = ((ProviderToken.Present)account.BranchRulesToken).Value;
         string payloadUrl = ingress.PayloadUrl(provider, repository.WebhookHookId)!;
 
         List<string> previousUrls = [];
@@ -79,7 +74,7 @@ internal sealed class WebhookRegistrar(
 
         WebhookHookSpec spec = new(payloadUrl, repository.EnsureWebhookSecret(), previousUrls);
 
-        Result<WebhookUpsertKind> result = await UpsertAsync(repository.Slug, account, serverToken, spec, cancellationToken);
+        Result<WebhookUpsertKind> result = await UpsertAsync(repository.Slug, account, accountToken, spec, cancellationToken);
 
         switch (result)
         {
@@ -111,13 +106,13 @@ internal sealed class WebhookRegistrar(
     private async Task<Result<WebhookUpsertKind>> UpsertAsync(
         RepositorySlug slug,
         Credential account,
-        string serverToken,
+        string accountToken,
         WebhookHookSpec spec,
         CancellationToken cancellationToken)
     {
         try
         {
-            IIssueProvider provider = providerFactory.CreateProvider(account, serverToken);
+            IIssueProvider provider = providerFactory.CreateProvider(account, accountToken);
             return await provider.UpsertWebhookAsync(slug, spec, cancellationToken);
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — report as a provider error

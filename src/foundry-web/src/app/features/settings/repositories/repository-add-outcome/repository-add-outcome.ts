@@ -102,18 +102,16 @@ export function branchRulesExplanation(outcome: BranchRulesOutcome): string | nu
     case 'skipped':
       switch (outcome.reason) {
         case 'access-failure':
-          return "Skipped: Foundry can't confirm push access to this repository, so it left the rules alone.";
+          return "Skipped: the account token can't confirm the access Foundry needs on this repository, so Foundry left the rules alone.";
         case 'unverifiable':
           return "Skipped: the repository's current rules couldn't be verified, so Foundry left them alone.";
-        case 'no-rules-token':
-          return 'Skipped: this account has no usable branch-rules token. Add one to the account to let Foundry apply rules.';
         default:
           return 'Skipped: Foundry did not change the rules.';
       }
     case 'failed':
       switch (outcome.reason) {
         case 'insufficient-permission':
-          return "Failed: the branch-rules token isn't allowed to change rules on this repository. It needs administration access (GitHub) or the Maintainer role (GitLab).";
+          return "Failed: the account token isn't allowed to change rules on this repository. It needs Administration (read and write) on GitHub or the Maintainer role on GitLab.";
         case 'provider-error':
           return 'Failed: the provider rejected the change.';
         default:

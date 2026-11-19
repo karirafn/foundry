@@ -87,12 +87,11 @@ export type WebhookRegistrationOutcomeKind = 'created' | 'updated' | 'skipped' |
 
 export type WebhookRegistrationOutcomeReason =
   | 'not-configured'
-  | 'no-server-token'
-  | 'server-token-unreadable'
+  | 'token-unreadable'
   | 'insufficient-permission'
   | 'provider-error';
 
-/** Per-request result of registering a webhook with the account's server-side token. Never persisted. */
+/** Per-request result of registering a webhook with the account token. Never persisted. */
 export interface WebhookRegistrationOutcome {
   kind: WebhookRegistrationOutcomeKind;
   /** Present only on skipped / failed. */
@@ -126,16 +125,14 @@ export function webhookRegistrationMessage(outcome: WebhookRegistrationOutcome, 
       return `The existing webhook on ${providerName} was updated. It becomes active on its next delivery.`;
     case 'skipped':
       switch (outcome.reason) {
-        case 'no-server-token':
-          return `This account has no server-side token, so Foundry can't register the webhook. Add one with ${permission} in the account settings, or add the webhook manually.`;
-        case 'server-token-unreadable':
-          return "This account's server-side token can't be read. Re-enter it in the account settings, or add the webhook manually.";
+        case 'token-unreadable':
+          return "The account token can't be read. Re-enter it on the account, or add the webhook manually.";
         default:
           return 'Webhooks are off, so nothing was registered.';
       }
     case 'failed':
       if (outcome.reason === 'insufficient-permission') {
-        return `The server-side token needs ${permission} to manage webhooks. Grant it, or add the webhook manually.`;
+        return `The account token needs ${permission} to manage webhooks. Give the token that permission, or add the webhook manually.`;
       }
       return outcome.detail
         ? `${providerName} rejected the registration: ${outcome.detail}`
@@ -173,7 +170,6 @@ export type BranchRulesOutcomeKind = 'applied' | 'already-present' | 'not-reques
 export type BranchRulesOutcomeReason =
   | 'access-failure'
   | 'unverifiable'
-  | 'no-rules-token'
   | 'insufficient-permission'
   | 'provider-error';
 
@@ -191,7 +187,7 @@ export interface BranchRulesOutcome {
 export interface CreateRepositoryResponse {
   repository: RepositorySummary;
   branchRules: BranchRulesOutcome;
-  /** Outcome of registering the webhook with the server-side token. Absent from older servers. */
+  /** Outcome of registering the webhook with the account token. Absent from older servers. */
   webhook?: WebhookRegistrationOutcome | null;
 }
 

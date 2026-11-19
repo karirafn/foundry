@@ -22,8 +22,7 @@ public sealed class GitLabCredential : Credential
     public static GitLabCredential Create(
         AccountName name,
         IssuedToken? token,
-        BaseUrl baseUrl,
-        string? branchRulesToken = null)
+        BaseUrl baseUrl)
     {
         GuardAgainstQueryOrFragment(baseUrl);
 
@@ -37,11 +36,6 @@ public sealed class GitLabCredential : Credential
         if (token is not null)
         {
             credential.SetAccountToken(token);
-        }
-
-        if (branchRulesToken is not null)
-        {
-            credential.SetBranchRulesToken(branchRulesToken);
         }
 
         return credential;

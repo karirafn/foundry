@@ -10,7 +10,7 @@ namespace Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 /// <summary>
 /// Applies Foundry's default-branch rules to every repository an account covers whose persisted
 /// <see cref="MonitoredRepository.ApplyBranchRules"/> intent is <see langword="true"/>, after the
-/// account's branch-rules token is set or replaced (ADR 0084).
+/// account token is replaced (ADR 0084, ADR 0115).
 /// </summary>
 /// <remarks>
 /// Repositories are processed sequentially — the DbContext is not thread-safe and the provider
@@ -100,7 +100,7 @@ internal sealed class OptedInBranchRuleApplier(
                 cancellationToken);
 
             logger.LogInformation(
-                "Branch rules for repository {Slug} after the branch-rules token was saved: {Kind} ({Reason}).",
+                "Branch rules for repository {Slug} after the account token was saved: {Kind} ({Reason}).",
                 repository.Slug,
                 outcome.Kind,
                 outcome.Reason);
@@ -111,7 +111,7 @@ internal sealed class OptedInBranchRuleApplier(
         {
             logger.LogError(
                 ex,
-                "Applying branch rules to repository {Slug} after the branch-rules token was saved threw.",
+                "Applying branch rules to repository {Slug} after the account token was saved threw.",
                 repository.Slug);
         }
     }

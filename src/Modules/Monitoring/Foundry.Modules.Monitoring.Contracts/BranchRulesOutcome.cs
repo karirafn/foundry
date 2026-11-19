@@ -38,10 +38,7 @@ public sealed record BranchRulesOutcome(
     /// <summary>Eligibility could not be determined, so the need for rules is unknown.</summary>
     public const string UnverifiableReason = "unverifiable";
 
-    /// <summary>The account has no readable branch-rules token.</summary>
-    public const string NoRulesTokenReason = "no-rules-token";
-
-    /// <summary>The provider rejected the write with 403.</summary>
+    /// <summary>The provider rejected the account token's write with 403.</summary>
     public const string InsufficientPermissionReason = "insufficient-permission";
 
     /// <summary>Any other provider failure, including rules written but not effective.</summary>

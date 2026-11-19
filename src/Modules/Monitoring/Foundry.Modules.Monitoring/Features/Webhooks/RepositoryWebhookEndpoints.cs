@@ -15,7 +15,7 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// <summary>
 /// Webhook registration for one repository (ADR 0085): the registration details, the explicit
 /// secret reveal, the operator's "I've added the webhook" action, and the "Register webhook" action
-/// that creates or updates the hook with the server-side token. All are scoped to an
+/// that creates or updates the hook with the account token. All are scoped to an
 /// account that covers the repository, like the other repository endpoints.
 /// </summary>
 internal static class RepositoryWebhookEndpoints
@@ -85,7 +85,7 @@ internal static class RepositoryWebhookEndpoints
 
         /// <summary>
         /// The repository page's "Register webhook" action: the same create-or-update as the automatic
-        /// triggers, with the account's server-side token.
+        /// triggers, with the account token.
         /// </summary>
         public async Task<Result<RegisterWebhookResponse>> RegisterAsync(
             Guid accountId,
@@ -230,7 +230,7 @@ internal static class RepositoryWebhookEndpoints
                     error => error.ToProblem(StatusCodes.Status404NotFound));
             })
             .WithName("RegisterRepositoryWebhook")
-            .WithSummary("Creates or updates the repository's webhook on the provider with the account's server-side token")
+            .WithSummary("Creates or updates the repository's webhook on the provider with the account token")
             .Produces<RegisterWebhookResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
     }

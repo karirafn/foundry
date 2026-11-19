@@ -18,8 +18,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Webhooks.WebhookRegistra
 public sealed class RegisterAsync
 {
     private const string PublicBaseUrl = "https://hooks.example.com";
-    private const string ServerToken = "github_pat_server_side";
-    private const string WorkerToken = "ghp_worker";
+    private const string AccountToken = "github_pat_account";
 
     private static WebhookRegistrar BuildSut(
         RecordingBranchRulesProviderFactory factory,
@@ -33,11 +32,14 @@ public sealed class RegisterAsync
     private static MonitoredRepository NewRepository(string slug = "owner/repo") =>
         MonitoredRepository.Create(RepositorySlug.Create(slug).ValueOrThrow(), "github.com", null).ValueOrThrow();
 
-    private static GitHubCredential GitHubAccount(string? serverToken = ServerToken) =>
-        GitHubCredential.Create(AccountName.Create("owner").ValueOrThrow(), new IssuedToken(WorkerToken, new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
+    private static GitHubCredential GitHubAccount(string? accountToken = AccountToken) =>
+        GitHubCredential.Create(
+            AccountName.Create("owner").ValueOrThrow(),
+            accountToken is null ? null : new IssuedToken(accountToken, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
     [Fact]
-    public async Task WhenNotRegisteredAndTokenPresent_CreatesTheHookWithTheServerTokenAndBecomesPending()
+    public async Task WhenNotRegisteredAndTokenPresent_CreatesTheHookWithTheAccountTokenAndBecomesPending()
     {
         // Arrange
         RecordingBranchRulesProviderFactory factory = new();
@@ -50,7 +52,7 @@ public sealed class RegisterAsync
         // Assert
         outcome.Kind.ShouldBe(WebhookRegistrationOutcome.CreatedKind);
         repository.WebhookStatus.ShouldBe(WebhookStatus.Pending);
-        factory.TokensUsed.ShouldBe([ServerToken]);
+        factory.TokensUsed.ShouldBe([AccountToken]);
         factory.WebhookUpserts.Count.ShouldBe(1);
         WebhookHookSpec spec = factory.WebhookUpserts[0].Spec;
         spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/github/{repository.WebhookHookId}");
@@ -66,14 +68,14 @@ public sealed class RegisterAsync
         WebhookRegistrar sut = BuildSut(factory);
         MonitoredRepository repository = NewRepository("group/project");
         GitLabCredential account = GitLabCredential.Create(
-            AccountName.Create("group").ValueOrThrow(), new IssuedToken("glpat_worker", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow(), "glpat_server");
+            AccountName.Create("group").ValueOrThrow(), new IssuedToken("glpat_account", new TokenExpiry.NotChecked()), BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
         // Act
         WebhookRegistrationOutcome outcome = await sut.RegisterAsync(repository, account, CancellationToken.None);
 
         // Assert
         outcome.IsRegistered.ShouldBeTrue();
-        factory.TokensUsed.ShouldBe(["glpat_server"]);
+        factory.TokensUsed.ShouldBe(["glpat_account"]);
         factory.WebhookUpserts[0].Spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/gitlab/{repository.WebhookHookId}");
     }
 
@@ -128,7 +130,7 @@ public sealed class RegisterAsync
     }
 
     [Fact]
-    public async Task WhenNoServerTokenIsConfigured_MakesNoCall()
+    public async Task WhenTheAccountTokenIsAbsent_MakesNoCallAndReportsTokenUnreadable()
     {
         // Arrange
         RecordingBranchRulesProviderFactory factory = new();
@@ -137,33 +139,52 @@ public sealed class RegisterAsync
 
         // Act
         WebhookRegistrationOutcome outcome = await sut.RegisterAsync(
-            repository, GitHubAccount(serverToken: null), CancellationToken.None);
+            repository, GitHubAccount(accountToken: null), CancellationToken.None);
 
         // Assert
         outcome.ShouldBe(new WebhookRegistrationOutcome(
-            WebhookRegistrationOutcome.SkippedKind, WebhookRegistrationOutcome.NoServerTokenReason));
+            WebhookRegistrationOutcome.SkippedKind, WebhookRegistrationOutcome.TokenUnreadableReason));
         factory.TokensUsed.ShouldBeEmpty();
         factory.WebhookUpserts.ShouldBeEmpty();
         repository.WebhookStatus.ShouldBe(WebhookStatus.NotRegistered);
     }
 
     [Fact]
-    public async Task WhenTheServerTokenIsUnreadable_MakesNoCall()
+    public async Task WhenTheAccountTokenIsUnreadable_MakesNoCallAndReportsTokenUnreadable()
+    {
+        // Arrange
+        RecordingBranchRulesProviderFactory factory = new();
+        WebhookRegistrar sut = BuildSut(factory);
+        MonitoredRepository repository = NewRepository();
+        GitHubCredential account = GitHubCredential.CreateWithUnreadableToken(
+            AccountName.Create("owner").ValueOrThrow(), BaseUrl.Create("https://github.com").ValueOrThrow());
+
+        // Act
+        WebhookRegistrationOutcome outcome = await sut.RegisterAsync(repository, account, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new WebhookRegistrationOutcome(
+            WebhookRegistrationOutcome.SkippedKind, WebhookRegistrationOutcome.TokenUnreadableReason));
+        factory.TokensUsed.ShouldBeEmpty();
+        repository.WebhookStatus.ShouldBe(WebhookStatus.NotRegistered);
+    }
+
+    [Fact]
+    public async Task WhenTheAccountTokenIsMarkedInvalid_StillAttemptsTheRegistration()
     {
         // Arrange
         RecordingBranchRulesProviderFactory factory = new();
         WebhookRegistrar sut = BuildSut(factory);
         MonitoredRepository repository = NewRepository();
         GitHubCredential account = GitHubAccount();
-        Credential.ApplyUnreadableBranchRulesToken(account);
+        account.MarkTokenInvalid(DateTimeOffset.UnixEpoch);
 
         // Act
         WebhookRegistrationOutcome outcome = await sut.RegisterAsync(repository, account, CancellationToken.None);
 
         // Assert
-        outcome.Reason.ShouldBe(WebhookRegistrationOutcome.ServerTokenUnreadableReason);
-        factory.TokensUsed.ShouldBeEmpty();
-        repository.WebhookStatus.ShouldBe(WebhookStatus.NotRegistered);
+        outcome.Kind.ShouldBe(WebhookRegistrationOutcome.CreatedKind);
+        factory.TokensUsed.ShouldBe([AccountToken]);
     }
 
     [Fact]

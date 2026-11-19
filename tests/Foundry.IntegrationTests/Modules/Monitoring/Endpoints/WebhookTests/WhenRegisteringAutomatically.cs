@@ -2,10 +2,12 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 using Foundry.IntegrationTests.Shared;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -30,13 +32,13 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.WebhookTests;
 
 /// <summary>
-/// Automatic webhook registration with the account's server-side token: the "Register webhook"
-/// action, repository add, server-side token save, and a Webhook Public Base URL change.
+/// Automatic webhook registration with the account token: the "Register webhook" action,
+/// repository add, account token rotation, and a Webhook Public Base URL change.
 /// </summary>
 public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 {
-    private const string WorkerToken = "ghp_worker_token";
-    private const string ServerToken = "github_pat_server_token";
+    private const string AccountToken = "ghp_account_token";
+    private const string RotatedToken = "ghp_rotated_token";
     private const string PublicBaseUrl = "https://hooks.example.com";
 
     private readonly ProviderState _state = new();
@@ -45,6 +47,11 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 
     public WhenRegisteringAutomatically()
     {
+        Dictionary<string, string> tokenToListing = new()
+        {
+            [RotatedToken] = """[{ "full_name": "owner/one", "private": false, "permissions": { "push": true } }]""",
+        };
+
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.Configure<WebhookIngressOptions>(options => options.Port = WebhookTestHost.WebhookPort);
@@ -54,10 +61,14 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
             services.AddSingleton(_state);
             services.AddScoped<IIssueProviderFactory, StatefulProviderFactory>();
 
+            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
+            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
+                _ => new StubValidateTokenHandler());
+
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
-                    new HttpClient(new ProbeGrantedFakeHandler()),
+                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)),
                     NullLogger<GitHubHttpClient>.Instance,
                     new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
                     new InMemoryProviderRateBudget(),
@@ -73,13 +84,12 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<Guid> SeedAccountAsync(string? serverToken)
+    private async Task<Guid> SeedAccountAsync(string? accountToken = AccountToken)
     {
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(
             _factory,
             name: "Hooks Org",
-            token: WorkerToken,
-            branchRulesToken: serverToken);
+            token: accountToken);
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
         return accountId;
     }
@@ -96,11 +106,11 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
     }
 
     [Fact]
-    public async Task RegisterAction_CreatesTheHookWithTheServerTokenAndMovesToPending()
+    public async Task RegisterAction_CreatesTheHookWithTheAccountTokenAndMovesToPending()
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
-        Guid accountId = await SeedAccountAsync(ServerToken);
+        Guid accountId = await SeedAccountAsync();
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory);
 
         // Act
@@ -111,17 +121,17 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         response.Webhook.Status.ShouldBe("pending");
         (string slug, string token, WebhookHookSpec spec) = _state.Upserts.ShouldHaveSingleItem();
         slug.ShouldBe("owner/repo");
-        token.ShouldBe(ServerToken);
+        token.ShouldBe(AccountToken);
         spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/github/{repository.WebhookHookId}");
         spec.Secret.ShouldBe((await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookSecret);
     }
 
     [Fact]
-    public async Task RegisterAction_WithoutServerToken_MakesNoCallAndStaysNotRegistered()
+    public async Task RegisterAction_WithoutAccountToken_MakesNoCallAndStaysNotRegistered()
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
-        Guid accountId = await SeedAccountAsync(serverToken: null);
+        Guid accountId = await SeedAccountAsync(accountToken: null);
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory);
 
         // Act
@@ -130,7 +140,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         // Assert
         response.Outcome.ShouldBe(new WebhookRegistrationOutcome(
             WebhookRegistrationOutcome.SkippedKind,
-            WebhookRegistrationOutcome.NoServerTokenReason));
+            WebhookRegistrationOutcome.TokenUnreadableReason));
         response.Webhook.Status.ShouldBe("not-registered");
         _state.Upserts.ShouldBeEmpty();
     }
@@ -140,7 +150,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
-        Guid accountId = await SeedAccountAsync(ServerToken);
+        Guid accountId = await SeedAccountAsync();
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory);
         _state.UpsertResult = Result<WebhookUpsertKind>.Fail(WebhookWriteErrors.InsufficientPermission("403"));
 
@@ -158,7 +168,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
-        Guid accountId = await SeedAccountAsync(ServerToken);
+        Guid accountId = await SeedAccountAsync();
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -172,27 +182,27 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
             TestContext.Current.CancellationToken)).ShouldNotBeNull();
         created.Webhook.ShouldNotBeNull().Kind.ShouldBe(WebhookRegistrationOutcome.CreatedKind);
         created.Repository.WebhookStatus.ShouldBe("pending");
-        _state.Upserts.ShouldHaveSingleItem().Token.ShouldBe(ServerToken);
+        _state.Upserts.ShouldHaveSingleItem().Token.ShouldBe(AccountToken);
     }
 
     [Fact]
-    public async Task SavingAServerToken_RegistersTheAccountsNotRegisteredRepositories()
+    public async Task RotatingTheAccountToken_RegistersTheAccountsNotRegisteredRepositoriesWithTheNewToken()
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
-        Guid accountId = await SeedAccountAsync(serverToken: null);
+        Guid accountId = await SeedAccountAsync();
         MonitoredRepository unregistered = await WebhookTestHost.SeedRepositoryAsync(_factory, slug: "owner/one");
         await WebhookTestHost.SeedRepositoryAsync(_factory, slug: "owner/two", registered: true, position: 1);
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
             new Uri($"/api/accounts/{accountId}", UriKind.Relative),
-            new { baseUrl = "https://github.com", token = (string?)null, branchRulesToken = ServerToken },
+            new { baseUrl = "https://github.com", token = RotatedToken },
             TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        _state.Upserts.Select(u => (u.Slug, u.Token)).ShouldBe([("owner/one", ServerToken)]);
+        _state.Upserts.Select(u => (u.Slug, u.Token)).ShouldBe([("owner/one", RotatedToken)]);
         (await WebhookTestHost.LoadRepositoryAsync(_factory, unregistered)).WebhookStatus.ShouldBe(WebhookStatus.Pending);
     }
 
@@ -201,7 +211,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, "https://old.example.com");
-        await SeedAccountAsync(ServerToken);
+        await SeedAccountAsync();
         MonitoredRepository registered = await WebhookTestHost.SeedRepositoryAsync(_factory, slug: "owner/one", registered: true);
         await WebhookTestHost.SeedRepositoryAsync(_factory, slug: "owner/two", position: 1);
 
@@ -218,7 +228,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         // Assert — only the registered hook is re-pointed, matched against its old payload URL.
         (string slug, string token, WebhookHookSpec spec) = _state.Upserts.ShouldHaveSingleItem();
         slug.ShouldBe("owner/one");
-        token.ShouldBe(ServerToken);
+        token.ShouldBe(AccountToken);
         spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/github/{registered.WebhookHookId}");
         spec.PreviousPayloadUrls.ShouldBe([$"https://old.example.com/webhooks/github/{registered.WebhookHookId}"]);
     }

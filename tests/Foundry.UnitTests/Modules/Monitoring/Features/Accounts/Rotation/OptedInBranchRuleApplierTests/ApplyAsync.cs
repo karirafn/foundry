@@ -21,7 +21,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Rotation.OptedI
 
 public sealed class ApplyAsync : IAsyncDisposable
 {
-    private const string RulesToken = "github_pat_rules";
+    private const string AccountToken = "ghp_account";
 
     private static readonly RepositoryEligibility BranchProtectionViolations = new RepositoryEligibility.Ineligible(
     [
@@ -68,9 +68,8 @@ public sealed class ApplyAsync : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("acct").ValueOrThrow(),
-            new IssuedToken("ghp_account", new TokenExpiry.NotChecked()),
-            BaseUrl.Create("https://github.com").ValueOrThrow(),
-            RulesToken);
+            new IssuedToken(AccountToken, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces(namespaces.Select(n => Namespace.Create(n).ValueOrThrow()));
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -100,7 +99,7 @@ public sealed class ApplyAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOptedInRepoHasOnlyBranchProtectionViolations_WritesWithRulesTokenAndReportsEligible()
+    public async Task WhenOptedInRepoHasOnlyBranchProtectionViolations_WritesWithAccountTokenAndReportsEligible()
     {
         // Arrange
         GitHubCredential credential = await SeedCredentialAsync("alice");
@@ -116,7 +115,7 @@ public sealed class ApplyAsync : IAsyncDisposable
         // Assert
         factory.ShouldSatisfyAllConditions(
             () => factory.AppliedSlugs.ShouldBe(["alice/one"]),
-            () => factory.TokensUsed.ShouldBe([RulesToken]));
+            () => factory.TokensUsed.ShouldBe([AccountToken]));
         affected.ShouldBe([new AffectedRepository(repo.Id.Value, "alice/one", "ineligible", "eligible")]);
         _dbContext.ChangeTracker.Clear();
         MonitoredRepository stored = await _dbContext.Set<MonitoredRepository>()

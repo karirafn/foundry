@@ -22,7 +22,6 @@ namespace Foundry.UnitTests.Shared.Infrastructure.DataProtection.DataProtectedCo
 internal sealed class LegacyEncryptedDatabase : IAsyncDisposable
 {
     internal const string TokenValue = "ghp_worker";
-    internal const string BranchRulesTokenValue = "ghp_rules";
     internal const string ApiKeyValue = "sk-ant-test";
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
@@ -68,8 +67,7 @@ internal sealed class LegacyEncryptedDatabase : IAsyncDisposable
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("my-org").ValueOrThrow(),
             new IssuedToken(TokenValue, new TokenExpiry.NotChecked()),
-            BaseUrl.Create("https://github.com").ValueOrThrow(),
-            BranchRulesTokenValue);
+            BaseUrl.Create("https://github.com").ValueOrThrow());
 
         await using FoundryDbContext dbContext = CreateDbContext(provider);
         dbContext.AddRange(repository, account, credential);

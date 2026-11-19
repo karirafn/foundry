@@ -40,7 +40,6 @@ public sealed class ReEncryptAsync : IAsyncDisposable
         MonitoredRepository repository = await reader.Set<MonitoredRepository>().SingleAsync(TestContext.Current.CancellationToken);
         ClaudeAccount account = await reader.Set<ClaudeAccount>().SingleAsync(TestContext.Current.CancellationToken);
         credential.Token.ShouldBe(new ProviderToken.Present(LegacyEncryptedDatabase.TokenValue));
-        credential.BranchRulesToken.ShouldBe(new ProviderToken.Present(LegacyEncryptedDatabase.BranchRulesTokenValue));
         repository.EnsureWebhookSecret().ShouldBe(_database.WebhookSecret);
         account.AuthMode.ShouldBe(new AuthMode.ApiKey(new ApiKeyCredential.Present(LegacyEncryptedDatabase.ApiKeyValue)));
     }

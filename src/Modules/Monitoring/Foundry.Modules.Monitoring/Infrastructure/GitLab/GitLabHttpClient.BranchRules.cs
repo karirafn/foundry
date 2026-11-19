@@ -157,7 +157,7 @@ internal sealed partial class GitLabHttpClient
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return BranchRuleWriteErrors.InsufficientPermission(
-                $"Writing branch protection on {slug} returned 403 — the branch-rules token needs " +
+                $"Writing branch protection on {slug} returned 403 — the account token needs " +
                 $"the Maintainer role and the api scope." +
                 (providerMessage is null ? string.Empty : $" GitLab: {providerMessage}"));
         }

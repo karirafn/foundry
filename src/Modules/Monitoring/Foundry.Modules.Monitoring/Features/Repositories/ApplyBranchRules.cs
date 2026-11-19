@@ -58,7 +58,7 @@ internal static class ApplyBranchRules
                 return Result<ApplyBranchRulesResponse>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            // The write uses this account's branch-rules token, so the repository must be one the
+            // The write uses this account's token, so the repository must be one the
             // account lists (same host, covered by its namespaces) — never another account's repo.
             if (repository.Host != credential.Host || !credential.Covers(repository.Slug))
             {

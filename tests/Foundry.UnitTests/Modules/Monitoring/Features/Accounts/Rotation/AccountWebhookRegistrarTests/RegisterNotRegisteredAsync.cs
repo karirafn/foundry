@@ -19,7 +19,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Rotation.Accoun
 
 public sealed class RegisterNotRegisteredAsync : IAsyncDisposable
 {
-    private const string ServerToken = "github_pat_server_side";
+    private const string AccountToken = "ghp_account";
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
@@ -58,9 +58,8 @@ public sealed class RegisterNotRegisteredAsync : IAsyncDisposable
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("alice").ValueOrThrow(),
-            new IssuedToken("ghp_account", new TokenExpiry.NotChecked()),
-            BaseUrl.Create("https://github.com").ValueOrThrow(),
-            ServerToken);
+            new IssuedToken(AccountToken, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
         credential.SetNamespaces([Namespace.Create("alice").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
@@ -86,7 +85,7 @@ public sealed class RegisterNotRegisteredAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task RegistersOnlyTheAccountsNotRegisteredRepositoriesWithTheServerToken()
+    public async Task RegistersOnlyTheAccountsNotRegisteredRepositoriesWithTheAccountToken()
     {
         // Arrange
         GitHubCredential credential = await SeedCredentialAsync();
@@ -101,7 +100,7 @@ public sealed class RegisterNotRegisteredAsync : IAsyncDisposable
 
         // Assert
         factory.WebhookUpserts.Select(u => u.Slug).ShouldBe(["alice/one"]);
-        factory.TokensUsed.ShouldBe([ServerToken]);
+        factory.TokensUsed.ShouldBe([AccountToken]);
         unregistered.WebhookStatus.ShouldBe(WebhookStatus.Pending);
     }
 

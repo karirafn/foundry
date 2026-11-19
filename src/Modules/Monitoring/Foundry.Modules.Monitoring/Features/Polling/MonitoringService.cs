@@ -534,7 +534,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
     /// <summary>
     /// Runs one create-or-update of a hook that just went <c>Silent</c> — a drifted or deleted hook is
-    /// repaired with the server-side token. A hook still <c>Silent</c> afterwards is not retried until its
+    /// repaired with the account token. A hook still <c>Silent</c> afterwards is not retried until its
     /// next transition into <c>Silent</c>, because this runs only on that transition.
     /// </summary>
     private async Task ReRegisterSilentWebhookAsync(

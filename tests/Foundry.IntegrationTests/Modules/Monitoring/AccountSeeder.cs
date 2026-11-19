@@ -18,14 +18,13 @@ internal static class AccountSeeder
         string name = "My GitHub",
         string? token = "ghp_test_token",
         string baseUrl = "https://github.com",
-        string? branchRulesToken = null,
         TokenExpiry? tokenExpiry = null)
     {
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token is null ? null : new IssuedToken(token, tokenExpiry ?? new TokenExpiry.NotChecked()), parsedBaseUrl, branchRulesToken);
+        GitHubCredential credential = GitHubCredential.Create(AccountName.Create(name).ValueOrThrow(), token is null ? null : new IssuedToken(token, tokenExpiry ?? new TokenExpiry.NotChecked()), parsedBaseUrl);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 

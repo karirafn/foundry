@@ -527,7 +527,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates or updates the repository's webhook on the provider with the account's server-side token */
+        /** Creates or updates the repository's webhook on the provider with the account token */
         post: operations["RegisterRepositoryWebhook"];
         delete?: never;
         options?: never;
@@ -1117,7 +1117,6 @@ export interface components {
             baseUrl: string;
             token: string;
             takeoverNamespaces?: null | string[];
-            branchRulesToken?: null | string;
         };
         CreateRepositoryRequestBody: {
             slug: string;
@@ -1147,7 +1146,6 @@ export interface components {
             hasToken: boolean;
             tokenStatus: string;
             namespaces: string[];
-            branchRulesTokenStatus: string;
             /** Format: date-time */
             tokenInvalidSince: null | string;
             tokenExpiry: components["schemas"]["TokenExpirySummary"];
@@ -1726,8 +1724,6 @@ export interface components {
         UpdateAccountRequestBody: {
             baseUrl: string;
             token: null | string;
-            branchRulesToken?: null | string;
-            clearBranchRulesToken?: null | boolean;
         };
         UpdateAllowedProviderHostsRequestBody: {
             hosts: string[];

@@ -10,7 +10,7 @@ namespace Foundry.Modules.Monitoring.Features.Eligibility;
 
 /// <summary>
 /// Evaluates a newly added repository and, when the operator asked for it, writes Foundry's
-/// default-branch rules with the account's branch-rules token (ADR 0084). Runs on operator action
+/// default-branch rules with the account token (ADR 0084, ADR 0115). Runs on operator action
 /// only — polling stays read-only toward the provider.
 /// </summary>
 /// <remarks>
@@ -66,12 +66,13 @@ internal sealed class BranchRuleEnforcer(
                 return Skipped(BranchRulesOutcome.UnverifiableReason, settingsUrl);
         }
 
-        if (account.BranchRulesToken is not ProviderToken.Present rulesToken)
+        // An absent or unreadable token normally surfaces earlier, as an access violation in the evaluation.
+        if (account.ReadableTokenValue is not { } accountToken)
         {
-            return Skipped(BranchRulesOutcome.NoRulesTokenReason, settingsUrl);
+            return Skipped(BranchRulesOutcome.AccessFailureReason, settingsUrl);
         }
 
-        Result writeResult = await WriteRulesAsync(repository.Slug, account, rulesToken.Value, cancellationToken);
+        Result writeResult = await WriteRulesAsync(repository.Slug, account, accountToken, cancellationToken);
 
         if (writeResult is Result.Failure failure)
         {
@@ -108,12 +109,12 @@ internal sealed class BranchRuleEnforcer(
     private async Task<Result> WriteRulesAsync(
         RepositorySlug slug,
         Credential account,
-        string rulesToken,
+        string accountToken,
         CancellationToken cancellationToken)
     {
         try
         {
-            IIssueProvider provider = providerFactory.CreateProvider(account, rulesToken);
+            IIssueProvider provider = providerFactory.CreateProvider(account, accountToken);
             return await provider.ApplyBranchRulesAsync(slug, cancellationToken);
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — report as a provider error

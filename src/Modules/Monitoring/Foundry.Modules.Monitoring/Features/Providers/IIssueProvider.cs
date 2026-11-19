@@ -274,7 +274,7 @@ internal interface IIssueProvider
     /// URL matches <see cref="WebhookHookSpec.PayloadUrl"/> (or one of
     /// <see cref="WebhookHookSpec.PreviousPayloadUrls"/>) is updated in place — events, secret, URL and
     /// active flag — and adopted; otherwise a new hook is created. Callers pass a provider built with
-    /// the account's server-side token, never the worker token. A missing permission fails with
+    /// the account token. A missing permission fails with
     /// <see cref="WebhookWriteErrors.InsufficientPermissionCode"/>.
     /// </summary>
     /// <remarks>Providers without webhook support keep this default, which fails with
