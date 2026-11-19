@@ -12,17 +12,14 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 {
     public async Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         return settings is null ? null : GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
     }
 
     public async Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
     {
-        int? value = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        int? value = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => (int?)s.MaxConcurrent)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -31,8 +28,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 
     public async Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
     {
-        int? value = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        int? value = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => (int?)s.TimeoutMinutes)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -41,8 +37,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 
     public async Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
     {
-        int? value = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        int? value = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => (int?)s.ProbeIntervalMinutes)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -51,8 +46,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 
     public async Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
     {
-        int? value = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        int? value = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => (int?)s.PollIntervalSeconds)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -61,8 +55,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 
     public async Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
     {
-        int? hours = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        int? hours = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => (int?)s.AwaitingInputReminderDelayHours)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -71,8 +64,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 
     public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
     {
-        var row = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        var row = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => new
             {
                 s.UsageLimitResetsAt,
@@ -98,9 +90,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
 
     public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         if (settings is null)
         {
@@ -114,9 +104,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
     {
         // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
         // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         return settings?.WorkerImageConfiguration.ImageTag ?? WorkerImageConfiguration.Default.ImageTag;
     }
@@ -125,17 +113,14 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
     {
         // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
         // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         return settings?.WorkerImageConfiguration.BuildEnabled ?? WorkerImageConfiguration.Default.BuildEnabled;
     }
 
     public async Task<bool> GetNestedDockerEnabledAsync(CancellationToken cancellationToken)
     {
-        bool? value = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        bool? value = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => (bool?)s.NestedDockerEnabled)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -146,9 +131,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
     {
         // WorkerResourceLimits is stored as a JSON blob and cannot be projected
         // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         WorkerResourceLimits limits = settings?.WorkerResourceLimits ?? WorkerResourceLimits.Default;
         return new WorkerResourceLimitsSnapshot(limits.MemoryLimitMb, limits.CpuLimit, limits.PidsLimit);
@@ -158,9 +141,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
     {
         // ClaudeCodeSettings is stored as a JSON blob and cannot be projected
         // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         ClaudeCodeSettings claudeCode = settings?.ClaudeCodeSettings ?? ClaudeCodeSettings.Default;
         return new ClaudeCodeSettingsSnapshot(claudeCode.AdditionalDenyRules);
@@ -170,9 +151,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
     {
         // AllowedProviderHosts is stored as a JSON blob and cannot be projected
         // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
         return settings?.AllowedProviderHosts ?? [];
     }

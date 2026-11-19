@@ -42,8 +42,7 @@ internal static class UpdateWorkerLimits
             Command command,
             CancellationToken cancellationToken)
         {
-            GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(cancellationToken);
+            GlobalSettings? settings = await dbContext.FindGlobalSettingsAsync(cancellationToken);
 
             if (settings is null)
             {
