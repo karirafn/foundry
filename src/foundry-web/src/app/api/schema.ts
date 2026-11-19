@@ -1470,6 +1470,16 @@ export interface components {
         RateBudgetSnapshot: {
             budgets: components["schemas"]["ProviderBudgetHeadroom"][];
         };
+        RecordedReviewVerdict: {
+            summary: string;
+            findings: components["schemas"]["ReviewFinding"][];
+            dimensions: components["schemas"]["ReviewDimension"][];
+            criteria: components["schemas"]["ReviewCriterionAnswer"][];
+            tests: components["schemas"]["ReviewTests"];
+            outcome: components["schemas"]["ReviewVerdictOutcome"];
+            reviewedCommit: string;
+            patchId: null | string;
+        };
         RefreshUsageResponse: {
             status: string;
         };
@@ -1546,6 +1556,47 @@ export interface components {
             /** Format: uuid */
             workerRunId: string;
         };
+        /** @enum {unknown} */
+        ReviewCategory: "Correctness" | "Criteria" | "Tests" | "Security" | "Quality" | "Design" | "Conventions";
+        ReviewCriterionAnswer: {
+            id: string;
+            status: components["schemas"]["ReviewCriterionStatus"];
+            evidence: string;
+        };
+        /** @enum {unknown} */
+        ReviewCriterionStatus: "Met" | "Unmet" | "NotVerifiable";
+        ReviewDimension: {
+            category: components["schemas"]["ReviewCategory"];
+            status: components["schemas"]["ReviewDimensionStatus"];
+            note: string;
+        };
+        /** @enum {unknown} */
+        ReviewDimensionStatus: "Clear" | "Findings" | "NotApplicable";
+        ReviewFinding: {
+            path: string;
+            /** Format: int32 */
+            line: null | number | string;
+            severity: components["schemas"]["ReviewSeverity"];
+            category: components["schemas"]["ReviewCategory"];
+            rule: null | components["schemas"]["ReviewRule"];
+            body: string;
+        };
+        ReviewRule: {
+            principle: null | string;
+            file: null | string;
+            quote: null | string;
+        };
+        /** @enum {unknown} */
+        ReviewSeverity: "Blocking" | "Advisory";
+        ReviewTests: {
+            assessment: components["schemas"]["ReviewTestsAssessment"];
+            reason: string;
+            coveringTests: string[];
+        };
+        /** @enum {unknown} */
+        ReviewTestsAssessment: "Adequate" | "Missing" | "NotNeeded";
+        /** @enum {unknown} */
+        ReviewVerdictOutcome: "Approved" | "ApprovedForPerson" | "ChangesRequested";
         RolePluginComponent: {
             name: string;
             description: null | string;
@@ -1869,6 +1920,7 @@ export interface components {
             falsePositivesConfirmedAt?: null | string;
             confirmedFindings?: components["schemas"]["WorkerRunConfirmedFinding"][];
             toolchain?: null | components["schemas"]["WorkerRunTool"][];
+            reviewVerdict?: null | components["schemas"]["RecordedReviewVerdict"];
         };
         WorkerRunPublishDetail: {
             headSha: string;
