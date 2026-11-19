@@ -177,7 +177,7 @@ interface AddRow {
           Apply branch rules
         </label>
         <span class="setup-repos-step__apply-rules-hint" id="setup-apply-branch-rules-hint">
-          Applies to every repository added in this step. Where the default branch is missing the rules eligibility requires, Foundry adds them using the account's branch-rules token.
+          Applies to every repository added in this step. Where the default branch is missing the rules eligibility requires, Foundry adds them using the account token.
         </span>
       </div>
 

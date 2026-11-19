@@ -10,7 +10,6 @@ const MOCK_ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],

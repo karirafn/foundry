@@ -80,10 +80,9 @@ describe('RepositoryAddOutcomeComponent', () => {
   const nonApplied: { name: string; outcome: BranchRulesOutcome; status: string; tone: string; reasonText: string }[] = [
     { name: 'already-present', outcome: { kind: 'already-present', settingsUrl: SETTINGS_URL }, status: 'Already in place', tone: 'pass', reasonText: 'already in place' },
     { name: 'not-requested', outcome: { kind: 'not-requested', settingsUrl: SETTINGS_URL }, status: 'Not requested', tone: 'neutral', reasonText: 'turned off' },
-    { name: 'skipped / access-failure', outcome: { kind: 'skipped', reason: 'access-failure', settingsUrl: SETTINGS_URL }, status: 'Skipped', tone: 'neutral', reasonText: 'push access' },
+    { name: 'skipped / access-failure', outcome: { kind: 'skipped', reason: 'access-failure', settingsUrl: SETTINGS_URL }, status: 'Skipped', tone: 'neutral', reasonText: "account token can't confirm the access" },
     { name: 'skipped / unverifiable', outcome: { kind: 'skipped', reason: 'unverifiable', settingsUrl: SETTINGS_URL }, status: 'Skipped', tone: 'neutral', reasonText: "couldn't be verified" },
-    { name: 'skipped / no-rules-token', outcome: { kind: 'skipped', reason: 'no-rules-token', settingsUrl: SETTINGS_URL }, status: 'Skipped', tone: 'neutral', reasonText: 'branch-rules token' },
-    { name: 'failed / insufficient-permission', outcome: { kind: 'failed', reason: 'insufficient-permission', settingsUrl: SETTINGS_URL, detail: 'Must have admin rights' }, status: 'Failed', tone: 'fail', reasonText: "isn't allowed" },
+    { name: 'failed / insufficient-permission', outcome: { kind: 'failed', reason: 'insufficient-permission', settingsUrl: SETTINGS_URL, detail: 'Must have admin rights' }, status: 'Failed', tone: 'fail', reasonText: "account token isn't allowed" },
     { name: 'failed / provider-error', outcome: { kind: 'failed', reason: 'provider-error', settingsUrl: SETTINGS_URL, detail: 'rules written but not effective' }, status: 'Failed', tone: 'fail', reasonText: 'provider rejected' },
   ];
 
@@ -123,7 +122,7 @@ describe('RepositoryAddOutcomeComponent', () => {
 
   it('should not show a detail for a non-failed outcome even if one is present', () => {
     // Arrange / Act
-    const { el } = setup({ kind: 'skipped', reason: 'no-rules-token', settingsUrl: SETTINGS_URL, detail: 'stray' });
+    const { el } = setup({ kind: 'skipped', reason: 'unverifiable', settingsUrl: SETTINGS_URL, detail: 'stray' });
 
     // Assert
     expect(el.querySelector('.repository-add-outcome__detail')).toBeFalsy();

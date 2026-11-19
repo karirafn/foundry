@@ -141,7 +141,7 @@ describe('RepositoryWebhookComponent', () => {
     return Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('Register webhook'))!;
   }
 
-  it('registers the webhook with the server-side token and shows the pending status', () => {
+  it('registers the webhook and shows the pending status', () => {
     // Arrange
     const { fixture, httpMock, el } = setup(NOT_REGISTERED);
 
@@ -177,7 +177,7 @@ describe('RepositoryWebhookComponent', () => {
     expect(el.querySelector('.repository-webhook__details')).not.toBeNull();
   });
 
-  it('explains a missing server-side token on GitLab with the Maintainer role', () => {
+  it('asks for the Maintainer role on the account token on GitLab', () => {
     // Arrange
     const { fixture, httpMock, el } = setup(GITLAB_NOT_REGISTERED);
 
@@ -185,14 +185,41 @@ describe('RepositoryWebhookComponent', () => {
     registerButton(el).click();
     httpMock.expectOne(`${BASE}/register`).flush({
       webhook: GITLAB_NOT_REGISTERED,
-      outcome: { kind: 'skipped', reason: 'no-server-token' },
+      outcome: { kind: 'failed', reason: 'insufficient-permission', detail: '403' },
     });
     fixture.detectChanges();
 
     // Assert
-    const outcome = el.querySelector('.repository-webhook__outcome');
-    expect(outcome?.textContent).toContain('no server-side token');
-    expect(outcome?.textContent).toContain('Maintainer role');
+    expect(el.querySelector('.repository-webhook__outcome')?.textContent?.trim()).toBe(
+      'The account token needs the Maintainer role to manage webhooks. Give the token that permission, or add the webhook manually.',
+    );
+  });
+
+  it('asks to re-enter an unreadable account token', () => {
+    // Arrange
+    const { fixture, httpMock, el } = setup(NOT_REGISTERED);
+
+    // Act
+    registerButton(el).click();
+    httpMock.expectOne(`${BASE}/register`).flush({
+      webhook: NOT_REGISTERED,
+      outcome: { kind: 'skipped', reason: 'token-unreadable' },
+    });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.repository-webhook__outcome')?.textContent?.trim()).toBe(
+      "The account token can't be read. Re-enter it on the account, or add the webhook manually.",
+    );
+  });
+
+  it('says the register action uses the account token', () => {
+    // Arrange & Act
+    const { el } = setup(NOT_REGISTERED);
+
+    // Assert
+    expect(el.querySelector('.repository-webhook__register .repository-webhook__hint')?.textContent?.replace(/\s+/g, ' ').trim())
+      .toBe('Foundry can create or update this webhook on GitHub itself, using the account token.');
   });
 
   it('shows an error when the registration request fails', () => {

@@ -19,7 +19,6 @@ const MOCK_ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
@@ -33,7 +32,6 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
@@ -1293,7 +1291,6 @@ describe('RepositoryFormComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
-      branchRulesTokenStatus: 'absent',
       deniedRepositories: [],
       tokenInvalidSince: null,
       namespaces: ['team-alpha'],
@@ -1306,7 +1303,6 @@ describe('RepositoryFormComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
-      branchRulesTokenStatus: 'absent',
       deniedRepositories: [],
       tokenInvalidSince: null,
       namespaces: ['team-beta'],
@@ -2069,7 +2065,7 @@ describe('RepositoryFormComponent', () => {
       repository: { ...MOCK_REPOSITORY, eligibility: { status: 'ineligible', violations: [], reason: null } },
       branchRules: {
         kind: 'skipped',
-        reason: 'no-rules-token',
+        reason: 'unverifiable',
         settingsUrl: 'https://github.com/my-org/my-repo/settings/rules',
         detail: null,
       },
@@ -2096,6 +2092,16 @@ describe('RepositoryFormComponent', () => {
       expect(checkbox.type).toBe('checkbox');
       expect(checkbox.checked).toBe(true);
       expect(el.querySelector('label[for="repository-apply-branch-rules"]')?.textContent).toContain('Apply branch rules');
+    });
+
+    it('should say the branch rules are added with the account token', () => {
+      // Arrange / Act
+      const { el } = setup({ repository: null });
+
+      // Assert
+      expect(el.querySelector('#repository-apply-branch-rules-hint')?.textContent?.trim()).toBe(
+        'If the default branch is missing the rules eligibility requires, Foundry adds them using the account token.',
+      );
     });
 
     it('should not render the "Apply branch rules" checkbox in edit mode', () => {

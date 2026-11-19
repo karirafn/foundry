@@ -21,21 +21,16 @@ Generate a fine-grained token at **Settings > Developer settings > Personal acce
 | Permission | Access |
 |---|---|
 | Contents | Read and write |
+| Issues | Read and write |
+| Pull requests | Read and write |
+| Administration | Read and write (Foundry writes the default-branch rules eligibility requires) |
+| Webhooks | Read and write (Foundry registers each repository's webhook) |
+| Commit statuses | Read |
+| Actions | Read |
 | Metadata | Read |
-| Pull requests | Read and write (optional — required only if workers need to create or update PRs) |
+| Workflows | Read and write |
 
-This is the **account (worker) token**. It keeps exactly this permission set — do not add Administration to it. It is injected into every worker container (as `GH_TOKEN`), so any permission it carries is available to autonomous workers.
-
-#### Branch-rules token (optional)
-
-An account can also carry a second, optional **branch-rules token** (the account's *server-side token*), entered in the account form's *Branch-rules token* field. Foundry uses it server-side only, for privileged provider writes — default-branch protection and repository webhooks; it is stored encrypted like the account token, is never returned by the API (only whether it is configured, absent or unreadable), and is never given to workers.
-
-| Provider | Required permission |
-|---|---|
-| GitHub (fine-grained token) | Administration — Read and write (branch rules); Webhooks — Read and write (webhooks) |
-| GitLab | Maintainer role on the project (both) |
-
-It is kept separate from the account token because GitHub's Administration: write also grants repository deletion and rule removal, Webhooks: write lets the holder re-point or add hooks (and so read every event), and GitLab's Maintainer role can likewise change protection and hooks — power autonomous workers must never hold. The worker token's required permissions are unchanged. The two tokens may belong to different users. Leave the field empty if you don't want Foundry to manage branch protection; rotating the account token keeps the branch-rules token unless you change it.
+This is the **account token**, the only token an account holds ([ADR 0115](docs/adr/0115-one-account-token-verified-against-every-permission-foundry-uses.md)). On GitLab the token's user needs the **Maintainer** role on each project. Foundry checks each permission on every repository before it starts work; the account form and setup wizard list the same requirements. No worker container receives the token ([ADR 0100](docs/adr/0100-workers-hold-no-provider-credential-and-foundry-publishes.md)): only Foundry's server code and the Publisher use it.
 
 ### Worker environment
 
@@ -108,7 +103,7 @@ GitHub and GitLab webhooks make Foundry react within seconds and let repositorie
 
 3. **Set the public base URL** in the setup wizard or in **Settings → Dispatch → Webhooks**: the public `https` URL the tunnel or proxy serves, without `/webhooks` (e.g. `https://hooks.example.com`). The URL is required and can be changed but not cleared. `localhost` and loopback, link-local or unspecified IP addresses are rejected; private addresses and any other host name are accepted. **Saving a changed URL verifies it**: Foundry sends a one-time code to `<URL>/webhooks/probe/<code>` and saves only when that request arrives back at this Foundry, within 10 seconds. Otherwise nothing is saved and the page names the cause (the host did not resolve, the certificate was rejected, no answer in time, another server answered, or an unexpected HTTP status). A LAN reverse proxy behind a router without NAT loopback can time out although GitHub could deliver; split DNS or a hosts entry on the Foundry host resolves it. Saving only the backstop interval makes no check.
 
-4. **Register the webhook per repository.** If the repository's account has a [branch-rules token](#branch-rules-token-optional) with the webhook permission above, Foundry registers the webhook itself: when the repository is added, when that token is saved (for the account's not-yet-registered repositories), when the public base URL changes (every registered hook is re-pointed), and once whenever a hook turns **Silent**. It creates the hook — or updates a hook with the same payload URL in place, adopting one you added by hand — with the payload URL, the secret, JSON content type and exactly the events below, and the status becomes *Waiting for first delivery*. The repository's Webhook panel also has a **Register webhook** button that runs the same create-or-update. Without the token, or when the token lacks the permission (GitHub answers 403/404 on `/hooks`, GitLab 403 below Maintainer), nothing changes and you register the hook manually as below; polling is never blocked.
+4. **Register the webhook per repository.** Foundry registers the webhook itself with the account token: when the repository is added, when a new account token is saved (for the account's not-yet-registered repositories), when the public base URL changes (every registered hook is re-pointed), and once whenever a hook turns **Silent**. It creates the hook — or updates a hook with the same payload URL in place, adopting one you added by hand — with the payload URL, the secret, JSON content type and exactly the events below, and the status becomes *Waiting for first delivery*. The repository's Webhook panel also has a **Register webhook** button that runs the same create-or-update. When the account token is unreadable, or lacks the Webhooks permission (GitHub answers 403/404 on `/hooks`, GitLab 403 below Maintainer), nothing changes and you register the hook manually as below; polling is never blocked.
 
    A hook still pointing at an *old* public base URL that Foundry did not re-point (for example one added by hand before the URL changed) is not matched, so a second hook is created; delete the old one on the provider — it only fails harmlessly. Removing a repository from Foundry does not delete its hook.
 
@@ -122,7 +117,7 @@ A repository polls at the backstop interval only while its webhook is **Active**
 
 ## Moving an install
 
-Stored secrets (account tokens, branch-rules tokens, webhook secrets, the Claude API key) are encrypted with ASP.NET Core Data Protection under the fixed application name `Foundry`, so they survive moving the install to another folder or operating system. To move an install, copy both of these to the same relative places in the new checkout:
+Stored secrets (account tokens, webhook secrets, the Claude API key) are encrypted with ASP.NET Core Data Protection under the fixed application name `Foundry`, so they survive moving the install to another folder or operating system. To move an install, copy both of these to the same relative places in the new checkout:
 
 - the database directory `data/` at the repository root (the AppHost default, `../../data` relative to `src/Foundry.AppHost`);
 - the key ring `src/Foundry.WebApi/data/dp-keys` (relative to the WebApi working directory, which is `src/Foundry.WebApi` under the AppHost).

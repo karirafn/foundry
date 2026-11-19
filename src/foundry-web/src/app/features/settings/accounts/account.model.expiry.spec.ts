@@ -15,7 +15,6 @@ const ACCOUNT: AccountSummary = {
   baseUrl: 'https://gitlab.com',
   hasToken: true,
   tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],

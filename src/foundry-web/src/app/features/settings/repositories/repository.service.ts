@@ -228,7 +228,7 @@ export class RepositoryService {
     );
   }
 
-  /** Creates or updates the webhook on the provider with the account's server-side token. */
+  /** Creates or updates the webhook on the provider with the account token. */
   registerWebhook(accountId: string, id: string): Observable<RegisterWebhookResponse> {
     return this._http.post<RegisterWebhookResponse>(`${this._repositoriesUrl(accountId)}/${id}/webhook/register`, {}).pipe(
       tap((response) => this._setWebhookStatus(id, response.webhook.status)),

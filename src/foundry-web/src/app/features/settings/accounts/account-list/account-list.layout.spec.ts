@@ -11,7 +11,6 @@ const BASE: AccountSummary = {
   baseUrl: 'https://github.com/',
   hasToken: true,
   tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],

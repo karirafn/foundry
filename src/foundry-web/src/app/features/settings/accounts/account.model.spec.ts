@@ -3,7 +3,6 @@ import {
   accountProblem,
   accountStatusTag,
   affectedStatusLabel,
-  resolveBranchRulesTokenStatus,
   resolveTokenStatus,
 } from './account.model';
 
@@ -14,7 +13,6 @@ const ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
-  branchRulesTokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
@@ -28,14 +26,6 @@ describe('account.model', () => {
 
     // Assert
     expect(status).toBe('invalid');
-  });
-
-  it('should read a stray invalid branch-rules token status as absent', () => {
-    // Act
-    const status = resolveBranchRulesTokenStatus({ ...ACCOUNT, branchRulesTokenStatus: 'invalid' });
-
-    // Assert
-    expect(status).toBe('absent');
   });
 
   it('should label the credential-invalid affected status "Token invalid"', () => {

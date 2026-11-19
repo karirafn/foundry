@@ -247,7 +247,7 @@ const MAX_WORKER_LIMIT = 20;
               <label class="repository-form__field-label" for="repository-apply-branch-rules">Apply branch rules</label>
             </div>
             <span class="repository-form__field-hint" id="repository-apply-branch-rules-hint">
-              If the default branch is missing the rules eligibility requires, Foundry adds them using the account's branch-rules token.
+              If the default branch is missing the rules eligibility requires, Foundry adds them using the account token.
             </span>
           </div>
         }

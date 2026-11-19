@@ -23,7 +23,7 @@ import {
  * and, while the hook is not active, the payload URL, content type (GitHub), on-demand secret
  * ("Secret token" on GitLab) and exact event or trigger list, plus the "I've added the webhook" action.
  * GitLab has no ping, so its instructions point at the hook's "Test" action instead.
- * The "Register webhook" action creates or updates the hook with the account's server-side token;
+ * The "Register webhook" action creates or updates the hook with the account token;
  * when that is not possible the manual instructions stay the fallback.
  */
 @Component({
@@ -139,7 +139,7 @@ import {
           <div class="repository-webhook__register">
             <p class="repository-webhook__hint">
               Foundry can create or update this webhook on {{ info.provider === 'gitlab' ? 'GitLab' : 'GitHub' }}
-              itself, using the account's server-side token.
+              itself, using the account token.
             </p>
             <button
               type="button"
