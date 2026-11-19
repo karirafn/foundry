@@ -18,7 +18,7 @@ public sealed class BeginPublishing
         RunExit exit = new(1, OomKilled: true, RunStopReason.TimedOut, PublishingRunFixture.ExitedAt);
 
         // Act
-        PublishingRun publishing = active.BeginPublishing(exit, "log tail", RunVerdict.Done(), new RunPullRequestText("s", "b"));
+        PublishingRun publishing = active.BeginPublishing(exit, "log tail", RunVerdict.Done(), new RunPullRequestText("s", new RunPullRequestDescription(null, ["b"], ["dotnet test: passed."], [], null)));
 
         // Assert
         publishing.ShouldSatisfyAllConditions(
@@ -28,7 +28,7 @@ public sealed class BeginPublishing
             () => publishing.Base.ShouldBe(PublishingRunFixture.Base),
             () => publishing.ContainerOutput.ShouldBe("log tail"),
             () => publishing.VerdictStatus.ShouldBe(RunVerdictStatus.Done),
-            () => publishing.PullRequestText.ShouldBe(new RunPullRequestText("s", "b")),
+            () => publishing.PullRequestText.ShouldBe(new RunPullRequestText("s", new RunPullRequestDescription(null, ["b"], ["dotnet test: passed."], [], null))),
             () => publishing.HasPublished.ShouldBeFalse());
     }
 

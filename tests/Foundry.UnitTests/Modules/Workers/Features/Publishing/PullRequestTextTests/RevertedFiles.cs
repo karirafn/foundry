@@ -9,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Publishing.PullRequestTextT
 
 public sealed class RevertedFiles
 {
-    private static readonly PullRequestDescription Description = PullRequestDescription.TryCreate("Adds the demo.")!;
+    private static readonly PullRequestDescription Description = Descriptions.Create();
 
     private static readonly RevertedFile[] Reverted =
     [
@@ -18,42 +18,42 @@ public sealed class RevertedFiles
     ];
 
     private const string Section = """
-        ## Files reverted by Foundry
-
-        Foundry's diff gate reverted these files in a separate commit before pushing, because binary files and files over its size limit are not published. Add them yourself if they belong in the change.
+        <details><summary>Reverted files (2)</summary>
 
         - `assets/demo.mp4`: too large (48.2 MB)
         - `tools/protoc.exe`: binary (940 B)
+
+        </details>
         """;
 
     [Fact]
-    public void WhenFilesWereReverted_ThePullRequestBodyListsThemBeforeTheClosesLine()
+    public void WhenFilesWereReverted_ThePullRequestBodyListsThemCollapsedBeforeTheClosesLine()
     {
         // Act
         PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, "Demo", 42, [], Reverted, []);
 
         // Assert
-        text.Body.ShouldBe($"Adds the demo.\n\n{Section}\n\nCloses #42");
+        text.Body.ShouldEndWith($"- dotnet test: 12 passed.\n\n{Section}\n\nCloses #42");
     }
 
     [Fact]
-    public void WhenFilesWereReverted_TheSummaryCommentListsThem()
+    public void WhenFilesWereReverted_TheSummaryCommentListsThemCollapsed()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], Reverted, []);
+        string comment = PullRequestText.SummaryComment(null, Description, [], Reverted, []);
 
         // Assert
-        comment.ShouldBe($"Adds the demo.\n\n{Section}");
+        comment.ShouldEndWith($"- dotnet test: 12 passed.\n\n{Section}");
     }
 
     [Fact]
     public void WhenNoFilesWereReverted_TheBodyHasNoRevertedSection()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], []);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], []);
 
         // Assert
-        comment.ShouldNotContain("Files reverted by Foundry");
+        comment.ShouldNotContain("Reverted files");
     }
 
     [Fact]
@@ -61,13 +61,14 @@ public sealed class RevertedFiles
     {
         // Act
         string comment = PullRequestText.SummaryComment(
+            null,
             Description,
             [],
             [new RevertedFile("odd`name.bin", RevertedFileReason.Binary, 1024)],
             []);
 
         // Assert
-        comment.ShouldEndWith("- ``odd`name.bin``: binary (1 KB)");
+        comment.ShouldContain("\n- ``odd`name.bin``: binary (1 KB)\n");
     }
 
     [Theory]
@@ -82,12 +83,13 @@ public sealed class RevertedFiles
     {
         // Act
         string comment = PullRequestText.SummaryComment(
+            null,
             Description,
             [],
             [new RevertedFile("f.bin", RevertedFileReason.Binary, sizeBytes)],
             []);
 
         // Assert
-        comment.ShouldEndWith($"- `f.bin`: binary ({expected})");
+        comment.ShouldContain($"\n- `f.bin`: binary ({expected})\n");
     }
 }

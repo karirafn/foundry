@@ -104,7 +104,11 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
 }
 
 /// <summary>Answers the issue detail publishing reads for the pull request title and body; nothing else.</summary>
-internal sealed class StubIssueQueries(int issueNumber = 42, string title = "Add retry", string? kind = "feature") : IIssueQueries
+internal sealed class StubIssueQueries(
+    int issueNumber = 42,
+    string title = "Add retry",
+    string? kind = "feature",
+    string? runKind = IssueSummary.FreshRunKind) : IIssueQueries
 {
     public Task<Result<IssueDetail>> GetIssueDetailAsync(IssueId issueId, CancellationToken cancellationToken) =>
         Task.FromResult(Result<IssueDetail>.Ok(new IssueDetail(
@@ -120,7 +124,8 @@ internal sealed class StubIssueQueries(int issueNumber = 42, string title = "Add
             StateDetails: null,
             new IssueKindDetails(kind is null ? IssueKindDetails.UnclassifiedSource : IssueKindDetails.LabelledSource, kind, null),
             Triage: null,
-            Clarifications: [])));
+            Clarifications: [],
+            runKind)));
 
     public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();

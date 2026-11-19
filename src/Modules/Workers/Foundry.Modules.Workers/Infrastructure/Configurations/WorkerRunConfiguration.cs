@@ -540,6 +540,10 @@ public sealed class UnpublishedRunConfiguration : IEntityTypeConfiguration<Unpub
         subjects => subjects.Aggregate(0, (hash, subject) => HashCode.Combine(hash, subject)),
         subjects => subjects.ToList());
 
+    private static readonly ValueConverter<RunPullRequestDescription?, string?> PullRequestDescriptionConverter = new(
+        description => description == null ? null : JsonSerializer.Serialize(description, SubjectsJsonOptions),
+        json => json == null ? null : JsonSerializer.Deserialize<RunPullRequestDescription>(json, SubjectsJsonOptions));
+
     public void Configure(EntityTypeBuilder<UnpublishedRun> builder)
     {
         builder.Property(r => r.StartedAt)
@@ -583,10 +587,11 @@ public sealed class UnpublishedRunConfiguration : IEntityTypeConfiguration<Unpub
             .HasMaxLength(PullRequestSummaryMaxLength)
             .HasColumnName("pull_request_summary");
 
-        builder.Property(r => r.PullRequestBody)
+        builder.Property(r => r.PullRequestDescriptionDraft)
+            .HasConversion(PullRequestDescriptionConverter)
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
-            .HasColumnName("pull_request_body");
+            .HasColumnName("pull_request_description");
 
         builder.Property(r => r.FailedPublishAttempts)
             .HasColumnName("failed_publish_attempts");

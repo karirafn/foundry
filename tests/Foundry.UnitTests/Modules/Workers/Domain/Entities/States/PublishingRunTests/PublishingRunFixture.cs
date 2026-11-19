@@ -29,5 +29,5 @@ internal static class PublishingRunFixture
             exit ?? new RunExit(0, OomKilled: false, RunStopReason.Exited, ExitedAt),
             containerOutput: "log tail",
             verdict ?? RunVerdict.Done(),
-            new RunPullRequestText("Add retry", "Body"));
+            new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Body"], ["dotnet test: passed."], [], null)));
 }

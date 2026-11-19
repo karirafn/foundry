@@ -320,7 +320,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         await RunPublisherAsync(publisher, provider);
 
         // Assert
-        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("## Files reverted by Foundry");
+        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("<details><summary>Reverted files (1)</summary>");
     }
 
     [Fact]
@@ -337,7 +337,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
 
         // Assert
         _commands.Opened.ShouldHaveSingleItem().Body
-            .ShouldContain("## Possible generic secrets for review\n\nFoundry's diff gate matched these lines with a generic secret pattern");
+            .ShouldContain("> - 1 line matched a generic secret pattern; check it is not a real secret.");
         _commands.Opened.Single().Body.ShouldContain("- `src/store.ts` line 3: rule `generic-api-key`");
         await using FoundryDbContext db = CreateDbContext();
         WorkerRun run = await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
@@ -490,7 +490,42 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         await RunPublisherAsync(publisher, provider);
 
         // Assert
-        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("## Secret findings confirmed as false positives");
+        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("<details><summary>Confirmed false positives (1)</summary>");
+    }
+
+    [Fact]
+    public async Task TheSummaryCommentOfALaterRun_IsHeadedWithTheIssuesRunKindAndLaysOutTheDescription()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], [], []));
+        StubPostExitProviderQueries provider = new(
+            hasCommits: true,
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
+
+        // Act
+        await RunPublisherAsync(publisher, provider, IssueSummary.ChecksFixRunKind);
+
+        // Assert
+        _commands.Summaries.ShouldHaveSingleItem().Body
+            .ShouldBe("### Checks fix\n\n**Changes**\n- Adds retry with backoff.\n\n**Verified**\n- dotnet test: passed.");
+    }
+
+    [Fact]
+    public async Task WhenTheIssueReportsNoRunKind_TheSummaryCommentHasNoHeading()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], [], []));
+        StubPostExitProviderQueries provider = new(
+            hasCommits: true,
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
+
+        // Act
+        await RunPublisherAsync(publisher, provider, issueRunKind: null);
+
+        // Assert
+        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldStartWith("**Changes**\n");
     }
 
     [Fact]
@@ -524,7 +559,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             exit,
             containerOutput: null,
             exit.FinishedCleanly ? RunVerdict.Done() : null,
-            new RunPullRequestText("Add retry", "Adds retry with backoff."));
+            new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Adds retry with backoff."], ["dotnet test: passed."], [], null)));
         db.Set<WorkerRun>().Add(publishing);
         db.SaveChanges();
     }
@@ -538,8 +573,13 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         PublishingRun publishing = active.BeginPublishing(
             new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
             containerOutput: null,
+<<<<<<< HEAD
             RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which database?")]),
             new RunPullRequestText("Add retry", "Adds retry with backoff."));
+=======
+            RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]),
+            new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Adds retry with backoff."], ["dotnet test: passed."], [], null)));
+>>>>>>> 2fb036f6 (feat(workers): pull request text is structured, with one warning alert for what a reviewer must check)
         db.Set<WorkerRun>().Add(publishing);
         db.SaveChanges();
     }
@@ -552,14 +592,17 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), MonitoredRepositoryId.New());
         RunExit exit = new(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow);
         PublishingRun confirmed = active
-            .BeginPublishing(exit, containerOutput: null, RunVerdict.Done(), new RunPullRequestText("Add retry", "Adds retry."))
+            .BeginPublishing(exit, containerOutput: null, RunVerdict.Done(), new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Adds retry."], ["dotnet test: passed."], [], null)))
             .BlockPublish([finding], DateTimeOffset.UtcNow)
             .ConfirmFalsePositives(DateTimeOffset.UtcNow);
         db.Set<WorkerRun>().Add(confirmed);
         db.SaveChanges();
     }
 
-    private async Task RunPublisherAsync(FakePublisher publisher, StubPostExitProviderQueries provider)
+    private async Task RunPublisherAsync(
+        FakePublisher publisher,
+        StubPostExitProviderQueries provider,
+        string? issueRunKind = IssueSummary.FreshRunKind)
     {
         await using FoundryDbContext db = CreateDbContext();
         DomainEventDispatcher domainEvents = new(new ServiceCollection().BuildServiceProvider());
@@ -570,7 +613,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             StubRepositoryDispatchQueries.WithToken("ghp_test"),
             _commands,
             provider,
-            new StubIssueQueries(),
+            new StubIssueQueries(runKind: issueRunKind),
             new StubGlobalSettingsQueries(),
             parser,
             new WorkerOutcomeResolver(provider, parser, [new TriageOutcomeResolver(parser)], prRetryDelay: TimeSpan.Zero),

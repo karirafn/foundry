@@ -22,7 +22,7 @@ public sealed partial class ResolveAsync
             new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
             containerOutput: null,
             RunVerdict.Done(),
-            new RunPullRequestText("Add feature", "Body"));
+            new RunPullRequestText("Add feature", new RunPullRequestDescription(null, ["Body"], ["dotnet test: passed."], [], null)));
         run.RecordPublished(new PublishResult.Published(PublishedHead, 1, ["feat: add feature"], [], []), DateTimeOffset.UtcNow);
         return run;
     }

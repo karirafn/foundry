@@ -4168,7 +4168,8 @@
           "stateDetails",
           "kind",
           "triage",
-          "clarifications"
+          "clarifications",
+          "runKind"
         ],
         "type": "object",
         "properties": {
@@ -4237,6 +4238,12 @@
             "items": {
               "$ref": "#/components/schemas/ClarificationDetails"
             }
+          },
+          "runKind": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

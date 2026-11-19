@@ -169,7 +169,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
             new RunExit(0, OomKilled: false, RunStopReason.Exited, exitedAt),
             containerOutput: null,
             RunVerdict.Done(),
-            new RunPullRequestText("Add retry", "Adds retry with backoff."));
+            new RunPullRequestText("Add retry", new RunPullRequestDescription(null, ["Adds retry with backoff."], ["dotnet test: passed."], [], null)));
     }
 
     private void SeedPublishingRun(DateTimeOffset exitedAt)

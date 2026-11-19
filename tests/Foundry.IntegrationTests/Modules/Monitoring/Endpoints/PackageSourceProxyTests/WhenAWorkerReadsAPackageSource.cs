@@ -426,7 +426,7 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
                 new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
                 containerOutput: "log tail",
                 RunVerdict.Done(),
-                new RunPullRequestText("Title", "Body"))
+                new RunPullRequestText("Title", new RunPullRequestDescription(null, ["Body"], ["dotnet test: passed."], [], null)))
             : active;
         dbContext.Set<WorkerRun>().Add(run);
 

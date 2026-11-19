@@ -5,6 +5,10 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Contracts;
 
+/// <summary>
+/// One issue in full. <paramref name="RunKind"/> is the kind of run the issue is queued for or running (an
+/// <see cref="IssueSummary"/> run kind), and <see langword="null"/> when none is; while a run publishes, it is that run's kind.
+/// </summary>
 public sealed record IssueDetail(
     Guid Id,
     int IssueNumber,
@@ -18,7 +22,8 @@ public sealed record IssueDetail(
     IssueStateDetails? StateDetails,
     IssueKindDetails Kind,
     TriageVerdictDetails? Triage,
-    IReadOnlyList<ClarificationDetails> Clarifications);
+    IReadOnlyList<ClarificationDetails> Clarifications,
+    string? RunKind);
 
 /// <summary>
 /// One round of the issue's clarification log (ADR 0096), oldest first in <see cref="IssueDetail.Clarifications"/>:

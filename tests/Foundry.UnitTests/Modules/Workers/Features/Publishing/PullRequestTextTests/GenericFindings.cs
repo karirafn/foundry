@@ -10,7 +10,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Publishing.PullRequestTextT
 
 public sealed class GenericFindings
 {
-    private static readonly PullRequestDescription Description = PullRequestDescription.TryCreate("Adds the store.")!;
+    private static readonly PullRequestDescription Description = Descriptions.Create();
 
     private static readonly SecretFinding[] Findings =
     [
@@ -25,68 +25,69 @@ public sealed class GenericFindings
         new DateTimeOffset(2026, 11, 14, 9, 30, 0, TimeSpan.Zero));
 
     private const string Section = """
-        ## Possible generic secrets for review
-
-        Foundry's diff gate matched these lines with a generic secret pattern and published them; check that none of them is a real secret.
+        <details><summary>Possible secrets (2)</summary>
 
         - `src/store.ts` line 3: rule `generic-api-key`
         - `docs/README.md` line 41: rule `generic-api-key`
+
+        </details>
         """;
 
     [Fact]
-    public void ARunWithGenericFindings_ListsThemInThePullRequestBodyBeforeTheClosesLine()
+    public void ARunWithGenericFindings_ListsThemCollapsedInThePullRequestBodyBeforeTheClosesLine()
     {
         // Act
         PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, "Store", 42, [], [], Findings);
 
         // Assert
-        text.Body.ShouldBe($"Adds the store.\n\n{Section}\n\nCloses #42");
+        text.Body.ShouldEndWith($"- dotnet test: 12 passed.\n\n{Section}\n\nCloses #42");
     }
 
     [Fact]
-    public void ARevisionWithGenericFindings_ListsThemInTheSummaryComment()
+    public void ARevisionWithGenericFindings_ListsThemCollapsedInTheSummaryComment()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], Findings);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], Findings);
 
         // Assert
-        comment.ShouldBe($"Adds the store.\n\n{Section}");
+        comment.ShouldEndWith($"- dotnet test: 12 passed.\n\n{Section}");
     }
 
     [Fact]
     public void ARunWithoutGenericFindings_HasNoGenericSection()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], []);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], []);
 
         // Assert
-        comment.ShouldBe("Adds the store.");
+        comment.ShouldNotContain("Possible secrets");
     }
 
     [Fact]
     public void TheSection_NeverCarriesTheFindingsCommit()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], [], Findings);
+        string comment = PullRequestText.SummaryComment(null, Description, [], [], Findings);
 
         // Assert
-        comment.ShouldNotContain("3333333");
-        comment.ShouldNotContain("4444444");
+        comment.ShouldSatisfyAllConditions(
+            () => comment.ShouldNotContain("3333333"),
+            () => comment.ShouldNotContain("4444444"));
     }
 
     [Fact]
-    public void TheSection_FollowsTheRevertedFilesAndConfirmedFindingsSections()
+    public void TheSections_ListRevertedFilesThenPossibleSecretsThenConfirmedFalsePositives()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(Description, [], Reverted, Findings, Confirmation);
+        string comment = PullRequestText.SummaryComment(null, Description, [], Reverted, Findings, Confirmation);
 
         // Assert
-        int reverted = comment.IndexOf("## Files reverted by Foundry", StringComparison.Ordinal);
-        int confirmed = comment.IndexOf("## Secret findings confirmed as false positives", StringComparison.Ordinal);
-        int generic = comment.IndexOf("## Possible generic secrets for review", StringComparison.Ordinal);
-        reverted.ShouldBeGreaterThan(0);
-        confirmed.ShouldBeGreaterThan(reverted);
-        generic.ShouldBeGreaterThan(confirmed);
-        comment.ShouldEndWith(Section);
+        int reverted = comment.IndexOf("<summary>Reverted files (1)</summary>", StringComparison.Ordinal);
+        int generic = comment.IndexOf("<summary>Possible secrets (2)</summary>", StringComparison.Ordinal);
+        int confirmed = comment.IndexOf("<summary>Confirmed false positives (1)</summary>", StringComparison.Ordinal);
+        comment.ShouldSatisfyAllConditions(
+            () => reverted.ShouldBeGreaterThan(0),
+            () => generic.ShouldBeGreaterThan(reverted),
+            () => confirmed.ShouldBeGreaterThan(generic));
     }
 }

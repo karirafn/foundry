@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared.Markdown;
 
@@ -30,17 +31,7 @@ internal sealed partial record PullRequestText(string Title, string Body)
 
     private const string Ellipsis = "…";
 
-    private const string RevertedFilesHeading = "## Files reverted by Foundry";
-
-    private const string RevertedFilesExplanation =
-        "Foundry's diff gate reverted these files in a separate commit before pushing, because binary files and files over its size limit are not published. Add them yourself if they belong in the change.";
-
-    private const string ConfirmedFindingsHeading = "## Secret findings confirmed as false positives";
-
-    private const string GenericFindingsHeading = "## Possible generic secrets for review";
-
-    private const string GenericFindingsExplanation =
-        "Foundry's diff gate matched these lines with a generic secret pattern and published them; check that none of them is a real secret.";
+    private const string ImplementationNotesSummary = "Implementation notes";
 
     public static PullRequestText Build(
         PullRequestKind kind,
@@ -59,19 +50,19 @@ internal sealed partial record PullRequestText(string Title, string Body)
         ArgumentNullException.ThrowIfNull(genericFindings);
 
         string title = $"{TypeOf(kind)}: {summary?.Value ?? SummaryFromIssueTitle(issueTitle, issueNumber)}";
-        string body = SummaryComment(description, commitSubjects, revertedFiles, genericFindings, confirmation)
+        string body = Compose(heading: null, description, commitSubjects, revertedFiles, genericFindings, confirmation)
             + "\n\nCloses #" + issueNumber.ToString(CultureInfo.InvariantCulture);
 
         return new PullRequestText(title, body);
     }
 
     /// <summary>
-    /// The body of the summary comment posted on an existing pull request after a later run: the description, or the
-    /// commit-subject fallback, then the files the Diff gate reverted, then the findings an operator confirmed as false
-    /// positives, then the generic findings it published for review. It carries no closing keyword, as the pull request
-    /// body already links the issue.
+    /// The body of the summary comment posted on an existing pull request after a later run: laid out as the pull request
+    /// body, under a heading naming <paramref name="runKind"/> (an <c>IssueSummary</c> run kind; none when it is
+    /// <see langword="null"/>). It carries no closing keyword, as the pull request body already links the issue.
     /// </summary>
     public static string SummaryComment(
+        string? runKind,
         PullRequestDescription? description,
         IReadOnlyList<string> commitSubjects,
         IReadOnlyList<RevertedFile> revertedFiles,
@@ -82,27 +73,112 @@ internal sealed partial record PullRequestText(string Title, string Body)
         ArgumentNullException.ThrowIfNull(revertedFiles);
         ArgumentNullException.ThrowIfNull(genericFindings);
 
-        StringBuilder comment = new(description is null
-            ? BodyFromCommitSubjects(commitSubjects)
-            : ModelMarkdown.Block(description.Value));
+        return Compose(HeadingOf(runKind), description, commitSubjects, revertedFiles, genericFindings, confirmation);
+    }
+
+    // One alert leads with everything a reviewer must check; the diff gate's lists sit collapsed below, as their alert
+    // lines already carry the counts. Blank lines surround each <details> body because GitLab renders Markdown inside it
+    // only then.
+    private static string Compose(
+        string? heading,
+        PullRequestDescription? description,
+        IReadOnlyList<string> commitSubjects,
+        IReadOnlyList<RevertedFile> revertedFiles,
+        IReadOnlyList<SecretFinding> genericFindings,
+        FalsePositiveConfirmation? confirmation)
+    {
+        List<string> blocks = [];
+
+        if (Alert(description?.Attention ?? [], revertedFiles.Count, genericFindings.Count) is { } alert)
+        {
+            blocks.Add(alert);
+        }
+
+        string? cause = description?.Cause is { } text ? "**Cause:** " + ModelMarkdown.Inline(text) : null;
+        if (heading is not null || cause is not null)
+        {
+            blocks.Add(string.Join('\n', new[] { heading is null ? null : "### " + heading, cause }.OfType<string>()));
+        }
+
+        if (description is null)
+        {
+            blocks.Add(ChangesFromCommitSubjects(commitSubjects));
+        }
+        else
+        {
+            blocks.Add(BulletList("**Changes**", description.Changes));
+            blocks.Add(BulletList("**Verified**", description.Verification));
+
+            if (description.Notes is { } notes)
+            {
+                blocks.Add(Details(ImplementationNotesSummary, ModelMarkdown.Block(notes)));
+            }
+        }
 
         if (revertedFiles.Count > 0)
         {
-            comment.Append("\n\n").Append(RevertedFilesSection(revertedFiles));
-        }
-
-        if (confirmation is not null)
-        {
-            comment.Append("\n\n").Append(ConfirmedFindingsSection(confirmation));
+            blocks.Add(Details(
+                $"Reverted files ({revertedFiles.Count.ToString(CultureInfo.InvariantCulture)})",
+                string.Join('\n', revertedFiles.Select(RevertedFileItem))));
         }
 
         if (genericFindings.Count > 0)
         {
-            comment.Append("\n\n").Append(GenericFindingsSection(genericFindings));
+            blocks.Add(Details(
+                $"Possible secrets ({genericFindings.Count.ToString(CultureInfo.InvariantCulture)})",
+                FindingItems(genericFindings)));
         }
 
-        return comment.ToString();
+        if (confirmation is not null)
+        {
+            blocks.Add(ConfirmedFindingsDetails(confirmation));
+        }
+
+        return string.Join("\n\n", blocks);
     }
+
+    // Confirmed false positives get no alert line: a person already decided them, so they are a record.
+    private static string? Alert(IReadOnlyList<string> attention, int revertedFileCount, int genericFindingCount)
+    {
+        List<string> lines = [];
+
+        if (revertedFileCount > 0)
+        {
+            lines.Add(revertedFileCount == 1
+                ? "1 file was reverted by Foundry's diff gate and is missing from this change."
+                : $"{revertedFileCount.ToString(CultureInfo.InvariantCulture)} files were reverted by Foundry's diff gate and are missing from this change.");
+        }
+
+        if (genericFindingCount > 0)
+        {
+            lines.Add(genericFindingCount == 1
+                ? "1 line matched a generic secret pattern; check it is not a real secret."
+                : $"{genericFindingCount.ToString(CultureInfo.InvariantCulture)} lines matched a generic secret pattern; check none is a real secret.");
+        }
+
+        lines.AddRange(attention.Select(ModelMarkdown.Inline));
+
+        // GitHub recognises the alert tag only on a line of its own.
+        return lines.Count == 0 ? null : "> [!WARNING]\n" + string.Join('\n', lines.Select(line => "> - " + line));
+    }
+
+    private static string? HeadingOf(string? runKind) => runKind switch
+    {
+        IssueSummary.ChecksFixRunKind => "Checks fix",
+        IssueSummary.ReviewFixRunKind => "Review fix",
+        IssueSummary.FindingsFixRunKind => "Review findings fix",
+        IssueSummary.ConflictFixRunKind => "Conflict fix",
+        IssueSummary.InputResumeRunKind => "Resumed with input",
+        IssueSummary.ContinuationRunKind => "Continuation",
+        IssueSummary.FreshRunKind => "Update",
+        _ => null,
+    };
+
+    private static string BulletList(string label, IEnumerable<string> items) =>
+        label + "\n" + string.Join('\n', items.Select(item => "- " + ModelMarkdown.Inline(item)));
+
+    private static string Details(string summary, string body) =>
+        $"<details><summary>{summary}</summary>\n\n{body}\n\n</details>";
 
     private static string TypeOf(PullRequestKind kind) => kind switch
     {
@@ -160,79 +236,33 @@ internal sealed partial record PullRequestText(string Title, string Body)
         return value[..length];
     }
 
-    private static string BodyFromCommitSubjects(IReadOnlyList<string> commitSubjects)
+    private static string ChangesFromCommitSubjects(IReadOnlyList<string> commitSubjects)
     {
         string[] subjects = [.. commitSubjects
             .Select(subject => subject.Trim())
             .Where(subject => subject.Length > 0)];
 
-        if (subjects.Length == 0)
-        {
-            return NoChangesListedSentence;
-        }
-
-        return "## Changes\n\n" + string.Join('\n', subjects.Select(subject => "- " + ModelMarkdown.Inline(subject)));
+        return subjects.Length == 0 ? NoChangesListedSentence : BulletList("**Changes**", subjects);
     }
 
-    // The pull request is where a reviewer learns that the run's change is missing these files (#788).
-    private static string RevertedFilesSection(IReadOnlyList<RevertedFile> revertedFiles)
-    {
-        StringBuilder section = new(RevertedFilesHeading);
-        section.Append("\n\n").Append(RevertedFilesExplanation).Append('\n');
+    private static string RevertedFileItem(RevertedFile file) =>
+        $"- {ModelMarkdown.CodeSpan(file.Path)}: {ReasonOf(file.Reason)} ({FileSize(file.SizeBytes)})";
 
-        foreach (RevertedFile file in revertedFiles)
-        {
-            section.Append("\n- ")
-                .Append(ModelMarkdown.CodeSpan(file.Path))
-                .Append(": ")
-                .Append(ReasonOf(file.Reason))
-                .Append(" (")
-                .Append(FileSize(file.SizeBytes))
-                .Append(')');
-        }
-
-        return section.ToString();
-    }
-
-    // The pull request is the lasting record that a person, not the scanner, let these findings through (#899). It names
-    // where and which rule only, because a finding never holds a matched value.
-    private static string ConfirmedFindingsSection(FalsePositiveConfirmation confirmation)
+    // The pull request is the lasting record that a person, not the scanner, let these findings through. It names where
+    // and which rule only, because a finding never holds a matched value.
+    private static string ConfirmedFindingsDetails(FalsePositiveConfirmation confirmation)
     {
         string confirmedAt = confirmation.ConfirmedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
-        StringBuilder section = new(ConfirmedFindingsHeading);
-        section.Append("\n\n")
-            .Append("Foundry's diff gate flagged these lines as possible secrets. An operator confirmed them as false positives on ")
-            .Append(confirmedAt)
-            .Append(" UTC, so Foundry published them.\n");
-
-        AppendFindings(section, confirmation.Findings);
-
-        return section.ToString();
+        return Details(
+            $"Confirmed false positives ({confirmation.Findings.Count.ToString(CultureInfo.InvariantCulture)})",
+            $"An operator confirmed these possible secrets as false positives on {confirmedAt} UTC, so Foundry published them.\n\n"
+                + FindingItems(confirmation.Findings));
     }
 
-    // A generic finding is pushed without an operator's decision (#956, ADR 0107), so the pull request is its only review
-    // point. Like the confirmed section it names where and which rule only: a finding never holds a matched value.
-    private static string GenericFindingsSection(IReadOnlyList<SecretFinding> findings)
-    {
-        StringBuilder section = new(GenericFindingsHeading);
-        section.Append("\n\n").Append(GenericFindingsExplanation).Append('\n');
-        AppendFindings(section, findings);
-        return section.ToString();
-    }
-
-    private static void AppendFindings(StringBuilder section, IReadOnlyList<SecretFinding> findings)
-    {
-        foreach (SecretFinding finding in findings)
-        {
-            section.Append("\n- ")
-                .Append(ModelMarkdown.CodeSpan(finding.Path))
-                .Append(" line ")
-                .Append(finding.Line.ToString(CultureInfo.InvariantCulture))
-                .Append(": rule ")
-                .Append(ModelMarkdown.CodeSpan(finding.RuleId));
-        }
-    }
+    private static string FindingItems(IReadOnlyList<SecretFinding> findings) =>
+        string.Join('\n', findings.Select(finding =>
+            $"- {ModelMarkdown.CodeSpan(finding.Path)} line {finding.Line.ToString(CultureInfo.InvariantCulture)}: rule {ModelMarkdown.CodeSpan(finding.RuleId)}"));
 
     private static string ReasonOf(RevertedFileReason reason) => reason switch
     {

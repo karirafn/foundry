@@ -1297,6 +1297,7 @@ export interface components {
             kind: components["schemas"]["IssueKindDetails"];
             triage: null | components["schemas"]["TriageVerdictDetails"];
             clarifications: components["schemas"]["ClarificationDetails"][];
+            runKind: null | string;
         };
         IssueKindDetails: {
             source: string;
