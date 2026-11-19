@@ -54,8 +54,6 @@ public sealed class RebasePendingIssue : Issue
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
 
-    public int ChecksFixAttempts { get; private set; }
-
     /// <summary>
     /// Consecutive rebase conflicts that dispatched a conflict-resolution revision. Reset by a successful sync
     /// (<see cref="RebaseOutcome.UpToDate"/> or <see cref="RebaseOutcome.Rebased"/>); left unchanged by
@@ -90,7 +88,7 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.PullRequestUrl = pullRequestUrl;
         rebasePending.EnteredRebasePendingAt = DateTimeOffset.UtcNow;
         rebasePending.FeedbackCutoffAt = feedbackCutoffAt;
-        rebasePending.ChecksFixAttempts = 0;
+        rebasePending.ResetChecksFixAttempts();
         rebasePending.RebaseConflictAttempts = 0;
         rebasePending.Reason = reason;
         return rebasePending;
@@ -100,7 +98,7 @@ public sealed class RebasePendingIssue : Issue
         RevisionInProgressIssue source,
         RebasePendingReason.AfterRun reason,
         DateTimeOffset feedbackCutoffAt,
-        int checksFixAttempts,
+        bool exhaustChecksFixAttempts,
         DateTimeOffset transitionedAt)
     {
         RebasePendingIssue rebasePending = new(source.Id, transitionedAt);
@@ -110,16 +108,20 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.PullRequestUrl = source.PullRequestUrl;
         rebasePending.EnteredRebasePendingAt = DateTimeOffset.UtcNow;
         rebasePending.FeedbackCutoffAt = feedbackCutoffAt;
-        rebasePending.ChecksFixAttempts = checksFixAttempts;
         rebasePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         rebasePending.Reason = reason;
+        if (exhaustChecksFixAttempts)
+        {
+            rebasePending.ExhaustChecksFixAttempts();
+        }
+
         return rebasePending;
     }
 
     /// <summary>
     /// The merge-pending issue is the head of its repository's catch-up queue (ADR 0111): its branch rebases onto
-    /// the default branch, then its checks run again before it merges. A merge-pending issue carries no checks-fix
-    /// count, so a red verdict after the catch-up starts from a fresh fix budget.
+    /// the default branch, then its checks run again before it merges. The catch-up starts the checks fix budget
+    /// over, so a red verdict after the catch-up gets a fresh fix budget.
     /// </summary>
     internal static RebasePendingIssue FromMergePendingCatchUp(MergePendingIssue source, DateTimeOffset transitionedAt)
     {
@@ -130,7 +132,7 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.PullRequestUrl = source.PullRequestUrl;
         rebasePending.EnteredRebasePendingAt = transitionedAt;
         rebasePending.FeedbackCutoffAt = source.FeedbackCutoffAt;
-        rebasePending.ChecksFixAttempts = 0;
+        rebasePending.ResetChecksFixAttempts();
         rebasePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         rebasePending.Reason = new RebasePendingReason.CatchUp();
         rebasePending.CatchUpHeadSha = source.HeadSha;

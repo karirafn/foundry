@@ -47,8 +47,6 @@ public sealed class PublishFailedIssue : Issue
     /// <summary>The revision's trigger, or <see langword="null"/> when the run was an implement run.</summary>
     public RevisionTrigger? Trigger { get; private set; }
 
-    public int ChecksFixAttempts { get; private set; }
-
     /// <summary>
     /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
     /// <see langword="null"/> when the revision consumed comments or predates the field.
@@ -96,7 +94,6 @@ public sealed class PublishFailedIssue : Issue
         publishFailed.BranchName = source.BranchName;
         publishFailed.PullRequestUrl = source.PullRequestUrl;
         publishFailed.Trigger = source.Trigger;
-        publishFailed.ChecksFixAttempts = source.ChecksFixAttempts;
         publishFailed.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         publishFailed.RebaseConflictAttempts = source.RebaseConflictAttempts;
         publishFailed.FailureReason = failureReason;

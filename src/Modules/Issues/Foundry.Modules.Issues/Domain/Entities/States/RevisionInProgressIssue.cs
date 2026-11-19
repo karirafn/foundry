@@ -39,8 +39,6 @@ public sealed class RevisionInProgressIssue : Issue
     // Placeholder replaced by the factory method or EF materialisation; invalid until assigned.
     public RevisionTrigger Trigger { get; private set; } = new RevisionTrigger.ReviewFeedback([], 0, null);
 
-    public int ChecksFixAttempts { get; private set; }
-
     /// <summary>
     /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
     /// <see langword="null"/> when the revision consumed comments or predates the field.
@@ -60,7 +58,6 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.Trigger = source.Trigger;
-        revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
         revisionInProgress.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionInProgress;
@@ -77,7 +74,6 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.Trigger = trigger;
-        revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
         revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionInProgress;
     }
@@ -93,7 +89,6 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.Trigger = trigger;
-        revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
         revisionInProgress.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionInProgress;
@@ -154,7 +149,7 @@ public sealed class RevisionInProgressIssue : Issue
             this,
             new RebasePendingReason.AfterRun(),
             feedbackCutoffAt,
-            ChecksFixAttempts,
+            exhaustChecksFixAttempts: false,
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -171,7 +166,7 @@ public sealed class RevisionInProgressIssue : Issue
             this,
             new RebasePendingReason.AfterRun(),
             feedbackCutoffAt,
-            UnchangedChecksFixAttempts(),
+            exhaustChecksFixAttempts: Trigger is RevisionTrigger.FailedChecks,
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -180,9 +175,6 @@ public sealed class RevisionInProgressIssue : Issue
             rebasePending.EnteredRebasePendingAt));
         return rebasePending;
     }
-
-    private int UnchangedChecksFixAttempts() =>
-        Trigger is RevisionTrigger.FailedChecks ? ChecksPendingIssue.ChecksMaxFixPushes : ChecksFixAttempts;
 
     // The cutoff the next review pass reads comments after. A ReviewFeedback trigger anchors to the newest comment
     // it consumed, so feedback posted after that batch is still read. Every other trigger (FailedChecks,
