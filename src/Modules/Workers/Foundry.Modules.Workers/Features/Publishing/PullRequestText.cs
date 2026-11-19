@@ -82,7 +82,9 @@ internal sealed partial record PullRequestText(string Title, string Body)
         ArgumentNullException.ThrowIfNull(revertedFiles);
         ArgumentNullException.ThrowIfNull(genericFindings);
 
-        StringBuilder comment = new(description?.Value ?? BodyFromCommitSubjects(commitSubjects));
+        StringBuilder comment = new(description is null
+            ? BodyFromCommitSubjects(commitSubjects)
+            : ModelMarkdown.Block(description.Value));
 
         if (revertedFiles.Count > 0)
         {
@@ -169,7 +171,7 @@ internal sealed partial record PullRequestText(string Title, string Body)
             return NoChangesListedSentence;
         }
 
-        return "## Changes\n\n" + string.Join('\n', subjects.Select(subject => "- " + subject));
+        return "## Changes\n\n" + string.Join('\n', subjects.Select(subject => "- " + ModelMarkdown.Inline(subject)));
     }
 
     // The pull request is where a reviewer learns that the run's change is missing these files (#788).
