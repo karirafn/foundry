@@ -48,8 +48,6 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     // Placeholder replaced by the factory method or EF materialisation; invalid until assigned.
     public RevisionTrigger Trigger { get; private set; } = new RevisionTrigger.ReviewFeedback([], 0, null);
 
-    public int ChecksFixAttempts { get; private set; }
-
     /// <summary>
     /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
     /// <see langword="null"/> when the revision consumed comments or predates the field.
@@ -71,7 +69,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
         revisionQueued.RecordPersonFeedback();
-        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
@@ -89,7 +87,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
         revisionQueued.RecordPersonFeedback();
-        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
@@ -107,7 +105,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
         revisionQueued.RecordPersonFeedback();
-        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
@@ -128,7 +126,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = findings;
         revisionQueued.RecordReviewFix();
-        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.ResetChecksFixAttempts();
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
@@ -144,7 +142,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks);
-        revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts + 1;
+        revisionQueued.RecordChecksFix();
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
@@ -157,7 +155,6 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.RebaseConflict();
-        revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts;
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts + 1;
         return revisionQueued;
@@ -170,7 +167,6 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = source.Trigger;
-        revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts;
         revisionQueued.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
@@ -190,7 +186,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = target.BranchName;
         revisionQueued.PullRequestUrl = target.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.InputProvided();
-        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = 0;
         return revisionQueued;
     }

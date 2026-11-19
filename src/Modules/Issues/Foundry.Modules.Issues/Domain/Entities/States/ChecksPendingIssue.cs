@@ -50,8 +50,6 @@ public sealed class ChecksPendingIssue : Issue
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
 
-    public int ChecksFixAttempts { get; private set; }
-
     public int RebaseConflictAttempts { get; private set; }
 
     /// <summary>
@@ -77,7 +75,6 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.PullRequestUrl = source.PullRequestUrl;
         checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
         checksPending.FeedbackCutoffAt = source.FeedbackCutoffAt;
-        checksPending.ChecksFixAttempts = source.ChecksFixAttempts;
         checksPending.RebaseConflictAttempts = rebaseOutcome is RebaseOutcome.UpToDate or RebaseOutcome.Rebased
             ? 0
             : source.RebaseConflictAttempts;
@@ -109,7 +106,7 @@ public sealed class ChecksPendingIssue : Issue
     internal static ChecksPendingIssue FromReviewAfterChecksRerun(ReviewIssue source, DateTimeOffset transitionedAt)
     {
         ChecksPendingIssue checksPending = FromReviewKeepingReviewFixes(source, transitionedAt);
-        checksPending.ChecksFixAttempts = ChecksMaxFixPushes;
+        checksPending.ExhaustChecksFixAttempts();
         checksPending.Reason = new ChecksPendingReason.ChecksRerun();
         return checksPending;
     }
@@ -123,7 +120,7 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.PullRequestUrl = source.PullRequestUrl;
         checksPending.EnteredChecksPendingAt = transitionedAt;
         checksPending.FeedbackCutoffAt = source.FeedbackCutoffAt;
-        checksPending.ChecksFixAttempts = 0;
+        checksPending.ResetChecksFixAttempts();
         checksPending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = source.RebaseOutcome;
         checksPending.Reason = new ChecksPendingReason.HeadMoved();

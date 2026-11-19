@@ -48,8 +48,6 @@ public sealed class PublishBlockedIssue : Issue
     /// <summary>The revision's trigger, or <see langword="null"/> when the run was an implement run.</summary>
     public RevisionTrigger? Trigger { get; private set; }
 
-    public int ChecksFixAttempts { get; private set; }
-
     /// <summary>
     /// The feedback cutoff of the state a revision that consumed no comments started from (issue #925);
     /// <see langword="null"/> when the revision consumed comments or predates the field.
@@ -87,7 +85,6 @@ public sealed class PublishBlockedIssue : Issue
         blocked.BranchName = source.BranchName;
         blocked.PullRequestUrl = source.PullRequestUrl;
         blocked.Trigger = source.Trigger;
-        blocked.ChecksFixAttempts = source.ChecksFixAttempts;
         blocked.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
         blocked.RebaseConflictAttempts = source.RebaseConflictAttempts;
         blocked.BlockedAt = blockedAt;

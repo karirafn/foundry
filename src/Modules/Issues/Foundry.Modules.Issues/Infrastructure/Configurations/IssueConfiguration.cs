@@ -195,6 +195,11 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasDefaultValue(0)
             .HasColumnName("review_fix_attempts");
 
+        builder.Property(i => i.ChecksFixAttempts)
+            .IsRequired()
+            .HasDefaultValue(0)
+            .HasColumnName("checks_fix_attempts");
+
         builder.Property(i => i.TriageVerdict)
             .HasConversion((ValueConverter)TriageVerdictJsonConversion.Converter, TriageVerdictJsonConversion.Comparer)
             .HasMaxLength(int.MaxValue)

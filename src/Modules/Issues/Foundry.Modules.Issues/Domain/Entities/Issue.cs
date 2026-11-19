@@ -106,6 +106,14 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public int ReviewFixAttempts { get; private set; }
 
+    /// <summary>
+    /// How many checks fix runs (<see cref="RevisionTrigger.FailedChecks"/>) the current pushed code has spent, capped
+    /// by <see cref="ChecksPendingIssue.ChecksMaxFixPushes"/>. Carried through every transition with the shared
+    /// properties, so no detour drops it; only new code (a fresh run, a person's push or feedback, a findings fix)
+    /// starts it again at zero.
+    /// </summary>
+    public int ChecksFixAttempts { get; private set; }
+
     /// <summary>The round still waiting for input, or <see langword="null"/> when every round is answered.</summary>
     public Clarification? OpenClarification =>
         Clarifications.Count > 0 && Clarifications[^1].IsOpen ? Clarifications[^1] : null;
@@ -220,6 +228,28 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         Clarifications = source.Clarifications;
         HasPersonFeedback = source.HasPersonFeedback;
         ReviewFixAttempts = source.ReviewFixAttempts;
+        ChecksFixAttempts = source.ChecksFixAttempts;
+    }
+
+    /// <summary>A checks fix run is queued: it spends one of the pushed code's checks fix runs.</summary>
+    private protected void RecordChecksFix()
+    {
+        ChecksFixAttempts++;
+    }
+
+    /// <summary>New code reached the branch: the checks get their full fix budget again.</summary>
+    private protected void ResetChecksFixAttempts()
+    {
+        ChecksFixAttempts = 0;
+    }
+
+    /// <summary>
+    /// No new code follows: a red verdict goes to a person instead of spending a fix run on code nobody changed
+    /// (ADR 0108).
+    /// </summary>
+    private protected void ExhaustChecksFixAttempts()
+    {
+        ChecksFixAttempts = ChecksPendingIssue.ChecksMaxFixPushes;
     }
 
     /// <summary>The reviewer's findings drive this revision: it spends one of the round's review fix runs.</summary>
