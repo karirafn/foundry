@@ -1842,8 +1842,7 @@ describe('RepositoryFormComponent', () => {
     expect((emitted as CreateRepositoryRequest).maxConcurrentWorkers).toBe(1);
   });
 
-  // Cycle 40: "Polling enabled" checkbox label
-  it('should label the active toggle "Polling enabled" in edit mode', () => {
+  it('should label the active toggle "Monitor this repository" in edit mode', () => {
     // Arrange
 
     // Act
@@ -1851,7 +1850,37 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     const label = el.querySelector('label[for="repository-active"]');
-    expect(label?.textContent?.trim()).toBe('Polling enabled');
+    expect(label?.textContent?.trim()).toBe('Monitor this repository');
+  });
+
+  it('should describe the active toggle with a hint that says webhook deliveries are ignored', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repository: MOCK_REPOSITORY });
+
+    // Assert
+    const hintId = el.querySelector('#repository-active')?.getAttribute('aria-describedby');
+    expect(hintId).toBe('repository-active-hint');
+    expect(el.querySelector(`#${hintId}`)?.textContent).toContain('webhook');
+  });
+
+  it('should show the same active toggle hint whether the toggle is on or off', () => {
+    // Arrange
+    const expected =
+      'Turn this off to pause all issue detection for this repository. Scheduled polls stop and webhook deliveries are ignored. Issues already queued still run and open pull requests. To use webhooks, leave this on: polling then slows to the backstop interval.';
+    const { fixture, el } = setup({ repository: MOCK_REPOSITORY });
+    const hintWhenOn = el.querySelector('#repository-active-hint')?.textContent?.trim();
+    const toggle = el.querySelector('#repository-active') as HTMLInputElement;
+
+    // Act
+    toggle.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(toggle.checked).toBe(false);
+    expect(hintWhenOn).toBe(expected);
+    expect(el.querySelector('#repository-active-hint')?.textContent?.trim()).toBe(expected);
   });
 
   // Cycle 41: sorted order — pushable repos come before unpushable repos in listbox

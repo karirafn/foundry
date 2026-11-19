@@ -289,15 +289,21 @@ const MAX_WORKER_LIMIT = 20;
         </div>
 
         @if (_isEditMode()) {
-          <div class="repository-form__field repository-form__field--inline">
-            <label class="repository-form__field-label" for="repository-active">Polling enabled</label>
-            <input
-              class="repository-form__toggle"
-              type="checkbox"
-              id="repository-active"
-              [checked]="_isActive()"
-              (change)="_isActive.set($any($event.target).checked)"
-            />
+          <div class="repository-form__field">
+            <div class="repository-form__checkbox-row">
+              <input
+                class="repository-form__toggle"
+                type="checkbox"
+                id="repository-active"
+                aria-describedby="repository-active-hint"
+                [checked]="_isActive()"
+                (change)="_isActive.set($any($event.target).checked)"
+              />
+              <label class="repository-form__field-label" for="repository-active">Monitor this repository</label>
+            </div>
+            <span class="repository-form__field-hint" id="repository-active-hint">
+              Turn this off to pause all issue detection for this repository. Scheduled polls stop and webhook deliveries are ignored. Issues already queued still run and open pull requests. To use webhooks, leave this on: polling then slows to the backstop interval.
+            </span>
           </div>
         }
 
