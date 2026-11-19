@@ -127,6 +127,6 @@ internal sealed class RepositoryDispatchQueries(
             return null;
         }
 
-        return new WorkerNuGetConfig(((Result<string>.Success)built).Value);
+        return new WorkerNuGetConfig(((Result<string>.Success)built).Value, proxyOptions.Value.WorkerBaseUrl);
     }
 }

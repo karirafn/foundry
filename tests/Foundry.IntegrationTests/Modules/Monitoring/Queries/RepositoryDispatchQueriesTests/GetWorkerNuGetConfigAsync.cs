@@ -55,6 +55,19 @@ public sealed class GetWorkerNuGetConfigAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheRepositoryDeclaresAStoredSource_ReturnsTheProxyBaseUrlAsTheWorkerSeesIt()
+    {
+        // Arrange
+        (MonitoredRepositoryId repositoryId, _) = await SeedAsync(declares: true, storeSource: true);
+
+        // Act
+        WorkerNuGetConfig? result = await QueryAsync(repositoryId);
+
+        // Assert
+        result.ShouldNotBeNull().ProxyBaseUrl.ShouldBe(new Uri("http://host.docker.internal:5287/package-sources/"));
+    }
+
+    [Fact]
     public async Task WhenTheRepositoryDeclaresNoSource_ReturnsNothing()
     {
         // Arrange

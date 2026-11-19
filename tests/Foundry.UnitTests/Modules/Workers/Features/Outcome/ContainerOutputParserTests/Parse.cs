@@ -350,6 +350,39 @@ public sealed class Parse
     }
 
     [Fact]
+    public void WhenPackageSourcesSentinelPresent_ReturnsPackageSourceUnreachableWithTheDetailLine()
+    {
+        // Arrange
+        string log = """
+            Package sources: restoring through Foundry
+            2026-11-19T10:00:00.000000001Z FOUNDRY_BOOTSTRAP_FAILED stage=package-sources detail=the package proxy at host.docker.internal:5287 did not answer
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.PackageSourceUnreachable>()
+            .Detail.ShouldBe("the package proxy at host.docker.internal:5287 did not answer");
+    }
+
+    [Fact]
+    public void WhenToolResultQuotesPackageSourcesSentinel_ReturnsAgentStartedNoResultLine()
+    {
+        // Arrange
+        string log = """
+            2026-11-01T10:00:00.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            2026-11-01T10:16:00.000000001Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"tool_use_result":{"stdout":"FOUNDRY_BOOTSTRAP_FAILED stage=package-sources detail=x\n","stderr":""}}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AgentStartedNoResultLine>();
+    }
+
+    [Fact]
     public void WhenManagedSettingsSentinelPresent_DetailTellsTheOperatorToRebuild()
     {
         // Arrange

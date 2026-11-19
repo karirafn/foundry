@@ -4,6 +4,7 @@ export type FailureCategoryToken =
   | 'container_error'
   | 'provider_error'
   | 'provider_unreachable'
+  | 'package_source_unreachable'
   | 'usage_limited'
   | 'worker_bootstrap_failed'
   | 'credits_exhausted'
@@ -30,6 +31,7 @@ export const FAILURE_CATEGORY_DISPLAY = {
   container_error: { label: 'CONTAINER ERROR', cssClass: 'badge--failure-container-error' },
   provider_error: { label: 'PROVIDER ERROR', cssClass: 'badge--failure-provider-error' },
   provider_unreachable: { label: 'PROVIDER UNREACHABLE', cssClass: 'badge--failure-provider-unreachable' },
+  package_source_unreachable: { label: 'PACKAGES UNREACHABLE', cssClass: 'badge--failure-provider-unreachable' },
   usage_limited: { label: 'USAGE LIMITED', cssClass: 'badge--usage-limited' },
   worker_bootstrap_failed: { label: 'BOOTSTRAP FAILED', cssClass: 'badge--failure-bootstrap' },
   credits_exhausted: { label: 'CREDITS EXHAUSTED', cssClass: 'badge--failure-credits-exhausted' },

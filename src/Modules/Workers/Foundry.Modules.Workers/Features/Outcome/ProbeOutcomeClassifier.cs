@@ -23,6 +23,7 @@ internal sealed class ProbeOutcomeClassifier(IContainerOutputParser parser) : IP
             ContainerOutputParseResult.NoResultLine => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.AgentStartedNoResultLine => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.WorkerBootstrapFailed => new ProbeOutcome.InfrastructureFailure(),
+            ContainerOutputParseResult.PackageSourceUnreachable => new ProbeOutcome.InfrastructureFailure(),
             _ => throw new UnreachableException($"Unhandled {nameof(ContainerOutputParseResult)}: {result}"),
         };
     }
