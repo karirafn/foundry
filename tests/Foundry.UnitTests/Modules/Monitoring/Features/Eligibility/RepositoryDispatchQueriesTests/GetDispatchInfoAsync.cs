@@ -125,7 +125,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         MonitoredRepository repository = await _dbContext.Set<MonitoredRepository>()
             .SingleAsync(r => r.Id == repoId, TestContext.Current.CancellationToken);
         string webhookSecret = repository.EnsureWebhookSecret();
-        repository.MarkWebhookRegistered();
+        repository.MarkWebhookRegistered("stamp");
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         GitHubCredential credential = GitHubCredential.Create(

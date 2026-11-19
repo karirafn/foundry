@@ -78,7 +78,7 @@ internal static class RepositoryWebhookEndpoints
                     ((Result<(MonitoredRepository Repository, Credential Credential)>.Failure)loaded).Error);
             }
 
-            success.Value.Repository.MarkWebhookRegistered();
+            success.Value.Repository.MarkWebhookAddedManually();
             await dbContext.SaveChangesAsync(cancellationToken);
             return await ToInfoAsync(success.Value.Repository, success.Value.Credential, cancellationToken);
         }

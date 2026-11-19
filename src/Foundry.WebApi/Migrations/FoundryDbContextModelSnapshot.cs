@@ -506,9 +506,19 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("webhook_hook_id");
 
+                    b.Property<DateTimeOffset?>("WebhookRegistrationFailedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("webhook_registration_failed_at");
+
                     b.Property<string>("WebhookSecret")
                         .HasColumnType("TEXT")
                         .HasColumnName("webhook_secret");
+
+                    b.Property<string>("WebhookSpecStamp")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("webhook_spec_stamp");
 
                     b.Property<string>("WebhookStatus")
                         .IsRequired()

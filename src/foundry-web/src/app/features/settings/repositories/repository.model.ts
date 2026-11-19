@@ -52,7 +52,7 @@ export type WebhookStatus = 'not-configured' | 'not-registered' | 'pending' | 'a
 export function webhookStatusLabel(status: WebhookStatus): string {
   switch (status) {
     case 'not-configured':
-      return 'Not configured';
+      return 'No webhook URL';
     case 'not-registered':
       return 'Not registered';
     case 'pending':
@@ -128,7 +128,7 @@ export function webhookRegistrationMessage(outcome: WebhookRegistrationOutcome, 
         case 'token-unreadable':
           return "The account token can't be read. Re-enter it on the account, or add the webhook manually.";
         default:
-          return 'Webhooks are off, so nothing was registered.';
+          return 'Foundry has no webhook URL yet, so nothing was registered. Set it in Dispatch settings.';
       }
     case 'failed':
       if (outcome.reason === 'insufficient-permission') {

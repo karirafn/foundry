@@ -34,6 +34,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// </summary>
     internal static readonly TimeSpan DeniedWriteProbeCooldown = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// Minimum wait after a failed webhook registration before the scheduled poll tries again, so a
+    /// permanently failing repository spends at most one provider attempt per hour.
+    /// </summary>
+    internal static readonly TimeSpan WebhookRegistrationRetryDelay = TimeSpan.FromHours(1);
+
     /// <summary>Length of the opaque webhook hook id (16 random bytes, lower-case hex).</summary>
     public const int WebhookHookIdLength = 32;
 
@@ -117,6 +123,16 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// stored — it is derived by <see cref="EffectiveWebhookStatus"/> when ingress is not configured.
     /// </summary>
     public WebhookStatus WebhookStatus { get; private set; } = WebhookStatus.NotRegistered;
+
+    /// <summary>
+    /// The <c>WebhookSpecStamp</c> of the hook settings and public base URL the webhook was last registered
+    /// with by Foundry. <see langword="null"/> until Foundry registers it; a stamp that differs from the
+    /// current one makes the repository due for registration (<see cref="IsDueForWebhookRegistration"/>).
+    /// </summary>
+    internal string? WebhookSpecStamp { get; private set; }
+
+    /// <summary>When the last registration attempt failed; cleared by a successful registration.</summary>
+    internal DateTimeOffset? WebhookRegistrationFailedAt { get; private set; }
 
     /// <summary>
     /// The Package Sources the repository's root <c>nuget.config</c> on its default branch declares, as last read
@@ -262,10 +278,53 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     }
 
     /// <summary>
-    /// Records the operator's "I've added the webhook" action: the hook waits for its first verified
-    /// delivery. An already <see cref="ValueObjects.WebhookStatus.Active"/> hook stays active.
+    /// Records a successful registration by Foundry with the hook spec <paramref name="specStamp"/>
+    /// describes: the hook waits for its first verified delivery, and an earlier failure is cleared. An
+    /// already <see cref="ValueObjects.WebhookStatus.Active"/> hook stays active.
     /// </summary>
-    public void MarkWebhookRegistered()
+    public void MarkWebhookRegistered(string specStamp)
+    {
+        WebhookSpecStamp = specStamp;
+        WebhookRegistrationFailedAt = null;
+        MarkWebhookPending();
+    }
+
+    /// <summary>
+    /// Records the operator's "I've added the webhook" action: the hook waits for its first verified
+    /// delivery. No stamp is stored, because Foundry does not know the spec of a hook added by hand, so
+    /// the scheduled poll still registers it.
+    /// </summary>
+    public void MarkWebhookAddedManually() => MarkWebhookPending();
+
+    /// <summary>
+    /// Records a failed registration attempt at <paramref name="attemptedAt"/>. The stamp and status are
+    /// unchanged.
+    /// </summary>
+    public void RecordWebhookRegistrationFailed(DateTimeOffset attemptedAt) =>
+        WebhookRegistrationFailedAt = attemptedAt;
+
+    /// <summary>
+    /// Whether the scheduled poll should register the webhook: its stamp differs from
+    /// <paramref name="currentStamp"/> (never registered counts as different), the write probe has not
+    /// denied the token, and no registration failed within <see cref="WebhookRegistrationRetryDelay"/> —
+    /// a strict &lt; boundary, mirroring <see cref="IsDueForWriteProbe"/>.
+    /// </summary>
+    public bool IsDueForWebhookRegistration(string currentStamp, DateTimeOffset now)
+    {
+        if (string.Equals(WebhookSpecStamp, currentStamp, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (WriteProbeVerdict is WriteProbeVerdict.Denied)
+        {
+            return false;
+        }
+
+        return HasCooldownElapsed(WebhookRegistrationFailedAt, WebhookRegistrationRetryDelay, now);
+    }
+
+    private void MarkWebhookPending()
     {
         if (WebhookStatus == WebhookStatus.Active)
         {

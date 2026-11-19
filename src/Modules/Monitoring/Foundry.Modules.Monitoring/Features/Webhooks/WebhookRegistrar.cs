@@ -15,14 +15,16 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// </summary>
 /// <remarks>
 /// No provider call is made when webhook ingress is not configured or the account token is absent or
-/// unreadable. A successful registration moves the Webhook Status to <c>Pending</c> (an
-/// <c>Active</c> hook stays active); a failure leaves it unchanged, so a <c>NotRegistered</c>
-/// repository keeps showing the manual instructions. The caller saves the repository afterwards — a
+/// unreadable; such a skip records nothing. A successful registration stores the current
+/// <see cref="WebhookSpecStamp"/> and moves the Webhook Status to <c>Pending</c> (an <c>Active</c> hook
+/// stays active); a failure records the attempt time and leaves the stamp and status unchanged, so a
+/// <c>NotRegistered</c> repository keeps showing the manual instructions. The caller saves the repository afterwards — a
 /// first registration may also generate the webhook secret.
 /// </remarks>
 internal sealed class WebhookRegistrar(
     WebhookIngress webhookIngress,
     IIssueProviderFactory providerFactory,
+    TimeProvider timeProvider,
     ILogger<WebhookRegistrar> logger)
 {
     internal const string UnsupportedProviderDetail = "Webhooks can only be registered on GitHub and GitLab.";
@@ -39,7 +41,7 @@ internal sealed class WebhookRegistrar(
         CancellationToken cancellationToken)
     {
         WebhookIngressState ingress = await webhookIngress.GetStateAsync(cancellationToken);
-        if (!ingress.IsConfigured)
+        if (!ingress.IsConfigured || ingress.PublicBaseUrl is not { } publicBaseUrl)
         {
             return Skipped(WebhookRegistrationOutcome.NotConfiguredReason);
         }
@@ -51,6 +53,7 @@ internal sealed class WebhookRegistrar(
 
         if (WebhookProviders.From(account) is not { } provider)
         {
+            repository.RecordWebhookRegistrationFailed(timeProvider.GetUtcNow());
             return Failed(WebhookRegistrationOutcome.ProviderErrorReason, UnsupportedProviderDetail);
         }
 
@@ -66,7 +69,7 @@ internal sealed class WebhookRegistrar(
         switch (result)
         {
             case Result<WebhookUpsertKind>.Success success:
-                repository.MarkWebhookRegistered();
+                repository.MarkWebhookRegistered(WebhookSpecStamp.For(provider, publicBaseUrl));
                 logger.LogInformation(
                     "Webhook for repository {Slug} {Action} on the provider.",
                     repository.Slug,
@@ -79,6 +82,7 @@ internal sealed class WebhookRegistrar(
                 string reason = failure.Error.Code == WebhookWriteErrors.InsufficientPermissionCode
                     ? WebhookRegistrationOutcome.InsufficientPermissionReason
                     : WebhookRegistrationOutcome.ProviderErrorReason;
+                repository.RecordWebhookRegistrationFailed(timeProvider.GetUtcNow());
                 logger.LogWarning(
                     "Registering the webhook for repository {Slug} failed ({ErrorCode}).",
                     repository.Slug,

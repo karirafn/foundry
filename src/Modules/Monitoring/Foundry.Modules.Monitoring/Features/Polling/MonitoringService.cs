@@ -242,12 +242,16 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 repos.Count);
         }
 
+        List<MonitoredRepositoryId> polledRepoIds = [];
+
         foreach (MonitoredRepository repo in repos)
         {
             if (!catchUp && !repo.IsDueForPoll(pollInterval, now, backstopInterval))
             {
                 continue;
             }
+
+            polledRepoIds.Add(repo.Id);
 
             ResolvedProvider? resolved = await ResolveProviderAsync(
                 repo,
@@ -334,6 +338,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 await ReRegisterSilentWebhookAsync(scope.ServiceProvider, dbContext, repo, resolvedProvider.Credential, cancellationToken);
             }
         }
+
+        await RegisterStaleWebhooksAsync(polledRepoIds, now, cancellationToken);
     }
 
     /// <summary>
@@ -556,6 +562,75 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
         _logger.LogInformation(
             "Re-registering the silent webhook for repository '{Slug}': {Kind} ({Reason}).",
+            repo.Slug,
+            outcome.Kind,
+            outcome.Reason);
+    }
+
+    /// <summary>
+    /// The webhook registration step of the scheduled poll (ADR 0116): registers each polled repository
+    /// whose <see cref="MonitoredRepository.WebhookSpecStamp"/> is not the current
+    /// <see cref="WebhookSpecStamp"/> (<see cref="MonitoredRepository.IsDueForWebhookRegistration"/>).
+    /// Each repository runs in its own scope, outside <see cref="RepositoryPoller.PollDetectingChangesAsync"/>,
+    /// so a current stamp costs no provider call and one repository's failure never reaches the others.
+    /// </summary>
+    private async Task RegisterStaleWebhooksAsync(
+        IReadOnlyList<MonitoredRepositoryId> repoIds,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        foreach (MonitoredRepositoryId repoId in repoIds)
+        {
+            try
+            {
+                await RegisterIfStaleAsync(repoId, now, cancellationToken);
+            }
+#pragma warning disable CA1031 // One repository's registration must never stop the tick for the rest; the error log surfaces it.
+            catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+            {
+                _logger.LogError(ex, "Registering the stale webhook for repository '{RepositoryId}' threw.", repoId);
+            }
+        }
+    }
+
+    private async Task RegisterIfStaleAsync(
+        MonitoredRepositoryId repoId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+
+        // Optional: hosts (and tests) without webhook wiring skip the step.
+        WebhookRegistrar? registrar = scope.ServiceProvider.GetService<WebhookRegistrar>();
+        WebhookIngressState? ingress = await GetIngressStateAsync(scope.ServiceProvider, cancellationToken);
+        if (registrar is null || ingress is not { IsConfigured: true, PublicBaseUrl: { } publicBaseUrl })
+        {
+            return;
+        }
+
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        MonitoredRepository? repo = await dbContext.Set<MonitoredRepository>()
+            .SingleOrDefaultAsync(r => r.Id == repoId && r.IsActive, cancellationToken);
+        if (repo is null)
+        {
+            return;
+        }
+
+        ICredentialResolver credentialResolver = scope.ServiceProvider.GetRequiredService<ICredentialResolver>();
+        Credential? credential = await credentialResolver.ResolveAsync(repo.Host, repo.Slug, cancellationToken);
+        if (credential is null
+            || WebhookProviders.From(credential) is not { } provider
+            || !repo.IsDueForWebhookRegistration(WebhookSpecStamp.For(provider, publicBaseUrl), now))
+        {
+            return;
+        }
+
+        WebhookRegistrationOutcome outcome = await registrar.RegisterAsync(repo, credential, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Registering the stale webhook for repository '{Slug}': {Kind} ({Reason}).",
             repo.Slug,
             outcome.Kind,
             outcome.Reason);

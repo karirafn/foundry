@@ -2,28 +2,20 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 using Foundry.IntegrationTests.Shared;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Webhooks;
-using Foundry.Modules.Monitoring.Infrastructure;
-using Foundry.Modules.Monitoring.Infrastructure.GitHub;
-using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -33,13 +25,12 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.WebhookTests;
 
 /// <summary>
 /// Automatic webhook registration with the account token: the "Register webhook" action,
-/// repository add, account token rotation, a Webhook Public Base URL change, and hook deletion on
+/// repository add, a Webhook Public Base URL change, and hook deletion on
 /// repository removal.
 /// </summary>
 public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 {
     private const string AccountToken = "ghp_account_token";
-    private const string RotatedToken = "ghp_rotated_token";
     private const string PublicBaseUrl = "https://hooks.example.com";
 
     private readonly ProviderState _state = new();
@@ -48,11 +39,6 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 
     public WhenRegisteringAutomatically()
     {
-        Dictionary<string, string> tokenToListing = new()
-        {
-            [RotatedToken] = """[{ "full_name": "owner/one", "private": false, "permissions": { "push": true } }]""",
-        };
-
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.Configure<WebhookIngressOptions>(options => options.Port = WebhookTestHost.WebhookPort);
@@ -61,19 +47,6 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
             services.RemoveAll<IIssueProviderFactory>();
             services.AddSingleton(_state);
             services.AddScoped<IIssueProviderFactory, StatefulProviderFactory>();
-
-            services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
-            services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
-                _ => new StubValidateTokenHandler());
-
-            services.RemoveAll<GitHubHttpClient>();
-            services.AddSingleton(
-                new GitHubHttpClient(
-                    new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)),
-                    NullLogger<GitHubHttpClient>.Instance,
-                    new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
-                    new InMemoryProviderRateBudget(),
-                    TimeProvider.System));
         });
 
         _client = _factory.CreateClient();
@@ -184,27 +157,6 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         created.Webhook.ShouldNotBeNull().Kind.ShouldBe(WebhookRegistrationOutcome.CreatedKind);
         created.Repository.WebhookStatus.ShouldBe("pending");
         _state.Upserts.ShouldHaveSingleItem().Token.ShouldBe(AccountToken);
-    }
-
-    [Fact]
-    public async Task RotatingTheAccountToken_RegistersTheAccountsNotRegisteredRepositoriesWithTheNewToken()
-    {
-        // Arrange
-        await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
-        Guid accountId = await SeedAccountAsync();
-        MonitoredRepository unregistered = await WebhookTestHost.SeedRepositoryAsync(_factory, slug: "owner/one");
-        await WebhookTestHost.SeedRepositoryAsync(_factory, slug: "owner/two", registered: true, position: 1);
-
-        // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri($"/api/accounts/{accountId}", UriKind.Relative),
-            new { baseUrl = "https://github.com", token = RotatedToken },
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        _state.Upserts.Select(u => (u.Slug, u.Token)).ShouldBe([("owner/one", RotatedToken)]);
-        (await WebhookTestHost.LoadRepositoryAsync(_factory, unregistered)).WebhookStatus.ShouldBe(WebhookStatus.Pending);
     }
 
     [Fact]
