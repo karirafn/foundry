@@ -50,7 +50,7 @@ public sealed class UnchangedChecksFixBudget
         ChecksOutcome.StillFailing stillFailing = new(Failing);
 
         // Act
-        Issue next = checksPending.ResolveVerdict(stillFailing, autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(stillFailing, autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
@@ -66,7 +66,7 @@ public sealed class UnchangedChecksFixBudget
             .MarkChecksPending(new RebaseOutcome.Rebased(), DateTimeOffset.UtcNow);
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<MergePendingIssue>();
@@ -81,7 +81,7 @@ public sealed class UnchangedChecksFixBudget
             .MarkChecksPending(new RebaseOutcome.Rebased(), DateTimeOffset.UtcNow);
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
