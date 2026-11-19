@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerOutcomeApplierTests;
 
-public sealed class ApplyAsync : WorkerDispatchServiceTestBase
+public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
 {
     private const string ContainerId = "container-apply";
     private const string Branch = "feat/1-apply";

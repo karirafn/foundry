@@ -14,6 +14,7 @@ using Foundry.Shared.Infrastructure;
 using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
 using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
 using WorkerCreditsExhaustedEvent = Foundry.Modules.Workers.Contracts.WorkerCreditsExhausted;
+using ReviewRunCompletedEvent = Foundry.Modules.Workers.Contracts.ReviewRunCompleted;
 using TriageRunCompletedEvent = Foundry.Modules.Workers.Contracts.TriageRunCompleted;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 
@@ -240,6 +241,40 @@ internal sealed class WorkerOutcomeApplier(
                     "Worker run {WorkerRunId} triaged its issue: {Outcome}.",
                     activeRun.Id,
                     triage.Verdict.GetType().Name);
+                break;
+            }
+
+            case WorkerOutcome.ReviewCompleted reviewed:
+            {
+                // A review run publishes its checked verdict instead of WorkerRunCompleted: it has no branch or merge request.
+                RecordedReviewVerdict recorded = reviewed.Verdict.ToRecorded();
+                CompletedRun reviewedRun = activeRun.Complete(
+                    0,
+                    branchName: null,
+                    pullRequestUrl: null,
+                    reviewed.Summary,
+                    verdict,
+                    reviewed.ContainerOutput,
+                    recorded);
+                await TryDispatchAsync(
+                    [new ReviewRunCompletedEvent(
+                        activeRun.IssueId.Value,
+                        activeRun.Id,
+                        recorded.Outcome,
+                        recorded.ReviewedCommit,
+                        recorded.PatchId,
+                        reviewed.Verdict.BlockingFindings,
+                        reviewed.Verdict.UnmetCriteria,
+                        recorded.Tests.Assessment,
+                        timeProvider.GetUtcNow())],
+                    activeRun.Id,
+                    cancellationToken);
+                await dbContext.TransitionAsync(activeRun, reviewedRun, alongside, domainEventDispatcher, cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} reviewed commit {ReviewedCommit}: {Outcome}.",
+                    activeRun.Id,
+                    recorded.ReviewedCommit,
+                    recorded.Outcome);
                 break;
             }
 
