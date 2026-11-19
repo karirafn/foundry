@@ -196,6 +196,15 @@ public sealed class TickAsync : IAsyncDisposable
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<Result<InlineReviewResult>> PostInlineReviewAsync(
+            MonitoredRepositoryId repositoryId,
+            string pullRequestUrl,
+            string commitSha,
+            string summary,
+            IReadOnlyList<InlineReviewComment> comments,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<CommitIdentity>> GetCommitIdentityAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken) =>

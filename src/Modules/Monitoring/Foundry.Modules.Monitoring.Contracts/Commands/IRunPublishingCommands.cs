@@ -41,6 +41,22 @@ public interface IRunPublishingCommands
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Posts <paramref name="comments"/> as inline review comments on the pull/merge request at
+    /// <paramref name="pullRequestUrl"/>, on lines added by <paramref name="commitSha"/>'s diff, and saves each in the
+    /// posted-comment registry in the same call, so no comment reader treats them as review feedback. GitHub posts them
+    /// in one review whose body is <paramref name="summary"/>, and fails as a whole; GitLab posts one diff discussion
+    /// per comment, so the result lists the comments it posted and a reason for each it did not.
+    /// </summary>
+    /// <remarks>The registry save flushes the scope's unit of work, like <see cref="PostRunSummaryAsync"/>.</remarks>
+    Task<Result<InlineReviewResult>> PostInlineReviewAsync(
+        MonitoredRepositoryId repositoryId,
+        string pullRequestUrl,
+        string commitSha,
+        string summary,
+        IReadOnlyList<InlineReviewComment> comments,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// The account identity the Publisher rewrites run commits to. GitHub: the user's name (else login) and
     /// the account's noreply address <c>&lt;id&gt;+&lt;login&gt;@users.noreply.&lt;host&gt;</c>. GitLab: the
     /// user's name (else username) and the commit email when set, else the public email, else the private
@@ -61,6 +77,14 @@ public interface IRunPublishingCommands
         string branchName,
         CancellationToken cancellationToken);
 }
+
+/// <summary>A review comment on line <see cref="Line"/> of <see cref="Path"/> in the reviewed commit.</summary>
+public sealed record InlineReviewComment(string Path, int Line, string Body);
+
+/// <summary>
+/// The inline comments a provider posted, and one reason per comment it did not post; a comment never appears in both.
+/// </summary>
+public sealed record InlineReviewResult(IReadOnlyList<InlineReviewComment> Posted, IReadOnlyList<string> Failures);
 
 /// <summary>The author and committer identity of a published run commit.</summary>
 public sealed record CommitIdentity(string Name, string Email);

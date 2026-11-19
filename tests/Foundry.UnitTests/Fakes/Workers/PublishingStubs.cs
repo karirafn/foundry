@@ -22,6 +22,39 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
 
     public Error? PostError { get; init; }
 
+    public Error? InlineError { get; init; }
+
+    /// <summary>The <c>path:line</c> locations the provider rejects one by one, as GitLab may.</summary>
+    public IReadOnlySet<string> RejectedLocations { get; init; } = new HashSet<string>();
+
+    public List<(string PullRequestUrl, string CommitSha, string Summary, IReadOnlyList<InlineReviewComment> Comments)> InlineReviews { get; } = [];
+
+    /// <summary>Every call in order: <c>inline</c> or <c>summary</c>.</summary>
+    public List<string> Calls { get; } = [];
+
+    public Task<Result<InlineReviewResult>> PostInlineReviewAsync(
+        MonitoredRepositoryId repositoryId,
+        string pullRequestUrl,
+        string commitSha,
+        string summary,
+        IReadOnlyList<InlineReviewComment> comments,
+        CancellationToken cancellationToken)
+    {
+        Calls.Add("inline");
+        InlineReviews.Add((pullRequestUrl, commitSha, summary, comments));
+
+        if (InlineError is not null)
+        {
+            return Task.FromResult(Result<InlineReviewResult>.Fail(InlineError));
+        }
+
+        return Task.FromResult(Result<InlineReviewResult>.Ok(new InlineReviewResult(
+            [.. comments.Where(comment => !RejectedLocations.Contains($"{comment.Path}:{comment.Line}"))],
+            [.. comments
+                .Where(comment => RejectedLocations.Contains($"{comment.Path}:{comment.Line}"))
+                .Select(comment => $"{comment.Path}:{comment.Line}: rejected")])));
+    }
+
     public Task<Result<string>> OpenPullRequestAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,
@@ -44,6 +77,8 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
         string body,
         CancellationToken cancellationToken)
     {
+        Calls.Add("summary");
+
         if (PostError is not null)
         {
             return Task.FromResult(Result.Fail(PostError));

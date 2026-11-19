@@ -150,6 +150,24 @@ internal interface IIssueProvider
         => Task.FromResult(Result<ProviderCommentId>.Fail(CommentPostErrors.NotSupported()));
 
     /// <summary>
+    /// Posts <paramref name="comments"/> as inline review comments on the pull/merge request at
+    /// <paramref name="pullRequestUrl"/>, on lines of <paramref name="commitSha"/>'s diff, and returns the registry key
+    /// of each comment created. GitHub posts them in one review with <paramref name="summary"/> as its body and fails
+    /// as a whole; GitLab posts one discussion per comment and reports each rejected comment. Failures carry the
+    /// <see cref="CommentPostErrors"/> codes; this call never retries.
+    /// </summary>
+    /// <remarks>Providers without inline comments keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result<InlineReviewPosting>> PostInlineReviewAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string commitSha,
+        string summary,
+        IReadOnlyList<InlineComment> comments,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<InlineReviewPosting>.Fail(CommentPostErrors.NotSupported()));
+
+    /// <summary>
     /// Records that <paramref name="blockerNumber"/> blocks <paramref name="issueNumber"/>. A failure is
     /// <see cref="BlockerLinkErrors.TransientCode"/> (5xx, 429, a rate-limited 403, a transport failure) or
     /// <see cref="BlockerLinkErrors.PermanentCode"/> (any other 4xx); this call never retries. A duplicate-link

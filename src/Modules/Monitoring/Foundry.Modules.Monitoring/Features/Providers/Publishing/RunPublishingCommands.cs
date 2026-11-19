@@ -54,6 +54,47 @@ internal sealed class RunPublishingCommands(
         return Result.Ok();
     }
 
+    public async Task<Result<InlineReviewResult>> PostInlineReviewAsync(
+        MonitoredRepositoryId repositoryId,
+        string pullRequestUrl,
+        string commitSha,
+        string summary,
+        IReadOnlyList<InlineReviewComment> comments,
+        CancellationToken cancellationToken)
+    {
+        Result<InlineReviewPosting> posted = await CallProviderAsync(
+            repositoryId,
+            (provider, repo) => provider.PostInlineReviewAsync(
+                repo.Slug,
+                pullRequestUrl,
+                commitSha,
+                summary,
+                [.. comments.Select(comment => new InlineComment(comment.Path, comment.Line, comment.Body))],
+                cancellationToken),
+            cancellationToken);
+
+        if (posted is not Result<InlineReviewPosting>.Success { Value: var posting })
+        {
+            return Result<InlineReviewResult>.Fail(((Result<InlineReviewPosting>.Failure)posted).Error);
+        }
+
+        DateTimeOffset postedAt = timeProvider.GetUtcNow();
+        foreach (PostedCommentKey key in posting.Posted.Select(comment => comment.Key).Distinct())
+        {
+            postedCommentRegistry.Record(repositoryId, key, postedAt);
+        }
+
+        // Saved at once, like a summary comment, so a later failure in the caller cannot leave them unregistered.
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result<InlineReviewResult>.Ok(new InlineReviewResult(
+            [.. posting.Posted.Select(comment => ToContract(comment.Comment))],
+            [.. posting.Failed.Select(failed =>
+                $"{failed.Comment.Path}:{failed.Comment.Line}: {Classify(failed.Error).Code}: {failed.Error.Message}")]));
+    }
+
+    private static InlineReviewComment ToContract(InlineComment comment) => new(comment.Path, comment.Line, comment.Body);
+
     public Task<Result<CommitIdentity>> GetCommitIdentityAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken) =>

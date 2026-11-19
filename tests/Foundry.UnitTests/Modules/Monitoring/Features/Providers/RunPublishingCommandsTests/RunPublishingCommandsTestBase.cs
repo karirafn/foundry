@@ -84,6 +84,23 @@ public abstract class RunPublishingCommandsTestBase : IAsyncDisposable
         public Result<ProviderCommentId> Comment { get; set; } =
             Result<ProviderCommentId>.Ok(ProviderCommentId.Create(555).ValueOrThrow());
 
+        public Result<InlineReviewPosting>? InlineReview { get; set; }
+
+        public Task<Result<InlineReviewPosting>> PostInlineReviewAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            string commitSha,
+            string summary,
+            IReadOnlyList<InlineComment> comments,
+            CancellationToken cancellationToken)
+        {
+            Record($"inline {slug} {pullRequestUrl} {commitSha} {summary} {comments.Count}");
+            return Task.FromResult(InlineReview ?? Result<InlineReviewPosting>.Ok(new InlineReviewPosting(
+                [.. comments.Select((comment, index) => new PostedInlineComment(
+                    comment, PostedCommentKey.ReviewNote(ProviderCommentId.Create(900 + index).ValueOrThrow())))],
+                [])));
+        }
+
         public Result<CommitIdentity> Identity { get; set; } =
             Result<CommitIdentity>.Ok(new CommitIdentity("Octo", "1+octo@users.noreply.github.com"));
 
