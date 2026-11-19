@@ -11,7 +11,8 @@ namespace Foundry.UnitTests.Fakes.Monitoring;
 
 /// <summary>
 /// Records every branch-rules write, webhook upsert (slug, token and spec) and webhook deletion, and answers each with a
-/// per-slug scripted result. Unscripted slugs succeed (webhooks: <see cref="WebhookUpsertKind.Created"/>).
+/// per-slug scripted result. Unscripted slugs succeed (webhooks: created as <see cref="DefaultProviderHookId"/>,
+/// and the test delivery succeeds).
 /// Every other provider call throws.
 /// </summary>
 internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactory
@@ -25,7 +26,26 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
 
     public List<(string Slug, WebhookHookSpec Spec)> WebhookUpserts { get; } = [];
 
+    public const long DefaultProviderHookId = 4242;
+
     public List<(string Slug, string HookId)> WebhookDeletes { get; } = [];
+
+    public List<(string Slug, long ProviderHookId)> WebhookTests { get; } = [];
+
+    private readonly Dictionary<string, Result> _webhookTestResults = [];
+    private readonly Dictionary<string, Exception> _webhookTestExceptions = [];
+
+    public RecordingBranchRulesProviderFactory WithWebhookTestResult(string slug, Result result)
+    {
+        _webhookTestResults[slug] = result;
+        return this;
+    }
+
+    public RecordingBranchRulesProviderFactory WithWebhookTestException(string slug, Exception exception)
+    {
+        _webhookTestExceptions[slug] = exception;
+        return this;
+    }
 
     private readonly Dictionary<string, Result<int>> _webhookDeleteResults = [];
 
@@ -35,9 +55,9 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
         return this;
     }
 
-    private readonly Dictionary<string, Result<WebhookUpsertKind>> _webhookResults = [];
+    private readonly Dictionary<string, Result<WebhookUpsert>> _webhookResults = [];
 
-    public RecordingBranchRulesProviderFactory WithWebhookResult(string slug, Result<WebhookUpsertKind> result)
+    public RecordingBranchRulesProviderFactory WithWebhookResult(string slug, Result<WebhookUpsert> result)
     {
         _webhookResults[slug] = result;
         return this;
@@ -74,7 +94,7 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
             return Task.FromResult(owner._results.TryGetValue(slug.FullPath, out Result? result) ? result : Result.Ok());
         }
 
-        public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+        public Task<Result<WebhookUpsert>> UpsertWebhookAsync(
             RepositorySlug slug,
             WebhookHookSpec spec,
             CancellationToken cancellationToken)
@@ -85,9 +105,25 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
                 throw exception;
             }
 
-            return Task.FromResult(owner._webhookResults.TryGetValue(slug.FullPath, out Result<WebhookUpsertKind>? result)
+            return Task.FromResult(owner._webhookResults.TryGetValue(slug.FullPath, out Result<WebhookUpsert>? result)
                 ? result
-                : Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Created));
+                : Result<WebhookUpsert>.Ok(new WebhookUpsert(WebhookUpsertKind.Created, DefaultProviderHookId)));
+        }
+
+        public Task<Result> TestWebhookAsync(
+            RepositorySlug slug,
+            long providerHookId,
+            CancellationToken cancellationToken)
+        {
+            owner.WebhookTests.Add((slug.FullPath, providerHookId));
+            if (owner._webhookTestExceptions.TryGetValue(slug.FullPath, out Exception? exception))
+            {
+                throw exception;
+            }
+
+            return Task.FromResult(owner._webhookTestResults.TryGetValue(slug.FullPath, out Result? result)
+                ? result
+                : Result.Ok());
         }
 
         public Task<Result<int>> DeleteWebhooksAsync(

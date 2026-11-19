@@ -318,12 +318,20 @@ internal sealed partial class GitHubIssueProvider(
         return httpClient.ApplyBranchRulesAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 
-    public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+    public Task<Result<WebhookUpsert>> UpsertWebhookAsync(
         RepositorySlug slug,
         WebhookHookSpec spec,
         CancellationToken cancellationToken)
     {
         return httpClient.UpsertWebhookAsync(apiBaseUrl, slug, spec, token, cancellationToken);
+    }
+
+    public Task<Result> TestWebhookAsync(
+        RepositorySlug slug,
+        long providerHookId,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.TestWebhookAsync(apiBaseUrl, slug, providerHookId, token, cancellationToken);
     }
 
     public Task<Result<int>> DeleteWebhooksAsync(

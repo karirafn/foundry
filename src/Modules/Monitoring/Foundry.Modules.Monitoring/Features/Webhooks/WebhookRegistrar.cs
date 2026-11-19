@@ -17,8 +17,10 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// No provider call is made when webhook ingress is not configured or the account token is absent or
 /// unreadable; such a skip records nothing. A successful registration stores the current
 /// <see cref="WebhookSpecStamp"/> and moves the Webhook Status to <c>Pending</c> (an <c>Active</c> hook
-/// stays active); a failure records the attempt time and leaves the stamp and status unchanged, so a
-/// <c>NotRegistered</c> repository keeps showing the manual instructions. The caller saves the repository afterwards — a
+/// stays active) and asks the provider for its test delivery, whose arrival turns the hook <c>Active</c>;
+/// a failed test is only logged. A registration failure records the attempt time and leaves the stamp
+/// and status unchanged, so a <c>NotRegistered</c> repository keeps showing the manual instructions.
+/// The caller saves the repository afterwards — a
 /// first registration may also generate the webhook secret.
 /// </remarks>
 internal sealed class WebhookRegistrar(
@@ -64,21 +66,21 @@ internal sealed class WebhookRegistrar(
             repository.EnsureWebhookSecret(),
             WebhookHookPath.For(provider, repository.WebhookHookId));
 
-        Result<WebhookUpsertKind> result = await UpsertAsync(repository.Slug, account, accountToken, spec, cancellationToken);
+        Result<WebhookUpsert> result = await UpsertAndTestAsync(repository.Slug, account, accountToken, spec, cancellationToken);
 
         switch (result)
         {
-            case Result<WebhookUpsertKind>.Success success:
+            case Result<WebhookUpsert>.Success success:
                 repository.MarkWebhookRegistered(WebhookSpecStamp.For(provider, publicBaseUrl));
                 logger.LogInformation(
                     "Webhook for repository {Slug} {Action} on the provider.",
                     repository.Slug,
-                    success.Value == WebhookUpsertKind.Created ? "created" : "updated");
-                return new WebhookRegistrationOutcome(success.Value == WebhookUpsertKind.Created
+                    success.Value.Kind == WebhookUpsertKind.Created ? "created" : "updated");
+                return new WebhookRegistrationOutcome(success.Value.Kind == WebhookUpsertKind.Created
                     ? WebhookRegistrationOutcome.CreatedKind
                     : WebhookRegistrationOutcome.UpdatedKind);
 
-            case Result<WebhookUpsertKind>.Failure failure:
+            case Result<WebhookUpsert>.Failure failure:
                 string reason = failure.Error.Code == WebhookWriteErrors.InsufficientPermissionCode
                     ? WebhookRegistrationOutcome.InsufficientPermissionReason
                     : WebhookRegistrationOutcome.ProviderErrorReason;
@@ -94,7 +96,12 @@ internal sealed class WebhookRegistrar(
         }
     }
 
-    private async Task<Result<WebhookUpsertKind>> UpsertAsync(
+    /// <summary>
+    /// Upserts the hook and, when that succeeds, asks the provider for its test delivery with the same
+    /// provider. The test only speeds up the move to <c>Active</c>: its failure is logged and never changes
+    /// the upsert result.
+    /// </summary>
+    private async Task<Result<WebhookUpsert>> UpsertAndTestAsync(
         RepositorySlug slug,
         Credential account,
         string accountToken,
@@ -104,14 +111,44 @@ internal sealed class WebhookRegistrar(
         try
         {
             IIssueProvider provider = providerFactory.CreateProvider(account, accountToken);
-            return await provider.UpsertWebhookAsync(slug, spec, cancellationToken);
+            Result<WebhookUpsert> upserted = await provider.UpsertWebhookAsync(slug, spec, cancellationToken);
+            if (upserted is Result<WebhookUpsert>.Success { Value: { } upsert })
+            {
+                await TestAsync(provider, slug, upsert.ProviderHookId, cancellationToken);
+            }
+
+            return upserted;
         }
 #pragma warning disable CA1031 // Provider calls may fail with any exception type (network, serialization, etc.) — report as a provider error
         catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
             logger.LogError(ex, "Registering the webhook for repository {Slug} threw.", slug);
-            return Result<WebhookUpsertKind>.Fail(new Error("Webhooks.ProviderError", UnreachableDetail));
+            return Result<WebhookUpsert>.Fail(new Error("Webhooks.ProviderError", UnreachableDetail));
+        }
+    }
+
+    private async Task TestAsync(
+        IIssueProvider provider,
+        RepositorySlug slug,
+        long providerHookId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await provider.TestWebhookAsync(slug, providerHookId, cancellationToken) is Result.Failure failure)
+            {
+                logger.LogWarning(
+                    "Sending a test delivery to the webhook for repository {Slug} failed ({ErrorCode}); the status changes with the next delivery that arrives.",
+                    slug,
+                    failure.Error.Code);
+            }
+        }
+#pragma warning disable CA1031 // The test delivery is best-effort: any failure leaves the registration as it is
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(ex, "Sending a test delivery to the webhook for repository {Slug} threw.", slug);
         }
     }
 

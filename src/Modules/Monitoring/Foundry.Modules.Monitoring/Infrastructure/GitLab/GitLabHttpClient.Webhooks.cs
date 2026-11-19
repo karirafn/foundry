@@ -26,7 +26,7 @@ internal sealed partial class GitLabHttpClient
     /// A failed delete of a duplicate is logged and does not fail the upsert: the duplicate only
     /// receives deliveries the endpoint already verifies and coalesces.
     /// </remarks>
-    public async Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+    public async Task<Result<WebhookUpsert>> UpsertWebhookAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         WebhookHookSpec spec,
@@ -35,7 +35,7 @@ internal sealed partial class GitLabHttpClient
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<WebhookUpsertKind>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<WebhookUpsert>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
@@ -45,7 +45,7 @@ internal sealed partial class GitLabHttpClient
         Result<List<GitLabHookDto>> listed = await ListHooksAsync(baseUri, encodedPath, slug, token, RegisteringAction, cancellationToken);
         if (listed is not Result<List<GitLabHookDto>>.Success { Value: { } hooks })
         {
-            return Result<WebhookUpsertKind>.Fail(((Result<List<GitLabHookDto>>.Failure)listed).Error);
+            return Result<WebhookUpsert>.Fail(((Result<List<GitLabHookDto>>.Failure)listed).Error);
         }
 
         List<GitLabHookDto> matches = [.. hooks.Where(h => spec.Matches(h.Url))];
@@ -68,11 +68,17 @@ internal sealed partial class GitLabHttpClient
 
         if (!writeResponse.IsSuccessStatusCode)
         {
-            return Result<WebhookUpsertKind>.Fail(
+            return Result<WebhookUpsert>.Fail(
                 await ErrorFromWebhookFailureAsync(writeResponse, slug, RegisteringAction, cancellationToken));
         }
 
         RecordRestHeadroom(writeResponse);
+
+        if ((existing?.Id ?? await ReadCreatedHookIdAsync(writeResponse, cancellationToken)) is not { } providerHookId)
+        {
+            return Result<WebhookUpsert>.Fail(
+                GitLabErrors.ProviderError($"{RegisteringAction} on {slug} returned no hook id."));
+        }
 
         foreach (GitLabHookDto duplicate in matches.Where(h => h.Id != existing?.Id))
         {
@@ -87,7 +93,7 @@ internal sealed partial class GitLabHttpClient
             }
         }
 
-        return Result<WebhookUpsertKind>.Ok(kind);
+        return Result<WebhookUpsert>.Ok(new WebhookUpsert(kind, providerHookId));
     }
 
     /// <summary>
@@ -130,9 +136,58 @@ internal sealed partial class GitLabHttpClient
         return Result<int>.Ok(deletedCount);
     }
 
+    /// <summary>
+    /// Asks GitLab to send a test push delivery to the hook
+    /// (<c>POST /projects/:id/hooks/:hook_id/test/push_events</c>, 201 on success). GitLab allows five
+    /// test requests per minute per project and user; a 429 fails like any other status.
+    /// </summary>
+    public async Task<Result> TestWebhookAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        long providerHookId,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        Uri baseUri = EnsureTrailingSlash(apiBaseUrl);
+        using HttpRequestMessage request = new(
+            HttpMethod.Post,
+            new Uri(baseUri, $"projects/{encodedPath}/hooks/{providerHookId}/test/push_events"));
+        AddCommonHeaders(request, token);
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result.Fail(await ErrorFromWebhookFailureAsync(response, slug, TestingAction, cancellationToken));
+        }
+
+        RecordRestHeadroom(response);
+        return Result.Ok();
+    }
+
     private const string RegisteringAction = "Registering the webhook";
 
     private const string DeletingAction = "Deleting the webhooks";
+
+    private const string TestingAction = "Sending a test delivery to the webhook";
+
+    private static async Task<long?> ReadCreatedHookIdAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        try
+        {
+            return JsonSerializer.Deserialize<GitLabHookDto>(body, JsonOptions) is { Id: > 0 } created ? created.Id : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static Uri HookUri(Uri baseUri, string encodedPath, long hookId) =>
         new(baseUri, $"projects/{encodedPath}/hooks/{hookId}");
