@@ -151,4 +151,17 @@ public sealed class CategoryToken
         // Assert
         token.ShouldBe("issue_closed");
     }
+
+    [Fact]
+    public void WhenRepositoryRemoved_CategoryTokenIsRepositoryRemoved()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.RepositoryRemoved();
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("repository_removed");
+    }
 }

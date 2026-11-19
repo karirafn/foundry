@@ -223,7 +223,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         }
 
         RemovedAt = now;
-        AddDomainEvent(new MonitoredRepositoryRemovedDomainEvent(Id));
+        AddDomainEvent(new MonitoredRepositoryRemovedDomainEvent(Id, now));
         return Result.Ok();
     }
 

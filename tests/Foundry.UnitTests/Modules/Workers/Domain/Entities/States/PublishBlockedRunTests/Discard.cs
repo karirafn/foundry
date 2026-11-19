@@ -63,4 +63,21 @@ public sealed class Discard
             () => discarded.BranchName.ShouldBe(PublishingRunFixture.Branch),
             () => blocked.DomainEvents.ShouldHaveSingleItem());
     }
+
+    [Fact]
+    public void ARemovedRepository_DiscardsTheRunAsRepositoryRemoved()
+    {
+        // Arrange
+        PublishBlockedRun blocked = Blocked();
+
+        // Act
+        FailedRun discarded = blocked.DiscardOnRepositoryRemoved();
+
+        // Assert
+        discarded.ShouldSatisfyAllConditions(
+            () => discarded.Reason.ShouldBeOfType<FailureReason.RepositoryRemoved>(),
+            () => discarded.Reason.CategoryToken.ShouldBe(FailureCategory.RepositoryRemovedToken),
+            () => discarded.BranchName.ShouldBe(PublishingRunFixture.Branch),
+            () => blocked.DomainEvents.ShouldHaveSingleItem());
+    }
 }

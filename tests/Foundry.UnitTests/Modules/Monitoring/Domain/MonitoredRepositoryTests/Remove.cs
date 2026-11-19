@@ -43,7 +43,7 @@ public sealed class Remove
 
         // Assert
         repository.DomainEvents.ShouldHaveSingleItem()
-            .ShouldBe(new MonitoredRepositoryRemovedDomainEvent(repository.Id));
+            .ShouldBe(new MonitoredRepositoryRemovedDomainEvent(repository.Id, Now));
     }
 
     [Fact]

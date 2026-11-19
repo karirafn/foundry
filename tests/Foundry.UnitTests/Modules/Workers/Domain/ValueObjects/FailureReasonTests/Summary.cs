@@ -157,4 +157,17 @@ public sealed class Summary
         summary.ShouldBe(
             "The issue was closed on the provider before the run's work was published: its unpublished commits were deleted and nothing was pushed");
     }
+
+    [Fact]
+    public void WhenRepositoryRemoved_SummarySaysTheRepositoryWasRemovedAndNothingWasPushed()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.RepositoryRemoved();
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldBe("The run was discarded because its repository was removed from Foundry: nothing was pushed");
+    }
 }

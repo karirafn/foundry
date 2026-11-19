@@ -252,7 +252,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value), CancellationToken.None);
 
         // Assert
-        _domainEvents.DispatchedEvents.ShouldBe([new MonitoredRepositoryRemovedDomainEvent(repository.Id)]);
+        _domainEvents.DispatchedEvents.ShouldBe([new MonitoredRepositoryRemovedDomainEvent(repository.Id, Now)]);
     }
 
     [Fact]
