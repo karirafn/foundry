@@ -10,8 +10,7 @@ internal sealed class WebhookSettingsQueries(DbContext dbContext) : IWebhookSett
 {
     public async Task<WebhookSettingsSnapshot> GetWebhookSettingsAsync(CancellationToken cancellationToken)
     {
-        StoredWebhookSettings? stored = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
+        StoredWebhookSettings? stored = await dbContext.QueryGlobalSettingsNoTracking()
             .Select(s => new StoredWebhookSettings(s.WebhookPublicBaseUrl, s.BackstopIntervalMinutes))
             .FirstOrDefaultAsync(cancellationToken);
 

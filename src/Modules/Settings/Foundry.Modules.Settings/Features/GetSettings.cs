@@ -22,9 +22,7 @@ internal static class GetSettings
             Query query,
             CancellationToken cancellationToken)
         {
-            GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(cancellationToken);
+            GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
             if (settings is null)
             {
