@@ -57,6 +57,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
 
     private const string ToolchainImageId = "sha256:current-worker-image";
 
+    private static readonly Uri ProxyBaseUrl = new("http://host.docker.internal:5287/package-sources/");
+
     private async Task StoreToolchainAsync(string imageId, Toolchain toolchain)
     {
         _dbContext.Set<WorkerImageToolchain>().Add(WorkerImageToolchain.Create(imageId, toolchain, DateTimeOffset.UnixEpoch));
@@ -1928,7 +1930,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         const string xml = "<configuration><packageSources /></configuration>";
-        StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo()) { WorkerNuGetConfig = new WorkerNuGetConfig(xml) };
+        StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo()) { WorkerNuGetConfig = new WorkerNuGetConfig(xml, ProxyBaseUrl) };
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-nuget");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
 
@@ -1942,12 +1944,31 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheRepositoryHasAWorkerNuGetConfig_TheWorkerGetsTheProxyBaseUrl()
+    {
+        // Arrange
+        StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo())
+        {
+            WorkerNuGetConfig = new WorkerNuGetConfig("<configuration />", ProxyBaseUrl),
+        };
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-proxy");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables
+            .ShouldContainKeyAndValue("FOUNDRY_PACKAGE_PROXY_URL", "http://host.docker.internal:5287/package-sources/");
+    }
+
+    [Fact]
     public async Task WhenTheWorkerNuGetConfigIsRead_ItIsAskedForWithTheRunsOwnToken()
     {
         // Arrange
         StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo())
         {
-            WorkerNuGetConfig = new WorkerNuGetConfig("<configuration />"),
+            WorkerNuGetConfig = new WorkerNuGetConfig("<configuration />", ProxyBaseUrl),
         };
         IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: dispatchQueries);
 
@@ -1962,7 +1983,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTheRepositoryHasNoWorkerNuGetConfig_TheNuGetConfigVariableIsAbsent()
+    public async Task WhenTheRepositoryHasNoWorkerNuGetConfig_NeitherPackageSourceVariableIsSet()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-plain");
@@ -1974,7 +1995,9 @@ public sealed partial class HandleAsync : IAsyncDisposable
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
 
         // Assert
-        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldNotContainKey("FOUNDRY_NUGET_CONFIG");
+        IReadOnlyDictionary<string, string> env = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables;
+        env.ShouldNotContainKey("FOUNDRY_NUGET_CONFIG");
+        env.ShouldNotContainKey("FOUNDRY_PACKAGE_PROXY_URL");
     }
 
     [Fact]

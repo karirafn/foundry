@@ -16,6 +16,7 @@ public sealed record FailureCategory
     public const string AuthInvalidToken = "auth_invalid";
     public const string ProviderErrorToken = "provider_error";
     public const string ProviderUnreachableToken = "provider_unreachable";
+    public const string PackageSourceUnreachableToken = "package_source_unreachable";
     public const string TransientApiErrorToken = "transient_api_error";
     public const string CreditsExhaustedToken = "credits_exhausted";
     public const string ModelUnavailableToken = "model_unavailable";
@@ -42,6 +43,17 @@ public sealed record FailureCategory
     /// <remarks>Its schedule stretches over about an hour, long enough to outlast a typical provider outage.</remarks>
     public static readonly FailureCategory ProviderUnreachable = new(
         ProviderUnreachableToken,
+        AutomaticRetrySchedule.Create(
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32)));
+
+    /// <summary>The worker could not reach the Package Source Proxy before its agent started, so it did no work.</summary>
+    /// <remarks>It shares the provider outage's schedule: both are infrastructure outages a person need not act on.</remarks>
+    public static readonly FailureCategory PackageSourceUnreachable = new(
+        PackageSourceUnreachableToken,
         AutomaticRetrySchedule.Create(
             TimeSpan.FromMinutes(2),
             TimeSpan.FromMinutes(4),
@@ -88,6 +100,7 @@ public sealed record FailureCategory
             { AuthInvalidToken, AuthInvalid },
             { ProviderErrorToken, ProviderError },
             { ProviderUnreachableToken, ProviderUnreachable },
+            { PackageSourceUnreachableToken, PackageSourceUnreachable },
             { TransientApiErrorToken, TransientApiError },
             { CreditsExhaustedToken, CreditsExhausted },
             { ModelUnavailableToken, ModelUnavailable },

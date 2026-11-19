@@ -71,6 +71,23 @@ public sealed class AutomaticRetry
         backoff.ShouldBe(TimeSpan.FromMinutes(minutes));
     }
 
+    [Fact]
+    public void PackageSourceUnreachable_BacksOffDoublingFromTwoMinutesForFiveRetries()
+    {
+        // Act
+        TimeSpan[] backoffs = [.. FailureCategory.PackageSourceUnreachable.AutomaticRetry!.Backoffs];
+
+        // Assert
+        backoffs.ShouldBe(
+        [
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32),
+        ]);
+    }
+
     public static TheoryData<string> NonRetryableTokens =>
     [
         FailureCategory.NonZeroExitToken,
@@ -113,13 +130,14 @@ public sealed class AutomaticRetry
 
         // Assert
         autoRetryable.ShouldBe(
-            [FailureCategory.ProviderUnreachable, FailureCategory.TransientApiError],
+            [FailureCategory.ProviderUnreachable, FailureCategory.PackageSourceUnreachable, FailureCategory.TransientApiError],
             ignoreOrder: true);
     }
 
     [Theory]
     [InlineData(FailureCategory.TransientApiErrorToken, true)]
     [InlineData(FailureCategory.ProviderUnreachableToken, true)]
+    [InlineData(FailureCategory.PackageSourceUnreachableToken, true)]
     [InlineData(FailureCategory.NonZeroExitToken, false)]
     [InlineData("not_a_category", false)]
     public void IsAutoRetryableToken_IsTrueOnlyForATokenWhoseCategoryHasASchedule(string token, bool expected)

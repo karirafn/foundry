@@ -152,6 +152,19 @@ public sealed class Classify
     }
 
     [Fact]
+    public void WhenLogsProducePackageSourceUnreachable_ReturnsInfrastructureFailure()
+    {
+        // Arrange
+        string logs = "FOUNDRY_BOOTSTRAP_FAILED stage=package-sources detail=the package proxy did not answer";
+
+        // Act
+        ProbeOutcome result = _sut.Classify(logs);
+
+        // Assert
+        result.ShouldBeOfType<ProbeOutcome.InfrastructureFailure>();
+    }
+
+    [Fact]
     public void WhenLogsProduceWorkerBootstrapFailed_ReturnsInfrastructureFailure()
     {
         // Arrange — bootstrap sentinel triggers WorkerBootstrapFailed
