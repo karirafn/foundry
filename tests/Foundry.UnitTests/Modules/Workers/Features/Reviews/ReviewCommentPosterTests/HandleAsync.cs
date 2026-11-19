@@ -238,6 +238,26 @@ public sealed class HandleAsync : IAsyncDisposable
             .ShouldBe("Ask @\u200Balice &lt;b&gt;now&lt;/b&gt;. (correctness)");
     }
 
+    [Fact]
+    public async Task ACarriedApproval_PostsItsOneLineNoteAndNoInlineReview()
+    {
+        // Arrange — the carried approval's findings were posted by the review it carries
+        JsonObject advisory = Finding("correctness", severity: "advisory");
+        CompletedRun run = await SeedCompletedReviewAsync(
+            Verdict(findings: [advisory], dimensionStatuses: new() { ["correctness"] = "findings" }),
+            Facts(addedLines: [new AddedLineRange("src/a.cs", 3, 3)]),
+            carry: true);
+        RecordingRunPublishingCommands publishing = new();
+
+        // Act
+        await Sut(publishing).HandleAsync(Completed(run), TestContext.Current.CancellationToken);
+
+        // Assert
+        publishing.ShouldSatisfyAllConditions(
+            () => publishing.Calls.ShouldBe(["summary"]),
+            () => publishing.Summaries.ShouldHaveSingleItem().Body.ShouldStartWith("Approval carried to"));
+    }
+
     private static JsonObject VerdictWith(params JsonObject[] findings) =>
         Verdict(findings: [.. findings], dimensionStatuses: new() { ["correctness"] = "findings" });
 
@@ -252,7 +272,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private ReviewCommentPoster Sut(RecordingRunPublishingCommands publishing) =>
         new(_dbContext, publishing, NullLogger<ReviewCommentPoster>.Instance);
 
-    private async Task<CompletedRun> SeedCompletedReviewAsync(JsonObject? verdict = null, SuppliedReviewFacts? suppliedFacts = null)
+    private async Task<CompletedRun> SeedCompletedReviewAsync(JsonObject? verdict = null, SuppliedReviewFacts? suppliedFacts = null, bool carry = false)
     {
         SuppliedReviewFacts facts = suppliedFacts ?? Facts();
         JsonObject json = verdict ?? Verdict();
@@ -264,7 +284,13 @@ public sealed class HandleAsync : IAsyncDisposable
         starting.RecordSuppliedReviewFacts(facts);
         starting.RecordPreparedBase(new RunBase(facts.ReviewedCommit, null), MonitoredRepositoryId.New());
         ActiveRun active = starting.Activate(ContainerId.From("container-review"), branchName: null, MonitoredRepositoryId.New());
-        CompletedRun completed = active.Complete(0, null, null, reviewVerdict: valid.ToRecorded());
+        RecordedReviewVerdict recorded = valid.ToRecorded();
+        if (carry)
+        {
+            recorded = recorded.CarryTo("fedcba9876543210fedcba9876543210fedcba98", WorkerRunId.New());
+        }
+
+        CompletedRun completed = active.Complete(0, null, null, reviewVerdict: recorded);
         _dbContext.Set<WorkerRun>().Add(completed);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         return completed;

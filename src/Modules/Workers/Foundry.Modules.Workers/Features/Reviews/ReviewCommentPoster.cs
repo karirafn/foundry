@@ -83,6 +83,12 @@ internal sealed class ReviewCommentPoster(
         SuppliedReviewFacts facts,
         CancellationToken cancellationToken)
     {
+        // The review a carried approval came from already posted these findings.
+        if (verdict.CarriedFrom is not null)
+        {
+            return ([], []);
+        }
+
         ILookup<InlineReviewComment, ReviewFinding> inline = verdict.Findings
             .Where(finding => finding.Line is { } line && facts.IsAddedLine(finding.Path, line))
             .ToLookup(finding => new InlineReviewComment(finding.Path, finding.Line!.Value, ReviewVerdictComment.InlineBody(finding)));
