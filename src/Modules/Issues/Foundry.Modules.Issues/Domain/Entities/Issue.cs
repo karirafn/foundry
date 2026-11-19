@@ -114,6 +114,12 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public int ChecksFixAttempts { get; private set; }
 
+    /// <summary>
+    /// The issue's most recent review verdict (ADR 0113), or <see langword="null"/> when no review completed. Carried
+    /// through every transition with the shared properties, so a later review of an unchanged change can carry it.
+    /// </summary>
+    public LatestReview? LatestReview { get; private set; }
+
     /// <summary>The round still waiting for input, or <see langword="null"/> when every round is answered.</summary>
     public Clarification? OpenClarification =>
         Clarifications.Count > 0 && Clarifications[^1].IsOpen ? Clarifications[^1] : null;
@@ -229,6 +235,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         HasPersonFeedback = source.HasPersonFeedback;
         ReviewFixAttempts = source.ReviewFixAttempts;
         ChecksFixAttempts = source.ChecksFixAttempts;
+        LatestReview = source.LatestReview;
     }
 
     /// <summary>A checks fix run is queued: it spends one of the pushed code's checks fix runs.</summary>
@@ -250,6 +257,13 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     private protected void ExhaustChecksFixAttempts()
     {
         ChecksFixAttempts = ChecksPendingIssue.ChecksMaxFixPushes;
+    }
+
+    /// <summary>Records the verdict a review run completed with; the next state carries it.</summary>
+    private protected void RecordLatestReview(LatestReview latestReview)
+    {
+        ArgumentNullException.ThrowIfNull(latestReview);
+        LatestReview = latestReview;
     }
 
     /// <summary>The reviewer's findings drive this revision: it spends one of the round's review fix runs.</summary>

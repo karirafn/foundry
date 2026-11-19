@@ -88,9 +88,12 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
     /// <paramref name="findings"/>.</item>
     /// <item><b>Person:</b> everything else → <see cref="ReviewIssue"/>.</item>
     /// </list>
+    /// The verdict is recorded as the issue's <see cref="Issue.LatestReview"/>, with the <paramref name="patchId"/> of
+    /// the diff it judged, so a later review of an unchanged change can carry an approval.
     /// </summary>
     public Issue ResolveVerdict(
         ReviewVerdictOutcome outcome,
+        string? patchId,
         RevisionTrigger.ReviewFindings findings,
         DateTimeOffset transitionedAt)
     {
@@ -100,6 +103,8 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
         {
             throw new UnreachableException($"Unhandled review verdict outcome: {outcome}");
         }
+
+        RecordLatestReview(new LatestReview(WorkerRunId, outcome, patchId));
 
         if (outcome is ReviewVerdictOutcome.ChangesRequested && ReviewFixAttempts < ReviewMaxFixRuns)
         {

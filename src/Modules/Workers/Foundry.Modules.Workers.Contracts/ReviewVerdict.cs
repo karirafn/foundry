@@ -91,8 +91,15 @@ public sealed record ReviewUnmetCriterion(string Id, string Text, string Evidenc
 public sealed record ReviewTests(ReviewTestsAssessment Assessment, string Reason, IReadOnlyList<string> CoveringTests);
 
 /// <summary>
+/// The review a carried approval came from (ADR 0113): the run that judged the change, and the commit it judged.
+/// </summary>
+public sealed record ReviewCarry(WorkerRunId RunId, string ReviewedCommit);
+
+/// <summary>
 /// A valid review verdict as Foundry recorded it on its run: the verdict, the outcome code derived from it, and the
 /// commit and patch-id it judged. <see cref="PatchId"/> is <see langword="null"/> for a diff with no changes.
+/// <see cref="CarriedFrom"/> marks an approval carried to <see cref="ReviewedCommit"/> without a run, because the
+/// change was unchanged since the review it names; <see langword="null"/> for a verdict a run returned.
 /// </summary>
 public sealed record RecordedReviewVerdict(
     string Summary,
@@ -102,8 +109,30 @@ public sealed record RecordedReviewVerdict(
     ReviewTests Tests,
     ReviewVerdictOutcome Outcome,
     string ReviewedCommit,
-    string? PatchId)
+    string? PatchId,
+    ReviewCarry? CarriedFrom = null)
 {
+    /// <summary>
+    /// Carries this approval to <paramref name="reviewedCommit"/>, whose change has the same patch-id. A verdict that
+    /// was itself carried keeps naming the review that judged the change.
+    /// </summary>
+    /// <param name="reviewedCommit">The new head the approval now covers.</param>
+    /// <param name="reviewRunId">The run that recorded this verdict.</param>
+    public RecordedReviewVerdict CarryTo(string reviewedCommit, WorkerRunId reviewRunId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reviewedCommit);
+        if (Outcome is not (ReviewVerdictOutcome.Approved or ReviewVerdictOutcome.ApprovedForPerson))
+        {
+            throw new InvalidOperationException("Only an approval carries to a new head; a request for changes is reviewed again.");
+        }
+
+        return this with
+        {
+            ReviewedCommit = reviewedCommit,
+            CarriedFrom = CarriedFrom ?? new ReviewCarry(reviewRunId, ReviewedCommit),
+        };
+    }
+
     public bool Equals(RecordedReviewVerdict? other) =>
         other is not null
         && Summary == other.Summary
@@ -115,7 +144,8 @@ public sealed record RecordedReviewVerdict(
         && Tests.CoveringTests.SequenceEqual(other.Tests.CoveringTests)
         && Outcome == other.Outcome
         && ReviewedCommit == other.ReviewedCommit
-        && PatchId == other.PatchId;
+        && PatchId == other.PatchId
+        && CarriedFrom == other.CarriedFrom;
 
     public override int GetHashCode() => HashCode.Combine(Summary, Outcome, ReviewedCommit, PatchId, Findings.Count);
 }

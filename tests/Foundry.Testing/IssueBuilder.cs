@@ -264,6 +264,7 @@ public sealed class IssueBuilder
     public RevisionQueuedIssue RevisionQueuedFromReviewFindings() =>
         (RevisionQueuedIssue)ReviewInProgress().ResolveVerdict(
             ReviewVerdictOutcome.ChangesRequested,
+            patchId: null,
             new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Missing, "No test covers the change."),
             _transitionedAt);
 

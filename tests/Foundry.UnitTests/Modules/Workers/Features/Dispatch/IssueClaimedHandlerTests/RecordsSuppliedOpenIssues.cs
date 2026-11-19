@@ -81,6 +81,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
             new StubWorkerOrchestrator(),
             new FakePublisher(),
             new NullDomainEventDispatcher(),
+            new CapturingIntegrationEventDispatcher(),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(),
             new StubPostExitProviderQueries(),

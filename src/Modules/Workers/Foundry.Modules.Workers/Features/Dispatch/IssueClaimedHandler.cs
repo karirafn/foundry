@@ -31,6 +31,7 @@ internal sealed class IssueClaimedHandler(
     IWorkerOrchestrator orchestrator,
     IPublisher publisher,
     IDomainEventDispatcher domainEventDispatcher,
+    IIntegrationEventDispatcher integrationEventDispatcher,
     IGlobalSettingsQueries settingsQueries,
     ICredentialQueries credentialQueries,
     IPostExitProviderQueries postExitProviderQueries,
@@ -233,6 +234,14 @@ internal sealed class IssueClaimedHandler(
             reviewFacts = ((Result<SuppliedReviewFacts>.Success)factsResult).Value;
         }
 
+        if (claimed.Context is DispatchContext.Review carriedContext
+            && reviewFacts is not null
+            && await CarriedApproval.FindAsync(dbContext, claimed.IssueId, carriedContext, reviewFacts, cancellationToken) is { } carried)
+        {
+            await CompleteCarriedAsync(startingRun, claimed, prepared, trackerContext, reviewFacts, carried, cancellationToken);
+            return;
+        }
+
         Result<WorkerContainerSpec> specResult = await BuildSpecAsync(
             startingRun,
             claimed,
@@ -284,6 +293,54 @@ internal sealed class IssueClaimedHandler(
                 claimed.IssueNumber,
                 failure.Error.Message);
         }
+    }
+
+    /// <summary>
+    /// Completes the review with the issue's latest approval carried to the reviewed commit (ADR 0113): the change is
+    /// unchanged since that approval, so no worker starts. The issue routes the carried outcome as it routed the
+    /// approval.
+    /// </summary>
+    private async Task CompleteCarriedAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        PrepareOutcome.Prepared prepared,
+        TrackerContext trackerContext,
+        SuppliedReviewFacts reviewFacts,
+        RecordedReviewVerdict carried,
+        CancellationToken cancellationToken)
+    {
+        startingRun.RecordPreparedBase(prepared.Base, claimed.MonitoredRepositoryId);
+        startingRun.RecordSuppliedOpenIssues(trackerContext);
+        startingRun.RecordSuppliedReviewFacts(reviewFacts);
+        CompletedRun completed = startingRun.CompleteCarried(carried);
+
+        // An approval has no unmet criteria: every criterion was met, or could not be verified.
+        await integrationEventDispatcher.DispatchAsync(
+            [new ReviewRunCompleted(
+                claimed.IssueId.Value,
+                startingRun.Id,
+                carried.Outcome,
+                carried.ReviewedCommit,
+                carried.PatchId,
+                [.. carried.Findings.Where(finding => finding.Severity == ReviewSeverity.Blocking)],
+                UnmetCriteria: [],
+                carried.Tests.Assessment,
+                DateTimeOffset.UtcNow,
+                [.. carried.Findings.Where(finding => finding.Severity == ReviewSeverity.Advisory)],
+                UnmetCriterionDetails: [],
+                carried.Tests.Reason)],
+            cancellationToken);
+        await dbContext.TransitionAsync(startingRun, completed, domainEventDispatcher, cancellationToken);
+
+        // No worker will read the prepared bundle.
+        await orchestrator.DeleteHandOffVolumeAsync(startingRun.Id, cancellationToken);
+
+        logger.LogInformation(
+            "Worker run {WorkerRunId} carried the approval of run {CarriedRunId} to commit {ReviewedCommit} for issue #{IssueNumber}: the change is unchanged.",
+            startingRun.Id,
+            carried.CarriedFrom!.RunId,
+            carried.ReviewedCommit,
+            claimed.IssueNumber);
     }
 
     private async Task FailBeforeContainerAsync(

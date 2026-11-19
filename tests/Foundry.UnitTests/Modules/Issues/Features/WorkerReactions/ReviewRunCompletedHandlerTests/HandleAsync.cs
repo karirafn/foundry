@@ -203,4 +203,38 @@ public sealed class HandleAsync : IAsyncDisposable
             () => findings.Findings.ShouldBeEmpty(),
             () => findings.TestsReason.ShouldBeEmpty());
     }
+
+    [Theory]
+    [InlineData(ReviewVerdictOutcome.Approved)]
+    [InlineData(ReviewVerdictOutcome.ApprovedForPerson)]
+    [InlineData(ReviewVerdictOutcome.ChangesRequested)]
+    public async Task WhenTheReviewCompletes_TheNextStateStoresItAsTheLatestReview(ReviewVerdictOutcome outcome)
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        ReviewInProgressIssue reviewing = SeedReviewInProgress(workerRunId, autoMerge: true);
+        ReviewRunCompleted @event = Completed(reviewing, workerRunId, outcome);
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        Issue next = (await ReloadAsync(reviewing)).ShouldNotBeNull();
+        next.LatestReview.ShouldBe(new LatestReview(workerRunId, outcome, @event.PatchId));
+    }
+
+    [Fact]
+    public async Task WhenTheReviewedDiffHadNoPatchId_TheLatestReviewStoresNone()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        ReviewInProgressIssue reviewing = SeedReviewInProgress(workerRunId, autoMerge: false);
+        ReviewRunCompleted @event = Completed(reviewing, workerRunId, ReviewVerdictOutcome.Approved) with { PatchId = null };
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReloadAsync(reviewing)).ShouldNotBeNull().LatestReview.ShouldNotBeNull().PatchId.ShouldBeNull();
+    }
 }

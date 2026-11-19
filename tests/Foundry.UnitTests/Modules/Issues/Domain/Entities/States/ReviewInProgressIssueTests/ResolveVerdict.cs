@@ -32,7 +32,7 @@ public sealed class ResolveVerdict
             .ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         MergePendingIssue mergePending = next.ShouldBeOfType<MergePendingIssue>();
@@ -52,7 +52,7 @@ public sealed class ResolveVerdict
         ReviewInProgressIssue reviewing = new IssueBuilder().WithVerifiedHeadSha(Head).WithAutoMerge(false).ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
@@ -72,7 +72,7 @@ public sealed class ResolveVerdict
             .ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>();
@@ -94,7 +94,7 @@ public sealed class ResolveVerdict
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().HasPersonFeedback.ShouldBeTrue();
@@ -107,7 +107,7 @@ public sealed class ResolveVerdict
         ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ApprovedForPerson, NoFindings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ApprovedForPerson, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ReviewOutcome.ShouldBeNull();
@@ -121,7 +121,7 @@ public sealed class ResolveVerdict
         RevisionTrigger.ReviewFindings findings = Findings();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, findings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, findings, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionQueuedIssue queued = next.ShouldBeOfType<RevisionQueuedIssue>();
@@ -142,7 +142,7 @@ public sealed class ResolveVerdict
         ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, Findings(), DateTimeOffset.UtcNow);
 
         // Assert
         next.HasPersonFeedback.ShouldBeFalse();
@@ -155,7 +155,7 @@ public sealed class ResolveVerdict
         ReviewInProgressIssue reviewing = ReviewingAfterPersonFeedback();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, Findings(), DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<RevisionQueuedIssue>().HasPersonFeedback.ShouldBeTrue();
@@ -168,7 +168,7 @@ public sealed class ResolveVerdict
         ReviewInProgressIssue reviewing = ReviewingAfterFindingsFixes(new IssueBuilder().ReviewInProgress(), fixes: 1);
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, Findings(), DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<RevisionQueuedIssue>().ReviewFixAttempts.ShouldBe(2);
@@ -183,7 +183,7 @@ public sealed class ResolveVerdict
             fixes: Issue.ReviewMaxFixRuns);
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, Findings(), DateTimeOffset.UtcNow);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
@@ -202,7 +202,7 @@ public sealed class ResolveVerdict
             fixes: 1);
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<MergePendingIssue>().ReviewFixAttempts.ShouldBe(1);
@@ -230,6 +230,7 @@ public sealed class ResolveVerdict
         {
             RevisionQueuedIssue queued = (RevisionQueuedIssue)reviewing.ResolveVerdict(
                 ReviewVerdictOutcome.ChangesRequested,
+                patchId: null,
                 Findings(),
                 DateTimeOffset.UtcNow);
             ChecksPendingIssue checksPending = queued

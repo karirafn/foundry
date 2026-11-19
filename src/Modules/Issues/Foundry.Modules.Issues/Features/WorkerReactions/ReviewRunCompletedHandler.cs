@@ -40,7 +40,7 @@ internal sealed class ReviewRunCompletedHandler(
             return;
         }
 
-        Issue next = reviewing.ResolveVerdict(@event.Outcome, FindingsOf(@event), timeProvider.GetUtcNow());
+        Issue next = reviewing.ResolveVerdict(@event.Outcome, @event.PatchId, FindingsOf(@event), timeProvider.GetUtcNow());
         await db.TransitionAsync(reviewing, next, domainEventDispatcher, cancellationToken);
     }
 

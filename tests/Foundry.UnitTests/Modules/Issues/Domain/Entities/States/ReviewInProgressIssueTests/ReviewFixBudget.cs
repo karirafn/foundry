@@ -66,7 +66,7 @@ public sealed class ReviewFixBudget
         // Arrange
         RevisionQueuedIssue queued = (RevisionQueuedIssue)new IssueBuilder()
             .ReviewInProgress()
-            .ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings, DateTimeOffset.UtcNow);
+            .ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, Findings, DateTimeOffset.UtcNow);
         RevisionFailedIssue failed = queued
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
             .MarkFailed("Container exited with code 1", FailureCategory.NonZeroExit, DateTimeOffset.UtcNow);
@@ -89,6 +89,7 @@ public sealed class ReviewFixBudget
         {
             ChecksPendingIssue checksPending = ((RevisionQueuedIssue)reviewing.ResolveVerdict(
                     ReviewVerdictOutcome.ChangesRequested,
+                    patchId: null,
                     Findings,
                     DateTimeOffset.UtcNow))
                 .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
@@ -103,6 +104,6 @@ public sealed class ReviewFixBudget
                 .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         }
 
-        return (ReviewIssue)reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings, DateTimeOffset.UtcNow);
+        return (ReviewIssue)reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, patchId: null, Findings, DateTimeOffset.UtcNow);
     }
 }
