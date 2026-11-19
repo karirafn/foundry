@@ -168,6 +168,7 @@ public static class MonitoringModule
         services.AddScoped<IWebhookStatusQueries, WebhookStatusQueries>();
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
         services.AddScoped<WebhookRegistrar>();
+        services.AddScoped<RepositoryWebhookDeleter>();
         services.AddScoped<AccountWebhookRegistrar>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         // The self-probe (ADR 0116) sends exactly one request: the default resilience handler (retries and its own

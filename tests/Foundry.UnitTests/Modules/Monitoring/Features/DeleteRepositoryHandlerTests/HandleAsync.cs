@@ -1,12 +1,17 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Repositories;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -16,6 +21,8 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.DeleteRepositoryHandlerT
 
 public sealed class HandleAsync : IAsyncDisposable
 {
+    private const string AccountToken = "github_pat_account";
+
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
@@ -50,7 +57,31 @@ public sealed class HandleAsync : IAsyncDisposable
         return repo;
     }
 
-    private DeleteRepository.Handler CreateHandler() => new(_dbContext);
+    private async Task SeedAccountAsync(string ns, string? token = AccountToken)
+    {
+        GitHubCredential credential = GitHubCredential.Create(
+            AccountName.Create(ns).ValueOrThrow(),
+            token is null ? null : new IssuedToken(token, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.SetNamespaces([Namespace.Create(ns).ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private DeleteRepository.Handler CreateHandler(RecordingBranchRulesProviderFactory? factory = null) =>
+        new(
+            _dbContext,
+            new RepositoryWebhookDeleter(
+                new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+                factory ?? new RecordingBranchRulesProviderFactory(),
+                NullLogger<RepositoryWebhookDeleter>.Instance));
+
+    private async Task<bool> ExistsAsync(MonitoredRepository repository)
+    {
+        _dbContext.ChangeTracker.Clear();
+        return await _dbContext.Set<MonitoredRepository>()
+            .AnyAsync(r => r.Id == repository.Id, CancellationToken.None);
+    }
 
     [Fact]
     public async Task WhenMiddleRepositoryDeleted_SurvivorPositionsAreContiguous()
@@ -80,5 +111,106 @@ public sealed class HandleAsync : IAsyncDisposable
         reloaded.Select(r => r.Position).ShouldBe([0, 1]);
         reloaded[0].Id.ShouldBe(repoA.Id);
         reloaded[1].Id.ShouldBe(repoC.Id);
+    }
+
+    [Fact]
+    public async Task DeletesTheRepositorysHooksWithTheAccountToken()
+    {
+        // Arrange
+        await SeedAccountAsync("alice");
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        RecordingBranchRulesProviderFactory factory = new();
+        DeleteRepository.Handler sut = CreateHandler(factory);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        factory.TokensUsed.ShouldBe([AccountToken]);
+        factory.WebhookDeletes.ShouldBe([("alice/repo", repository.WebhookHookId)]);
+        (await ExistsAsync(repository)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenNoAccountCoversTheRepository_RemovesItWithoutAProviderCall()
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        RecordingBranchRulesProviderFactory factory = new();
+        DeleteRepository.Handler sut = CreateHandler(factory);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        factory.WebhookDeletes.ShouldBeEmpty();
+        (await ExistsAsync(repository)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenTheAccountTokenIsAbsent_RemovesItWithoutAProviderCall()
+    {
+        // Arrange
+        await SeedAccountAsync("alice", token: null);
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        RecordingBranchRulesProviderFactory factory = new();
+        DeleteRepository.Handler sut = CreateHandler(factory);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        factory.WebhookDeletes.ShouldBeEmpty();
+        (await ExistsAsync(repository)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenTheProviderRefusesTheDeletion_StillRemovesTheRepository()
+    {
+        // Arrange
+        await SeedAccountAsync("alice");
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        RecordingBranchRulesProviderFactory factory = new RecordingBranchRulesProviderFactory()
+            .WithWebhookDeleteResult("alice/repo", Result<int>.Fail(WebhookWriteErrors.InsufficientPermission("403")));
+        DeleteRepository.Handler sut = CreateHandler(factory);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        factory.WebhookDeletes.ShouldHaveSingleItem();
+        (await ExistsAsync(repository)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenTheProviderThrows_StillRemovesTheRepository()
+    {
+        // Arrange
+        await SeedAccountAsync("alice");
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        RecordingBranchRulesProviderFactory factory = new RecordingBranchRulesProviderFactory()
+            .WithException("alice/repo", new HttpRequestException("unreachable"));
+        DeleteRepository.Handler sut = CreateHandler(factory);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        (await ExistsAsync(repository)).ShouldBeFalse();
     }
 }

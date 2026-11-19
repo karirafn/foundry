@@ -11,13 +11,13 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Monitoring.Features.Webhooks;
 
 /// <summary>
-/// Re-points every registered repository webhook (any status other than <c>NotRegistered</c>) at the
-/// new payload URL after the Webhook Public Base URL changes. A hook still at the previous URL is
-/// updated in place rather than duplicated.
+/// Registers every monitored repository's webhook at the new payload URL after the Webhook Public Base
+/// URL changes, <c>NotRegistered</c> repositories included. A hook at any earlier base URL carries the
+/// repository's hook id, so it is updated in place rather than duplicated (ADR 0116).
 /// </summary>
 /// <remarks>
 /// Repositories are processed sequentially and one failure never stops the rest. Each registration
-/// is a create-or-update keyed by payload URL, so a redelivery after a partial run is harmless.
+/// is a create-or-update keyed by hook id, so a redelivery after a partial run is harmless.
 /// </remarks>
 [IntegrationEventHandlerIdentity("Monitoring.WebhookPublicBaseUrlChanged")]
 internal sealed class WebhookPublicBaseUrlChangedHandler(
@@ -29,12 +29,11 @@ internal sealed class WebhookPublicBaseUrlChangedHandler(
 {
     public async Task HandleAsync(WebhookPublicBaseUrlChanged @event, CancellationToken cancellationToken)
     {
-        List<MonitoredRepository> registered = await dbContext.Set<MonitoredRepository>()
-            .Where(r => r.WebhookStatus != WebhookStatus.NotRegistered)
+        List<MonitoredRepository> repositories = await dbContext.Set<MonitoredRepository>()
             .OrderBy(r => r.Position)
             .ToListAsync(cancellationToken);
 
-        foreach (MonitoredRepository repository in registered)
+        foreach (MonitoredRepository repository in repositories)
         {
             try
             {
@@ -54,7 +53,6 @@ internal sealed class WebhookPublicBaseUrlChangedHandler(
                 WebhookRegistrationOutcome outcome = await registrar.RegisterAsync(
                     repository,
                     credential,
-                    @event.PreviousPublicBaseUrl,
                     cancellationToken);
                 await dbContext.SaveChangesAsync(cancellationToken);
 

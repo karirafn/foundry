@@ -3,7 +3,8 @@ using Foundry.Shared;
 namespace Foundry.Modules.Monitoring.Features.Providers;
 
 /// <summary>
-/// Provider-neutral errors for <see cref="IIssueProvider.UpsertWebhookAsync"/>. Every other
+/// Provider-neutral errors for <see cref="IIssueProvider.UpsertWebhookAsync"/> and
+/// <see cref="IIssueProvider.DeleteWebhooksAsync"/>. Every other
 /// provider failure keeps its provider-specific error code.
 /// </summary>
 internal static class WebhookWriteErrors

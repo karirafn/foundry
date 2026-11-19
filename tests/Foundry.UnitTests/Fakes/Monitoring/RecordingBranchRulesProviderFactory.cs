@@ -10,7 +10,7 @@ using Foundry.Shared;
 namespace Foundry.UnitTests.Fakes.Monitoring;
 
 /// <summary>
-/// Records every branch-rules write and webhook upsert (slug, token and spec) and answers each with a
+/// Records every branch-rules write, webhook upsert (slug, token and spec) and webhook deletion, and answers each with a
 /// per-slug scripted result. Unscripted slugs succeed (webhooks: <see cref="WebhookUpsertKind.Created"/>).
 /// Every other provider call throws.
 /// </summary>
@@ -24,6 +24,16 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
     public List<string> AppliedSlugs { get; } = [];
 
     public List<(string Slug, WebhookHookSpec Spec)> WebhookUpserts { get; } = [];
+
+    public List<(string Slug, string HookId)> WebhookDeletes { get; } = [];
+
+    private readonly Dictionary<string, Result<int>> _webhookDeleteResults = [];
+
+    public RecordingBranchRulesProviderFactory WithWebhookDeleteResult(string slug, Result<int> result)
+    {
+        _webhookDeleteResults[slug] = result;
+        return this;
+    }
 
     private readonly Dictionary<string, Result<WebhookUpsertKind>> _webhookResults = [];
 
@@ -78,6 +88,22 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
             return Task.FromResult(owner._webhookResults.TryGetValue(slug.FullPath, out Result<WebhookUpsertKind>? result)
                 ? result
                 : Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Created));
+        }
+
+        public Task<Result<int>> DeleteWebhooksAsync(
+            RepositorySlug slug,
+            string hookId,
+            CancellationToken cancellationToken)
+        {
+            owner.WebhookDeletes.Add((slug.FullPath, hookId));
+            if (owner._exceptions.TryGetValue(slug.FullPath, out Exception? exception))
+            {
+                throw exception;
+            }
+
+            return Task.FromResult(owner._webhookDeleteResults.TryGetValue(slug.FullPath, out Result<int>? result)
+                ? result
+                : Result<int>.Ok(1));
         }
 
         public Task<Result<IssueListing>> GetIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken) =>

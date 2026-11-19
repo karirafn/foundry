@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -16,7 +17,7 @@ internal static class DeleteRepository
 {
     internal sealed record Command(Guid AccountId, Guid Id) : ICommand<bool>;
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, bool>
+    internal sealed class Handler(DbContext dbContext, RepositoryWebhookDeleter webhookDeleter) : ICommandHandler<Command, bool>
     {
         public async Task<Result<bool>> HandleAsync(
             Command command,
@@ -30,6 +31,9 @@ internal static class DeleteRepository
             {
                 return Result<bool>.Fail(RepositoryErrors.NotFound(repositoryId));
             }
+
+            // Outside the transaction, so a slow provider never holds the database; failures never block removal.
+            await webhookDeleter.DeleteAsync(repository, cancellationToken);
 
             await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 

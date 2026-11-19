@@ -14,6 +14,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers.RootDirectory;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
@@ -333,6 +334,19 @@ internal sealed partial class GitLabIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.UpsertWebhookAsync(apiBaseUrl, slug, spec, token, cancellationToken);
+    }
+
+    public Task<Result<int>> DeleteWebhooksAsync(
+        RepositorySlug slug,
+        string hookId,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.DeleteWebhooksAsync(
+            apiBaseUrl,
+            slug,
+            WebhookHookPath.For(WebhookProvider.GitLab, hookId),
+            token,
+            cancellationToken);
     }
 
     public Task<Result<bool>> CreateBranchAsync(

@@ -33,7 +33,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.WebhookTests;
 
 /// <summary>
 /// Automatic webhook registration with the account token: the "Register webhook" action,
-/// repository add, account token rotation, and a Webhook Public Base URL change.
+/// repository add, account token rotation, a Webhook Public Base URL change, and hook deletion on
+/// repository removal.
 /// </summary>
 public sealed class WhenRegisteringAutomatically : IAsyncDisposable
 {
@@ -207,7 +208,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ChangingThePublicBaseUrl_RepointsRegisteredHooksFromTheOldUrl()
+    public async Task ChangingThePublicBaseUrl_RegistersEveryRepositoryMatchedByHookId()
     {
         // Arrange
         await WebhookTestHost.SeedSettingsAsync(_factory, "https://old.example.com");
@@ -225,12 +226,52 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         OutboxRelayService relay = _factory.Services.GetRequiredService<OutboxRelayService>();
         await relay.TickForTest(TestContext.Current.CancellationToken);
 
-        // Assert — only the registered hook is re-pointed, matched against its old payload URL.
-        (string slug, string token, WebhookHookSpec spec) = _state.Upserts.ShouldHaveSingleItem();
-        slug.ShouldBe("owner/one");
-        token.ShouldBe(AccountToken);
+        // Assert — every repository is registered, NotRegistered included, each matched by its hook id.
+        _state.Upserts.Select(u => u.Slug).ShouldBe(["owner/one", "owner/two"]);
+        _state.Upserts.ShouldAllBe(u => u.Token == AccountToken);
+        WebhookHookSpec spec = _state.Upserts.First().Spec;
         spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/github/{registered.WebhookHookId}");
-        spec.PreviousPayloadUrls.ShouldBe([$"https://old.example.com/webhooks/github/{registered.WebhookHookId}"]);
+        spec.Matches($"https://old.example.com/webhooks/github/{registered.WebhookHookId}").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task RemovingARepository_DeletesItsHooksWithTheAccountToken()
+    {
+        // Arrange
+        await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
+        Guid accountId = await SeedAccountAsync();
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, registered: true);
+
+        // Act
+        HttpResponseMessage response = await _client.DeleteAsync(
+            new Uri($"/api/accounts/{accountId}/repositories/{repository.Id.Value}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        _state.Deletes.ShouldHaveSingleItem().ShouldBe(("owner/repo", AccountToken, repository.WebhookHookId));
+    }
+
+    [Fact]
+    public async Task RemovingARepository_WhenTheHookDeletionFails_StillRemovesIt()
+    {
+        // Arrange
+        await WebhookTestHost.SeedSettingsAsync(_factory, PublicBaseUrl);
+        Guid accountId = await SeedAccountAsync();
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, registered: true);
+        _state.DeleteResult = Result<int>.Fail(WebhookWriteErrors.InsufficientPermission("403"));
+
+        // Act
+        HttpResponseMessage response = await _client.DeleteAsync(
+            new Uri($"/api/accounts/{accountId}/repositories/{repository.Id.Value}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        HttpResponseMessage again = await _client.DeleteAsync(
+            new Uri($"/api/accounts/{accountId}/repositories/{repository.Id.Value}", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+        again.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     private sealed class ProviderState
@@ -238,6 +279,10 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         public Result<WebhookUpsertKind> UpsertResult { get; set; } = Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Created);
 
         public ConcurrentQueue<(string Slug, string Token, WebhookHookSpec Spec)> Upserts { get; } = new();
+
+        public Result<int> DeleteResult { get; set; } = Result<int>.Ok(1);
+
+        public ConcurrentQueue<(string Slug, string Token, string HookId)> Deletes { get; } = new();
     }
 
     private sealed class StatefulProviderFactory(ProviderState state) : IIssueProviderFactory
@@ -255,6 +300,15 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         {
             state.Upserts.Enqueue((slug.FullPath, token, spec));
             return Task.FromResult(state.UpsertResult);
+        }
+
+        public Task<Result<int>> DeleteWebhooksAsync(
+            RepositorySlug slug,
+            string hookId,
+            CancellationToken cancellationToken)
+        {
+            state.Deletes.Enqueue((slug.FullPath, token, hookId));
+            return Task.FromResult(state.DeleteResult);
         }
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(

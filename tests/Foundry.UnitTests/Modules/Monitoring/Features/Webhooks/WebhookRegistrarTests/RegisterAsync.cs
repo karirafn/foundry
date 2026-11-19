@@ -57,7 +57,7 @@ public sealed class RegisterAsync
         WebhookHookSpec spec = factory.WebhookUpserts[0].Spec;
         spec.PayloadUrl.ShouldBe($"{PublicBaseUrl}/webhooks/github/{repository.WebhookHookId}");
         spec.Secret.ShouldBe(repository.EnsureWebhookSecret());
-        spec.PreviousPayloadUrls.ShouldBeEmpty();
+        spec.HookPath.Suffix.ShouldBe($"/webhooks/github/{repository.WebhookHookId}");
     }
 
     [Fact]
@@ -111,22 +111,6 @@ public sealed class RegisterAsync
 
         // Assert
         repository.WebhookStatus.ShouldBe(WebhookStatus.Active);
-    }
-
-    [Fact]
-    public async Task WithAPreviousPublicBaseUrl_PassesThePreviousPayloadUrlToMatch()
-    {
-        // Arrange
-        RecordingBranchRulesProviderFactory factory = new();
-        WebhookRegistrar sut = BuildSut(factory);
-        MonitoredRepository repository = NewRepository();
-
-        // Act
-        await sut.RegisterAsync(repository, GitHubAccount(), "https://old.example.com", CancellationToken.None);
-
-        // Assert
-        factory.WebhookUpserts[0].Spec.PreviousPayloadUrls
-            .ShouldBe([$"https://old.example.com/webhooks/github/{repository.WebhookHookId}"]);
     }
 
     [Fact]
