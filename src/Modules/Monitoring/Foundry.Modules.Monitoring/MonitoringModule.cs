@@ -169,6 +169,7 @@ public static class MonitoringModule
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
         services.AddScoped<WebhookRegistrar>();
         services.AddScoped<RepositoryWebhookDeleter>();
+        services.AddScoped<RepositoryRemoval>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         // The self-probe (ADR 0116) sends exactly one request: the default resilience handler (retries and its own
         // timeouts) is cleared, redirects are not followed, and the probe applies its own 10 s timeout.

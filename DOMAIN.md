@@ -555,6 +555,8 @@ Carries `RebaseAfterRun` (non-nullable `bool`, default `true`) — see [Rebase A
 Carries `MergeWhenChecksPass` (non-nullable `bool`, default `false`) — see [Merge When Checks Pass](#merge-when-checks-pass).
 Carries the [Package Sources](#package-source) its root `nuget.config` declares, as last read by the poll.
 
+**Removed Repository** ([ADR 0117](docs/adr/0117-removed-repositories-are-soft-deleted-and-restored-on-re-add.md)): removing a repository (`RepositoryRemoval`, the single removal path) deletes its webhooks, sets `RemovedAt`, raises `MonitoredRepositoryRemovedDomainEvent`, deletes its repository-owned rows (`IssueWatch`, `PendingMerge`, `PendingRebase`, `PostedComment`) and takes it out of the [Repository Priority](#repository-priority) order; its row is kept. The named query filter `RemovedRepositoryFilter` hides a removed repository from every query except the two that bypass it by name: the History slug lookup (`RepositorySlugQueries`), so completed issues keep showing its slug, and the re-add lookup. Re-adding the same (Host, Repository Slug) restores it with the add request's settings; its `Id`, webhook hook id and webhook secret are kept, and its operational state is reset to what a new repository starts with (eligibility `Unreachable`, write probe `Unknown`, webhook status `NotRegistered` with no Webhook Spec Stamp or failed registration, no `LastPolledAt` or untrack suppression, no root `nuget.config` state, active, placed at the end of the order).
+
 ### Apply Branch Rules
 
 The persisted operator intent on a Monitored Repository (`ApplyBranchRules`, non-nullable, default `true` on the add request; existing rows migrated to `false`) that Foundry may write its default-branch rules.
@@ -609,7 +611,7 @@ Accepted asymmetry: a repo visible to account A but namespace-claimed by account
 
 The relative ordering of monitored repositories, expressed as a 0-based, contiguous, unique `Position` integer on each Monitored Repository — lower value means higher priority.
 `Position` is one component of Dispatch Order and therefore affects both dispatch and the order the dashboard's queued-issue list is served in.
-New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
+New and restored repositories append at the end (highest existing Position + 1); removing a repository renumbers survivors contiguously, and a removed repository holds no position in the order.
 Polling is independent of position.
 
 ## Repository Worker Limit
