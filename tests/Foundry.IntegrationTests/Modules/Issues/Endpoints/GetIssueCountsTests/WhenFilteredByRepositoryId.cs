@@ -100,6 +100,6 @@ public sealed class WhenFilteredByRepositoryId : IAsyncDisposable
             () => counts.Counts["rebase_pending"].ShouldBe(0),
             () => counts.Counts["merge_pending"].ShouldBe(0),
             () => counts.Counts["awaiting_input"].ShouldBe(0),
-            () => counts.Counts.Count.ShouldBe(24));
+            () => counts.Counts.Count.ShouldBe(27));
     }
 }
