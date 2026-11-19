@@ -10,7 +10,7 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="Stage"/> is one of <see cref="TriageStage"/>, <see cref="ImplementStage"/>, <see cref="ReviewStage"/>,
 /// <see cref="AwaitingReviewStage"/> or <see cref="DoneStage"/>; <paramref name="CodeStep"/> is one of
 /// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/>,
-/// <see cref="ChecksStep"/> or <see cref="MergingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
+/// <see cref="ChecksStep"/>, <see cref="MergingStep"/> or <see cref="CatchUpWaitingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
 /// </para>
 /// <para>
 /// <paramref name="RunKind"/> is the kind of worker run the issue runs next (#1059): one of <see cref="TriageRunKind"/>,
@@ -84,4 +84,9 @@ public sealed record IssueSummary(
 
     /// <summary>Foundry is merging the pull request it opened, after its checks passed (ADR 0105).</summary>
     public const string MergingStep = "merging";
+
+    /// <summary>
+    /// The issue is merge-pending while its catch-up queue entry waits for its turn to rebase (ADR 0111): no merge runs.
+    /// </summary>
+    public const string CatchUpWaitingStep = "catch_up_waiting";
 }

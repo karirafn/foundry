@@ -13,6 +13,14 @@ public interface IMergeQueueQueries
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the issues of <paramref name="repositoryIds"/> whose queue entry waits for its next catch-up (its
+    /// <see cref="MergeQueueEntry.Wait"/> is set), read for many issues at once as the board summaries need.
+    /// </summary>
+    Task<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>> GetWaitingIssuesAsync(
+        IReadOnlySet<MonitoredRepositoryId> repositoryIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

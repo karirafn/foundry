@@ -11,4 +11,10 @@ public sealed class NullMergeQueueQueries : IMergeQueueQueries
         int issueNumber,
         CancellationToken cancellationToken) =>
         Task.FromResult<MergeQueueEntry?>(null);
+
+    public Task<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>> GetWaitingIssuesAsync(
+        IReadOnlySet<MonitoredRepositoryId> repositoryIds,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>>(
+            new HashSet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>());
 }
