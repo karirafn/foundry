@@ -11,7 +11,8 @@ namespace Foundry.Modules.Workers.Features.Publisher;
 /// <summary>
 /// Reads a Prepare run's exit: its single <c>FOUNDRY_BASE</c> stdout line on success, or the bootstrap-failure
 /// sentinel it prints on failure. The base comes only from this line, never from the Hand-off volume. A review run's
-/// Prepare also prints its review packet facts on <c>FOUNDRY_REVIEW_PATH</c> and <c>FOUNDRY_REVIEW_PATCH_ID</c> lines.
+/// Prepare also prints its review packet facts on <c>FOUNDRY_REVIEW_PATH</c>, <c>FOUNDRY_REVIEW_LINES</c> and
+/// <c>FOUNDRY_REVIEW_PATCH_ID</c> lines.
 /// </summary>
 internal static partial class PrepareOutputParser
 {
@@ -21,6 +22,7 @@ internal static partial class PrepareOutputParser
 
     private const string PathLinePrefix = "PATH ";
     private const string PatchIdLinePrefix = "PATCH_ID ";
+    private const string LinesLinePrefix = "LINES ";
 
     public static PrepareOutcome Parse(long exitCode, string? log, bool expectsRunBranch, bool expectsReviewPacket = false)
     {
@@ -112,6 +114,7 @@ internal static partial class PrepareOutputParser
     private static ReviewPacketFacts? ReadReviewPacket(MatchCollection reviewLines)
     {
         List<ChangedPath> changedPaths = [];
+        List<AddedLineRange> addedLines = [];
         PatchId? patchId = null;
 
         foreach (Match line in reviewLines)
@@ -122,6 +125,11 @@ internal static partial class PrepareOutputParser
                 && ReadChangedPath(body[PathLinePrefix.Length..]) is { } changedPath)
             {
                 changedPaths.Add(changedPath);
+            }
+            else if (body.StartsWith(LinesLinePrefix, StringComparison.Ordinal)
+                && ReadAddedLines(body[LinesLinePrefix.Length..]) is { } range)
+            {
+                addedLines.Add(range);
             }
             else if (body.StartsWith(PatchIdLinePrefix, StringComparison.Ordinal)
                 && patchId is null
@@ -141,7 +149,40 @@ internal static partial class PrepareOutputParser
             return null;
         }
 
-        return new ReviewPacketFacts(changedPaths, patchId);
+        // Prepare prints added lines only for a path its diff adds or modifies.
+        if (addedLines.Any(range => !changedPaths.Any(path => path.Path == range.Path && path.Status != ChangeStatus.Deleted)))
+        {
+            return null;
+        }
+
+        return new ReviewPacketFacts(changedPaths, patchId, addedLines);
+    }
+
+    /// <summary>
+    /// Reads <c>&lt;path&gt; &lt;start&gt;-&lt;end&gt;</c>. The range is everything after the last space, so a path holding
+    /// spaces stays whole.
+    /// </summary>
+    private static AddedLineRange? ReadAddedLines(string pathAndRange)
+    {
+        int space = pathAndRange.LastIndexOf(' ');
+
+        if (space <= 0)
+        {
+            return null;
+        }
+
+        Match range = LineRangePattern().Match(pathAndRange[(space + 1)..]);
+
+        if (!range.Success
+            || !int.TryParse(range.Groups["start"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int start)
+            || !int.TryParse(range.Groups["end"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int end)
+            || start < 1
+            || end < start)
+        {
+            return null;
+        }
+
+        return new AddedLineRange(pathAndRange[..space], start, end);
     }
 
     /// <summary>
@@ -180,6 +221,9 @@ internal static partial class PrepareOutputParser
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex ReviewLinePattern();
+
+    [GeneratedRegex(@"^(?<start>[0-9]{1,9})-(?<end>[0-9]{1,9})$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex LineRangePattern();
 
     [GeneratedRegex(
         @"^FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=(?:could not reach the repository: )?(?<detail>.*)$",

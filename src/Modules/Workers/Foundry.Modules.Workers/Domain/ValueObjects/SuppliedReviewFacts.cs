@@ -4,7 +4,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
 /// The facts code computed for a review run at dispatch (ADR 0114): the pull request and commit under review, the
-/// diff's patch-id, every changed path with its class, and the issue's acceptance criteria. The run records them, its
+/// diff's patch-id, every changed path with its class, the lines each hunk adds, and the issue's acceptance criteria. The run records them, its
 /// prompt shows them, and its verdict is checked against them after the run.
 /// </summary>
 public sealed record SuppliedReviewFacts
@@ -14,7 +14,8 @@ public sealed record SuppliedReviewFacts
         CommitSha reviewedCommit,
         PatchId? patchId,
         IReadOnlyList<ClassifiedPath> classifiedPaths,
-        IReadOnlyList<AcceptanceCriterion> criteria)
+        IReadOnlyList<AcceptanceCriterion> criteria,
+        IReadOnlyList<AddedLineRange>? addedLines = null)
     {
         ArgumentNullException.ThrowIfNull(classifiedPaths);
         ArgumentNullException.ThrowIfNull(criteria);
@@ -39,6 +40,7 @@ public sealed record SuppliedReviewFacts
         PatchId = patchId;
         ClassifiedPaths = [.. classifiedPaths];
         Criteria = [.. criteria];
+        AddedLines = [.. addedLines ?? []];
     }
 
     /// <summary>
@@ -58,7 +60,8 @@ public sealed record SuppliedReviewFacts
             reviewedCommit,
             packet.PatchId,
             [.. packet.ChangedPaths.Select(ClassifiedPath.Of)],
-            AcceptanceCriteria.Extract(issueBody));
+            AcceptanceCriteria.Extract(issueBody),
+            packet.AddedLines);
     }
 
     public PullRequestUrl PullRequestUrl { get; }
@@ -71,6 +74,12 @@ public sealed record SuppliedReviewFacts
     public IReadOnlyList<ClassifiedPath> ClassifiedPaths { get; }
 
     public IReadOnlyList<AcceptanceCriterion> Criteria { get; }
+
+    /// <summary>The lines the reviewed diff adds; empty for facts recorded before the Publisher reported them.</summary>
+    public IReadOnlyList<AddedLineRange> AddedLines { get; }
+
+    /// <summary>Whether the reviewed diff adds <paramref name="line"/> of <paramref name="path"/>, so a comment can sit on it.</summary>
+    public bool IsAddedLine(string path, int line) => AddedLines.Any(range => range.Contains(path, line));
 
     /// <summary>
     /// Whether the change adds or modifies production code while adding or modifying no test. A deleted test is not a
@@ -86,7 +95,8 @@ public sealed record SuppliedReviewFacts
         && ReviewedCommit == other.ReviewedCommit
         && PatchId == other.PatchId
         && ClassifiedPaths.SequenceEqual(other.ClassifiedPaths)
-        && Criteria.SequenceEqual(other.Criteria);
+        && Criteria.SequenceEqual(other.Criteria)
+        && AddedLines.SequenceEqual(other.AddedLines);
 
     public override int GetHashCode() =>
         HashCode.Combine(PullRequestUrl, ReviewedCommit, PatchId, ClassifiedPaths.Count, Criteria.Count);

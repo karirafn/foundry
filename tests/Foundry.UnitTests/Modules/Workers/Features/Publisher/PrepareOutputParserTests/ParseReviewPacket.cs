@@ -119,6 +119,57 @@ public sealed class ParseReviewPacket
         outcome.ShouldBe(new PrepareOutcome.Prepared(Base, ReviewPacket: null));
     }
 
+    [Fact]
+    public void WhenLinesLinesFollowThePaths_ReturnsEachHunksAddedLineRange()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            0,
+            BaseLine
+            + "FOUNDRY_REVIEW_PATH M\tedit.txt\n"
+            + "FOUNDRY_REVIEW_PATH A\tnew file.txt\n"
+            + "FOUNDRY_REVIEW_LINES edit.txt 2-2\n"
+            + "FOUNDRY_REVIEW_LINES edit.txt 6-7\n"
+            + "FOUNDRY_REVIEW_LINES new file.txt 1-1\n"
+            + $"FOUNDRY_REVIEW_PATCH_ID {PatchIdValue}\n",
+            expectsRunBranch: false,
+            expectsReviewPacket: true);
+
+        // Assert
+        outcome.ShouldBeOfType<PrepareOutcome.Prepared>().ReviewPacket.ShouldNotBeNull().AddedLines.ShouldBe(
+        [
+            new AddedLineRange("edit.txt", 2, 2),
+            new AddedLineRange("edit.txt", 6, 7),
+            new AddedLineRange("new file.txt", 1, 1),
+        ]);
+    }
+
+    [Theory]
+    [InlineData("FOUNDRY_REVIEW_LINES src/a.cs 2-1\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES src/a.cs 0-1\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES src/a.cs x-y\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES src/a.cs 3\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES src/a.cs\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES  1-2\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES src/other.cs 1-2\n")]
+    [InlineData("FOUNDRY_REVIEW_LINES src/gone.cs 1-2\n")]
+    public void WhenALinesLineIsMalformedOrNamesNoAddedOrModifiedPath_FailsTheParse(string linesLine)
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            0,
+            BaseLine
+            + "FOUNDRY_REVIEW_PATH M\tsrc/a.cs\n"
+            + "FOUNDRY_REVIEW_PATH D\tsrc/gone.cs\n"
+            + linesLine
+            + $"FOUNDRY_REVIEW_PATCH_ID {PatchIdValue}\n",
+            expectsRunBranch: false,
+            expectsReviewPacket: true);
+
+        // Assert
+        outcome.ShouldBe(MalformedPacket);
+    }
+
     [Theory]
     [InlineData("FOUNDRY_REVIEW_PATH R\tmoved.txt\n")]
     [InlineData("FOUNDRY_REVIEW_PATH M\t\n")]
