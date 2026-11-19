@@ -44,16 +44,39 @@ public static class GlobalExceptionLogging
     }
 
     /// <summary>
-    /// Logs the unobserved task exception at Critical level and marks it observed so the
-    /// finalizer does not re-throw. Exposed for direct testing.
+    /// Logs the unobserved task exception at Critical level (Warning for the known Polly executor
+    /// disposal race) and marks it observed so the finalizer does not re-throw. Exposed for
+    /// direct testing.
     /// </summary>
     public static void HandleUnobservedTaskException(ILogger logger, UnobservedTaskExceptionEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(e);
 
-        logger.LogCritical(e.Exception, "Unobserved task exception.");
+        if (IsPollyExecutorDisposalRace(e.Exception))
+        {
+            logger.LogWarning(
+                e.Exception,
+                "Unobserved task exception from the known Polly circuit-breaker executor disposal race; the disposed executor had no work left.");
+        }
+        else
+        {
+            logger.LogCritical(e.Exception, "Unobserved task exception.");
+        }
 
         e.SetObserved();
     }
+
+    // Polly's ScheduledTaskExecutor starts its loop with Task.Run and disposes its semaphore on
+    // Dispose; a pipeline disposed before the loop reaches WaitAsync faults a task nobody observes
+    // (still present in Polly.Core 8.9.1). The executor type is internal, so it can only be matched
+    // by its stack frame, and a disposed executor has no work left to lose. Every inner exception
+    // must match, so a real failure aggregated alongside it still logs at Critical.
+    private static bool IsPollyExecutorDisposalRace(AggregateException exception) =>
+        exception.InnerExceptions.Count > 0
+        && exception.InnerExceptions.All(inner =>
+            inner is ObjectDisposedException
+            && inner.StackTrace?.Contains(
+                "Polly.CircuitBreaker.ScheduledTaskExecutor.StartProcessingAsync",
+                StringComparison.Ordinal) == true);
 }
