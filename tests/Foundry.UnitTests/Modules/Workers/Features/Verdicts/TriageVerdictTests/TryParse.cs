@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Verdicts;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -33,13 +34,13 @@ public sealed class TryParse
     {
         // Act
         TriageVerdict? verdict = TriageVerdict.TryParse(Json(
-            """{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which endpoint?","context":"Two match.","recommendation":"The v2 one."}]}"""));
+            """{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which endpoint?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}"""));
 
         // Assert
         TriageVerdict.NeedsInput needsInput = verdict.ShouldBeOfType<TriageVerdict.NeedsInput>();
         needsInput.ShouldSatisfyAllConditions(
             () => needsInput.Kind.ShouldBe(TriageIssueKind.Bug),
-            () => needsInput.Questions.ShouldBe([new RunVerdictQuestion("Which endpoint?", "Two match.", "The v2 one.")]));
+            () => needsInput.Questions.ShouldBe([StructuredQuestionBuilder.Build(question: "Which endpoint?")]));
     }
 
     [Fact]
@@ -114,7 +115,7 @@ public sealed class TryParse
 
     [Theory]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"Needs \ud800 the module."}]}""")]
-    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which \udc00 endpoint?","context":"c","recommendation":"r"}]}""")]
+    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which \udc00 endpoint?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""")]
     public void WhenAStringHoldsALoneSurrogate_ReturnsNullWithoutThrowing(string json)
     {
         // Act
@@ -126,7 +127,7 @@ public sealed class TryParse
 
     [Theory]
     [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.Ready))]
-    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","context":"c","recommendation":"r"}],"blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.NeedsInput))]
+    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}],"blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.NeedsInput))]
     public void WhenAWellFormedBlockedByAccompaniesAnotherOutcome_ItIsIgnored(string json, string expectedType)
     {
         // Act
@@ -155,7 +156,7 @@ public sealed class TryParse
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"x"},{"issue":16}]}""")]
     [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[]}""")]
     [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15}]}""")]
-    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","context":"c","recommendation":"r"}],"blockedBy":"x"}""")]
+    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}],"blockedBy":"x"}""")]
     public void WhenTheBlockedVerdictBreaksTheSchema_ReturnsNull(string json)
     {
         // Act
@@ -177,7 +178,7 @@ public sealed class TryParse
     [InlineData("""{"outcome":1,"kind":"feature"}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature"}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[]}""")]
-    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"","context":"x"}]}""")]
+    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Which?"}]}""")]
     [InlineData("""{"outcome":"ready","kind":"feature","questions":[]}""")]
     [InlineData("""{"outcome":"ready","kind":"feature","summary":"extra property"}""")]

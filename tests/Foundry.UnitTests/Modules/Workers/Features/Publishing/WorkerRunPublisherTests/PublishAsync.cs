@@ -538,7 +538,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         PublishingRun publishing = active.BeginPublishing(
             new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow),
             containerOutput: null,
-            RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]),
+            RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which database?")]),
             new RunPullRequestText("Add retry", "Adds retry with backoff."));
         db.Set<WorkerRun>().Add(publishing);
         db.SaveChanges();

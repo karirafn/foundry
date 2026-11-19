@@ -4,6 +4,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -15,7 +16,7 @@ namespace Foundry.UnitTests.Modules.Workers.Domain.Entities.States.StartingRunTe
 public sealed class RefusesNeedsInput
 {
     private static readonly RunVerdict NeedsInput =
-        RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]);
+        RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which database?")]);
 
     private static PublishingRun Publishing(bool refusesNeedsInput, RunVerdict verdict) =>
         StartingRun.Begin(IssueId.New(), WorkerRunId.New(), refusesNeedsInput: refusesNeedsInput)

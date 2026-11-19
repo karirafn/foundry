@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { AwaitingInputDetails, Clarification, IssueDetail } from '../../issues/issue.model';
+import { AwaitingInputDetails, Clarification, InputQuestion, IssueDetail } from '../../issues/issue.model';
 import { PaneClarificationsComponent } from './pane-clarifications';
 
 const ASKED_AT = '2026-02-01T12:00:00Z';
-const question = { question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' };
+const question: InputQuestion = { $type: 'legacy', question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' };
 
 function round(overrides: Partial<Clarification> = {}): Clarification {
   return { questions: [question], input: null, askedAt: ASKED_AT, answeredAt: null, ...overrides };
@@ -129,6 +129,28 @@ describe('PaneClarificationsComponent', () => {
     const list = el.querySelector('.pane-clarifications__questions')!;
     expect(text(el.querySelector(`#${list.getAttribute('aria-labelledby')}`))).toBe('Questions');
     expect(Array.from(list.querySelectorAll('li > span')).map(text)).toEqual(['Which API?', 'Two exist.', 'Recommended: The v2 one.']);
+  });
+
+  it('shows a structured question with its problem and lettered recommended option in the existing slots', () => {
+    // Arrange
+    const structured: InputQuestion = {
+      $type: 'structured',
+      question: 'Which API?',
+      problem: 'Two exist.',
+      impact: 'Clients break.',
+      options: ['v1', 'v2'],
+      recommendedOption: 'b',
+      recommendationReason: 'Clients moved.',
+      evidence: [],
+    };
+
+    // Act
+    const { el } = setup(detail([round({ questions: [structured] })], 'awaiting_input', awaiting({ questions: [structured] })));
+
+    // Assert
+    const list = el.querySelector('.pane-clarifications__questions')!;
+    expect(Array.from(list.querySelectorAll('li > span')).map(text))
+      .toEqual(['Which API?', 'Two exist.', 'Recommended: ✅ b) v2: Clients moved.']);
   });
 
   it('renders comment text as text, never as HTML', () => {

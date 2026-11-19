@@ -197,11 +197,20 @@ public sealed class RepositoryRoles
             () => items["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
             () => itemRequired.ShouldBe([
                 VerdictQuestionsReader.QuestionProperty,
-                VerdictQuestionsReader.ContextProperty,
-                VerdictQuestionsReader.RecommendationProperty]),
-            () => items["properties"]![VerdictQuestionsReader.QuestionProperty]!["minLength"]!.GetValue<int>().ShouldBe(1),
-            () => items["properties"]![VerdictQuestionsReader.RecommendationProperty]!["type"]!.GetValue<string>().ShouldBe("string"),
-            () => items["properties"]![VerdictQuestionsReader.RecommendationProperty]!["minLength"]!.GetValue<int>().ShouldBe(1));
+                VerdictQuestionsReader.ProblemProperty,
+                VerdictQuestionsReader.ImpactProperty,
+                VerdictQuestionsReader.OptionsProperty,
+                VerdictQuestionsReader.RecommendationProperty,
+                VerdictQuestionsReader.EvidenceProperty]),
+            () => items["properties"]![VerdictQuestionsReader.OptionsProperty]!["minItems"]!.GetValue<int>().ShouldBe(InputQuestion.Structured.MinOptions),
+            () => items["properties"]![VerdictQuestionsReader.OptionsProperty]!["maxItems"]!.GetValue<int>().ShouldBe(InputQuestion.Structured.MaxOptions),
+            () => items["properties"]![VerdictQuestionsReader.EvidenceProperty]!["maxItems"]!.GetValue<int>().ShouldBe(InputQuestion.Structured.MaxEvidence),
+            () => items["properties"]![VerdictQuestionsReader.RecommendationProperty]!["required"]!.AsArray()
+                .Select(node => node!.GetValue<string>())
+                .ShouldBe([VerdictQuestionsReader.RecommendedOptionProperty, VerdictQuestionsReader.ReasonProperty]),
+            () => items["properties"]![VerdictQuestionsReader.RecommendationProperty]!["properties"]![VerdictQuestionsReader.RecommendedOptionProperty]!["enum"]!.AsArray()
+                .Select(node => node!.GetValue<string>())
+                .ShouldBe(Enumerable.Range(0, InputQuestion.Structured.MaxOptions).Select(InputQuestion.Structured.LetterOf)));
     }
 
     [Theory]
@@ -238,7 +247,7 @@ public sealed class RepositoryRoles
     [Theory]
     [InlineData("""{"outcome":"done","pullRequest":{"summary":"add retry to webhook delivery","body":"Adds retry."}}""", RunVerdictStatus.Done)]
     [InlineData("""{"outcome":"done"}""", RunVerdictStatus.Invalid)]
-    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two.","recommendation":"Postgres."}]}""", RunVerdictStatus.NeedsInput)]
+    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""", RunVerdictStatus.NeedsInput)]
     public void ASampleMatchingTheImplementVerdictSchema_ParsesWithTheImplementVerdictParser(string sample, RunVerdictStatus expected)
     {
         // Act
@@ -299,7 +308,7 @@ public sealed class RepositoryRoles
 
     [Theory]
     [InlineData("""{"outcome":"ready","kind":"documentation"}""", RunVerdictStatus.Done)]
-    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","context":"None is named.","recommendation":"The home page."}]}""", RunVerdictStatus.NeedsInput)]
+    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""", RunVerdictStatus.NeedsInput)]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"The retry policy lands there."}]}""", RunVerdictStatus.Done)]
     public void ASampleMatchingTheTriageVerdictSchema_ParsesWithTheTriageVerdictParser(string sample, RunVerdictStatus expected)
     {

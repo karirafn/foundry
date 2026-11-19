@@ -41,7 +41,7 @@ public sealed class BuildRestricted
         string question = "Which webhooks?",
         string context = "Two kinds exist.")
     {
-        InputQuestion[] questions = [new InputQuestion(question, context, null)];
+        InputQuestion[] questions = [new InputQuestion.Legacy(question, context, null)];
 
         return input is null
             ? Clarification.Ask(questions, askedAt)

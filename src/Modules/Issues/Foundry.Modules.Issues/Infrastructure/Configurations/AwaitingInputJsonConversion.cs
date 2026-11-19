@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Contracts;
@@ -174,7 +175,7 @@ internal static class AwaitingInputJsonConversion
     private static string SerializeClarifications(IReadOnlyList<Clarification> log) =>
         JsonSerializer.Serialize(
             log.Select(round => new ClarificationDto(
-                [.. round.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
+                InputQuestionJson.ToNode(round.Questions),
                 round.Input is { } input ? SerializeInput(input) : null,
                 round.AskedAt,
                 round.AnsweredAt)).ToList(),
@@ -183,7 +184,7 @@ internal static class AwaitingInputJsonConversion
     private static List<Clarification> DeserializeClarifications(string json) =>
         (JsonSerializer.Deserialize<List<ClarificationDto>>(json, (JsonSerializerOptions?)null) ?? [])
             .Select(dto => new Clarification(
-                [.. dto.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
+                InputQuestionJson.FromNode(dto.Questions),
                 DeserializeInput(dto.Input),
                 dto.AskedAt,
                 dto.AnsweredAt))
@@ -253,15 +254,10 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("attempts")] int? Attempts);
 
     private sealed record ClarificationDto(
-        [property: JsonPropertyName("questions")] IReadOnlyList<QuestionDto> Questions,
+        [property: JsonPropertyName("questions")] JsonNode Questions,
         [property: JsonPropertyName("input")] JsonElement? Input,
         [property: JsonPropertyName("askedAt")] DateTimeOffset AskedAt,
         [property: JsonPropertyName("answeredAt")] DateTimeOffset? AnsweredAt);
-
-    private sealed record QuestionDto(
-        [property: JsonPropertyName("question")] string Question,
-        [property: JsonPropertyName("context")] string Context,
-        [property: JsonPropertyName("recommendation")] string? Recommendation);
 
     // A part writes its kind and only the fields it has: one without a payload is its kind alone, and a branch recreated
     // while waiting has no from-SHA.

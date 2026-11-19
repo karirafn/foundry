@@ -1,10 +1,10 @@
-import { AwaitingInputDetails, Clarification, IssueDetail } from '../../issues/issue.model';
-import { buildClarifications } from './pane-clarifications.model';
+import { AwaitingInputDetails, Clarification, InputQuestion, IssueDetail } from '../../issues/issue.model';
+import { buildClarifications, questionView } from './pane-clarifications.model';
 
 const ASKED_AT = '2026-02-01T12:00:00Z';
 const NOW = Date.parse('2026-02-03T13:00:00Z');
 
-const question = { question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' };
+const question: InputQuestion = { $type: 'legacy', question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' };
 
 function round(overrides: Partial<Clarification> = {}): Clarification {
   return { questions: [question], input: null, askedAt: ASKED_AT, answeredAt: null, ...overrides };
@@ -88,7 +88,7 @@ describe('buildClarifications', () => {
       [1, ASKED_AT, '2026-02-01T14:00:00Z'],
       [2, '2026-02-02T09:00:00Z', '2026-02-02T10:00:00Z'],
     ]);
-    expect(rounds[0].questions).toEqual([question]);
+    expect(rounds[0].questions).toEqual([{ question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' }]);
     expect(rounds[0].status).toBe('answered');
     expect(rounds[0].statusLabel).toBe('Answered');
   });
@@ -276,5 +276,50 @@ describe('buildClarifications', () => {
       // Assert
       expect(view.open).toBeNull();
     });
+  });
+});
+
+describe('questionView', () => {
+  const structured: InputQuestion = {
+    $type: 'structured',
+    question: 'Which API?',
+    problem: 'Two exist.',
+    impact: 'Clients break.',
+    options: ['v1', 'v2'],
+    recommendedOption: 'b',
+    recommendationReason: 'Clients moved.',
+    evidence: ['src/api.ts:3 routes v2'],
+  };
+
+  it('shows a structured question with its problem and its lettered recommended option', () => {
+    // Act
+    const view = questionView(structured);
+
+    // Assert
+    expect(view).toEqual({ question: 'Which API?', context: 'Two exist.', recommendation: '✅ b) v2: Clients moved.' });
+  });
+
+  it('shows a legacy question unchanged', () => {
+    // Act
+    const view = questionView(question);
+
+    // Assert
+    expect(view).toEqual({ question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' });
+  });
+
+  it('shows only the question when the recommended letter names no option', () => {
+    // Act
+    const view = questionView({ ...structured, recommendedOption: 'c' } as InputQuestion);
+
+    // Assert
+    expect(view).toEqual({ question: 'Which API?', context: null, recommendation: null });
+  });
+
+  it('shows only the question for an unknown type', () => {
+    // Act
+    const view = questionView({ $type: 'future', question: 'Which API?' } as unknown as InputQuestion);
+
+    // Assert
+    expect(view).toEqual({ question: 'Which API?', context: null, recommendation: null });
   });
 });

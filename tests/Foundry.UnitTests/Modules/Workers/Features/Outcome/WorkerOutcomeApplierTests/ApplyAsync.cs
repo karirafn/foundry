@@ -59,8 +59,8 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
         WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
         RunVerdict verdict = RunVerdict.NeedsInput(
         [
-            new RunVerdictQuestion("Which database?", "The issue names both SQLite and Postgres.", "Postgres."),
-            new RunVerdictQuestion("Keep the old endpoint?", string.Empty, "Yes."),
+            StructuredQuestionBuilder.Build(question: "Which database?"),
+            StructuredQuestionBuilder.Build(question: "Keep the old endpoint?"),
         ]);
 
         // Act
@@ -210,7 +210,7 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
             () => completed.MergeState.ShouldBe(WorkerRunMergeState.Open),
             () => completed.PullRequestUrl.ShouldBe("https://github.com/acme/repo/pull/1"),
             () => completed.InputRequest.ShouldNotBeNull().BranchHasCommits.ShouldBeTrue(),
-            () => completed.InputRequest!.Questions.ShouldBe([new InputQuestion("Which database?", "Two are configured.", "Postgres.")]));
+            () => completed.InputRequest!.Questions.ShouldBe([StructuredQuestionBuilder.Build(question: "Which database?")]));
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
         WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
             new TriageVerdict.NeedsInput(
                 TriageIssueKind.Refactor,
-                [new RunVerdictQuestion("Which module?", "Two are named.", "Issues.")]),
+                [StructuredQuestionBuilder.Build(question: "Which module?")]),
             ContainerOutput: null,
             Summary: null);
 
@@ -239,7 +239,7 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
             () => completed.IssueId.ShouldBe(activeRun.IssueId.Value),
             () => completed.WorkerRunId.ShouldBe(activeRun.Id),
             () => completed.Result.ShouldBeOfType<TriageResult.NeedsInput>().Kind.ShouldBe(TriageKind.Refactor),
-            () => ((TriageResult.NeedsInput)completed.Result).Questions.ShouldBe([new InputQuestion("Which module?", "Two are named.", "Issues.")]),
+            () => ((TriageResult.NeedsInput)completed.Result).Questions.ShouldBe([StructuredQuestionBuilder.Build(question: "Which module?")]),
             () => dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldBeEmpty(),
             () => orchestrator.StopAndRemoveCalls.ShouldBe([ContainerId]));
     }
@@ -320,7 +320,7 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
                 branch,
                 pullRequestUrl,
                 BranchHasCommits: true,
-                [new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")],
+                [StructuredQuestionBuilder.Build(question: "Which database?")],
                 containerOutput,
                 null),
             "Unchanged" => new WorkerOutcome.Unchanged(branch, containerOutput, null),

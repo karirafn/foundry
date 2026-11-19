@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Domain.ValueObjects;
@@ -34,7 +35,7 @@ internal static class TriageVerdictJsonConversion
             TriageVerdict.NeedsInput needsInput => new TriageVerdictDto(
                 NeedsInputOutcome,
                 needsInput.Kind.Value,
-                [.. needsInput.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
+                InputQuestionJson.ToNode(needsInput.Questions),
                 null,
                 needsInput.DecidedAt),
             TriageVerdict.Blocked blocked => new TriageVerdictDto(
@@ -80,7 +81,7 @@ internal static class TriageVerdictJsonConversion
             ReadyOutcome => new TriageVerdict.Ready(kind, dto.DecidedAt),
             NeedsInputOutcome => new TriageVerdict.NeedsInput(
                 kind,
-                [.. (dto.Questions ?? []).Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
+                InputQuestionJson.FromNode(dto.Questions),
                 dto.DecidedAt),
             BlockedOutcome => new TriageVerdict.Blocked(
                 kind,
@@ -94,7 +95,7 @@ internal static class TriageVerdictJsonConversion
         [property: JsonPropertyName("outcome")] string Outcome,
         [property: JsonPropertyName("kind")] string Kind,
         [property: JsonPropertyName("questions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<QuestionDto>? Questions,
+        JsonNode? Questions,
         [property: JsonPropertyName("blockedBy"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<BlockedByDto>? BlockedBy,
         [property: JsonPropertyName("decidedAt")] DateTimeOffset DecidedAt);
@@ -102,9 +103,4 @@ internal static class TriageVerdictJsonConversion
     private sealed record BlockedByDto(
         [property: JsonPropertyName("issue")] int Issue,
         [property: JsonPropertyName("reason")] string Reason);
-
-    private sealed record QuestionDto(
-        [property: JsonPropertyName("question")] string Question,
-        [property: JsonPropertyName("context")] string Context,
-        [property: JsonPropertyName("recommendation")] string? Recommendation);
 }

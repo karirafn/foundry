@@ -319,7 +319,7 @@ describe('buildCallout', () => {
       const callout = buildCallout(
         detail('awaiting_input', {
           awaitingInput: {
-            questions: [{ question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' }],
+            questions: [{ $type: 'legacy', question: 'Which API?', context: 'Two exist.', recommendation: 'The v2 one.' }],
             postStatus: 'posted',
             postedAt: '2026-02-01T12:00:00Z',
             commentUrl: 'https://github.com/acme/api/issues/42#c1',
@@ -358,7 +358,7 @@ describe('buildCallout', () => {
       const callout = buildCallout(
         detail('awaiting_input', {
           awaitingInput: {
-            questions: [{ question: 'Which API?', context: '' }],
+            questions: [{ $type: 'legacy', question: 'Which API?', context: '' }],
             postStatus: 'failed',
             postedAt: null,
             commentUrl: null,

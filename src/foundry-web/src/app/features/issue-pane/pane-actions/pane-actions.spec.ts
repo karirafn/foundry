@@ -503,7 +503,7 @@ describe('PaneActionsComponent', () => {
         stateDetails: {
           ...stateDetails,
           awaitingInput: {
-            questions: [{ question: 'Which API?', context: '' }],
+            questions: [{ $type: 'legacy', question: 'Which API?', context: '' }],
             postStatus: 'posted',
             postedAt: '2026-01-01T00:00:00Z',
             commentUrl: null,

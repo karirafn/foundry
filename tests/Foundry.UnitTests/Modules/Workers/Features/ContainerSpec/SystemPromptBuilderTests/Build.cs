@@ -2225,7 +2225,7 @@ public sealed class Build
     private static Clarification Round(string? input, int dayOffset = 0)
     {
         DateTimeOffset askedAt = RoundAskedAt.AddDays(dayOffset);
-        InputQuestion[] questions = [new InputQuestion("Which webhooks?", "Two kinds exist.", null)];
+        InputQuestion[] questions = [new InputQuestion.Legacy("Which webhooks?", "Two kinds exist.", null)];
 
         return input is null
             ? Clarification.Ask(questions, askedAt)

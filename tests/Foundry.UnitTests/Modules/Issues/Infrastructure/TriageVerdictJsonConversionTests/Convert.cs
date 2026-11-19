@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -24,7 +25,7 @@ public sealed class Convert
         // Arrange
         TriageVerdict verdict = new TriageVerdict.NeedsInput(
             IssueKind.Bug,
-            [new InputQuestion("Which endpoint?", "Two match.", "The v2 one.")],
+            [new InputQuestion.Legacy("Which endpoint?", "Two match.", "The v2 one.")],
             DecidedAt);
 
         // Act
@@ -32,7 +33,7 @@ public sealed class Convert
 
         // Assert
         read.ShouldBeOfType<TriageVerdict.NeedsInput>().Questions
-            .ShouldBe([new InputQuestion("Which endpoint?", "Two match.", "The v2 one.")]);
+            .ShouldBe([new InputQuestion.Legacy("Which endpoint?", "Two match.", "The v2 one.")]);
     }
 
     [Fact]
@@ -162,6 +163,50 @@ public sealed class Convert
     }
 
     [Fact]
+    public void ANeedsInputVerdictWithAStructuredQuestion_RoundTripsEveryField()
+    {
+        // Arrange
+        InputQuestion question = StructuredQuestionBuilder.Build(evidence: []);
+        TriageVerdict verdict = new TriageVerdict.NeedsInput(IssueKind.Bug, [question], DecidedAt);
+
+        // Act
+        TriageVerdict read = Deserialize(Serialize(verdict));
+
+        // Assert
+        read.ShouldBeOfType<TriageVerdict.NeedsInput>().Questions.ShouldBe([question]);
+    }
+
+    // The shape triage_verdict held before questions were structured, as the converter wrote it.
+    [Fact]
+    public void AQuestionStoredBeforeQuestionsWereStructured_ReadsAsLegacy()
+    {
+        // Arrange
+        const string Stored =
+            """{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which endpoint?","context":"Two match.","recommendation":"The v2 one."}],"decidedAt":"2026-11-11T10:00:00+00:00"}""";
+
+        // Act
+        TriageVerdict read = Deserialize(Stored);
+
+        // Assert
+        read.ShouldBeOfType<TriageVerdict.NeedsInput>().Questions
+            .ShouldBe([new InputQuestion.Legacy("Which endpoint?", "Two match.", "The v2 one.")]);
+    }
+
+    [Fact]
+    public void AStructuredQuestionBreakingItsRules_ReadsAsNoVerdict()
+    {
+        // Arrange
+        const string Stored =
+            """{"outcome":"needs_input","kind":"bug","questions":[{"$type":"structured","question":"Q?","problem":"P","impact":"I","options":["x","y"],"recommendedOption":"c","recommendationReason":"R","evidence":[]}],"decidedAt":"2026-11-11T10:00:00+00:00"}""";
+
+        // Act
+        TriageVerdict? read = (TriageVerdict?)TriageVerdictJsonConversion.Converter.ConvertFromProvider(Stored);
+
+        // Assert
+        read.ShouldBeNull();
+    }
+
+    [Fact]
     public void AQuestionStoredWithoutARecommendation_ReadsANullRecommendation()
     {
         // Arrange
@@ -173,6 +218,6 @@ public sealed class Convert
 
         // Assert
         read.ShouldBeOfType<TriageVerdict.NeedsInput>().Questions
-            .ShouldBe([new InputQuestion("Which endpoint?", "Two match.", null)]);
+            .ShouldBe([new InputQuestion.Legacy("Which endpoint?", "Two match.", null)]);
     }
 }

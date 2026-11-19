@@ -158,7 +158,7 @@ describe('IssuePaneComponent', () => {
   it('renders the clarifications between the status and the facts, and updates them when the detail reloads', async () => {
     // Arrange
     const { el, httpMock, render, service } = await setup();
-    const open = { questions: [{ question: 'Which API?', context: '' }], input: null, askedAt: '2026-01-02T00:00:00Z', answeredAt: null };
+    const open = { questions: [{ $type: 'legacy', question: 'Which API?', context: '' }], input: null, askedAt: '2026-01-02T00:00:00Z', answeredAt: null };
     httpMock.expectOne('/api/issues/f').flush({ ...detail, state: 'queued', clarifications: [open] });
     await render();
 

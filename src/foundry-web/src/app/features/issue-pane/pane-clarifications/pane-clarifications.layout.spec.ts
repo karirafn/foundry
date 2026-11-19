@@ -49,7 +49,7 @@ const DETAIL: IssueDetail = {
   triage: null,
   clarifications: [
     {
-      questions: [{ question: `Which API? ${LONG_WORD}`, context: 'Two exist.', recommendation: 'The v2 one.' }],
+      questions: [{ $type: 'legacy', question: `Which API? ${LONG_WORD}`, context: 'Two exist.', recommendation: 'The v2 one.' }],
       input: [
         { kind: 'comments', text: Array.from({ length: 20 }, (_, i) => `Line ${i} ${LONG_WORD}`).join('\n') },
         { kind: 'descriptionEdited' },
@@ -64,7 +64,7 @@ const DETAIL: IssueDetail = {
       answeredAt: '2026-01-02T00:00:00Z',
     },
     {
-      questions: [{ question: 'And the schema?', context: '' }],
+      questions: [{ $type: 'legacy', question: 'And the schema?', context: '' }],
       input: null,
       askedAt: '2026-01-03T00:00:00Z',
       answeredAt: null,

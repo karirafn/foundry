@@ -1261,10 +1261,24 @@ export interface components {
             /** @enum {string} */
             kind?: "descriptionEdited";
         };
-        InputQuestion: {
+        InputQuestion: components["schemas"]["InputQuestionInputQuestionStructured"] | components["schemas"]["InputQuestionInputQuestionLegacy"];
+        InputQuestionInputQuestionLegacy: {
+            /** @enum {string} */
+            $type?: "legacy";
             question: string;
             context: string;
             recommendation: null | string;
+        };
+        InputQuestionInputQuestionStructured: {
+            /** @enum {string} */
+            $type?: "structured";
+            question: string;
+            problem: string;
+            impact: string;
+            options: string[];
+            recommendedOption: string;
+            recommendationReason: string;
+            evidence: string[];
         };
         IssueDetail: {
             /** Format: uuid */

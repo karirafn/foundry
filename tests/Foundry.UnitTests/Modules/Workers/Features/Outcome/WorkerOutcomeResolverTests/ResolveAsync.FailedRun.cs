@@ -1,9 +1,11 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -130,7 +132,7 @@ public sealed partial class ResolveAsync
     {
         // Arrange
         WorkerOutcomeResolver sut = BuildResolverWithRealParser(OpenMrQueries());
-        RunVerdict verdict = RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]);
+        RunVerdict verdict = RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which database?")]);
 
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(

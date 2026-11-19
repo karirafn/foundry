@@ -1,9 +1,11 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -14,7 +16,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerOutcomeResolv
 public sealed partial class ResolveAsync
 {
     private static readonly RunVerdict NeedsInputVerdict =
-        RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]);
+        RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which database?")]);
 
     [Fact]
     public async Task WhenExitZeroWithNeedsInputAndOpenMr_ReturnsNeedsInputOnThePullRequest()

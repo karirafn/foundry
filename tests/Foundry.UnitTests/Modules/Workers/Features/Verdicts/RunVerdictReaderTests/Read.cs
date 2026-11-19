@@ -1,6 +1,8 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Verdicts;
+using Foundry.Testing;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -39,10 +41,10 @@ public sealed class Read
         // Act
         RunVerdict? verdict = _sut.Read(
             WorkerRole.Implement,
-            Log("""{"type":"result","result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which?","context":"Two options.","recommendation":"The first."}]}}"""));
+            Log("""{"type":"result","result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}}"""));
 
         // Assert
-        verdict.ShouldBe(RunVerdict.NeedsInput([new RunVerdictQuestion("Which?", "Two options.", "The first.")]));
+        verdict.ShouldBe(RunVerdict.NeedsInput([StructuredQuestionBuilder.Build(question: "Which?")]));
     }
 
     [Fact]

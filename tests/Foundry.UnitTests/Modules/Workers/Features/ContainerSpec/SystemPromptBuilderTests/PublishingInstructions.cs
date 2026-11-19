@@ -187,7 +187,7 @@ public sealed class PublishingInstructions
             Issue,
             timeoutMinutes: 120,
             toolchain: ToolchainFixtures.With(docker: hasDocker, csharpLs: true),
-            clarifications: [new Clarification([new InputQuestion("Which?", "Context.", "This one.")], ClarificationInput.FromComments("This one."), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)]);
+            clarifications: [new Clarification([new InputQuestion.Legacy("Which?", "Context.", "This one.")], ClarificationInput.FromComments("This one."), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)]);
 
         return result.ShouldBeOfType<Result<string>.Success>().Value;
     }

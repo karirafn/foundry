@@ -44,7 +44,7 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
     internal sealed record Ready(TriageIssueKind Kind) : TriageVerdict(Kind);
 
     /// <summary>The issue cannot be implemented without answers from a person.</summary>
-    internal sealed record NeedsInput(TriageIssueKind Kind, IReadOnlyList<RunVerdictQuestion> Questions) : TriageVerdict(Kind);
+    internal sealed record NeedsInput(TriageIssueKind Kind, IReadOnlyList<InputQuestion> Questions) : TriageVerdict(Kind);
 
     /// <summary>The issue cannot start until the open issues it depends on close.</summary>
     internal sealed record Blocked(TriageIssueKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageVerdict(Kind)
@@ -129,7 +129,7 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
             return null;
         }
 
-        IReadOnlyList<RunVerdictQuestion> questions = [];
+        IReadOnlyList<InputQuestion> questions = [];
 
         if (output.ContainsKey(QuestionsProperty))
         {

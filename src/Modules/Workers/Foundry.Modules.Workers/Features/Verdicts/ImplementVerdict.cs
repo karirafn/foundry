@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
 namespace Foundry.Modules.Workers.Features.Verdicts;
@@ -24,7 +25,7 @@ internal sealed record ImplementPullRequest(PullRequestSummary? Summary, PullReq
 /// </summary>
 internal sealed record ImplementVerdict(
     ImplementOutcome Outcome,
-    IReadOnlyList<RunVerdictQuestion> Questions,
+    IReadOnlyList<InputQuestion> Questions,
     ImplementPullRequest? PullRequest)
 {
     internal const string OutcomeProperty = "outcome";
@@ -60,7 +61,7 @@ internal sealed record ImplementVerdict(
             return null;
         }
 
-        IReadOnlyList<RunVerdictQuestion> questions = [];
+        IReadOnlyList<InputQuestion> questions = [];
 
         if (output.ContainsKey(QuestionsProperty))
         {

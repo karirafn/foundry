@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -101,7 +102,7 @@ internal sealed class WorkerOutcomeResolver(
         bool succeeded = RunFailureClassifier.Succeeded(status, summary);
 
         // A run started by Continue without answer may not ask again (ADR 0096): its verdict is refused and the facts decide.
-        IReadOnlyList<RunVerdictQuestion>? askedQuestions =
+        IReadOnlyList<InputQuestion>? askedQuestions =
             succeeded && verdict is { Status: RunVerdictStatus.NeedsInput } && !run.RefusesNeedsInput ? verdict.Questions : null;
 
         // Step 5a — MR-state first
@@ -225,7 +226,7 @@ internal sealed class WorkerOutcomeResolver(
         MergeRequestByBranch mr,
         string? containerOutput,
         RunResultSummary? summary,
-        IReadOnlyList<RunVerdictQuestion>? askedQuestions)
+        IReadOnlyList<InputQuestion>? askedQuestions)
     {
         // Guard: Open with null WebUrl — treat as indeterminate; real providers always supply a URL
         if (mr.WebUrl is null)
@@ -296,7 +297,7 @@ internal sealed class WorkerOutcomeResolver(
         WorkerStatus? status,
         string? containerOutput,
         RunResultSummary? summary,
-        IReadOnlyList<RunVerdictQuestion>? askedQuestions,
+        IReadOnlyList<InputQuestion>? askedQuestions,
         CancellationToken cancellationToken)
     {
         // Step 5b — no MR fallback
@@ -343,7 +344,7 @@ internal sealed class WorkerOutcomeResolver(
         BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
-        IReadOnlyList<RunVerdictQuestion>? askedQuestions,
+        IReadOnlyList<InputQuestion>? askedQuestions,
         CancellationToken cancellationToken)
     {
         for (int attempt = 0; attempt < prRetryAttempts; attempt++)
@@ -392,7 +393,7 @@ internal sealed class WorkerOutcomeResolver(
         BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
-        IReadOnlyList<RunVerdictQuestion>? askedQuestions)
+        IReadOnlyList<InputQuestion>? askedQuestions)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
         FailureReason? classified = RunFailureClassifier.TryClassify(parseResult, run.Role);

@@ -9,6 +9,7 @@ using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -31,7 +32,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
     private const string NeedsInputLog =
         """
         {"type":"system","subtype":"init","model":"claude-test"}
-        {"type":"result","subtype":"success","is_error":false,"result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two.","recommendation":"Postgres."}]}}
+        {"type":"result","subtype":"success","is_error":false,"result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which database?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}}
         """;
 
     private const string DoneLog =
@@ -96,7 +97,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
-        run.VerdictQuestions.ShouldBe([new RunVerdictQuestion("Which database?", "The issue names two.", "Postgres.")]);
+        run.VerdictQuestions.ShouldBe([StructuredQuestionBuilder.Build(question: "Which database?")]);
     }
 
     [Theory]

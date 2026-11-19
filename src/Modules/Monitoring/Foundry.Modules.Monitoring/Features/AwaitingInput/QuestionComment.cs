@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -16,7 +17,101 @@ internal static class QuestionComment
     private const string ReplyClosing =
         "Reply in a comment on this thread. The work resumes once replies have been quiet for two minutes.";
 
-    public static string Compose(IReadOnlyList<InputQuestion> questions)
+    private const string StructuredClosing = "_Work resumes two minutes after the last reply._";
+
+    public static string Compose(IReadOnlyList<InputQuestion> questions) =>
+        questions.All(question => question is InputQuestion.Legacy)
+            ? ComposeLegacy([.. questions.Cast<InputQuestion.Legacy>()])
+            : ComposeStructured(questions);
+
+    // The alert's tag line stands alone because GitHub recognises "[!IMPORTANT]" only there, and blank lines surround
+    // the <details> content because GitLab renders Markdown inside it only then.
+    private static string ComposeStructured(IReadOnlyList<InputQuestion> questions)
+    {
+        StringBuilder body = new();
+        string count = questions.Count == 1 ? "1 question" : $"{questions.Count} questions";
+        body.Append("> [!IMPORTANT]\n");
+        body.Append("> Foundry needs your input on **").Append(count).Append("** before continuing.\n");
+        body.Append("> Reply **ok** to accept all recommendations, or e.g. `1a` to choose differently.\n");
+
+        for (int i = 0; i < questions.Count; i++)
+        {
+            body.Append('\n');
+            body.Append("### ").Append(i + 1).Append(". ").Append(Inline(questions[i].Question)).Append('\n');
+
+            switch (questions[i])
+            {
+                case InputQuestion.Structured structured:
+                    AppendStructured(body, structured);
+                    break;
+                case InputQuestion.Legacy legacy:
+                    AppendLegacy(body, legacy);
+                    break;
+                default:
+                    throw new UnreachableException($"Unknown InputQuestion variant: {questions[i].GetType().Name}");
+            }
+        }
+
+        body.Append('\n').Append(StructuredClosing);
+        return body.ToString();
+    }
+
+    private static void AppendStructured(StringBuilder body, InputQuestion.Structured question)
+    {
+        body.Append("**Problem:** ").Append(Inline(question.Problem)).Append('\n');
+        body.Append("**Why it matters:** ").Append(Inline(question.Impact)).Append('\n');
+        body.Append('\n');
+
+        for (int index = 0; index < question.Options.Count; index++)
+        {
+            string letter = InputQuestion.Structured.LetterOf(index);
+            string option = Inline(question.Options[index]);
+
+            if (letter == question.RecommendedOption)
+            {
+                body.Append("- ✅ **").Append(letter).Append(") ").Append(option).Append("**: ")
+                    .Append(Inline(question.RecommendationReason)).Append('\n');
+            }
+            else
+            {
+                body.Append("- ").Append(letter).Append(") ").Append(option).Append('\n');
+            }
+        }
+
+        if (question.Evidence.Count == 0)
+        {
+            return;
+        }
+
+        body.Append('\n');
+        body.Append("<details><summary>Evidence (").Append(question.Evidence.Count).Append(")</summary>\n");
+        body.Append('\n');
+
+        foreach (string evidence in question.Evidence)
+        {
+            body.Append("- ").Append(Inline(evidence)).Append('\n');
+        }
+
+        body.Append('\n');
+        body.Append("</details>\n");
+    }
+
+    private static void AppendLegacy(StringBuilder body, InputQuestion.Legacy question)
+    {
+        if (!string.IsNullOrWhiteSpace(question.Context))
+        {
+            body.Append(Inline(question.Context)).Append('\n');
+        }
+
+        if (!string.IsNullOrWhiteSpace(question.Recommendation))
+        {
+            body.Append("**Recommended:** ").Append(Inline(question.Recommendation)).Append('\n');
+        }
+    }
+
+    private static string Inline(string text) => ModelMarkdown.Inline(text.Trim().ReplaceLineEndings(" "));
+
+    private static string ComposeLegacy(IReadOnlyList<InputQuestion.Legacy> questions)
     {
         StringBuilder body = new();
         body.AppendLine("Foundry needs input before the work on this issue can continue.");
@@ -24,7 +119,7 @@ internal static class QuestionComment
 
         for (int i = 0; i < questions.Count; i++)
         {
-            InputQuestion question = questions[i];
+            InputQuestion.Legacy question = questions[i];
             body.Append(i + 1).Append(". **").Append(ModelMarkdown.Inline(question.Question.Trim())).AppendLine("**");
 
             if (!string.IsNullOrWhiteSpace(question.Context))

@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -20,7 +21,7 @@ public sealed class ClarificationLog
     private static readonly DateTimeOffset AskedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 
     private static readonly Clarification Answered =
-        Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Use <sqlite>.")], AskedAt)
+        Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", "Use <sqlite>.")], AskedAt)
             .Answer(ClarificationInput.FromComments("Use <postgres>."), AskedAt.AddHours(1));
 
     public static TheoryData<DispatchContext> Contexts() =>
@@ -85,7 +86,7 @@ public sealed class ClarificationLog
     {
         // Arrange
         Clarification answeredByEdit =
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(
                     new ClarificationInput([new InputPart.Comments("See the description."), new InputPart.DescriptionEdited()]),
                     AskedAt.AddHours(1));
@@ -102,7 +103,7 @@ public sealed class ClarificationLog
     {
         // Arrange
         Clarification answeredByPush =
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.BranchUpdated("aaa111", "bbb222")]), AskedAt.AddHours(1));
 
         // Act
@@ -118,7 +119,7 @@ public sealed class ClarificationLog
     {
         // Arrange
         Clarification answeredByRecreation =
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.BranchUpdated(null, "bbb222")]), AskedAt.AddHours(1));
 
         // Act
@@ -133,7 +134,7 @@ public sealed class ClarificationLog
     {
         // Arrange
         Clarification continued =
-            Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)
+            Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)
                 .Answer(new ClarificationInput([new InputPart.ContinuedWithoutAnswer()]), AskedAt.AddDays(3));
 
         // Act
@@ -149,7 +150,7 @@ public sealed class ClarificationLog
         // Act
         string prompt = BuildPrompt(
             new DispatchContext.Fresh("feat/1-fix"),
-            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)]);
+            [Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)]);
 
         // Assert
         prompt.ShouldContain(SystemPromptBuilder.UnansweredClarificationNote);
@@ -168,12 +169,51 @@ public sealed class ClarificationLog
     }
 
     [Fact]
+    public void WhenAQuestionIsStructured_RendersItsLetteredOptionsRecommendationAndEvidence()
+    {
+        // Arrange
+        Clarification round = Clarification.Ask(
+            [StructuredQuestionBuilder.Build(
+                question: "Which <database>?",
+                problem: "Two are configured.",
+                impact: "Migrations target the wrong one.",
+                options: ["SQLite", "Postgres & co"],
+                recommendedOption: "b",
+                recommendationReason: "Production runs it.",
+                evidence: ["src/Db.cs:12 opens SQLite"])],
+            AskedAt);
+
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Fresh("feat/1-fix"), [round]).ReplaceLineEndings("\n");
+
+        // Assert
+        prompt.ShouldContain(
+            "<question>Which &lt;database&gt;?</question>\n"
+            + "<problem>Two are configured.</problem>\n"
+            + "<impact>Migrations target the wrong one.</impact>\n"
+            + "<option letter=\"a\">SQLite</option>\n"
+            + "<option letter=\"b\">Postgres &amp; co</option>\n"
+            + "<recommendation option=\"b\">Production runs it.</recommendation>\n"
+            + "<evidence>src/Db.cs:12 opens SQLite</evidence>\n");
+    }
+
+    [Fact]
+    public void TheLeadSentence_SaysALetteredReplyPicksAnOption()
+    {
+        // Act
+        string prompt = BuildPrompt(new DispatchContext.Fresh("feat/1-fix"), [Answered]);
+
+        // Assert
+        prompt.ShouldContain("A reply such as `1b` picks option b of question 1.");
+    }
+
+    [Fact]
     public void WhenAQuestionHasNoRecommendation_LeavesTheRecommendationOut()
     {
         // Act
         string prompt = BuildPrompt(
             new DispatchContext.Fresh("feat/1-fix"),
-            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)]);
+            [Clarification.Ask([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], AskedAt)]);
 
         // Assert
         prompt.ShouldNotContain("<recommendation>");
