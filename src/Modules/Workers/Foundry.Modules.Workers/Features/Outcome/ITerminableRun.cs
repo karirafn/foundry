@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
@@ -18,7 +19,8 @@ internal interface ITerminableRun : IResolvableRun
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary = null,
         RunVerdict? verdict = null,
-        string? containerOutput = null);
+        string? containerOutput = null,
+        RecordedReviewVerdict? reviewVerdict = null);
 
     FailedRun Fail(
         FailureReason reason,

@@ -143,6 +143,28 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     public IReadOnlyList<int>? SuppliedOpenIssueNumbers { get; private set; }
 
     /// <summary>
+    /// The facts code computed for a review run at dispatch (ADR 0114), against which its verdict is checked;
+    /// <see langword="null"/> for any other run.
+    /// </summary>
+    public SuppliedReviewFacts? SuppliedReviewFacts { get; private set; }
+
+    /// <summary>
+    /// The valid verdict a review run returned, with the outcome code derived from it (ADR 0113); <see langword="null"/>
+    /// for any other run and for a review that ended without a valid verdict.
+    /// </summary>
+    public RecordedReviewVerdict? ReviewVerdict { get; private set; }
+
+    protected void StoreSuppliedReviewFacts(SuppliedReviewFacts? suppliedReviewFacts)
+    {
+        SuppliedReviewFacts = suppliedReviewFacts;
+    }
+
+    protected void RecordReviewVerdict(RecordedReviewVerdict? reviewVerdict)
+    {
+        ReviewVerdict = reviewVerdict;
+    }
+
+    /// <summary>
     /// The hash of the run's Run Source Token (ADR 0112), minted when the run begins and kept through every state;
     /// <see langword="null"/> for a run recorded before runs had one.
     /// </summary>
@@ -227,6 +249,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
 
         RecordBase(source.Base, source.PreparedRepositoryId);
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
+        StoreSuppliedReviewFacts(source.SuppliedReviewFacts);
         SourceTokenHash = source.SourceTokenHash;
         StoreToolchain(source.Toolchain);
         RefusesNeedsInput = source.RefusesNeedsInput;

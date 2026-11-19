@@ -971,6 +971,11 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue("[]")
                         .HasColumnName("reverted_files");
 
+                    b.Property<string>("ReviewVerdict")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("review_verdict");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -990,6 +995,11 @@ namespace Foundry.WebApi.Migrations
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
                         .HasColumnName("supplied_open_issue_numbers");
+
+                    b.Property<string>("SuppliedReviewFacts")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplied_review_facts");
 
                     b.Property<string>("Toolchain")
                         .HasColumnType("TEXT")

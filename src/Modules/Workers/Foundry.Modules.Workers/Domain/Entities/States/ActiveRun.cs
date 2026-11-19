@@ -131,7 +131,8 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary = null,
         RunVerdict? verdict = null,
-        string? containerOutput = null)
+        string? containerOutput = null,
+        RecordedReviewVerdict? reviewVerdict = null)
     {
         CompletedRun completed = CompletedRun.FromActive(
             this,
@@ -140,7 +141,8 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
             pullRequestUrl,
             resultSummary,
             verdict,
-            containerOutput);
+            containerOutput,
+            reviewVerdict);
         AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }

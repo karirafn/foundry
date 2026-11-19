@@ -62,7 +62,8 @@ public sealed class CompletedRun : WorkerRun
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary,
         RunVerdict? verdict,
-        string? containerOutput)
+        string? containerOutput,
+        RecordedReviewVerdict? reviewVerdict)
     {
         CompletedRun completed = new(
             publishing.Id,
@@ -81,6 +82,7 @@ public sealed class CompletedRun : WorkerRun
         };
 
         completed.RecordVerdict(verdict);
+        completed.RecordReviewVerdict(reviewVerdict);
         completed.CarryDispatchFactsFrom(publishing);
         completed.CarryConfirmationFrom(publishing);
         completed.RecordPublishFacts(
@@ -99,7 +101,8 @@ public sealed class CompletedRun : WorkerRun
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary = null,
         RunVerdict? verdict = null,
-        string? containerOutput = null)
+        string? containerOutput = null,
+        RecordedReviewVerdict? reviewVerdict = null)
     {
         CompletedRun completed = new(
             active.Id,
@@ -118,6 +121,7 @@ public sealed class CompletedRun : WorkerRun
         };
 
         completed.RecordVerdict(verdict);
+        completed.RecordReviewVerdict(reviewVerdict);
         completed.CarryDispatchFactsFrom(active);
         return completed;
     }
