@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import {
+  CODE_STEPS,
   CodeStep,
   IssueDetail,
   IssueStage,
@@ -96,7 +97,7 @@ function toPublishPhase(value: string | null | undefined): PublishPhase | null {
 }
 
 const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>(['triage', 'implement', 'awaiting_review', 'done']);
-const CODE_STEPS: ReadonlySet<string> = new Set<CodeStep>(['publishing', 'publish_retrying', 'rebasing', 'checks', 'merging']);
+const KNOWN_CODE_STEPS: ReadonlySet<string> = new Set<string>(CODE_STEPS);
 
 // Narrows the wire value to a known stage; a stage this dashboard doesn't know reads as null, and
 // the board leaves that card out rather than guess its column.
@@ -105,7 +106,7 @@ function toIssueStage(value: string | null | undefined): IssueStage | null {
 }
 
 function toCodeStep(value: string | null | undefined): CodeStep | null {
-  return value != null && CODE_STEPS.has(value) ? (value as CodeStep) : null;
+  return value != null && KNOWN_CODE_STEPS.has(value) ? (value as CodeStep) : null;
 }
 
 const RUN_KINDS: ReadonlySet<string> = new Set<string>(Object.keys(RUN_KIND_LABELS));
