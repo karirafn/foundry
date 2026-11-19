@@ -3,6 +3,7 @@ using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features.AwaitingInput;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -75,7 +76,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -93,7 +94,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

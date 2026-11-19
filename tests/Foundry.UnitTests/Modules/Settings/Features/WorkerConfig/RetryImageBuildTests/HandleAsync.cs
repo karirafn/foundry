@@ -4,6 +4,7 @@ using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -63,7 +64,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -85,7 +86,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), dispatcher);
 
         // Act
         await sut.HandleAsync(new RetryImageBuild.Command(), TestContext.Current.CancellationToken);
@@ -107,7 +108,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -130,7 +131,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -152,7 +153,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), dispatcher);
 
         // Act
         await sut.HandleAsync(new RetryImageBuild.Command(), TestContext.Current.CancellationToken);
@@ -167,7 +168,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

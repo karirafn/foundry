@@ -3,6 +3,7 @@ using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features.ProviderHosts;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
         UpdateAllowedProviderHosts.Command command = new(["github.com", "gitlab.com"]);
 
         // Act
@@ -84,7 +85,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+            UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
             UpdateAllowedProviderHosts.Command command = new(["git.example.com"]);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -102,7 +103,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
         UpdateAllowedProviderHosts.Command command = new(["github.com"]);
 
         // Act
@@ -128,7 +129,7 @@ public sealed class HandleAsync : IAsyncLifetime
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateAllowedProviderHosts.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
         UpdateAllowedProviderHosts.Command command = new(["https://github.com"]);
 
         // Act

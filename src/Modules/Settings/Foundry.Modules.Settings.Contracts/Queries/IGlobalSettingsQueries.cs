@@ -1,17 +1,5 @@
 namespace Foundry.Modules.Settings.Contracts.Queries;
 
-/// <summary>
-/// Every dispatch-pause reason. <see cref="IsDispatchPaused"/> and <see cref="UsageLimitResetsAt"/> hold all dispatch;
-/// each of <see cref="PausedHosts"/> holds only the repositories on its host, and <see cref="PackageProxyPause"/> holds only
-/// the repositories that declare Package Sources.
-/// </summary>
-public sealed record DispatchPauseState(
-    DateTimeOffset? UsageLimitResetsAt,
-    bool IsDispatchPaused,
-    bool AutoResumeOnUsageReset,
-    IReadOnlyList<PausedHost> PausedHosts,
-    PausedPackageProxy? PackageProxyPause = null);
-
 public interface IGlobalSettingsQueries
 {
     Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken);
@@ -27,7 +15,8 @@ public interface IGlobalSettingsQueries
     /// <summary>How long a posted question waits without input before its one reminder (ADR 0096).</summary>
     Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken);
 
-    Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken);
+    /// <summary>Whether dispatch resumes on its own once a usage-limit pause reaches its reset time.</summary>
+    Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken);
 
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);
 

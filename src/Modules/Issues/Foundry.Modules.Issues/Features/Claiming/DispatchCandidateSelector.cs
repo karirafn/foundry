@@ -3,8 +3,8 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -28,7 +28,7 @@ internal sealed class DispatchCandidateSelector(
     IRepositoryEligibilityQuery repositoryEligibilityQuery,
     InFlightWorkerCountQuery inFlightWorkerCountQuery,
     ClaimTimeRecheck claimTimeRecheck,
-    IGlobalSettingsQueries settingsQueries,
+    IDispatchPauseQueries dispatchPauseQueries,
     ILogger<DispatchCandidateSelector> logger)
 {
     public async Task<SelectionOutcome> SelectAsync(CancellationToken cancellationToken)
@@ -56,7 +56,7 @@ internal sealed class DispatchCandidateSelector(
         // A host pause holds every queued kind on its host, and a package-proxy pause every queued kind of a repository
         // that declares Package Sources: they wait in the queue rather than each dispatching into an unreachable
         // endpoint and failing.
-        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+        DispatchPauseState pauseState = await dispatchPauseQueries.GetDispatchPauseStateAsync(cancellationToken);
         List<EligibleRepository> eligibleRepos = allEligibleRepos
             .Where(repo => !IsOnPausedHost(repo, pauseState.PausedHosts))
             .Where(repo => pauseState.PackageProxyPause is null || !repo.DeclaresPackageSources)

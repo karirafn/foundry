@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.PackageProxyPauses;
@@ -126,7 +126,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     private void SeedSettings(bool paused, bool globallyPaused = false)
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         if (paused)
         {
             settings.PausePackageProxy(PausedAt);
@@ -137,7 +137,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             settings.PauseDispatch();
         }
 
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 

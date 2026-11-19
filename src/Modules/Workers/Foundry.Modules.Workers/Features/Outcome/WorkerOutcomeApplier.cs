@@ -1,11 +1,11 @@
 using System.Diagnostics;
 
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.DispatchPauses;
 using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Verdicts;
@@ -366,7 +366,7 @@ internal sealed class WorkerOutcomeApplier(
 
     /// <summary>
     /// When <paramref name="failureReason"/> is <see cref="FailureReason.PackageSourceUnreachable"/>, pauses the package
-    /// proxy on the tracked settings, unsaved, so the pause commits in the run's failure save. Returns <c>true</c> when
+    /// proxy on the tracked dispatch pause, unsaved, so the pause commits in the run's failure save. Returns <c>true</c> when
     /// this added the pause; a pause already present keeps its backoff.
     /// </summary>
     private async Task<bool> StagePackageProxyPauseAsync(FailureReason failureReason, CancellationToken cancellationToken)
@@ -376,15 +376,15 @@ internal sealed class WorkerOutcomeApplier(
             return false;
         }
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
-        if (settings is null)
+        if (pause is null)
         {
-            logger.LogWarning("The package proxy is unreachable, but no GlobalSettings row exists to pause it on.");
+            logger.LogWarning("The package proxy is unreachable, but no dispatch pause row exists to pause it on.");
             return false;
         }
 
-        return settings.PausePackageProxy(timeProvider.GetUtcNow());
+        return pause.PausePackageProxy(timeProvider.GetUtcNow());
     }
 
     private async Task AnnouncePackageProxyPauseAsync(bool paused, CancellationToken cancellationToken)
@@ -411,7 +411,7 @@ internal sealed class WorkerOutcomeApplier(
 
     /// <summary>
     /// When <paramref name="failureReason"/> is <see cref="FailureReason.UsageLimited"/>,
-    /// persists the reset time to <see cref="GlobalSettings"/> (extend-only) and dispatches
+    /// persists the reset time to <see cref="DispatchPause"/> (extend-only) and dispatches
     /// <see cref="DispatchPausedEvent"/> when the value is newly set or extended.
     /// </summary>
     private async Task PersistUsageLimitIfNeededAsync(
@@ -423,21 +423,20 @@ internal sealed class WorkerOutcomeApplier(
             return;
         }
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
-        if (settings is null)
+        if (pause is null)
         {
             logger.LogWarning(
-                "Usage limit detected but could not persist reset time — no GlobalSettings row exists.");
+                "Usage limit detected but could not persist reset time — no dispatch pause row exists.");
             return;
         }
 
-        DateTimeOffset? resetsAtBefore = settings.UsageLimitResetsAt;
-        settings.SetUsageLimitResetsAt(usageLimited.ResetsAt);
+        DateTimeOffset? resetsAtBefore = pause.UsageLimitResetsAt;
+        pause.SetUsageLimitResetsAt(usageLimited.ResetsAt);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        bool resetsAtChanged = settings.UsageLimitResetsAt != resetsAtBefore;
+        bool resetsAtChanged = pause.UsageLimitResetsAt != resetsAtBefore;
 
         if (resetsAtChanged)
         {
@@ -445,7 +444,7 @@ internal sealed class WorkerOutcomeApplier(
             // Route via IIntegrationEventProcessor for direct in-process delivery — no outbox
             // row needed, no extra DB save, and no relay latency on a transient notification.
             await TryDeliverDirectAsync(
-                new DispatchPausedEvent(settings.UsageLimitResetsAt!.Value),
+                new DispatchPausedEvent(pause.UsageLimitResetsAt!.Value),
                 cancellationToken);
         }
 

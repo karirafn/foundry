@@ -8,8 +8,6 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -2227,7 +2225,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenPrepareFindsTheProviderUnreachable_PausesTheRepositorysHostInTheSameSave()
     {
         // Arrange
-        await SeedGlobalSettingsAsync();
+        await SeedDispatchPauseAsync();
         CapturingSystemNotificationBroadcaster broadcaster = new();
         StubRepositoryDispatchQueries dispatchQueries = new(new RepositoryDispatchInfo(
             "owner/repo",
@@ -2248,7 +2246,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
 
         // Assert
         WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
-        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         run.ShouldBeOfType<FailedRun>().Reason.ShouldBe(reason);
         settings.HostPauses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             pause => pause.Host.ShouldBe("gitlab.example.test"),
@@ -2261,7 +2259,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         DateTimeOffset pausedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        await SeedGlobalSettingsAsync(settings =>
+        await SeedDispatchPauseAsync(settings =>
         {
             settings.PauseHost("github.com", pausedAt);
             settings.RecordProbeUnreachable("github.com", pausedAt.AddMinutes(1));
@@ -2276,7 +2274,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Assert
-        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         HostPause pause = settings.HostPauses.ShouldHaveSingleItem();
         pause.ShouldSatisfyAllConditions(
             () => pause.PausedAt.ShouldBe(pausedAt),
@@ -2288,7 +2286,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenPrepareFailsForAnotherReason_NoHostIsPaused()
     {
         // Arrange
-        await SeedGlobalSettingsAsync();
+        await SeedDispatchPauseAsync();
         FailureReason reason = new FailureReason.WorkerBootstrapFailed("FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=403");
         IssueClaimedHandler sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
 
@@ -2297,7 +2295,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Assert
-        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.HostPauses.ShouldBeEmpty();
     }
 
@@ -2317,11 +2315,11 @@ public sealed partial class HandleAsync : IAsyncDisposable
         run.PreparedRepositoryId.ShouldBe(repositoryId);
     }
 
-    private async Task SeedGlobalSettingsAsync(Action<GlobalSettings>? configure = null)
+    private async Task SeedDispatchPauseAsync(Action<DispatchPause>? configure = null)
     {
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         configure?.Invoke(settings);
-        _dbContext.Set<GlobalSettings>().Add(settings);
+        _dbContext.Set<DispatchPause>().Add(settings);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
     }
@@ -2470,8 +2468,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
         public Task<TimeSpan> GetAwaitingInputReminderDelayAsync(CancellationToken cancellationToken)
             => Task.FromResult(TimeSpan.FromDays(3));
 
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true, []));
+        public Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(true);
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

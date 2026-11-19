@@ -3,7 +3,7 @@ using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -134,7 +134,7 @@ public sealed class CommitAsync : IAsyncLifetime
     }
 
     // Regression guard (AC5, #405): LoginSuccessCommitter clears only the auth-invalid pause on ClaudeAccount and must
-    // never clear the operator's manual dispatch pause on GlobalSettings. This asserts that architectural separation holds.
+    // never clear the operator's manual dispatch pause on DispatchPause. This asserts that architectural separation holds.
     [Fact]
     public async Task WhenManualDispatchPauseExists_DoesNotClearManualPause()
     {
@@ -143,9 +143,9 @@ public sealed class CommitAsync : IAsyncLifetime
 
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
-            GlobalSettings globalSettings = GlobalSettings.Create();
+            DispatchPause globalSettings = DispatchPause.Create();
             globalSettings.PauseDispatch();
-            seedDb.Set<GlobalSettings>().Add(globalSettings);
+            seedDb.Set<DispatchPause>().Add(globalSettings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -158,7 +158,7 @@ public sealed class CommitAsync : IAsyncLifetime
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? storedSettings = await assertDb.Set<GlobalSettings>()
+        DispatchPause? storedSettings = await assertDb.Set<DispatchPause>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         storedSettings.ShouldNotBeNull();
         storedSettings.IsDispatchPaused.ShouldBeTrue();

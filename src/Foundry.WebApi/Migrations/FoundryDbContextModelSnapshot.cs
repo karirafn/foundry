@@ -779,19 +779,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("HostPauses")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("host_pauses");
-
                     b.Property<string>("ImageBuildState")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("image_build_status");
-
-                    b.Property<bool>("IsDispatchPaused")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("is_dispatch_paused");
 
                     b.Property<DateTimeOffset?>("LastImageBuiltAt")
                         .HasColumnType("TEXT")
@@ -804,10 +795,6 @@ namespace Foundry.WebApi.Migrations
                     b.Property<bool>("NestedDockerEnabled")
                         .HasColumnType("INTEGER")
                         .HasColumnName("nested_docker_enabled");
-
-                    b.Property<string>("PackageProxyPause")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("package_proxy_pause");
 
                     b.Property<int>("PollIntervalSeconds")
                         .ValueGeneratedOnAdd()
@@ -827,10 +814,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("updated_at");
 
-                    b.Property<DateTimeOffset?>("UsageLimitResetsAt")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("usage_limit_resets_at");
-
                     b.Property<string>("WebhookPublicBaseUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("TEXT")
@@ -849,6 +832,38 @@ namespace Foundry.WebApi.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("global_settings", (string)null);
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.DispatchPause", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("HostPauses")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host_pauses");
+
+                    b.Property<bool>("IsDispatchPaused")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_dispatch_paused");
+
+                    b.Property<string>("PackageProxyPause")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("package_proxy_pause");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateTimeOffset?>("UsageLimitResetsAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("usage_limit_resets_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("dispatch_pause", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.DispatchReservation", b =>

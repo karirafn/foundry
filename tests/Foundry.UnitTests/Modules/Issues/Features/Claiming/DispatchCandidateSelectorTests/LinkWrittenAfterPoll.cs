@@ -86,7 +86,7 @@ public sealed class LinkWrittenAfterPoll : IAsyncDisposable
                 _dbContext,
                 new StubIssueBlockerQueries().WithBlockers(IssueNumber, BlockerNumber),
                 _domainEventDispatcher),
-            new NullGlobalSettingsQueries(),
+            new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
         // Act

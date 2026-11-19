@@ -1,6 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.PackageProxyPauses;
 using Foundry.Modules.Workers.Features.Publisher;
@@ -35,9 +35,9 @@ public sealed class ProbeAsync : IAsyncDisposable
 
         using FoundryDbContext db = CreateDbContext();
         db.Database.EnsureCreated();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         settings.PausePackageProxy(PausedAt);
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -101,7 +101,7 @@ public sealed class ProbeAsync : IAsyncDisposable
         // Arrange
         await using (FoundryDbContext clearDb = CreateDbContext())
         {
-            GlobalSettings settings = await clearDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+            DispatchPause settings = await clearDb.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
             settings.ResumeAllDispatch();
             await clearDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -129,7 +129,7 @@ public sealed class ProbeAsync : IAsyncDisposable
     private async Task<PackageProxyPause?> ReadPauseAsync()
     {
         await using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await db.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         return settings.PackageProxyPause;
     }
 

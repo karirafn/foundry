@@ -2,6 +2,7 @@ using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,7 @@ public sealed class GetWorkerImageBuildEnabledAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         bool result = await sut.GetWorkerImageBuildEnabledAsync(TestContext.Current.CancellationToken);
@@ -83,7 +84,7 @@ public sealed class GetWorkerImageBuildEnabledAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         bool result = await sut.GetWorkerImageBuildEnabledAsync(TestContext.Current.CancellationToken);
@@ -97,7 +98,7 @@ public sealed class GetWorkerImageBuildEnabledAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         bool result = await sut.GetWorkerImageBuildEnabledAsync(TestContext.Current.CancellationToken);

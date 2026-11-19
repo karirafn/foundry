@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.HostPauses;
@@ -55,10 +55,10 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         using IServiceScope scope = _services.CreateScope();
         FoundryDbContext db = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         db.Database.EnsureCreated();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         settings.PauseHost("due.example.test", PausedAt);
         settings.PauseHost("later.example.test", PausedAt.AddMinutes(5));
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 

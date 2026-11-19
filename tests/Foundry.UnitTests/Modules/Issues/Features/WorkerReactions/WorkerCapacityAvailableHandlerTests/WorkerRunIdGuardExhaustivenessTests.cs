@@ -429,7 +429,7 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
                 _dbContext,
                 new StubIssueBlockerQueries(),
                 new NullDomainEventDispatcher()),
-            new NullGlobalSettingsQueries(),
+            new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
         IssueClaimer claimer = new(

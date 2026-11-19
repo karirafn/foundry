@@ -6,9 +6,8 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -89,6 +88,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
 
         services.AddScoped<IGlobalSettingsQueries, StubGlobalSettingsQueries>();
+        services.AddScoped<IDispatchPauseQueries, StubGlobalSettingsQueries>();
         services.AddScoped<IPostExitProviderQueries, NullPostExitProviderQueries>();
         services.AddSingleton<IContainerOutputParser, NullContainerOutputParser>();
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
@@ -134,17 +134,17 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
     [Fact]
     public async Task WhenAutoResumeOccurs_DispatchResumedRowPersistedToOutbox()
     {
-        // Arrange — seed GlobalSettings with expired usage-limit reset time and auto-resume enabled
+        // Arrange — seed DispatchPause with expired usage-limit reset time and auto-resume enabled
         using (IServiceScope seedScope = _serviceProvider.CreateScope())
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-            GlobalSettings settings = GlobalSettings.Create();
-            settings.SetUsageLimitResetsAt(DateTimeOffset.UtcNow.AddHours(-1));
-            seedDb.Set<GlobalSettings>().Add(settings);
+            DispatchPause pause = DispatchPause.Create();
+            pause.SetUsageLimitResetsAt(DateTimeOffset.UtcNow.AddHours(-1));
+            seedDb.Set<DispatchPause>().Add(pause);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             // Force UsageLimitResetsAt to a past time in the DB (domain logic caps to future)
-            GlobalSettings? saved = await seedDb.Set<GlobalSettings>()
+            DispatchPause? saved = await seedDb.Set<DispatchPause>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             saved.ShouldNotBeNull();
             seedDb.Entry(saved).Property("UsageLimitResetsAt").CurrentValue =
@@ -276,8 +276,9 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
 
-        services.AddScoped<IGlobalSettingsQueries>(sp =>
-            new StubGlobalSettingsQueries(usePastResetsAt ? DateTimeOffset.UtcNow.AddHours(-1) : null));
+        StubGlobalSettingsQueries settingsQueries = new(usePastResetsAt ? DateTimeOffset.UtcNow.AddHours(-1) : null);
+        services.AddScoped<IGlobalSettingsQueries>(_ => settingsQueries);
+        services.AddScoped<IDispatchPauseQueries>(_ => settingsQueries);
         services.AddScoped<IPostExitProviderQueries, NullPostExitProviderQueries>();
         services.AddSingleton<IContainerOutputParser>(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
@@ -326,7 +327,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
     // ─── Stubs ───────────────────────────────────────────────────────────────────
 
     private sealed class StubGlobalSettingsQueries(DateTimeOffset? usageLimitResetsAt = null)
-        : IGlobalSettingsQueries
+        : IGlobalSettingsQueries, IDispatchPauseQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -349,11 +350,13 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             => Task.FromResult(TimeSpan.FromDays(3));
 
 
+        public Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(true);
+
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(
                 usageLimitResetsAt,
                 IsDispatchPaused: false,
-                AutoResumeOnUsageReset: true,
                 PausedHosts: []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)

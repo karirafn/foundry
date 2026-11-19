@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Foundry.Shared\Foundry.Shared.csproj" />
+    <ProjectReference Include="..\..\Workers\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

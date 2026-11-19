@@ -442,7 +442,7 @@ internal sealed class IssueClaimedHandler(
 
     /// <summary>
     /// Pauses <paramref name="host"/> on the tracked settings, unsaved. Returns the host when this added its pause;
-    /// <see langword="null"/> when it was already paused (its backoff is left alone) or no settings row exists.
+    /// <see langword="null"/> when it was already paused (its backoff is left alone) or no dispatch pause row exists.
     /// </summary>
     private async Task<string?> StageHostPauseAsync(string host, CancellationToken cancellationToken)
     {

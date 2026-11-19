@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -42,11 +41,11 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
             containerOutputParser: outputParser);
     }
 
-    private void SeedGlobalSettings()
+    private void SeedDispatchPause()
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-        db.Set<GlobalSettings>().Add(settings);
+        DispatchPause settings = DispatchPause.Create();
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -54,7 +53,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithCreditsExhaustedOutput_TransitionsToFailedRunWithCreditsExhaustedReason()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-credits-exhausted-reason");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
@@ -74,7 +73,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithCreditsExhaustedOutput_PublishesWorkerCreditsExhausted()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         ActiveRun activeRun = SeedActiveRun("container-credits-exhausted-event");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -99,7 +98,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithCreditsExhaustedOutput_DoesNotSetUsageLimitResetsAt()
     {
         // Arrange — CreditsExhausted must not write UsageLimitResetsAt (that is UsageLimited territory)
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-credits-exhausted-no-resets-at");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
@@ -109,7 +108,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+        DispatchPause? settings = await assertDb.Set<DispatchPause>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.UsageLimitResetsAt.ShouldBeNull();
@@ -119,7 +118,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
     public async Task WhenContinuableFailureWithCreditsExhaustedReason_PublishesWorkerCreditsExhausted()
     {
         // Arrange — branch has commits so outcome is ContinuableFailure, not Failure
-        SeedGlobalSettings();
+        SeedDispatchPause();
         ActiveRun activeRun = SeedActiveRun("container-credits-continuable");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();

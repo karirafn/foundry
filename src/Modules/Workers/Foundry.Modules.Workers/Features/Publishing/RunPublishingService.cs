@@ -1,5 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Shared.Infrastructure;
 
@@ -32,7 +32,7 @@ internal sealed class RunPublishingService(
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         WorkerRunPublisher runPublisher = scope.ServiceProvider.GetRequiredService<WorkerRunPublisher>();
         PublishHostGate hostGate = await PublishHostGate.ReadAsync(
-            scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>(),
+            scope.ServiceProvider.GetRequiredService<IDispatchPauseQueries>(),
             scope.ServiceProvider.GetRequiredService<IRepositoryDispatchQueries>(),
             cancellationToken);
         DateTimeOffset now = timeProvider.GetUtcNow();

@@ -64,26 +64,6 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenCreated_UsageLimitResetsAtIsNull()
-    {
-        // Arrange & Act
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Assert
-        settings.UsageLimitResetsAt.ShouldBeNull();
-    }
-
-    [Fact]
-    public void WhenCreated_IsDispatchPausedIsFalse()
-    {
-        // Arrange & Act
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Assert
-        settings.IsDispatchPaused.ShouldBeFalse();
-    }
-
-    [Fact]
     public void WhenCreated_AutoResumeOnUsageResetIsTrue()
     {
         // Arrange & Act

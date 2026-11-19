@@ -218,6 +218,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
         WorkerRun? run = (await dbContext.Set<WorkerRun>().AsNoTracking().ToListAsync()).MaxBy(candidate => candidate.CreatedAt);
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>().AsNoTracking().SingleOrDefaultAsync();
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>().AsNoTracking().SingleOrDefaultAsync();
+        DispatchPause? pause = await dbContext.Set<DispatchPause>().AsNoTracking().SingleOrDefaultAsync();
         bool catalogLoaded = scope.ServiceProvider.GetRequiredService<IWorkerRoleCatalogStore>().Current is not null;
 
         IEnumerable<string> recentLogs = _boundaries.Logs.Entries
@@ -231,7 +232,8 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
                 $"Issue: {issue?.GetType().Name ?? "none"}",
                 $"Worker run: {run?.GetType().Name ?? "none"}",
                 $"Claude account: {(account is null ? "none" : $"{account.AuthMode}, {account.Validity}, {account.SpendState}, CanDispatch={account.CanDispatch}")}",
-                $"Settings: {(settings is null ? "none" : $"{settings.ImageBuildState}, IsDispatchPaused={settings.IsDispatchPaused}, UsageLimitResetsAt={settings.UsageLimitResetsAt}")}",
+                $"Settings: {(settings is null ? "none" : $"{settings.ImageBuildState}, ")}",
+                $"Dispatch pause: {(pause is null ? "none" : $"IsDispatchPaused={pause.IsDispatchPaused}, UsageLimitResetsAt={pause.UsageLimitResetsAt}")}",
                 $"Role catalog loaded: {catalogLoaded}",
                 $"Worker containers started: {_boundaries.Containers.StartedSpecs.Count}",
                 "Recent host log:",

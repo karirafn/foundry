@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -49,7 +50,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         PublishFailedRun seeded = SeedPublishFailedRun(failedAt: DateTimeOffset.UtcNow.AddMinutes(-5));
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries(GitHubPaused));
+        await TickAsync(new PausedHostsDispatchPauseQueries(GitHubPaused));
 
         // Assert
         _publisher.PublishRequests.ShouldBeEmpty();
@@ -66,10 +67,10 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishFailedRun(failedAt: DateTimeOffset.UtcNow.AddMinutes(-5));
-        await TickAsync(new PausedHostsGlobalSettingsQueries(GitHubPaused));
+        await TickAsync(new PausedHostsDispatchPauseQueries(GitHubPaused));
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries());
+        await TickAsync(new PausedHostsDispatchPauseQueries());
 
         // Assert
         _publisher.PublishRequests.ShouldHaveSingleItem();
@@ -84,7 +85,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         SeedPublishingRun(DateTimeOffset.UtcNow);
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries(GitHubPaused));
+        await TickAsync(new PausedHostsDispatchPauseQueries(GitHubPaused));
 
         // Assert
         _publisher.PublishRequests.ShouldBeEmpty();
@@ -97,10 +98,10 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishingRun(DateTimeOffset.UtcNow);
-        await TickAsync(new PausedHostsGlobalSettingsQueries(GitHubPaused));
+        await TickAsync(new PausedHostsDispatchPauseQueries(GitHubPaused));
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries());
+        await TickAsync(new PausedHostsDispatchPauseQueries());
 
         // Assert
         _publisher.PublishRequests.ShouldHaveSingleItem();
@@ -114,7 +115,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         SeedPublishFailedRun(failedAt: exitedAt.AddMinutes(1), exitedAt);
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries(GitHubPaused));
+        await TickAsync(new PausedHostsDispatchPauseQueries(GitHubPaused));
 
         // Assert
         await using FoundryDbContext db = CreateDbContext();
@@ -132,7 +133,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         PausedHost gitLabPaused = GitHubPaused with { Host = "gitlab.com" };
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries(gitLabPaused));
+        await TickAsync(new PausedHostsDispatchPauseQueries(gitLabPaused));
 
         // Assert
         _publisher.PublishRequests.Count.ShouldBe(2);
@@ -145,17 +146,17 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         SeedPublishingRun(DateTimeOffset.UtcNow);
 
         // Act
-        await TickAsync(new PausedHostsGlobalSettingsQueries(GitHubPaused with { Host = "GitHub.com" }));
+        await TickAsync(new PausedHostsDispatchPauseQueries(GitHubPaused with { Host = "GitHub.com" }));
 
         // Assert
         _publisher.PublishRequests.ShouldBeEmpty();
     }
 
-    private async Task TickAsync(IGlobalSettingsQueries settingsQueries)
+    private async Task TickAsync(IDispatchPauseQueries dispatchPauseQueries)
     {
         DispatchAndPublishTicker ticker = BuildService(
             new FakeWorkerOrchestrator(),
-            settingsQueries: settingsQueries,
+            dispatchPauseQueries: dispatchPauseQueries,
             publisher: _publisher);
         await ticker.Publishing.ExecuteTickAsync(TestContext.Current.CancellationToken);
     }
