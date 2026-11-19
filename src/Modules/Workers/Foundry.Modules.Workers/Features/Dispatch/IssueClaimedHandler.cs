@@ -150,43 +150,43 @@ internal sealed class IssueClaimedHandler(
             }
         }
 
+        // A review reads the commit its context names (ADR 0114); a malformed one fails before anything is prepared.
+        ReviewDispatch? review = null;
+
+        if (claimed.Context is DispatchContext.Review reviewContext)
+        {
+            Result<ReviewDispatch> reviewResult = ReviewDispatch.From(reviewContext);
+
+            if (reviewResult is Result<ReviewDispatch>.Failure reviewFailure)
+            {
+                await FailBeforeContainerAsync(startingRun, claimed, "reading the review target failed", reviewFailure.Error, cancellationToken);
+                return;
+            }
+
+            review = ((Result<ReviewDispatch>.Success)reviewResult).Value;
+        }
+
         RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
             claimed.MonitoredRepositoryId,
             cancellationToken);
-        string? gitPat = GitPatOf(dispatchInfo);
-        Result<WorkerContainerSpec> specResult = gitPat is null
-            ? Result<WorkerContainerSpec>.Fail(EmptyGitPatError)
-            : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, trackerContext, cancellationToken);
 
-        if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
+        if (GitPatOf(dispatchInfo) is not { } gitPat)
         {
-            FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(specFailure.Error.Message));
-            await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Error}",
-                startingRun.Id,
-                claimed.IssueNumber,
-                specFailure.Error.Message);
+            await FailWithContainerErrorAsync(startingRun, claimed, EmptyGitPatError, cancellationToken);
             return;
         }
-
-        if (specResult is not Result<WorkerContainerSpec>.Success specSuccess || gitPat is null)
-        {
-            return;
-        }
-
-        WorkerContainerSpec spec = specSuccess.Value;
 
         // The Publisher fetches with the token and leaves a base bundle for the worker, so the worker's own spec
-        // carries no GIT_PAT (ADR 0100). Without a base bundle no worker starts.
+        // carries no GIT_PAT (ADR 0100). Without a base bundle no worker starts. It runs before the spec is built
+        // because a review's prompt shows the facts computed from what it prepared.
         PrepareOutcome prepareOutcome = await publisher.PrepareAsync(
             new PrepareRequest(
                 startingRun.Id,
                 claimed.CloneUrl,
                 gitPat,
                 RunBranchToPrepare(claimed, restricted),
-                new WorkerResourceLimitsSnapshot(spec.MemoryLimitMb, spec.CpuLimit, spec.PidsLimit)),
+                await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken),
+                review?.Target),
             cancellationToken);
 
         if (prepareOutcome is PrepareOutcome.Failed prepareFailure)
@@ -216,8 +216,48 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
-        startingRun.RecordPreparedBase(((PrepareOutcome.Prepared)prepareOutcome).Base, claimed.MonitoredRepositoryId);
+        PrepareOutcome.Prepared prepared = (PrepareOutcome.Prepared)prepareOutcome;
+        SuppliedReviewFacts? reviewFacts = null;
+
+        if (review is not null)
+        {
+            Result<SuppliedReviewFacts> factsResult = review.FactsFrom(prepared, issueContent.Body);
+
+            if (factsResult is Result<SuppliedReviewFacts>.Failure factsFailure)
+            {
+                await FailWithContainerErrorAsync(startingRun, claimed, factsFailure.Error, cancellationToken);
+                return;
+            }
+
+            reviewFacts = ((Result<SuppliedReviewFacts>.Success)factsResult).Value;
+        }
+
+        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(
+            startingRun,
+            claimed,
+            catalog,
+            issueContent,
+            trackerContext,
+            reviewFacts,
+            cancellationToken);
+
+        if (specResult is not Result<WorkerContainerSpec>.Success { Value: { } spec })
+        {
+            await FailWithContainerErrorAsync(
+                startingRun,
+                claimed,
+                ((Result<WorkerContainerSpec>.Failure)specResult).Error,
+                cancellationToken);
+            return;
+        }
+
+        startingRun.RecordPreparedBase(prepared.Base, claimed.MonitoredRepositoryId);
         startingRun.RecordSuppliedOpenIssues(trackerContext);
+
+        if (reviewFacts is not null)
+        {
+            startingRun.RecordSuppliedReviewFacts(reviewFacts);
+        }
 
         Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 
@@ -260,6 +300,22 @@ internal sealed class IssueClaimedHandler(
             startingRun.Id,
             claimed.IssueNumber,
             step,
+            error.Message);
+    }
+
+    private async Task FailWithContainerErrorAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        Error error,
+        CancellationToken cancellationToken)
+    {
+        FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(error.Message));
+        await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Error}",
+            startingRun.Id,
+            claimed.IssueNumber,
             error.Message);
     }
 
@@ -347,6 +403,7 @@ internal sealed class IssueClaimedHandler(
         WorkerRoleCatalog? catalog,
         IssueContent issueContent,
         TrackerContext trackerContext,
+        SuppliedReviewFacts? reviewFacts,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -378,7 +435,8 @@ internal sealed class IssueClaimedHandler(
                 issueContent,
                 toolchain,
                 claimed.Clarifications ?? [],
-                trackerContext: trackerContext)
+                trackerContext: trackerContext,
+                reviewFacts: reviewFacts)
             : SystemPromptBuilder.Build(
                 principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
@@ -449,6 +507,12 @@ internal sealed class IssueClaimedHandler(
         if (!restricted && claimed.BranchName is { } branchName)
         {
             envVars["BRANCH_NAME"] = branchName.Value;
+        }
+
+        // The entrypoint checks the reviewed commit out read-only; the Publisher already bundled it (ADR 0114).
+        if (reviewFacts is not null)
+        {
+            envVars[ReviewDispatch.ReviewCommitVariable] = reviewFacts.ReviewedCommit.Value;
         }
 
         // The worker clones the base bundle from the Hand-off volume and leaves its Run bundle there (ADR 0100). It holds

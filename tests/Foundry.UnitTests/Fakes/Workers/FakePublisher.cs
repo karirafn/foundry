@@ -3,8 +3,11 @@ using Foundry.Modules.Workers.Features.Publisher;
 
 namespace Foundry.UnitTests.Fakes.Workers;
 
-/// <summary>Records each Prepare request and answers with a scripted outcome (by default, a prepared base).</summary>
-internal sealed class FakePublisher(PrepareOutcome? outcome = null) : IPublisher
+/// <summary>
+/// Records each Prepare request and answers with a scripted outcome (by default, a prepared base, carrying
+/// <paramref name="reviewPacket"/> or an empty packet when the request names a review).
+/// </summary>
+internal sealed class FakePublisher(PrepareOutcome? outcome = null, ReviewPacketFacts? reviewPacket = null) : IPublisher
 {
     public static readonly CommitSha DefaultBranchHead = CommitSha.From("1111111111111111111111111111111111111111");
 
@@ -19,7 +22,8 @@ internal sealed class FakePublisher(PrepareOutcome? outcome = null) : IPublisher
         _requests.Add(request);
 
         PrepareOutcome prepared = new PrepareOutcome.Prepared(
-            new RunBase(DefaultBranchHead, request.RunBranch is null ? null : RunBranchHead));
+            new RunBase(DefaultBranchHead, request.RunBranch is null ? null : RunBranchHead),
+            request.Review is null ? null : reviewPacket ?? new ReviewPacketFacts([], patchId: null));
 
         return Task.FromResult(outcome ?? prepared);
     }
