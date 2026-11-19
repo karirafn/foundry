@@ -186,6 +186,19 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasColumnType("TEXT")
             .HasColumnName("supplied_open_issue_numbers");
 
+        // Bounded by what Foundry computes at dispatch: the reviewed diff's paths and the issue's criteria.
+        builder.Property(r => r.SuppliedReviewFacts)
+            .HasConversion(ReviewValueConverters.SuppliedFactsConverter, ReviewValueConverters.SuppliedFactsComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("supplied_review_facts");
+
+        builder.Property(r => r.ReviewVerdict)
+            .HasConversion(ReviewValueConverters.VerdictConverter, ReviewValueConverters.VerdictComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("review_verdict");
+
         builder.Property(r => r.Toolchain)
             .HasConversion(ToolchainValueConverters.OptionalConverter, ToolchainValueConverters.OptionalComparer)
             .HasColumnType("TEXT")

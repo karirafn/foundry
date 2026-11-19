@@ -82,6 +82,17 @@ public sealed class StartingRun : WorkerRun
         StoreSuppliedOpenIssueNumbers([.. openReferencedNumbers.Concat(indexNumbers).Distinct()]);
     }
 
+    /// <summary>
+    /// Records the facts code computed for a review run (ADR 0114): its pull request, reviewed commit and patch-id, its
+    /// classified changed paths and the flag over them, and the issue's acceptance criteria. Later states carry them, so
+    /// the verdict is checked against the same facts after a restart.
+    /// </summary>
+    public void RecordSuppliedReviewFacts(SuppliedReviewFacts suppliedReviewFacts)
+    {
+        ArgumentNullException.ThrowIfNull(suppliedReviewFacts);
+        StoreSuppliedReviewFacts(suppliedReviewFacts);
+    }
+
     public ActiveRun Activate(
         ContainerId containerId,
         BranchName? branchName,

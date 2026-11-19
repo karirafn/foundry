@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
@@ -129,7 +130,8 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary = null,
         RunVerdict? verdict = null,
-        string? containerOutput = null)
+        string? containerOutput = null,
+        RecordedReviewVerdict? reviewVerdict = null)
     {
         CompletedRun completed = CompletedRun.FromPublishing(
             this,
@@ -138,7 +140,8 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
             pullRequestUrl,
             resultSummary,
             verdict ?? Verdict,
-            containerOutput);
+            containerOutput,
+            reviewVerdict);
         AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }
