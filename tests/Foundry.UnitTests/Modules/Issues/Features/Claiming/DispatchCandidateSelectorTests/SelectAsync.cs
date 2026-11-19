@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -56,7 +57,8 @@ public sealed class SelectAsync : IAsyncDisposable
         IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
         IIssueBlockerQueries? issueBlockerQueries = null,
-        IGlobalSettingsQueries? settingsQueries = null)
+        IGlobalSettingsQueries? settingsQueries = null,
+        IPostExitProviderQueries? branchWorkQueries = null)
     {
         return new DispatchCandidateSelector(
             _dbContext,
@@ -66,7 +68,8 @@ public sealed class SelectAsync : IAsyncDisposable
             ClaimTimeRecheckFactory.Create(
                 _dbContext,
                 issueBlockerQueries ?? new StubIssueBlockerQueries(),
-                _domainEventDispatcher),
+                _domainEventDispatcher,
+                branchWorkQueries),
             settingsQueries ?? new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
     }
@@ -374,7 +377,8 @@ public sealed class SelectAsync : IAsyncDisposable
         outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
             Unresolvable: 0,
             Blocked: 2,
-            BlockerReadFailed: 0));
+            ReadFailed: 0,
+            BranchAdopted: 0));
 
         _dbContext.ChangeTracker.Clear();
         (await _dbContext.Set<QueuedIssue>().CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
@@ -429,7 +433,103 @@ public sealed class SelectAsync : IAsyncDisposable
         outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
             Unresolvable: 0,
             Blocked: 0,
-            BlockerReadFailed: 1));
+            ReadFailed: 1,
+            BranchAdopted: 0));
+    }
+
+    [Fact]
+    public async Task WhenHeadCandidateBranchHasWork_AdoptsItAsContinuationAndSelectsNextSameRepositoryCandidate()
+    {
+        // Arrange — MaxConcurrentWorkers 1: issue 2 only fits once issue 1 leaves the Fresh queue
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue head = SeedQueuedIssue(repoId, issueNumber: 1);
+        FreshQueuedIssue next = SeedQueuedIssue(repoId, issueNumber: 2);
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries()
+            .WithCommitsAhead(head.GeneratedBranchName.Value, 1);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]),
+            branchWorkQueries: branchQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(next.Id);
+
+        _dbContext.ChangeTracker.Clear();
+        Issue adopted = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.Id == head.Id, TestContext.Current.CancellationToken);
+        adopted.ShouldBeOfType<ContinuationQueuedIssue>().BranchName.ShouldBe(head.GeneratedBranchName.Value);
+    }
+
+    [Fact]
+    public async Task WhenOnlyCandidateBranchHasWork_ReturnsAllCandidatesSkippedWithAdoptedCount()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repoId, issueNumber: 1);
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries()
+            .WithCommitsAhead(queued.GeneratedBranchName.Value, 2);
+
+        DispatchCandidateSelector sut = BuildSelector(branchWorkQueries: branchQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 0,
+            ReadFailed: 0,
+            BranchAdopted: 1));
+    }
+
+    [Fact]
+    public async Task WhenAdoptedContinuationIsSelectedOnALaterPass_DispatchesAsContinuationOnTheBranch()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repoId, issueNumber: 1);
+        string branchName = queued.GeneratedBranchName.Value;
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries().WithCommitsAhead(branchName, 1);
+        DispatchCandidateSelector sut = BuildSelector(branchWorkQueries: branchQueries);
+        await sut.SelectAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Context
+            .ShouldBe(new DispatchContext.Continuation(branchName, FailureReason: null));
+        branchQueries.RequestedBranches.ShouldBe([branchName]);
+    }
+
+    [Fact]
+    public async Task WhenBranchReadFails_SkipsCandidateAndKeepsItFresh()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repoId, issueNumber: 1);
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries()
+            .WithFailure(queued.GeneratedBranchName.Value);
+
+        DispatchCandidateSelector sut = BuildSelector(branchWorkQueries: branchQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 0,
+            ReadFailed: 1,
+            BranchAdopted: 0));
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<Issue>().SingleAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken))
+            .ShouldBeOfType<FreshQueuedIssue>();
     }
 
     private static PausedHost PausedHostFor(string host) =>
@@ -604,7 +704,8 @@ public sealed class SelectAsync : IAsyncDisposable
         outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
             Unresolvable: 0,
             Blocked: 1,
-            BlockerReadFailed: 0));
+            ReadFailed: 0,
+            BranchAdopted: 0));
     }
 
     [Fact]
@@ -624,7 +725,8 @@ public sealed class SelectAsync : IAsyncDisposable
         outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
             Unresolvable: 0,
             Blocked: 0,
-            BlockerReadFailed: 1));
+            ReadFailed: 1,
+            BranchAdopted: 0));
 
         _dbContext.ChangeTracker.Clear();
         Issue unchanged = await _dbContext.Set<Issue>()

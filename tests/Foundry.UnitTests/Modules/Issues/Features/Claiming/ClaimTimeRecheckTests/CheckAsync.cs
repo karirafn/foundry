@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -8,6 +9,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 using Shouldly;
 
@@ -125,6 +127,138 @@ public sealed class CheckAsync : IAsyncDisposable
         outcome.ShouldBe(ClaimTimeRecheckOutcome.Blocked);
         (await ReloadAsync(queued)).ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([1]);
         _domainEventDispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenFreshCandidateBranchHasCommitsAhead_ReturnsBranchHasWorkAndQueuesContinuationOnTheBranch()
+    {
+        // Arrange
+        FreshQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).FreshQueued());
+        string branchName = queued.GeneratedBranchName.Value;
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries().WithCommitsAhead(branchName, 1);
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries(), _domainEventDispatcher, branchQueries);
+
+        // Act
+        ClaimTimeRecheckOutcome outcome = await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(ClaimTimeRecheckOutcome.BranchHasWork);
+        ContinuationQueuedIssue continuation = (await ReloadAsync(queued)).ShouldBeOfType<ContinuationQueuedIssue>();
+        continuation.Context.ShouldBe(new DispatchContext.Continuation(branchName, FailureReason: null));
+        _domainEventDispatcher.DispatchedEvents.OfType<IssueContinuationQueued>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenFreshCandidateBranchIsAdopted_LogsIssueBranchAndCommitCount()
+    {
+        // Arrange
+        FreshQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).FreshQueued());
+        string branchName = queued.GeneratedBranchName.Value;
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries().WithCommitsAhead(branchName, 3);
+        CapturingLogger<ClaimTimeRecheck> logger = new();
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries(), _domainEventDispatcher, branchQueries, logger);
+
+        // Act
+        await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        (LogLevel level, string message, _) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Information);
+        message.ShouldContain("#7");
+        message.ShouldContain(branchName);
+        message.ShouldContain("3 commit(s)");
+    }
+
+    [Fact]
+    public async Task WhenFreshCandidateBranchDoesNotExist_ReturnsClearWithoutStateChange()
+    {
+        // Arrange
+        FreshQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).FreshQueued());
+        StubBranchWorkQueries branchQueries = new();
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries(), _domainEventDispatcher, branchQueries);
+
+        // Act
+        ClaimTimeRecheckOutcome outcome = await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(ClaimTimeRecheckOutcome.Clear);
+        branchQueries.RequestedBranches.ShouldBe([queued.GeneratedBranchName.Value]);
+        (await ReloadAsync(queued)).ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenFreshCandidateBranchHasNoCommitsAhead_ReturnsClearWithoutStateChange()
+    {
+        // Arrange
+        FreshQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).FreshQueued());
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries()
+            .WithCommitsAhead(queued.GeneratedBranchName.Value, 0);
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries(), _domainEventDispatcher, branchQueries);
+
+        // Act
+        ClaimTimeRecheckOutcome outcome = await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(ClaimTimeRecheckOutcome.Clear);
+        (await ReloadAsync(queued)).ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenFreshCandidateBranchReadFails_ReturnsReadFailedWithoutStateChange()
+    {
+        // Arrange
+        FreshQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).FreshQueued());
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries()
+            .WithFailure(queued.GeneratedBranchName.Value);
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries(), _domainEventDispatcher, branchQueries);
+
+        // Act
+        ClaimTimeRecheckOutcome outcome = await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(ClaimTimeRecheckOutcome.ReadFailed);
+        (await ReloadAsync(queued)).ShouldBeOfType<FreshQueuedIssue>();
+        _domainEventDispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTriageCandidateIsChecked_DoesNotReadItsBranch()
+    {
+        // Arrange
+        TriageQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).TriageQueued());
+        StubBranchWorkQueries branchQueries = new();
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries(), _domainEventDispatcher, branchQueries);
+
+        // Act
+        ClaimTimeRecheckOutcome outcome = await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(ClaimTimeRecheckOutcome.Clear);
+        branchQueries.RequestedBranches.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenFreshCandidateGainedBlocker_DoesNotReadItsBranch()
+    {
+        // Arrange
+        FreshQueuedIssue queued = Seed(new IssueBuilder().WithIssueNumber(7).FreshQueued());
+        StubBranchWorkQueries branchQueries = new StubBranchWorkQueries()
+            .WithCommitsAhead(queued.GeneratedBranchName.Value, 1);
+        ClaimTimeRecheck sut = ClaimTimeRecheckFactory.Create(
+            _dbContext, new StubIssueBlockerQueries().WithBlockers(7, 99), _domainEventDispatcher, branchQueries);
+
+        // Act
+        ClaimTimeRecheckOutcome outcome = await sut.CheckAsync(queued, CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(ClaimTimeRecheckOutcome.Blocked);
+        branchQueries.RequestedBranches.ShouldBeEmpty();
     }
 
     private TIssue Seed<TIssue>(TIssue issue)

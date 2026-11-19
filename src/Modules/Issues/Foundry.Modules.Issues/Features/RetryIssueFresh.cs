@@ -17,9 +17,11 @@ namespace Foundry.Modules.Issues.Features;
 
 /// <summary>
 /// Retries a <see cref="ContinuableFailedIssue"/> from scratch: deletes its work branch on the
-/// provider, then requeues the issue fresh. The worker pre-creates its branch from the default
-/// branch and treats an existing branch as reusable, so the branch must be gone before the next
-/// dispatch — otherwise the "fresh" worker would pick up the previous commits.
+/// provider, then requeues the issue fresh. A Fresh run starts from the default branch and gets no
+/// issue branch in its base bundle, so a surviving branch is never built on: the run's publish would
+/// collide with it and diverge to a side branch, and the claim-time branch check would instead
+/// requeue the issue as a Continuation on it. The branch must therefore be gone before the next
+/// dispatch.
 /// </summary>
 internal static class RetryIssueFresh
 {

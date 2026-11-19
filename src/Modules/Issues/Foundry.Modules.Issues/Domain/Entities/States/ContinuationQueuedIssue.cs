@@ -39,7 +39,10 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
     public override BranchNameValue? DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
-        new DispatchContext.Continuation(BranchName, FailureReason) { ContinuedWithoutAnswer = ContinuedWithoutAnswer };
+        new DispatchContext.Continuation(BranchName, FailureReason.Length == 0 ? null : FailureReason)
+        {
+            ContinuedWithoutAnswer = ContinuedWithoutAnswer,
+        };
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -71,6 +74,22 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
                 $"The previous run's work could not join commits pushed to {source.BranchName} during the run and was pushed to {source.SideBranchName} instead.",
         };
         queued.FailureReason = reason.Length > FailureReasonMaxLength ? reason[..FailureReasonMaxLength] : reason;
+        return queued;
+    }
+
+    /// <summary>
+    /// A Fresh claim found the issue's branch already carrying commits the default branch lacks, so the claim continues
+    /// that work instead of re-implementing the issue. No prior run failed, so there is no failure reason.
+    /// </summary>
+    internal static ContinuationQueuedIssue FromFreshQueued(
+        FreshQueuedIssue source,
+        BranchNameValue branchName,
+        DateTimeOffset transitionedAt)
+    {
+        ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
+        queued.CopySharedPropertiesFrom(source);
+        queued.BranchName = branchName.Value;
+        queued.FailureReason = string.Empty;
         return queued;
     }
 

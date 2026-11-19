@@ -37,7 +37,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
     public override DispatchContext Context =>
         new DispatchContext.Fresh(GeneratedBranchName.Value) { ContinuedWithoutAnswer = ContinuedWithoutAnswer };
 
-    private BranchName GeneratedBranchName =>
+    internal BranchName GeneratedBranchName =>
         BranchName.Generate(KindClassification, IssueNumber, Title);
 
     internal static FreshQueuedIssue FromBlocked(BlockedIssue blocked, DateTimeOffset transitionedAt)
@@ -89,6 +89,17 @@ public sealed class FreshQueuedIssue : QueuedIssue
         BlockedIssue blocked = BlockedIssue.FromQueued(this, blockers, transitionedAt);
         AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
         return blocked;
+    }
+
+    /// <summary>
+    /// The issue's branch already carries commits the default branch lacks (work from a run Foundry has no record of),
+    /// so the issue continues on that branch instead of re-implementing it from the default branch.
+    /// </summary>
+    public ContinuationQueuedIssue AdoptBranch(DateTimeOffset transitionedAt)
+    {
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromFreshQueued(this, GeneratedBranchName, transitionedAt);
+        AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 
     /// <summary>Re-triage: an operator sends the queued issue back to triage.</summary>
