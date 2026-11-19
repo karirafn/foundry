@@ -265,6 +265,10 @@ export function repositoryStatusTag(
 }
 
 /** Splits a slug into its namespace (trailing `/` included, `''` when none) and its name. */
+export function repositoryDeletionMessage(slug: string): string {
+  return `Foundry will stop monitoring "${slug}", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.`;
+}
+
 export function splitRepositorySlug(slug: string): { namespace: string; name: string } {
   const nameStart = slug.lastIndexOf('/') + 1;
   return { namespace: slug.slice(0, nameStart), name: slug.slice(nameStart) };

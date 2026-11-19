@@ -28,6 +28,7 @@ public sealed class JsonRoundTrip
     [InlineData(FailureCategory.BlockerCycleToken)]
     [InlineData(FailureCategory.BlockerLinkFailedToken)]
     [InlineData(FailureCategory.IssueClosedToken)]
+    [InlineData(FailureCategory.RepositoryRemovedToken)]
     public void WhenSerialized_EmitsFlatTokenString(string token)
     {
         // Arrange
@@ -58,6 +59,7 @@ public sealed class JsonRoundTrip
     [InlineData(FailureCategory.BlockerCycleToken)]
     [InlineData(FailureCategory.BlockerLinkFailedToken)]
     [InlineData(FailureCategory.IssueClosedToken)]
+    [InlineData(FailureCategory.RepositoryRemovedToken)]
     public void WhenDeserializedFromTokenString_ProducesEqualCategory(string token)
     {
         // Arrange

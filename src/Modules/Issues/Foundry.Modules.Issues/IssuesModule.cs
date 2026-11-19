@@ -9,6 +9,7 @@ using Foundry.Modules.Issues.Features.CredentialReactions;
 using Foundry.Modules.Issues.Features.Dependencies;
 using Foundry.Modules.Issues.Features.DispatchReactions;
 using Foundry.Modules.Issues.Features.ProviderReactions;
+using Foundry.Modules.Issues.Features.RepositoryReactions;
 using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Issues.Features.WorkerReactions;
@@ -64,6 +65,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ReviewRunCompleted, ReviewRunCompletedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
+        services.AddIntegrationEventHandler<MonitoredRepositoryRemoved, MonitoredRepositoryRemovedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestHeadMoved, ProviderPullRequestHeadMovedHandler>();

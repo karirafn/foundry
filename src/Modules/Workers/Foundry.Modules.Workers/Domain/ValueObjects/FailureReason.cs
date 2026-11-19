@@ -25,6 +25,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(PublishExpired), typeDiscriminator: FailureReason.PublishExpiredToken)]
 [JsonDerivedType(typeof(RunDiscarded), typeDiscriminator: FailureReason.RunDiscardedToken)]
 [JsonDerivedType(typeof(IssueClosed), typeDiscriminator: FailureReason.IssueClosedToken)]
+[JsonDerivedType(typeof(RepositoryRemoved), typeDiscriminator: FailureReason.RepositoryRemovedToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -46,6 +47,7 @@ public abstract record FailureReason
     public const string PublishExpiredToken = FailureCategory.PublishExpiredToken;
     public const string RunDiscardedToken = FailureCategory.RunDiscardedToken;
     public const string IssueClosedToken = FailureCategory.IssueClosedToken;
+    public const string RepositoryRemovedToken = FailureCategory.RepositoryRemovedToken;
 
     private FailureReason()
     {
@@ -72,6 +74,7 @@ public abstract record FailureReason
         PublishExpired => PublishExpiredToken,
         RunDiscarded => RunDiscardedToken,
         IssueClosed => IssueClosedToken,
+        RepositoryRemoved => RepositoryRemovedToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -99,6 +102,7 @@ public abstract record FailureReason
         RunDiscarded => "The run was discarded: its unpublished commits were deleted and nothing was pushed",
         IssueClosed =>
             "The issue was closed on the provider before the run's work was published: its unpublished commits were deleted and nothing was pushed",
+        RepositoryRemoved => "The run was discarded because its repository was removed from Foundry: nothing was pushed",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -195,4 +199,10 @@ public abstract record FailureReason
     /// published, so its commits were deleted and nothing was pushed.
     /// </summary>
     public sealed record IssueClosed : FailureReason;
+
+    /// <summary>
+    /// The run's repository was removed from Foundry while its work waited unpublished (ADR 0117): the work can never be
+    /// published, so its commits were deleted and nothing was pushed.
+    /// </summary>
+    public sealed record RepositoryRemoved : FailureReason;
 }

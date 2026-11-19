@@ -7,6 +7,7 @@ import {
   formatPollInterval,
   repositorySettingTags,
   repositoryStatusTag,
+  repositoryDeletionMessage,
   repositoryUpdatesLine,
   splitRepositorySlug,
 } from './repository.model';
@@ -214,5 +215,17 @@ describe('repositorySettingTags', () => {
       mergeWhenChecksPass: true,
       rebaseAfterRun: false,
     }))).toEqual(['3 workers', 'No review', 'Merges on pass', 'No rebase']);
+  });
+});
+
+describe('repositoryDeletionMessage', () => {
+  it('should state every consequence of deleting the repository', () => {
+    // Act
+    const message = repositoryDeletionMessage('acme/api');
+
+    // Assert
+    expect(message).toBe(
+      'Foundry will stop monitoring "acme/api", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.'
+    );
   });
 });

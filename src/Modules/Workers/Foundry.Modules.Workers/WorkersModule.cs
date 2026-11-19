@@ -92,6 +92,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
         services.AddIntegrationEventHandler<IssueClosedWithUnpublishedRun, IssueClosedWithUnpublishedRunHandler>();
+        services.AddIntegrationEventHandler<MonitoredRepositoryRemoved, MonitoredRepositoryRemovedHandler>();
         services.AddIntegrationEventHandler<ReviewRunCompleted, ReviewCommentPoster>();
         services.AddIntegrationEventHandler<WorkerImageSettingsChanged, WorkerImageSettingsChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();

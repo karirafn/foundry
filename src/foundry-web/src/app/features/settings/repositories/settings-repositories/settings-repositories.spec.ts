@@ -302,7 +302,7 @@ describe('SettingsRepositoriesComponent', () => {
     // Assert — the shared dialog asks, not the native confirm
     expect(dialog.open).toBe(true);
     expect(dialog.querySelector('.confirm-dialog__message')?.textContent?.trim()).toBe(
-      `Delete repository "${REPO_1.slug}"? Foundry will stop monitoring it and remove its webhook.`
+      `Foundry will stop monitoring "${REPO_1.slug}", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.`
     );
     expect(nativeConfirm).not.toHaveBeenCalled();
     httpMock.expectNone(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);

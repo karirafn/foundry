@@ -109,6 +109,7 @@ public sealed class AutomaticRetry
         FailureCategory.BlockerCycleToken,
         FailureCategory.BlockerLinkFailedToken,
         FailureCategory.IssueClosedToken,
+        FailureCategory.RepositoryRemovedToken,
     ];
 
     [Theory]
