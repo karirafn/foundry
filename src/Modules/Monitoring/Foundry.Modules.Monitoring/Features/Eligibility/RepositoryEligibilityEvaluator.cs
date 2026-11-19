@@ -263,7 +263,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         }
 
         return probe is WritePermissionProbeResult.Missing
-            ? new WriteProbeVerdict.Denied()
+            ? new WriteProbeVerdict.Denied(ProbedAt: now)
             : new WriteProbeVerdict.Granted();
     }
 
@@ -281,7 +281,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         {
             // Transport failure — stamp the attempt time so the next automatic retry is one cooldown away.
             Result<bool>.Failure => new WriteProbeVerdict.Unknown(LastAttemptedAt: now),
-            Result<bool>.Success { Value: false } => new WriteProbeVerdict.Denied(),
+            Result<bool>.Success { Value: false } => new WriteProbeVerdict.Denied(ProbedAt: now),
             _ => new WriteProbeVerdict.Granted(),
         };
     }

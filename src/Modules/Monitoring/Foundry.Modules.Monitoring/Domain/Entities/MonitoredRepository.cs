@@ -21,11 +21,18 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     /// <summary>
     /// Minimum interval between automatic write-probe re-attempts for a repository parked at
-    /// <see cref="WriteProbeVerdict.Unknown"/>. Passed into <see cref="IsDueForWriteProbe"/> by
-    /// callers (mirroring how <see cref="IsDueForPoll"/> receives its interval) so the poller and
-    /// tests share one source of truth.
+    /// <see cref="WriteProbeVerdict.Unknown"/>. <see cref="IsDueForWriteProbe"/> picks it from the verdict.
     /// </summary>
     internal static readonly TimeSpan WriteProbeCooldown = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Minimum interval between automatic write-probe re-attempts for a repository parked at
+    /// <see cref="WriteProbeVerdict.Denied"/>. Longer than <see cref="WriteProbeCooldown"/> because a
+    /// denied probe is a definitive answer and each GitHub probe sequence spends write POSTs against
+    /// the secondary rate limit; it exists at all because a permission gained in place on the
+    /// provider raises no credential event (ADR 0115).
+    /// </summary>
+    internal static readonly TimeSpan DeniedWriteProbeCooldown = TimeSpan.FromHours(1);
 
     /// <summary>Length of the opaque webhook hook id (16 random bytes, lower-case hex).</summary>
     public const int WebhookHookIdLength = 32;
@@ -295,26 +302,23 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     /// <summary>
     /// Returns <see langword="true"/> when the repository should have its write probe re-run on the next
-    /// poll cycle: the stored verdict is <see cref="WriteProbeVerdict.Unknown"/> and either the probe
-    /// was never attempted (<see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/> is <see langword="null"/>)
-    /// or <paramref name="cooldown"/> has elapsed since the last attempt (strict &lt; boundary, mirroring
-    /// <see cref="IsDueForPoll"/>). Returns <see langword="false"/> for <see cref="WriteProbeVerdict.Granted"/>
-    /// and <see cref="WriteProbeVerdict.Denied"/> unconditionally — those verdicts are event-triggered.
+    /// poll cycle. For <see cref="WriteProbeVerdict.Unknown"/> that is when the probe was never attempted
+    /// or <see cref="WriteProbeCooldown"/> has elapsed since <see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/>;
+    /// for <see cref="WriteProbeVerdict.Denied"/> when <see cref="WriteProbeVerdict.Denied.ProbedAt"/> is
+    /// unknown or <see cref="DeniedWriteProbeCooldown"/> has elapsed since it. Both use a strict &lt; boundary,
+    /// mirroring <see cref="IsDueForPoll"/>. Returns <see langword="false"/> for
+    /// <see cref="WriteProbeVerdict.Granted"/>, which stays event-triggered so steady-state polling sends no
+    /// write probes.
     /// </summary>
-    public bool IsDueForWriteProbe(TimeSpan cooldown, DateTimeOffset now)
+    public bool IsDueForWriteProbe(DateTimeOffset now) => WriteProbeVerdict switch
     {
-        if (WriteProbeVerdict is not WriteProbeVerdict.Unknown unknown)
-        {
-            return false;
-        }
+        WriteProbeVerdict.Unknown unknown => HasCooldownElapsed(unknown.LastAttemptedAt, WriteProbeCooldown, now),
+        WriteProbeVerdict.Denied denied => HasCooldownElapsed(denied.ProbedAt, DeniedWriteProbeCooldown, now),
+        _ => false,
+    };
 
-        if (unknown.LastAttemptedAt is null)
-        {
-            return true;
-        }
-
-        return unknown.LastAttemptedAt.Value + cooldown < now;
-    }
+    private static bool HasCooldownElapsed(DateTimeOffset? lastProbedAt, TimeSpan cooldown, DateTimeOffset now)
+        => lastProbedAt is null || lastProbedAt.Value + cooldown < now;
 
     public Result Update(TimeSpan? pollInterval, bool isActive, int maxConcurrentWorkers)
     {
