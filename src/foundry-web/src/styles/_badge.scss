@@ -58,6 +58,8 @@ $badge-outlined-variants: (
   retry-exhausted: (var(--fd-state-failed), var(--fd-text-error)),
   // Publishing is active work, but the agent has stopped.
   publishing: (var(--fd-accent-working), var(--fd-text-activity)),
+  // A catch-up wait: nothing is wrong, so the same neutral outline as a cancelled run.
+  catch-up-waiting: (var(--fd-text-secondary), var(--fd-text-secondary)),
   // Attention needed, but the run's work is safe on a side branch.
   branch-diverged: (var(--fd-text-warning), var(--fd-text-warning)),
   // Diff gate reasons for a reverted file.

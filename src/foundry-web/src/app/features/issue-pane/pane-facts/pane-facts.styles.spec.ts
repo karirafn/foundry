@@ -69,6 +69,16 @@ describe('publish badge styles (#787)', () => {
     expect(body).toContain('color: var(--fd-text-warning)');
   });
 
+  it('outlines the catch-up-waiting chip in the secondary text colour', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--catch-up-waiting');
+
+    // Assert
+    expect(body).toContain('background: transparent');
+    expect(body).toContain('border: 1px solid var(--fd-text-secondary)');
+    expect(body).toContain('color: var(--fd-text-secondary)');
+  });
+
   it('fills the publish-failed chip with the failed state colour', () => {
     // Act
     const body = ruleBody(compiledCss(stateBadgePath), '.badge--publish-failed');

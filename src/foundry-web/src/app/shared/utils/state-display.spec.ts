@@ -2,6 +2,7 @@ import { STATE_ARIA_LABELS, STATE_CSS_CLASSES, STATE_LABELS, cardAccentFor, reso
 import { RETRIAGEABLE_STATES, RETRYABLE_STATES, WORKING_STATES } from './issue-state';
 import type { IssueState } from './issue-state';
 import type { RevisionTriggerKind } from './revision-trigger-kind';
+import { CODE_STEPS, type CodeStep } from '../../features/issues/issue.model';
 
 describe('cardAccentFor', () => {
   // Working states → 'working'
@@ -186,7 +187,7 @@ describe('secret-blocked state display (#788)', () => {
 
   it('should resolve publish_blocked to the SECRET DETECTED display', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('publish_blocked');
+    const display = resolveStateDisplay('publish_blocked', { codeStep: null });
 
     // Assert
     expect(display).toEqual({
@@ -208,7 +209,7 @@ describe('secret-blocked state display (#788)', () => {
 
   it('should show RUN DISCARDED for a failed issue whose run was discarded', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('failed', { failureClassification: 'run_discarded' });
+    const display = resolveStateDisplay('failed', { codeStep: null, failureClassification: 'run_discarded' });
 
     // Assert
     expect(display.label).toBe('RUN DISCARDED');
@@ -236,7 +237,7 @@ describe('resolveStateDisplay', () => {
   for (const c of triggerCases) {
     it(`should resolve "${c.label}" with the state's badge class for ${c.state} triggered by ${c.kind}`, () => {
       // Arrange / Act
-      const display = resolveStateDisplay(c.state, { revisionTriggerKind: c.kind });
+      const display = resolveStateDisplay(c.state, { codeStep: null, revisionTriggerKind: c.kind });
 
       // Assert
       expect(display).toEqual({ label: c.label, ariaLabel: c.ariaLabel, cssClass: STATE_CSS_CLASSES[c.state] });
@@ -249,7 +250,7 @@ describe('resolveStateDisplay', () => {
     for (const kind of [null, undefined, 'some_future_trigger']) {
       it(`should fall back to the state display for ${state} when the trigger kind is ${String(kind)}`, () => {
         // Arrange / Act
-        const display = resolveStateDisplay(state, { revisionTriggerKind: kind as RevisionTriggerKind | null | undefined });
+        const display = resolveStateDisplay(state, { codeStep: null, revisionTriggerKind: kind as RevisionTriggerKind | null | undefined });
 
         // Assert
         expect(display).toEqual({
@@ -261,9 +262,9 @@ describe('resolveStateDisplay', () => {
     }
   }
 
-  it('should fall back to the state display when called without options', () => {
+  it('should fall back to the state display with no overriding option', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('in_progress');
+    const display = resolveStateDisplay('in_progress', { codeStep: null });
 
     // Assert
     expect(display).toEqual({ label: 'IN PROGRESS', ariaLabel: 'in progress', cssClass: 'badge--in-progress' });
@@ -271,7 +272,7 @@ describe('resolveStateDisplay', () => {
 
   it('should ignore a trigger kind on a non-revision state', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('awaiting_input', { revisionTriggerKind: 'rebase_conflict' });
+    const display = resolveStateDisplay('awaiting_input', { codeStep: null, revisionTriggerKind: 'rebase_conflict' });
 
     // Assert
     expect(display).toEqual({ label: 'AWAITING INPUT', ariaLabel: 'awaiting input', cssClass: 'badge--awaiting-input' });
@@ -280,7 +281,7 @@ describe('resolveStateDisplay', () => {
   for (const state of ['failed', 'continuable_failed'] as IssueState[]) {
     it(`should resolve the failure category display for ${state} with a known failure classification`, () => {
       // Arrange / Act
-      const display = resolveStateDisplay(state, { failureClassification: 'credits_exhausted' });
+      const display = resolveStateDisplay(state, { codeStep: null, failureClassification: 'credits_exhausted' });
 
       // Assert
       expect(display).toEqual({
@@ -293,7 +294,7 @@ describe('resolveStateDisplay', () => {
 
   it('should fall back to the state display for failed with an unknown failure classification', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('failed', { failureClassification: 'some_unknown_category' });
+    const display = resolveStateDisplay('failed', { codeStep: null, failureClassification: 'some_unknown_category' });
 
     // Assert
     expect(display).toEqual({ label: 'FAILED', ariaLabel: 'failed', cssClass: 'badge--failed' });
@@ -302,6 +303,7 @@ describe('resolveStateDisplay', () => {
   it('should show the trigger label for revision_failed even with a failure classification', () => {
     // Arrange / Act
     const display = resolveStateDisplay('revision_failed', {
+      codeStep: null,
       failureClassification: 'credits_exhausted',
       revisionTriggerKind: 'rebase_conflict',
     });
@@ -312,11 +314,51 @@ describe('resolveStateDisplay', () => {
 
   it('should ignore a failure classification on a non-failed state', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('triage_failed', { failureClassification: 'non_zero_exit' });
+    const display = resolveStateDisplay('triage_failed', { codeStep: null, failureClassification: 'non_zero_exit' });
 
     // Assert
     expect(display).toEqual({ label: 'TRIAGE FAILED', ariaLabel: 'triage failed', cssClass: 'badge--triage-failed' });
   });
+});
+
+describe('catch-up wait display', () => {
+  it('should show CATCH-UP QUEUED for a merge_pending issue waiting to catch up', () => {
+    // Arrange / Act
+    const display = resolveStateDisplay('merge_pending', { codeStep: 'catch_up_waiting' });
+
+    // Assert
+    expect(display).toEqual({
+      label: 'CATCH-UP QUEUED',
+      ariaLabel: 'waiting to catch up',
+      cssClass: 'badge--catch-up-waiting',
+    });
+  });
+
+  const otherSteps: (CodeStep | null)[] = [...CODE_STEPS.filter((step) => step !== 'catch_up_waiting'), null];
+
+  for (const step of otherSteps) {
+    it(`should show MERGING for a merge_pending issue with code step ${String(step)}`, () => {
+      // Arrange / Act
+      const display = resolveStateDisplay('merge_pending', { codeStep: step });
+
+      // Assert
+      expect(display).toEqual({ label: 'MERGING', ariaLabel: 'merging', cssClass: 'badge--merge-pending' });
+    });
+  }
+
+  for (const state of ['rebase_pending', 'checks_pending', 'review', 'in_progress'] as IssueState[]) {
+    it(`should ignore a catch-up wait on ${state}`, () => {
+      // Arrange / Act
+      const display = resolveStateDisplay(state, { codeStep: 'catch_up_waiting' });
+
+      // Assert
+      expect(display).toEqual({
+        label: STATE_LABELS[state],
+        ariaLabel: STATE_ARIA_LABELS[state],
+        cssClass: STATE_CSS_CLASSES[state],
+      });
+    });
+  }
 });
 
 describe('triage_blocked display (ADR 0102)', () => {

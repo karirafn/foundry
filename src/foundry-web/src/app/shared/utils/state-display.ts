@@ -1,6 +1,7 @@
 import { IssueState, WORKING_STATES } from './issue-state';
 import { getFailureCategoryDisplay } from './failure-category';
 import type { RevisionTriggerKind } from './revision-trigger-kind';
+import type { CodeStep } from '../../features/issues/issue.model';
 
 export const STATE_LABELS: Record<IssueState, string> = {
   detected: 'DETECTED',
@@ -105,6 +106,8 @@ export interface StateDisplayOptions {
   readonly revisionTriggerKind?: RevisionTriggerKind | null;
   /** Set while Foundry publishes a working run's commits, or retries a failed publish. */
   readonly publishPhase?: 'publishing' | 'retrying' | null;
+  /** Required so no caller can forget it and silently show MERGING for a catch-up wait. */
+  readonly codeStep: CodeStep | null;
 }
 
 type RevisionState = Extract<IssueState, 'revision_queued' | 'revision_in_progress' | 'revision_failed'>;
@@ -154,12 +157,18 @@ function triggerLabelFor(state: IssueState, kind: RevisionTriggerKind | null | u
 
 /**
  * The single source of an issue's state label, ARIA phrase and badge class.
- * Precedence: failure category, then revision trigger, then the plain state.
+ * Precedence: publish phase (working states only), then catch-up wait (merge_pending only), then
+ * failure category, then revision trigger, then the plain state.
  */
-export function resolveStateDisplay(state: IssueState, options: StateDisplayOptions = {}): StateDisplay {
+export function resolveStateDisplay(state: IssueState, options: StateDisplayOptions): StateDisplay {
   const publish = publishDisplayFor(state, options.publishPhase);
   if (publish !== null) {
     return publish;
+  }
+
+  const catchUp = catchUpDisplayFor(state, options.codeStep);
+  if (catchUp !== null) {
+    return catchUp;
   }
 
   const classification = options.failureClassification;
@@ -176,6 +185,13 @@ export function resolveStateDisplay(state: IssueState, options: StateDisplayOpti
   }
 
   return { label: STATE_LABELS[state], ariaLabel: STATE_ARIA_LABELS[state], cssClass: STATE_CSS_CLASSES[state] };
+}
+
+function catchUpDisplayFor(state: IssueState, codeStep: CodeStep | null): StateDisplay | null {
+  if (state !== 'merge_pending' || codeStep !== 'catch_up_waiting') {
+    return null;
+  }
+  return { label: 'CATCH-UP QUEUED', ariaLabel: 'waiting to catch up', cssClass: 'badge--catch-up-waiting' };
 }
 
 function publishDisplayFor(

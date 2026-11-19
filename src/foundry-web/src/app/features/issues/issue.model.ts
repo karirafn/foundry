@@ -24,7 +24,14 @@ export type PublishPhase = 'publishing' | 'retrying';
  */
 export type IssueStage = 'triage' | 'implement' | 'awaiting_review' | 'done';
 
-export const CODE_STEPS = ['publishing', 'publish_retrying', 'rebasing', 'checks', 'merging'] as const;
+export const CODE_STEPS = [
+  'publishing',
+  'publish_retrying',
+  'rebasing',
+  'checks',
+  'merging',
+  'catch_up_waiting',
+] as const;
 
 /** The step Foundry's own code runs for the issue, with no worker involved. */
 export type CodeStep = (typeof CODE_STEPS)[number];

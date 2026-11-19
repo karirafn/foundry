@@ -149,6 +149,18 @@ describe('IssueService', () => {
     expect(service.issues()[0].codeStep).toBe(step);
   });
 
+  it('should carry a catch-up wait through loadIssues as catch_up_waiting', () => {
+    // Arrange
+    const wire = { ...mockSummary, state: 'merge_pending', codeStep: 'catch_up_waiting' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [wire], nextCursor: null });
+
+    // Assert
+    expect(service.issues()[0].codeStep).toBe('catch_up_waiting');
+  });
+
   it('should map an unknown code step to null on loadIssues', () => {
     // Arrange
     const wire = { ...mockSummary, state: 'merge_pending', codeStep: 'not_a_step' };
