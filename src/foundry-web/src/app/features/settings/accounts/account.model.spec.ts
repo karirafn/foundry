@@ -15,6 +15,7 @@ const ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -87,6 +88,7 @@ describe('account.model', () => {
 
       // Assert
       expect(problem).toEqual({
+        kind: 'token',
         tone: 'warning',
         message: "The account token can't be decrypted. Re-enter it on the account to resume.",
         actionLabel: 'Re-enter token',
@@ -99,6 +101,7 @@ describe('account.model', () => {
 
       // Assert
       expect(problem).toEqual({
+        kind: 'token',
         tone: 'error',
         message: 'The provider rejected the account token. Enter a new token on the account to resume.',
         actionLabel: 'Enter new token',

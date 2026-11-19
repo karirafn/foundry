@@ -33,16 +33,16 @@ public sealed class HandleAsync
         requirements.ShouldSatisfyAllConditions(
             () => requirements.ProviderType.ShouldBe("github"),
             () => requirements.TokenTypeLabel.ShouldBe("GitHub fine-grained personal access token"),
-            () => requirements.Scopes.ShouldBe([
-                "Contents (read and write)",
-                "Issues (read and write)",
-                "Pull requests (read and write)",
-                "Administration (read and write)",
-                "Webhooks (read and write)",
-                "Commit statuses (read)",
-                "Actions (read)",
-                "Metadata (read)",
-                "Workflows (read and write)"]),
+            () => requirements.Permissions.ShouldBe([
+                new TokenPermissionRequirement("Contents (read and write)", "probe"),
+                new TokenPermissionRequirement("Issues (read and write)", "probe"),
+                new TokenPermissionRequirement("Pull requests (read and write)", "probe"),
+                new TokenPermissionRequirement("Administration (read and write)", "probe"),
+                new TokenPermissionRequirement("Webhooks (read and write)", "probe"),
+                new TokenPermissionRequirement("Commit statuses (read)", "probe"),
+                new TokenPermissionRequirement("Actions (read)", "probe"),
+                new TokenPermissionRequirement("Metadata (read)", "always-granted"),
+                new TokenPermissionRequirement("Workflows (read and write)", "unverifiable")]),
             () => requirements.ResourceOwnerHint.ShouldNotBeNull());
     }
 
@@ -66,7 +66,9 @@ public sealed class HandleAsync
         requirements.ShouldSatisfyAllConditions(
             () => requirements.ProviderType.ShouldBe("gitlab"),
             () => requirements.TokenTypeLabel.ShouldBe("GitLab personal access token"),
-            () => requirements.Scopes.ShouldBe(["api", "Maintainer role"]),
+            () => requirements.Permissions.ShouldBe([
+                new TokenPermissionRequirement("api", "scope"),
+                new TokenPermissionRequirement("Maintainer role", "role")]),
             () => requirements.ResourceOwnerHint.ShouldBeNull());
     }
 

@@ -16,6 +16,7 @@ const ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -135,6 +136,7 @@ describe('account.model token expiry', () => {
 
       // Assert
       expect(problem).toEqual({
+        kind: 'token',
         tone: 'warning',
         expiry: { status: 'expired', expiresAt: EXPIRES_AT },
         message: 'GitLab can reject it at any time, which pauses monitoring.',
@@ -148,6 +150,7 @@ describe('account.model token expiry', () => {
 
       // Assert
       expect(problem).toEqual({
+        kind: 'token',
         tone: 'warning',
         expiry: { status: 'expiringSoon', expiresAt: EXPIRES_AT },
         message: 'Enter a replacement token before it expires.',

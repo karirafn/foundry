@@ -16,6 +16,8 @@ export type CreateAccountConflictResponse = Schemas['CreateAccountConflictRespon
 export type UpdateAccountConflictResponse = Schemas['UpdateAccountConflictResponse'];
 export type TakeoverValidationResponse = Schemas['TakeoverValidationResponse'];
 export type TokenRequirements = Schemas['TokenRequirements'];
+export type TokenPermissionRequirement = Schemas['TokenPermissionRequirement'];
+export type DeniedRepositorySummary = Schemas['DeniedRepositorySummary'];
 
 // Client-side refinements layered over the generated string wire type.
 // The API returns these fields as open strings so they are intentionally not generated.
@@ -119,9 +121,12 @@ export type AccountStatusTag =
   | { readonly kind: 'token-unreadable'; readonly label: 'Token unreadable'; readonly tone: 'warning' }
   | { readonly kind: 'token-invalid'; readonly label: 'Token invalid'; readonly tone: 'error' }
   | { readonly kind: 'token-expired'; readonly label: 'Token expired'; readonly tone: 'warning' }
-  | { readonly kind: 'token-expiring'; readonly label: 'Token expires soon'; readonly tone: 'warning' };
+  | { readonly kind: 'token-expiring'; readonly label: 'Token expires soon'; readonly tone: 'warning' }
+  | { readonly kind: 'missing-permissions'; readonly label: 'Missing permissions'; readonly tone: 'warning' };
 
-export interface AccountProblem {
+/** A problem with the token itself: unreadable, invalid or near its expiry. */
+export interface TokenProblem {
+  readonly kind: 'token';
   readonly tone: Exclude<AccountStatusTone, 'neutral'>;
   readonly message: string;
   /** Visible button text; the button's aria-label is `${actionLabel} for ${account.name}`. */
@@ -130,24 +135,54 @@ export interface AccountProblem {
   readonly expiry?: ResolvedTokenExpiry;
 }
 
+/** How the operator gives the token what it is missing; each has its own remedy text and actions. */
+export type MissingPermissionsRemedy = 'github-fine-grained' | 'github-classic' | 'gitlab';
+
+/** A present token that lacks permissions Foundry needs on some of the account's repositories. */
+export interface MissingPermissionsProblem {
+  readonly kind: 'missing-permissions';
+  readonly tone: 'warning';
+  /** Set when the expiry also warrants a warning; the row renders the expiry phrase before the message. */
+  readonly expiry?: ResolvedTokenExpiry;
+  readonly message: string;
+  /** The union of every denied repository's missing labels, in permission-list order. */
+  readonly missingPermissions: readonly string[];
+  readonly repositories: readonly DeniedRepositorySummary[];
+  readonly remedy: MissingPermissionsRemedy;
+  readonly remedyText: string;
+  /** Where a GitHub fine-grained token's permissions are edited; null for the other remedies. */
+  readonly editToken: { readonly url: string; readonly host: string } | null;
+}
+
+export type AccountProblem = TokenProblem | MissingPermissionsProblem;
+
 const NOT_CONFIGURED_TAG: AccountStatusTag = { kind: 'not-configured', label: 'Not configured', tone: 'neutral' };
 const TOKEN_UNREADABLE_TAG: AccountStatusTag = { kind: 'token-unreadable', label: 'Token unreadable', tone: 'warning' };
 const TOKEN_INVALID_TAG: AccountStatusTag = { kind: 'token-invalid', label: 'Token invalid', tone: 'error' };
 const TOKEN_EXPIRED_TAG: AccountStatusTag = { kind: 'token-expired', label: 'Token expired', tone: 'warning' };
 const TOKEN_EXPIRING_TAG: AccountStatusTag = { kind: 'token-expiring', label: 'Token expires soon', tone: 'warning' };
+const MISSING_PERMISSIONS_TAG: AccountStatusTag = {
+  kind: 'missing-permissions',
+  label: 'Missing permissions',
+  tone: 'warning',
+};
 
-const TOKEN_UNREADABLE_PROBLEM: AccountProblem = {
+const TOKEN_UNREADABLE_PROBLEM: TokenProblem = {
+  kind: 'token',
   tone: 'warning',
   message: "The account token can't be decrypted. Re-enter it on the account to resume.",
   actionLabel: 'Re-enter token',
 };
-const TOKEN_INVALID_PROBLEM: AccountProblem = {
+const TOKEN_INVALID_PROBLEM: TokenProblem = {
+  kind: 'token',
   tone: 'error',
   message: 'The provider rejected the account token. Enter a new token on the account to resume.',
   actionLabel: 'Enter new token',
 };
 
-// Both take the whole account, not its TokenStatus, because a present token also reads its expiry.
+// Both take the whole account, not its TokenStatus, because a present token also reads its denied
+// repositories and its expiry. Precedence: an absent, unreadable or invalid token first, then missing
+// permissions, then expiry.
 // An invalid, unreadable or absent token shows no expiry: its date is stale or there is none.
 
 /** The one status tag an account row shows, or null when the token is healthy. */
@@ -155,7 +190,9 @@ export function accountStatusTag(account: AccountSummary): AccountStatusTag | nu
   const status = resolveTokenStatus(account);
   switch (status) {
     case 'present':
-      return expiryStatusTag(resolveTokenExpiry(account.tokenExpiry));
+      return deniedRepositories(account).length > 0
+        ? MISSING_PERMISSIONS_TAG
+        : expiryStatusTag(resolveTokenExpiry(account.tokenExpiry));
     case 'absent':
       return NOT_CONFIGURED_TAG;
     case 'unreadable':
@@ -172,7 +209,10 @@ export function accountProblem(account: AccountSummary): AccountProblem | null {
   const status = resolveTokenStatus(account);
   switch (status) {
     case 'present':
-      return expiryProblem(resolveTokenExpiry(account.tokenExpiry), providerDisplayName(account.providerType));
+      return (
+        missingPermissionsProblem(account)
+        ?? expiryProblem(resolveTokenExpiry(account.tokenExpiry), providerDisplayName(account.providerType))
+      );
     case 'absent':
       return null;
     case 'unreadable':
@@ -195,10 +235,11 @@ function expiryStatusTag(expiry: ResolvedTokenExpiry): AccountStatusTag | null {
   }
 }
 
-function expiryProblem(expiry: ResolvedTokenExpiry, provider: string): AccountProblem | null {
+function expiryProblem(expiry: ResolvedTokenExpiry, provider: string): TokenProblem | null {
   switch (expiry.status) {
     case 'expired':
       return {
+        kind: 'token',
         tone: 'warning',
         expiry,
         message: `${provider} can reject it at any time, which pauses monitoring.`,
@@ -206,6 +247,7 @@ function expiryProblem(expiry: ResolvedTokenExpiry, provider: string): AccountPr
       };
     case 'expiringSoon':
       return {
+        kind: 'token',
         tone: 'warning',
         expiry,
         message: 'Enter a replacement token before it expires.',
@@ -216,8 +258,97 @@ function expiryProblem(expiry: ResolvedTokenExpiry, provider: string): AccountPr
   }
 }
 
+/** The label a classic GitHub token reports when only the user's admin role on the repository can grant the access. */
+export const GITHUB_CLASSIC_ADMIN_ROLE_LABEL = 'Admin role on the repository';
+
+const RECHECK_SENTENCE =
+  "Foundry re-checks these repositories every hour; a repository's Re-check button checks it right away.";
+
+/** The account's denied repositories; a response predating the field has none. */
+export function deniedRepositories(account: AccountSummary): readonly DeniedRepositorySummary[] {
+  return (account as { deniedRepositories?: DeniedRepositorySummary[] }).deniedRepositories ?? [];
+}
+
+/**
+ * The union of the repositories' missing labels in permission-list order. Each repository's labels are
+ * already in list order, so a new label goes just before the next label of its repository that the union
+ * already holds, or at the end when there is none.
+ */
+function unionInListOrder(repositories: readonly DeniedRepositorySummary[]): string[] {
+  const union: string[] = [];
+  for (const repository of repositories) {
+    repository.missingPermissions.forEach((label, index) => {
+      if (union.includes(label)) {
+        return;
+      }
+      const next = repository.missingPermissions.slice(index + 1).find((later) => union.includes(later));
+      union.splice(next === undefined ? union.length : union.indexOf(next), 0, label);
+    });
+  }
+  return union;
+}
+
+function missingPermissionsProblem(account: AccountSummary): MissingPermissionsProblem | null {
+  const repositories = deniedRepositories(account);
+  if (repositories.length === 0) {
+    return null;
+  }
+
+  const missingPermissions = unionInListOrder(repositories);
+  const count = repositories.length;
+  const expiry = resolveTokenExpiry(account.tokenExpiry);
+  const remedy = missingPermissionsRemedy(account.providerType, missingPermissions);
+
+  return {
+    kind: 'missing-permissions',
+    tone: 'warning',
+    ...(isTokenExpiryWarning(expiry) ? { expiry } : {}),
+    message:
+      `This token is missing permissions Foundry needs, so Foundry won't start work on ${count} `
+      + `${count === 1 ? 'repository' : 'repositories'} until it has them.`,
+    missingPermissions,
+    repositories,
+    remedy,
+    remedyText: remedyText(remedy, account.name),
+    editToken: remedy === 'github-fine-grained' ? githubEditTokenLink(account.baseUrl) : null,
+  };
+}
+
+function missingPermissionsRemedy(providerType: string, missingPermissions: readonly string[]): MissingPermissionsRemedy {
+  if (providerType.toLowerCase() === 'gitlab') {
+    return 'gitlab';
+  }
+  return missingPermissions.includes(GITHUB_CLASSIC_ADMIN_ROLE_LABEL) ? 'github-classic' : 'github-fine-grained';
+}
+
+function remedyText(remedy: MissingPermissionsRemedy, name: string): string {
+  switch (remedy) {
+    case 'github-fine-grained':
+      return `Edit the token's permissions on GitHub, or create a new token, then re-check. ${RECHECK_SENTENCE}`;
+    case 'github-classic':
+      return `Ask a repository admin to give the token's user, ${name}, the Admin role on these repositories, then re-check. ${RECHECK_SENTENCE}`;
+    case 'gitlab':
+      return `Give the token's user, ${name}, the Maintainer role on these repositories, then re-check. ${RECHECK_SENTENCE}`;
+    default:
+      return assertNever(remedy);
+  }
+}
+
+/** GitHub's fine-grained token list on the account's host: the creation URL's origin, without `/new`. */
+function githubEditTokenLink(baseUrl: string): { readonly url: string; readonly host: string } | null {
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null;
+    }
+    return { url: `${parsed.origin}/settings/personal-access-tokens`, host: parsed.host };
+  } catch {
+    return null;
+  }
+}
+
 function assertNever(value: never): never {
-  throw new Error(`Unhandled token status: ${String(value)}`);
+  throw new Error(`Unhandled value: ${String(value)}`);
 }
 
 export function affectedStatusLabel(status: AffectedRepositoryStatus | string): string {

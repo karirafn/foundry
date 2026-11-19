@@ -194,7 +194,7 @@ internal sealed partial class GitHubHttpClient(
 
     // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
     // Each permission entry keeps its classic scope apart from its fine-grained display label, so the scopes
-    // checked here stay decoupled from the labels RequiredScopes.For(github) shows in the UI.
+    // checked here stay decoupled from the labels the token requirements list shows in the UI.
     private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = TokenPermissions.GitHubClassicScopes;
 
     private static readonly JsonSerializerOptions JsonOptions = new()

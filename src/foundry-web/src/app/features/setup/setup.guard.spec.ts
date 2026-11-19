@@ -16,6 +16,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },

@@ -14,6 +14,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -27,6 +28,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -929,7 +931,7 @@ describe('AccountService', () => {
     const mockRequirements: TokenRequirements = {
       providerType: 'github',
       tokenTypeLabel: 'GitHub fine-grained personal access token',
-      scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+      permissions: [{ label: 'Contents (read and write)', verification: 'probe' }, { label: 'Workflows (read and write)', verification: 'unverifiable' }],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
       resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
     };
@@ -952,7 +954,7 @@ describe('AccountService', () => {
     const mockRequirements: TokenRequirements = {
       providerType: 'gitlab',
       tokenTypeLabel: 'GitLab personal access token',
-      scopes: ['api'],
+      permissions: [{ label: 'api', verification: 'scope' }],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
       resourceOwnerHint: null,
     };
@@ -975,7 +977,7 @@ describe('AccountService', () => {
     const mockRequirements: TokenRequirements = {
       providerType: 'github',
       tokenTypeLabel: 'GitHub fine-grained personal access token',
-      scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+      permissions: [{ label: 'Contents (read and write)', verification: 'probe' }, { label: 'Workflows (read and write)', verification: 'unverifiable' }],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
       resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
     };
@@ -1341,14 +1343,14 @@ describe('AccountService', () => {
     const githubRequirements: TokenRequirements = {
       providerType: 'github',
       tokenTypeLabel: 'GitHub fine-grained personal access token',
-      scopes: ['Contents (read and write)', 'Issues (read and write)', 'Pull requests (read and write)', 'Workflows (write)', 'Metadata (read)'],
+      permissions: [{ label: 'Contents (read and write)', verification: 'probe' }, { label: 'Workflows (read and write)', verification: 'unverifiable' }],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
       resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
     };
     const gitlabRequirements: TokenRequirements = {
       providerType: 'gitlab',
       tokenTypeLabel: 'GitLab personal access token',
-      scopes: ['api'],
+      permissions: [{ label: 'api', verification: 'scope' }],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
       resourceOwnerHint: null,
     };

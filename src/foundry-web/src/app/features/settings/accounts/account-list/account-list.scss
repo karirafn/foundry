@@ -167,6 +167,27 @@
   &__btn--primary {
     @include settings-list-button-primary;
   }
+
+  // An external link styled as a button; the mixin targets buttons, so the link needs flex centring.
+  &__link-btn {
+    align-items: center;
+    display: inline-flex;
+    gap: var(--fd-spacing-xs);
+    text-decoration: none;
+  }
+
+  &__repo-link {
+    color: var(--fd-text-link);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
 }
 
 @include settings-list-narrow-rows(account-list, account-list);

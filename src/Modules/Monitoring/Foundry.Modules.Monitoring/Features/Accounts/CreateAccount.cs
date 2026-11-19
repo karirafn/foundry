@@ -318,7 +318,10 @@ internal static partial class CreateAccount
                     priorStatusSnapshot,
                     cancellationToken);
 
-                CredentialSummary summaryAfterTakeover = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
+                CredentialSummary summaryAfterTakeover = AccountsDatabaseHelpers.ToSummary(
+                credential,
+                timeProvider.GetUtcNow(),
+                await DeniedRepositories.ForAccountAsync(dbContext, credential.Id, cancellationToken));
 
                 return new Outcome.Created(new CredentialCreationResult(summaryAfterTakeover, affectedRepositories));
             }
@@ -339,7 +342,10 @@ internal static partial class CreateAccount
 
             await DispatchDomainEventsAsync(credential, cancellationToken);
 
-            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential, timeProvider.GetUtcNow());
+            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(
+                credential,
+                timeProvider.GetUtcNow(),
+                await DeniedRepositories.ForAccountAsync(dbContext, credential.Id, cancellationToken));
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));
         }

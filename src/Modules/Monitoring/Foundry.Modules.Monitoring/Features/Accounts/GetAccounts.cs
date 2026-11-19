@@ -45,9 +45,15 @@ internal static class GetAccounts
                 }
             }
 
+            IReadOnlyDictionary<CredentialId, IReadOnlyList<DeniedRepositorySummary>> deniedByAccount =
+                await DeniedRepositories.ByAccountAsync(dbContext, cancellationToken);
+
             DateTimeOffset now = timeProvider.GetUtcNow();
             List<CredentialSummary> summaries = credentials
-                .Select(credential => AccountsDatabaseHelpers.ToSummary(credential, now))
+                .Select(credential => AccountsDatabaseHelpers.ToSummary(
+                    credential,
+                    now,
+                    deniedByAccount.TryGetValue(credential.Id, out IReadOnlyList<DeniedRepositorySummary>? denied) ? denied : []))
                 .ToList();
 
             return Result<IReadOnlyList<CredentialSummary>>.Ok(summaries);

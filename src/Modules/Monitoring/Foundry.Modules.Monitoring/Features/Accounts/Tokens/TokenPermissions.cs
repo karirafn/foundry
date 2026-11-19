@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.Security.Cryptography;
 using System.Text;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -17,40 +18,49 @@ internal abstract record PermissionVerification
     /// </summary>
     internal abstract string? VersionToken { get; }
 
+    /// <summary>The wire name the token requirements list renders this kind of check by.</summary>
+    internal abstract string WireName { get; }
+
     /// <summary>Verified by the GitHub write probe for <paramref name="Permission"/>.</summary>
     internal sealed record WriteProbe(WritePermission Permission) : PermissionVerification
     {
         internal override string VersionToken => $"write-probe:{Permission}";
+        internal override string WireName => "probe";
     }
 
     /// <summary>Verified by the GitHub read probe for <paramref name="Permission"/>.</summary>
     internal sealed record ReadProbe(WritePermission Permission) : PermissionVerification
     {
         internal override string VersionToken => $"read-probe:{Permission}";
+        internal override string WireName => "probe";
     }
 
     /// <summary>Verified by the token user's GitLab role on the repository reaching <paramref name="MinimumAccessLevel"/>.</summary>
     internal sealed record GitLabRole(int MinimumAccessLevel) : PermissionVerification
     {
         internal override string VersionToken => $"gitlab-role:{MinimumAccessLevel}";
+        internal override string WireName => "role";
     }
 
     /// <summary>Verified by the token's scopes when the token is validated.</summary>
     internal sealed record Scope : PermissionVerification
     {
         internal override string VersionToken => "scope";
+        internal override string WireName => "scope";
     }
 
     /// <summary>Every token holds it.</summary>
     internal sealed record AlwaysGranted : PermissionVerification
     {
         internal override string? VersionToken => null;
+        internal override string WireName => "always-granted";
     }
 
     /// <summary>Cannot be verified before use.</summary>
     internal sealed record NotVerified : PermissionVerification
     {
         internal override string? VersionToken => null;
+        internal override string WireName => "unverifiable";
     }
 }
 
@@ -176,6 +186,12 @@ internal static class TokenPermissions
 
     internal static IReadOnlyList<TokenPermission> For(string providerType) =>
         ByProvider.TryGetValue(providerType, out IReadOnlyList<TokenPermission>? entries) ? entries : [];
+
+    /// <summary>What the account form and setup wizard list for <paramref name="providerType"/>, in list order.</summary>
+    internal static IReadOnlyList<TokenPermissionRequirement> RequirementsFor(string providerType) =>
+        For(providerType)
+            .Select(entry => new TokenPermissionRequirement(entry.Label, entry.VerifiedBy.WireName))
+            .ToList();
 
     /// <summary>The GitHub probes, write and read, in the order they run.</summary>
     internal static IReadOnlyList<WritePermission> GitHubProbes { get; } = GitHub

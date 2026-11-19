@@ -28,6 +28,7 @@ function account(id: string): AccountSummary {
     hasToken: true,
     tokenStatus: 'present',
     branchRulesTokenStatus: 'absent',
+    deniedRepositories: [],
     tokenInvalidSince: null,
     namespaces: [],
     tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -92,7 +93,12 @@ const RESUME_AT_REPOS = {
 };
 
 describe('SetupWizardComponent', () => {
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => {
+    const httpMock = TestBed.inject(HttpTestingController);
+    // The account step loads the token requirements list on every provider change; it is guidance only.
+    httpMock.match((request) => request.url.endsWith('/token-requirements'));
+    httpMock.verify();
+  });
 
   describe('progress', () => {
     it('should render four step labels: Auth, Account, Webhooks, Repositories', () => {

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { SetupAccountStepComponent } from './setup-account-step';
-import { AccountSummary, CredentialCreationResult, TokenValidationResult } from '../../settings/accounts/account.model';
+import { AccountSummary, CredentialCreationResult, TokenRequirements, TokenValidationResult } from '../../settings/accounts/account.model';
 
 function setup() {
   TestBed.resetTestingModule();
@@ -24,6 +24,7 @@ const CREATED_ACCOUNT: AccountSummary = {
   hasToken: true,
   tokenStatus: 'present',
   branchRulesTokenStatus: 'absent',
+  deniedRepositories: [],
   tokenInvalidSince: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
@@ -83,7 +84,12 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
 };
 
 describe('SetupAccountStepComponent', () => {
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => {
+    const httpMock = TestBed.inject(HttpTestingController);
+    // The account step loads the token requirements list on every provider change; it is guidance only.
+    httpMock.match((request) => request.url.endsWith('/token-requirements'));
+    httpMock.verify();
+  });
 
   it('should make its heading programmatically focusable', () => {
     // Arrange
@@ -1202,5 +1208,86 @@ describe('SetupAccountStepComponent', () => {
     const statusRegion = el.querySelector('[role="status"]');
     const srOnly = statusRegion?.querySelector('.sr-only');
     expect(srOnly?.textContent?.trim()).toBe('Error:');
+  });
+
+  describe('token requirements', () => {
+    const GITHUB_REQUIREMENTS: TokenRequirements = {
+      providerType: 'github',
+      tokenTypeLabel: 'GitHub fine-grained personal access token',
+      permissions: [
+        { label: 'Contents (read and write)', verification: 'probe' },
+        { label: 'Workflows (read and write)', verification: 'unverifiable' },
+      ],
+      creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry',
+      resourceOwnerHint: null,
+    };
+    const GITLAB_REQUIREMENTS: TokenRequirements = {
+      providerType: 'gitlab',
+      tokenTypeLabel: 'GitLab personal access token',
+      permissions: [
+        { label: 'api', verification: 'scope' },
+        { label: 'Maintainer role', verification: 'role' },
+      ],
+      creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+      resourceOwnerHint: null,
+    };
+
+    it('should show the GitHub requirements list between Base URL and Token', async () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      // Act
+      httpMock.expectOne('/api/providers/github/token-requirements').flush(GITHUB_REQUIREMENTS);
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const list = el.querySelector('fd-token-requirements');
+      expect(list?.querySelector('h3')?.id).toBe('setup-req-heading');
+      const labels = Array.from(el.querySelectorAll('.token-requirements__label'), (label) => label.textContent);
+      expect(labels).toEqual(['Contents (read and write)', 'Workflows (read and write)']);
+      const baseUrl = el.querySelector('#setup-base-url')!;
+      const token = el.querySelector('#setup-token')!;
+      expect(baseUrl.compareDocumentPosition(list!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(list!.compareDocumentPosition(token) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('should load the GitLab requirements when the provider changes to GitLab', async () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+      httpMock.expectOne('/api/providers/github/token-requirements').flush(GITHUB_REQUIREMENTS);
+      await new Promise((resolve) => setTimeout(resolve));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Act
+      const radios = el.querySelectorAll('input[type="radio"]') as NodeListOf<HTMLInputElement>;
+      Array.from(radios).find((r) => r.value === 'GitLab')!.click();
+      fixture.detectChanges();
+      httpMock.expectOne('/api/providers/gitlab/token-requirements').flush(GITLAB_REQUIREMENTS);
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+
+      // Assert
+      const labels = Array.from(el.querySelectorAll('.token-requirements__label'), (label) => label.textContent);
+      expect(labels).toEqual(['api', 'Maintainer role']);
+      expect(el.querySelector('.token-requirements__note')?.textContent).toContain('set on each repository, not on the token');
+    });
+
+    it('should show no requirements list when the requirements fail to load', async () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      // Act
+      httpMock.expectOne('/api/providers/github/token-requirements').flush('', { status: 404, statusText: 'Not Found' });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Assert
+      expect((fixture.nativeElement as HTMLElement).querySelector('fd-token-requirements')).toBeNull();
+    });
   });
 });

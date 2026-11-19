@@ -41,6 +41,7 @@ import { ProviderSelectorComponent } from '../provider-selector/provider-selecto
 import { AccountService } from '../account.service';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 import { TokenExpiryComponent } from '../token-expiry/token-expiry';
+import { TokenRequirementsComponent } from '../token-requirements/token-requirements';
 
 const GITHUB_BASE_URL = 'https://github.com';
 const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
@@ -48,7 +49,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
 @Component({
   selector: 'fd-account-form',
   standalone: true,
-  imports: [DatePipe, ProviderSelectorComponent, SpinnerComponent, TokenExpiryComponent],
+  imports: [DatePipe, ProviderSelectorComponent, SpinnerComponent, TokenExpiryComponent, TokenRequirementsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="account-form" role="region" aria-label="Account form" [attr.aria-busy]="saving() ? 'true' : null">
@@ -96,39 +97,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
       </div>
 
       @if (_tokenRequirements(); as req) {
-        <section class="account-form__requirements" aria-labelledby="account-form-req-heading">
-          <h3 id="account-form-req-heading" class="account-form__requirements-heading">
-            <svg class="account-form__requirements-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-            Token requirements
-          </h3>
-          <p class="account-form__requirements-text">
-            Create a <strong>{{ req.tokenTypeLabel }}</strong> with the following:
-          </p>
-          <ul class="account-form__requirements-scopes" aria-label="Required token permissions">
-            @for (scope of req.scopes; track scope) {
-              <li class="account-form__requirements-scope"><code>{{ scope }}</code></li>
-            }
-          </ul>
-          @if (req.resourceOwnerHint) {
-            <p id="account-form-owner-hint" class="account-form__requirements-owner-hint">{{ req.resourceOwnerHint }}</p>
-          }
-          @if (_createTokenUrl(); as url) {
-            <a class="account-form__requirements-link" [href]="url" target="_blank" rel="noopener noreferrer"
-               [attr.aria-describedby]="req.resourceOwnerHint ? 'account-form-owner-hint' : null">
-              Create token on {{ _resolvedHost() }}
-              <span class="account-form__requirements-link-icon" aria-hidden="true">↗</span>
-              <span class="sr-only">(opens in a new tab)</span>
-            </a>
-          } @else {
-            <p class="account-form__requirements-link-hint">
-              Enter a Base URL above to get a direct link to the token creation page.
-            </p>
-          }
-        </section>
+        <fd-token-requirements [requirements]="req" [baseUrl]="_baseUrl()" idPrefix="account-form" />
       }
 
       @if (_isEditMode()) {
@@ -634,48 +603,6 @@ export class AccountFormComponent implements OnInit {
     }
     return this.validationResult()?.accountName ?? null;
   });
-
-  protected readonly _resolvedHost: Signal<string> = computed(() => {
-    try {
-      return new URL(this._baseUrl()).host;
-    } catch {
-      return this._baseUrl();
-    }
-  });
-
-  protected readonly _createTokenUrl: Signal<string | null> = computed(() => {
-    const requirements = this._tokenRequirements();
-    if (!requirements) {
-      return null;
-    }
-    const template = requirements.creationUrlTemplate;
-    if (!template.includes('{baseUrl}')) {
-      return AccountFormComponent._isHttpUrl(template) ? template : null;
-    }
-    const rawBaseUrl = this._baseUrl().trim();
-    if (!rawBaseUrl) {
-      return null;
-    }
-    try {
-      const parsed = new URL(rawBaseUrl);
-      if (!AccountFormComponent._isHttpUrl(parsed.origin)) {
-        return null;
-      }
-      const url = template.replace('{baseUrl}', parsed.origin);
-      return AccountFormComponent._isHttpUrl(url) ? url : null;
-    } catch {
-      return null;
-    }
-  });
-
-  private static _isHttpUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    } catch {
-      return false;
-    }
-  }
 
   /** True only when the last resolved triple still matches current inputs — hides stale results after edits. */
   protected readonly _resultVisible: Signal<boolean> = computed(() => {
