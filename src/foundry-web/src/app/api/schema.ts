@@ -1497,6 +1497,7 @@ export interface components {
             outcome: components["schemas"]["ReviewVerdictOutcome"];
             reviewedCommit: string;
             patchId: null | string;
+            carriedFrom?: null | components["schemas"]["ReviewCarry"];
         };
         RefreshUsageResponse: {
             status: string;
@@ -1573,6 +1574,11 @@ export interface components {
         RequestRunDiscardResponse: {
             /** Format: uuid */
             workerRunId: string;
+        };
+        ReviewCarry: {
+            /** Format: uuid */
+            runId: string;
+            reviewedCommit: string;
         };
         /** @enum {unknown} */
         ReviewCategory: "Correctness" | "Criteria" | "Tests" | "Security" | "Quality" | "Design" | "Conventions";
