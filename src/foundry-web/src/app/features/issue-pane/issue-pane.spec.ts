@@ -178,6 +178,52 @@ describe('IssuePaneComponent', () => {
     expect(el.querySelector('.pane-clarifications__comment')?.textContent).toBe('Use v2.');
   });
 
+  it('shows the latest review between the status and the facts, loaded from the review run', async () => {
+    // Arrange
+    const { el, httpMock, render } = await setup();
+    const stateDetails = {
+      workerRunId: null,
+      branchName: 'feat/142-retry',
+      feedbackCutoffAt: null,
+      failureReason: null,
+      failedAt: null,
+      completedAt: null,
+      blockedBy: null,
+      transientRetry: null,
+      reviewRunId: 'review-run',
+    };
+
+    // Act
+    httpMock.expectOne('/api/issues/f').flush({ ...detail, state: 'revision_queued', stateDetails });
+    await render();
+    httpMock.expectOne('/api/workers/runs/review-run').flush({
+      ...runningRun,
+      workerRunId: 'review-run',
+      role: 'review',
+      state: 'completed',
+      reviewVerdict: {
+        summary: 'A test is missing.',
+        findings: [],
+        dimensions: [],
+        criteria: [],
+        tests: { assessment: 'Missing', reason: 'No test covers the retry.', coveringTests: [] },
+        outcome: 'ChangesRequested',
+        reviewedCommit: '0123456789abcdef0123456789abcdef01234567',
+        patchId: null,
+        carriedFrom: null,
+      },
+      productionChangedWithoutTests: true,
+      reviewCriteria: [],
+    });
+    await render();
+
+    // Assert
+    const layers = Array.from(el.querySelectorAll('fd-pane-status, fd-pane-review section, fd-pane-facts')).map((n) =>
+      n.tagName.toLowerCase());
+    expect(layers).toEqual(['fd-pane-status', 'section', 'fd-pane-facts']);
+    expect(el.querySelector('fd-pane-review .pane-review__outcome .badge')?.textContent?.trim()).toBe('Changes requested');
+  });
+
   it('renders the activity after the facts while a worker runs', async () => {
     // Arrange
     const { el, httpMock, render } = await setup();

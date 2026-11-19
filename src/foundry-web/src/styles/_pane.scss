@@ -1,0 +1,9 @@
+/// The issue pane's section-heading style: a small, uppercase, secondary-text h3 above each section.
+@mixin pane-section-heading {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--fd-spacing-sm);
+  text-transform: uppercase;
+}

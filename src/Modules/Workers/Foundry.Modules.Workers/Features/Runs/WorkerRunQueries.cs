@@ -149,6 +149,10 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 ? [.. toolchain.Entries.Select(entry => new WorkerRunTool(entry.Name, entry.Version))]
                 : null,
             ReviewVerdict = run.ReviewVerdict,
+            ProductionChangedWithoutTests = run.SuppliedReviewFacts?.ProductionChangedWithoutTests,
+            ReviewCriteria = run.SuppliedReviewFacts is { } facts
+                ? [.. facts.Criteria.Select(criterion => new WorkerRunReviewCriterion(criterion.Id, criterion.Text))]
+                : null,
         };
     }
 

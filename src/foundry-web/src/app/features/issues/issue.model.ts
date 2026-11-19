@@ -221,6 +221,8 @@ export interface IssueStateDetails {
   /** Set on a review issue whose review run failed open: `skipped` (ADR 0113). */
   reviewOutcome?: string | null;
   reviewSkippedReason?: string | null;
+  /** The run of the issue's latest review verdict, in any state, once one was handled (ADR 0113). */
+  reviewRunId?: string | null;
   awaitingInput?: AwaitingInputDetails | null;
   /** Set when the state is branch_diverged: the issue branch on the provider (URL built by the API). */
   branchUrl?: string | null;

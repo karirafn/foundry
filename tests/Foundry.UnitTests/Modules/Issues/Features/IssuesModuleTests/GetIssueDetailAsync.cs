@@ -932,6 +932,68 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheIssueHasALatestReview_StateDetailsCarryItsReviewRunId()
+    {
+        // Arrange
+        WorkerRunId reviewRunId = WorkerRunId.New();
+        RevisionQueuedIssue findingsFix = new IssueBuilder()
+            .WithWorkerRunId(reviewRunId)
+            .RevisionQueuedFromReviewFindings();
+        _dbContext.Set<Issue>().Add(findingsFix);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(findingsFix.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.StateDetails.ShouldNotBeNull()
+            .ReviewRunId.ShouldBe(reviewRunId.Value);
+    }
+
+    [Fact]
+    public async Task WhenAReviewQueuedIssueHasALatestReview_StateDetailsCarryItsReviewRunId()
+    {
+        // Arrange
+        WorkerRunId reviewRunId = WorkerRunId.New();
+        ReviewInProgressIssue reviewing = new IssueBuilder().WithWorkerRunId(reviewRunId).ReviewInProgress();
+        ReviewIssue review = (ReviewIssue)reviewing.ResolveVerdict(
+            ReviewVerdictOutcome.ApprovedForPerson,
+            patchId: null,
+            new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Adequate, "Covered."),
+            DateTimeOffset.UtcNow);
+        ReviewQueuedIssue requeued = (ReviewQueuedIssue)review
+            .RecheckAfterHeadMoved(DateTimeOffset.UtcNow)
+            .ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: true, headSha: "abc1234", DateTimeOffset.UtcNow);
+        _dbContext.Set<Issue>().Add(requeued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(requeued.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.StateDetails.ShouldNotBeNull()
+            .ReviewRunId.ShouldBe(reviewRunId.Value);
+    }
+
+    [Fact]
+    public async Task WhenTheIssueHasNoLatestReview_StateDetailsCarryNoReviewRunId()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.StateDetails.ShouldNotBeNull().ReviewRunId.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenReviewAfterSkippedReview_StateDetailsCarryReviewOutcomeAndReason()
     {
         // Arrange

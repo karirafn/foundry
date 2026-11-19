@@ -1,3 +1,4 @@
+import { components } from '../../api/schema';
 import { ToolchainEntry } from '../../core/models/toolchain.model';
 
 export type WorkerRunState = 'starting' | 'running' | 'publishing' | 'publish_failed' | 'publish_blocked' | 'completed' | 'failed';
@@ -84,7 +85,20 @@ export interface WorkerRunDetail {
   readonly confirmedFindings: readonly ConfirmedFinding[];
   /** The toolchain the run's container reported when it started, in its order; null when it reported none. */
   readonly toolchain: readonly ToolchainEntry[] | null;
+  /** The valid verdict a review run recorded, with the outcome Foundry derived from it; absent or null for any other run. */
+  readonly reviewVerdict?: RecordedReviewVerdict | null;
+  /** Foundry's own test check on a review run: production code changed while no test did; null without review facts. */
+  readonly productionChangedWithoutTests?: boolean | null;
+  /** The acceptance criteria Foundry supplied to a review run, which its verdict answers by id; null without review facts. */
+  readonly reviewCriteria?: readonly ReviewCriterion[] | null;
 }
+
+/** A review verdict as the run recorded it (ADR 0113). */
+export type RecordedReviewVerdict = components['schemas']['RecordedReviewVerdict'];
+export type ReviewFinding = components['schemas']['ReviewFinding'];
+export type ReviewCategory = components['schemas']['ReviewCategory'];
+export type ReviewVerdictOutcome = components['schemas']['ReviewVerdictOutcome'];
+export type ReviewCriterion = components['schemas']['WorkerRunReviewCriterion'];
 
 /** Run states in which the agent has stopped and Foundry owns the run's commits. */
 export const PUBLISH_RUN_STATES: ReadonlySet<WorkerRunState> = new Set<WorkerRunState>([

@@ -1,0 +1,234 @@
+@use 'sass:map';
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/badge' as *;
+@use '../../../../styles/pane' as *;
+
+// The outcome, severity, criterion and test-check chips take the shared pill shape; no state or outlined
+// modifier is emitted here.
+@include badge($states: (), $exclude-outlined: map.keys($badge-outlined-variants));
+
+:host {
+  display: block;
+}
+
+.pane-review {
+  font-size: 0.8125rem;
+  margin-bottom: var(--fd-spacing-xl);
+}
+
+.pane-review__heading {
+  @include pane-section-heading;
+}
+
+.pane-review__line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  margin: 0;
+
+  // Verdict text is unbounded: a long rule, criterion or path wraps inside the pane.
+  > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.pane-review__mono {
+  font-family: var(--fd-font-mono);
+}
+
+.pane-review__note {
+  color: var(--fd-text-secondary);
+}
+
+.pane-review__path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+// Outlined chips, like the Details triage chips; their pill shape and type come from the badge mixin (`.badge`).
+.pane-review__chip {
+  &--success {
+    border: 1px solid var(--fd-text-success);
+    color: var(--fd-text-success);
+  }
+
+  &--warning {
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &--neutral {
+    border: 1px solid var(--fd-text-secondary);
+    color: var(--fd-text-secondary);
+  }
+
+  &--error {
+    border: 1px solid var(--fd-text-error);
+    color: var(--fd-text-error);
+  }
+}
+
+.pane-review__summary {
+  color: var(--fd-text-primary);
+  line-height: 1.6;
+  margin: var(--fd-spacing-sm) 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+
+  &--clamped {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+}
+
+.pane-review__more,
+.pane-review__disclosure summary {
+  color: var(--fd-text-link);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  min-height: 32px;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+.pane-review__more {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.pane-review__disclosure {
+  margin-top: var(--fd-spacing-xs);
+
+  // The native marker stays; the line height fills the touch target.
+  summary {
+    display: list-item;
+    line-height: 32px;
+
+    @media (any-pointer: coarse) {
+      line-height: 44px;
+    }
+  }
+}
+
+.pane-review__items,
+.pane-review__covering {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  list-style: none;
+  margin: var(--fd-spacing-xs) 0 0;
+  padding: 0;
+}
+
+.pane-review__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+  min-width: 0;
+}
+
+.pane-review__body {
+  display: block;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.pane-review__covering {
+  gap: var(--fd-spacing-xs);
+}
+
+.pane-review__empty {
+  color: var(--fd-text-secondary);
+  margin: var(--fd-spacing-sm) 0 0;
+}
+
+.pane-review__check {
+  margin-top: var(--fd-spacing-sm);
+
+  // The check is a sentence; on a narrow pane it wraps rather than overflowing as one pill line.
+  .badge {
+    border-radius: var(--fd-radius-sm);
+    white-space: normal;
+  }
+}
+
+// The Details list grid.
+.pane-review__dimensions {
+  display: grid;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  grid-template-columns: minmax(7.5rem, max-content) 1fr;
+  margin: var(--fd-spacing-xs) 0 0;
+
+  dt {
+    color: var(--fd-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 479px) {
+    grid-template-columns: 1fr;
+
+    dd {
+      margin-bottom: var(--fd-spacing-xs);
+    }
+  }
+}
+
+.pane-review__status {
+  font-weight: 600;
+
+  &--success {
+    color: var(--fd-text-success);
+  }
+
+  &--warning {
+    color: var(--fd-text-warning);
+  }
+
+  &--secondary {
+    color: var(--fd-text-secondary);
+  }
+}
+
+.pane-review__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+}
+
+.pane-review__bar {
+  animation: fd-skeleton-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--fd-border-default) 0%,
+    var(--fd-bg-card-hover) 50%,
+    var(--fd-border-default) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--fd-radius-sm);
+  display: block;
+  height: 1rem;
+  width: 100%;
+
+  &--short {
+    width: 40%;
+  }
+}
