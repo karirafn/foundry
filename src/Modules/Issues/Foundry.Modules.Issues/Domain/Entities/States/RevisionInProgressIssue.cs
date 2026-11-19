@@ -143,6 +143,8 @@ public sealed class RevisionInProgressIssue : Issue
     // MarkUnchangedRebasePending signals the worker found nothing to change but the branch may still be behind
     // the default branch, so it is rebased all the same (ADR 0087).
     // The semantic distinction is preserved in logs and events without diverging the cutoff logic.
+    // They differ in one rule: an unchanged FailedChecks run spends the rest of the checks fix budget, because every
+    // new fix budget follows a push and another fix run on unchanged code would only repeat this one (issue #1140).
     // Do NOT merge them into one method.
 
     public RebasePendingIssue MarkRebasePending(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
@@ -152,6 +154,7 @@ public sealed class RevisionInProgressIssue : Issue
             this,
             new RebasePendingReason.AfterRun(),
             feedbackCutoffAt,
+            ChecksFixAttempts,
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -168,6 +171,7 @@ public sealed class RevisionInProgressIssue : Issue
             this,
             new RebasePendingReason.AfterRun(),
             feedbackCutoffAt,
+            UnchangedChecksFixAttempts(),
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -176,6 +180,9 @@ public sealed class RevisionInProgressIssue : Issue
             rebasePending.EnteredRebasePendingAt));
         return rebasePending;
     }
+
+    private int UnchangedChecksFixAttempts() =>
+        Trigger is RevisionTrigger.FailedChecks ? ChecksPendingIssue.ChecksMaxFixPushes : ChecksFixAttempts;
 
     // The cutoff the next review pass reads comments after. A ReviewFeedback trigger anchors to the newest comment
     // it consumed, so feedback posted after that batch is still read. Every other trigger (FailedChecks,

@@ -100,6 +100,7 @@ public sealed class RebasePendingIssue : Issue
         RevisionInProgressIssue source,
         RebasePendingReason.AfterRun reason,
         DateTimeOffset feedbackCutoffAt,
+        int checksFixAttempts,
         DateTimeOffset transitionedAt)
     {
         RebasePendingIssue rebasePending = new(source.Id, transitionedAt);
@@ -109,7 +110,7 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.PullRequestUrl = source.PullRequestUrl;
         rebasePending.EnteredRebasePendingAt = DateTimeOffset.UtcNow;
         rebasePending.FeedbackCutoffAt = feedbackCutoffAt;
-        rebasePending.ChecksFixAttempts = source.ChecksFixAttempts;
+        rebasePending.ChecksFixAttempts = checksFixAttempts;
         rebasePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         rebasePending.Reason = reason;
         return rebasePending;
