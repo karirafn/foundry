@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared.Markdown;
 
 namespace Foundry.Modules.Workers.Features.Publishing;
 
@@ -180,7 +181,7 @@ internal sealed partial record PullRequestText(string Title, string Body)
         foreach (RevertedFile file in revertedFiles)
         {
             section.Append("\n- ")
-                .Append(CodeSpan(file.Path))
+                .Append(ModelMarkdown.CodeSpan(file.Path))
                 .Append(": ")
                 .Append(ReasonOf(file.Reason))
                 .Append(" (")
@@ -223,11 +224,11 @@ internal sealed partial record PullRequestText(string Title, string Body)
         foreach (SecretFinding finding in findings)
         {
             section.Append("\n- ")
-                .Append(CodeSpan(finding.Path))
+                .Append(ModelMarkdown.CodeSpan(finding.Path))
                 .Append(" line ")
                 .Append(finding.Line.ToString(CultureInfo.InvariantCulture))
                 .Append(": rule ")
-                .Append(CodeSpan(finding.RuleId));
+                .Append(ModelMarkdown.CodeSpan(finding.RuleId));
         }
     }
 
@@ -237,22 +238,6 @@ internal sealed partial record PullRequestText(string Title, string Body)
         RevertedFileReason.Binary => "binary",
         _ => throw new UnreachableException($"Unhandled {nameof(RevertedFileReason)}: {reason}"),
     };
-
-    // A fence one backtick longer than the longest run inside the path keeps it one code span.
-    private static string CodeSpan(string text)
-    {
-        int longestRun = 0;
-        int run = 0;
-        foreach (char c in text)
-        {
-            run = c == '`' ? run + 1 : 0;
-            longestRun = Math.Max(longestRun, run);
-        }
-
-        string fence = new('`', longestRun + 1);
-        string padding = text.StartsWith('`') || text.EndsWith('`') ? " " : string.Empty;
-        return fence + padding + text + padding + fence;
-    }
 
     // Base 1024, one decimal, a trailing ".0" dropped: 940 B, 12.4 KB, 3.1 MB.
     private static string FileSize(long bytes)
