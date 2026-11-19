@@ -110,9 +110,55 @@ prepare_csharp_lsp() {
 #
 # Runs before prepare_csharp_lsp, so the C# LSP pre-restore uses it too.  A value
 # that does not decode prints one warning and the run continues without the
-# redirect; this never fails the bootstrap.
+# redirect.
+#
+# When Foundry passes FOUNDRY_PACKAGE_PROXY_URL, the proxy is then checked with
+# check_package_proxy, whether or not the config decoded; an unreachable proxy
+# emits the bootstrap-failure sentinel (stage=package-sources) and returns
+# non-zero, because a run that cannot restore writes code it can never build.
 # ---------------------------------------------------------------------------
 prepare_package_sources() {
+    write_package_source_config
+    if [[ -n "${FOUNDRY_PACKAGE_PROXY_URL:-}" ]]; then
+        check_package_proxy "$FOUNDRY_PACKAGE_PROXY_URL" || return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# check_package_proxy <url>
+#
+# Requests <url> once, unauthenticated, within PACKAGE_PROXY_TIMEOUT_SECONDS.
+# Any HTTP response, whatever its status (the proxy answers 404 at its base
+# path), means the proxy is reachable; only no response at all (DNS failure,
+# refused or unreachable connection, timeout) fails.  -q skips any curlrc and
+# nothing passes a credential, so the Run Source Token is never sent.
+# ---------------------------------------------------------------------------
+readonly PACKAGE_PROXY_TIMEOUT_SECONDS=10
+
+check_package_proxy() {
+    local url="$1"
+    local status
+    status="$(curl -q --silent --output /dev/null --write-out '%{http_code}' \
+        --max-time "$PACKAGE_PROXY_TIMEOUT_SECONDS" "$url" 2> /dev/null)" || true
+
+    if [[ -n "$status" && "$status" != "000" ]]; then
+        echo "Package sources: the package proxy answered (HTTP $status)" >&2
+        return 0
+    fi
+
+    local authority="${url#*://}"
+    authority="${authority%%/*}"
+    local host="${authority%:*}"
+    local port="${authority##*:}"
+    if [[ "$authority" != *:* ]]; then
+        host="$authority"
+        port="80"
+    fi
+    fail_bootstrap "package-sources" "no HTTP response from the package proxy at $host:$port within ${PACKAGE_PROXY_TIMEOUT_SECONDS}s; this run could not restore its packages"
+    return 1
+}
+
+write_package_source_config() {
     if [[ -z "${FOUNDRY_NUGET_CONFIG+set}" ]]; then
         return 0
     fi
@@ -589,7 +635,7 @@ unset _cred_dir
 # claude nor a repository build script it starts can push or call the provider.
 unset GH_TOKEN GITLAB_TOKEN GIT_PAT
 
-prepare_package_sources
+prepare_package_sources || exit 1
 
 # Resolve the run's role plugins before any clone work so a role this image
 # does not carry fails fast at stage=role.  The roles directory is baked into the

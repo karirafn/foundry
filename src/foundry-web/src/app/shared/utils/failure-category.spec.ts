@@ -134,6 +134,14 @@ describe('failure-category', () => {
     expect(display?.cssClass).toBe('badge--failure-provider-unreachable');
   });
 
+  it('should map package_source_unreachable to "PACKAGES UNREACHABLE" with the provider-unreachable warning outline', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('package_source_unreachable');
+
+    // Assert
+    expect(display).toEqual({ label: 'PACKAGES UNREACHABLE', cssClass: 'badge--failure-provider-unreachable' });
+  });
+
   it('should return display for credits_exhausted', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('credits_exhausted');

@@ -105,6 +105,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void PackageSourceUnreachable_ValueIsPackageSourceUnreachable()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.PackageSourceUnreachable;
+
+        // Assert
+        category.Value.ShouldBe("package_source_unreachable");
+    }
+
+    [Fact]
     public void TransientApiError_ValueMatchesToken()
     {
         // Arrange

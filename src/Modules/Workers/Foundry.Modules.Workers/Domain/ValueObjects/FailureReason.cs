@@ -14,6 +14,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(AuthInvalid), typeDiscriminator: FailureReason.AuthInvalidToken)]
 [JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
 [JsonDerivedType(typeof(ProviderUnreachable), typeDiscriminator: FailureReason.ProviderUnreachableToken)]
+[JsonDerivedType(typeof(PackageSourceUnreachable), typeDiscriminator: FailureReason.PackageSourceUnreachableToken)]
 [JsonDerivedType(typeof(TransientApiError), typeDiscriminator: FailureReason.TransientApiErrorToken)]
 [JsonDerivedType(typeof(CreditsExhausted), typeDiscriminator: FailureReason.CreditsExhaustedToken)]
 [JsonDerivedType(typeof(ModelUnavailable), typeDiscriminator: FailureReason.ModelUnavailableToken)]
@@ -34,6 +35,7 @@ public abstract record FailureReason
     public const string AuthInvalidToken = FailureCategory.AuthInvalidToken;
     public const string ProviderErrorToken = FailureCategory.ProviderErrorToken;
     public const string ProviderUnreachableToken = FailureCategory.ProviderUnreachableToken;
+    public const string PackageSourceUnreachableToken = FailureCategory.PackageSourceUnreachableToken;
     public const string TransientApiErrorToken = FailureCategory.TransientApiErrorToken;
     public const string CreditsExhaustedToken = FailureCategory.CreditsExhaustedToken;
     public const string ModelUnavailableToken = FailureCategory.ModelUnavailableToken;
@@ -59,6 +61,7 @@ public abstract record FailureReason
         AuthInvalid => AuthInvalidToken,
         ProviderError => ProviderErrorToken,
         ProviderUnreachable => ProviderUnreachableToken,
+        PackageSourceUnreachable => PackageSourceUnreachableToken,
         TransientApiError => TransientApiErrorToken,
         CreditsExhausted => CreditsExhaustedToken,
         ModelUnavailable => ModelUnavailableToken,
@@ -83,6 +86,7 @@ public abstract record FailureReason
         AuthInvalid => "Worker authentication failed",
         ProviderError providerError => providerError.Message,
         ProviderUnreachable providerUnreachable => $"Could not reach the git provider: {providerUnreachable.Detail}",
+        PackageSourceUnreachable packageSourceUnreachable => $"Could not reach the package proxy: {packageSourceUnreachable.Detail}",
         TransientApiError => "Transient Anthropic API fault",
         CreditsExhausted => "Credits exhausted",
         ModelUnavailable modelUnavailable =>
@@ -121,6 +125,12 @@ public abstract record FailureReason
     /// on any of its attempts. <see cref="Detail"/> carries git's last error, redacted.
     /// </summary>
     public sealed record ProviderUnreachable(string Detail) : FailureReason;
+
+    /// <summary>
+    /// The worker's entrypoint got no HTTP response from the Package Source Proxy before its agent started (ADR 0112),
+    /// so the run could never have restored its packages. <see cref="Detail"/> carries the entrypoint's line, redacted.
+    /// </summary>
+    public sealed record PackageSourceUnreachable(string Detail) : FailureReason;
 
     public sealed record TransientApiError : FailureReason;
 

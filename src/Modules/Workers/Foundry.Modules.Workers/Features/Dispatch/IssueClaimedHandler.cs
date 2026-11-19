@@ -44,6 +44,7 @@ internal sealed class IssueClaimedHandler(
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private const string NuGetConfigVariable = "FOUNDRY_NUGET_CONFIG";
+    private const string PackageProxyUrlVariable = "FOUNDRY_PACKAGE_PROXY_URL";
 
     private static readonly Error EmptyGitPatError =
         new("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings.");
@@ -496,11 +497,14 @@ internal sealed class IssueClaimedHandler(
         }
 
         // A repository with Package Sources restores them through the Package Source Proxy (ADR 0112); the entrypoint
-        // writes this config and points RestoreConfigFile at it. Base64 keeps the XML one env line.
+        // writes this config and points RestoreConfigFile at it. Base64 keeps the XML one env line. The entrypoint
+        // requests the proxy URL before Claude starts and fails the bootstrap when it gets no answer, so a run never
+        // writes code it cannot restore.
         if (startingRun.SourceToken is { } sourceToken
             && await repositoryDispatchQueries.GetWorkerNuGetConfigAsync(claimed.MonitoredRepositoryId, sourceToken.Value, cancellationToken) is { } nuGetConfig)
         {
             envVars[NuGetConfigVariable] = Convert.ToBase64String(Encoding.UTF8.GetBytes(nuGetConfig.Xml));
+            envVars[PackageProxyUrlVariable] = nuGetConfig.ProxyBaseUrl.AbsoluteUri;
         }
 
         // A restricted run gets no branch.

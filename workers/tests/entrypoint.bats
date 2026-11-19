@@ -3781,6 +3781,112 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# Package proxy check: with FOUNDRY_PACKAGE_PROXY_URL set, the entrypoint requests
+# the proxy once before the C# LSP pre-restore and claude.  Any HTTP response is
+# reachable; none fails the bootstrap at stage=package-sources.
+# ---------------------------------------------------------------------------
+
+# Starts an HTTP listener on 127.0.0.1 that answers every request 404, records
+# "proxy" in the order file and each request's headers in proxy_requests, and
+# prints its port once it is listening.
+start_package_proxy_listener() {
+    local port_file="$BATS_TEST_TMPDIR/proxy_port"
+    node -e '
+        const fs = require("fs");
+        const [orderFile, requestsFile, portFile] = process.argv.slice(1);
+        const server = require("http").createServer((req, res) => {
+            fs.appendFileSync(orderFile, "proxy\n");
+            fs.appendFileSync(requestsFile, JSON.stringify({ url: req.url, headers: req.headers }) + "\n");
+            res.writeHead(404);
+            res.end();
+        });
+        server.listen(0, "127.0.0.1", () => fs.writeFileSync(portFile, String(server.address().port)));
+    ' "$BATS_TEST_TMPDIR/order" "$BATS_TEST_TMPDIR/proxy_requests" "$port_file" > /dev/null 2>&1 3>&- &
+    local _
+    for _ in $(seq 1 100); do
+        [ -s "$port_file" ] && break
+        sleep 0.05
+    done
+    cat "$port_file"
+}
+
+@test "package proxy: without FOUNDRY_PACKAGE_PROXY_URL no request is made" {
+    set_required_env
+    unset FOUNDRY_PACKAGE_PROXY_URL
+    make_fake_git
+    make_fake_claude_record_package_source_env
+    cat > "$FAKE_BIN_DIR/curl" <<EOF
+#!/bin/bash
+echo curl >> "$BATS_TEST_TMPDIR/curl_called"
+exit 7
+EOF
+    chmod +x "$FAKE_BIN_DIR/curl"
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$BATS_TEST_TMPDIR/curl_called" ]
+    [[ "$stderr" != *"stage=package-sources"* ]]
+}
+
+@test "package proxy: a listener that answers 404 is reachable and is asked once before the LSP restore and claude, with no credential" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet_record_restore_config
+    make_fake_claude_record_package_source_env
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
+    local port
+    port="$(start_package_proxy_listener)"
+    export FOUNDRY_PACKAGE_PROXY_URL="http://127.0.0.1:$port/package-sources/"
+    FOUNDRY_NUGET_CONFIG="$(printf '%s' '<configuration><packageSourceCredentials><group><add key="ClearTextPassword" value="run-source-token" /></group></packageSourceCredentials></configuration>' | base64 -w 0)"
+    export FOUNDRY_NUGET_CONFIG
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$stderr" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    [ "$(head -n 1 "$BATS_TEST_TMPDIR/order")" = "proxy" ]
+    [ "$(grep -c '^proxy$' "$BATS_TEST_TMPDIR/order")" -eq 1 ]
+    grep -q '"url":"/package-sources/"' "$BATS_TEST_TMPDIR/proxy_requests"
+    run ! grep -qi 'authorization' "$BATS_TEST_TMPDIR/proxy_requests"
+    run ! grep -q 'run-source-token' "$BATS_TEST_TMPDIR/proxy_requests"
+}
+
+@test "package proxy: an undecodable FOUNDRY_NUGET_CONFIG still checks the proxy" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_package_source_env
+    local port
+    port="$(start_package_proxy_listener)"
+    export FOUNDRY_PACKAGE_PROXY_URL="http://127.0.0.1:$port/package-sources/"
+    export FOUNDRY_NUGET_CONFIG='not base64 !!!'
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *"Package sources: FOUNDRY_NUGET_CONFIG unreadable"* ]]
+    [ "$(grep -c '^proxy$' "$BATS_TEST_TMPDIR/order")" -eq 1 ]
+}
+
+@test "package proxy: a closed port fails the bootstrap at stage package-sources naming the host and port, and claude never starts" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_package_source_env
+    export FOUNDRY_PACKAGE_PROXY_URL="http://127.0.0.1:1/package-sources/"
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -e "$BATS_TEST_TMPDIR/claude_called" ]
+    local sentinel
+    sentinel="$(grep '^FOUNDRY_BOOTSTRAP_FAILED ' <<< "$stderr")"
+    [ "$(wc -l <<< "$sentinel")" -eq 1 ]
+    [[ "$sentinel" == "FOUNDRY_BOOTSTRAP_FAILED stage=package-sources detail="*"127.0.0.1:1 "* ]]
+}
+
+# ---------------------------------------------------------------------------
 # Review checkout tests (ADR 0114)
 #
 # A review run (REVIEW_COMMIT, restricted only) checks the reviewed commit out

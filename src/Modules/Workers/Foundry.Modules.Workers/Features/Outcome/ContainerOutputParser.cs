@@ -601,10 +601,19 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
     private const int MaxBootstrapDetailLength = 500;
 
-    private static ContainerOutputParseResult BootstrapSentinelOrNoResultLine(string log) =>
-        FindBootstrapSentinel(log) is { } detail
-            ? new ContainerOutputParseResult.WorkerBootstrapFailed(detail)
-            : new ContainerOutputParseResult.NoResultLine();
+    private static ContainerOutputParseResult BootstrapSentinelOrNoResultLine(string log)
+    {
+        if (FindBootstrapSentinel(log) is not { } sentinel)
+        {
+            return new ContainerOutputParseResult.NoResultLine();
+        }
+
+        Match packageSources = PackageSourcesSentinelPattern().Match(sentinel);
+
+        return packageSources.Success
+            ? new ContainerOutputParseResult.PackageSourceUnreachable(packageSources.Groups["detail"].Value)
+            : new ContainerOutputParseResult.WorkerBootstrapFailed(sentinel);
+    }
 
     /// <summary>
     /// The first bootstrap-failure sentinel a container printed (the worker entrypoint or the Publisher), capped; or
@@ -643,8 +652,14 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     // Anchored to the start of a line (after the optional Docker timestamp), so text that merely quotes
     // the marker, such as a shell command echoing it, is not the entrypoint emitting it.
     [GeneratedRegex(
-        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|unreachable|auth|branch|managed-settings|role)[^\n]*)",
+        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|unreachable|auth|branch|managed-settings|role|package-sources)[^\n]*)",
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
+
+    [GeneratedRegex(
+        @"^FOUNDRY_BOOTSTRAP_FAILED stage=package-sources detail=(?<detail>.*)$",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PackageSourcesSentinelPattern();
 }
