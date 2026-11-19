@@ -3321,6 +3321,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<string>("ReviewCommentFailure")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("review_comment_failure");
+
                     b.ToTable(t =>
                         {
                             t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");

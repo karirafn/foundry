@@ -394,6 +394,11 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .HasColumnType("TEXT")
             .HasColumnName("container_output");
 
+        builder.Property(r => r.ReviewCommentFailure)
+            .HasMaxLength(CompletedRun.ReviewCommentFailureMaxLength)
+            .IsUnicode(true)
+            .HasColumnName("review_comment_failure");
+
         builder.Property(r => r.CancelRequestedAt)
             .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
 

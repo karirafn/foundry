@@ -8,6 +8,8 @@ namespace Foundry.Modules.Workers.Domain.Entities.States;
 
 public sealed class CompletedRun : WorkerRun
 {
+    public const int ReviewCommentFailureMaxLength = 1000;
+
     // Private parameterless constructor for EF Core materialization.
     private CompletedRun()
     {
@@ -54,6 +56,25 @@ public sealed class CompletedRun : WorkerRun
     /// before a pending cancel took effect can be told apart.
     /// </summary>
     public DateTimeOffset? CancelRequestedAt { get; private set; }
+
+    /// <summary>
+    /// Why posting the review comment on the run's pull request failed (ADR 0113); <see langword="null"/> when it was
+    /// posted, for any other run, and for a review recorded before review comments were posted. A failed post is only
+    /// recorded: it never changes how the review routes its issue and is not retried.
+    /// </summary>
+    public string? ReviewCommentFailure { get; private set; }
+
+    /// <summary>Records why the review comment could not be posted, cut to <see cref="ReviewCommentFailureMaxLength"/>.</summary>
+    public void RecordReviewCommentFailure(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        if (ReviewVerdict is null)
+        {
+            throw new InvalidOperationException("Only a run that recorded a review verdict posts a review comment.");
+        }
+
+        ReviewCommentFailure = reason.Length > ReviewCommentFailureMaxLength ? reason[..ReviewCommentFailureMaxLength] : reason;
+    }
 
     internal static CompletedRun FromPublishing(
         PublishingRun publishing,

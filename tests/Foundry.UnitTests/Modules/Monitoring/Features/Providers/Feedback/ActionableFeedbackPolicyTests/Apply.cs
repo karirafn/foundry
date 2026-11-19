@@ -1,6 +1,8 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Features.Reviews;
 
 using Foundry.Testing;
 
@@ -391,5 +393,43 @@ public sealed class Apply
 
         // Assert
         result.Comments.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenFoundryPostedAReviewVerdictComment_ItIsNotActionableButAPersonsReplyIs()
+    {
+        // Arrange — the posted review comment is in the registry and is written by the same account a person might use
+        string verdictBody = ReviewVerdictComment.Compose(new RecordedReviewVerdict(
+            "Adds retry.",
+            [new ReviewFinding("src/Retry.cs", 12, ReviewSeverity.Blocking, ReviewCategory.Correctness, null, "Retries forever.")],
+            [],
+            [],
+            new ReviewTests(ReviewTestsAssessment.Adequate, "Covered.", []),
+            ReviewVerdictOutcome.ChangesRequested,
+            "0123456789abcdef0123456789abcdef01234567",
+            PatchId: null));
+        ProviderComment posted = new ProviderCommentBuilder()
+            .WithId(101)
+            .WithBody(verdictBody)
+            .WithAuthorLogin("octocat")
+            .WithOrigin(CommentOrigin.Conversation)
+            .WithCreatedAt(Since.AddHours(1))
+            .Build();
+        ProviderComment reply = new ProviderCommentBuilder()
+            .WithId(102)
+            .WithBody("Please keep the retry bounded.")
+            .WithAuthorLogin("octocat")
+            .WithOrigin(CommentOrigin.Conversation)
+            .WithCreatedAt(Since.AddHours(2))
+            .Build();
+        PostedCommentIds registry = new([ProviderCommentId.Create(101).ValueOrThrow()]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([posted, reply], Since, registry);
+
+        // Assert
+        result.Comments.ShouldHaveSingleItem().Body.ShouldBe("Please keep the retry bounded.");
     }
 }

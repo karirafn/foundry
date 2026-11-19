@@ -29,6 +29,8 @@ public sealed class RepositoryRoles
 
     private static readonly string[] ForbiddenTopLevelKeywords = ["allOf", "anyOf", "oneOf"];
 
+    private const string SingleLinePattern = @"^[^\r\n]+$";
+
     public static TheoryData<string> RoleNames => [.. WorkerRole.All.Select(role => role.Name)];
 
     [Theory]
@@ -354,7 +356,7 @@ public sealed class RepositoryRoles
             () => properties.ShouldNotContain("outcome"),
             () => schema["summary"].ShouldBeNull(),
             () => schema["properties"]!["summary"]!["minLength"]!.GetValue<int>().ShouldBe(1),
-            () => schema["properties"]!["summary"]!["maxLength"]!.GetValue<int>().ShouldBe(2000));
+            () => schema["properties"]!["summary"]!["maxLength"]!.GetValue<int>().ShouldBe(300));
     }
 
     [Fact]
@@ -398,7 +400,8 @@ public sealed class RepositoryRoles
             () => rule["required"].ShouldBeNull(),
             () => rule["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(["principle", "file", "quote"], ignoreOrder: true),
             () => properties["body"]!["minLength"]!.GetValue<int>().ShouldBe(1),
-            () => properties["body"]!["maxLength"]!.GetValue<int>().ShouldBe(2000));
+            () => properties["body"]!["maxLength"]!.GetValue<int>().ShouldBe(300),
+            () => properties["body"]!["pattern"]!.GetValue<string>().ShouldBe(SingleLinePattern));
     }
 
     [Fact]
@@ -441,10 +444,12 @@ public sealed class RepositoryRoles
             () => StringsOf(criteria["items"]!["required"]).ShouldBe(["id", "status", "evidence"], ignoreOrder: true),
             () => criterion["id"]!["pattern"]!.GetValue<string>().ShouldBe("^AC[0-9]+$"),
             () => StringsOf(criterion["status"]!["enum"]).ShouldBe(["met", "unmet", "not_verifiable"]),
-            () => criterion["evidence"]!["maxLength"]!.GetValue<int>().ShouldBe(1000),
+            () => criterion["evidence"]!["maxLength"]!.GetValue<int>().ShouldBe(200),
+            () => criterion["evidence"]!["pattern"]!.GetValue<string>().ShouldBe(SingleLinePattern),
             () => StringsOf(tests["required"]).ShouldBe(["assessment", "reason", "coveringTests"], ignoreOrder: true),
             () => StringsOf(testProperties["assessment"]!["enum"]).ShouldBe(["adequate", "missing", "not_needed"]),
-            () => testProperties["reason"]!["maxLength"]!.GetValue<int>().ShouldBe(1000),
+            () => testProperties["reason"]!["maxLength"]!.GetValue<int>().ShouldBe(200),
+            () => testProperties["reason"]!["pattern"]!.GetValue<string>().ShouldBe(SingleLinePattern),
             () => testProperties["coveringTests"]!["minItems"]!.GetValue<int>().ShouldBe(0),
             () => testProperties["coveringTests"]!["maxItems"]!.GetValue<int>().ShouldBe(50),
             () => testProperties["coveringTests"]!["items"]!["type"]!.GetValue<string>().ShouldBe("string"));
