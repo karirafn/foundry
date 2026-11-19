@@ -21,9 +21,7 @@ internal static class GetCredentials
             Query query,
             CancellationToken cancellationToken)
         {
-            ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(cancellationToken);
+            ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
             if (account is null)
             {

@@ -51,9 +51,7 @@ internal sealed class CreditProbeService : PeriodicBackgroundService
         await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
         DbContext db = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        ClaudeAccount? account = await db.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await db.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         if (account is null)
         {

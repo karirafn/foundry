@@ -16,8 +16,7 @@ internal sealed class DispatchResumedSpendHandler(
 {
     public async Task HandleAsync(DispatchResumed @event, CancellationToken cancellationToken)
     {
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
         if (account is null)
         {
