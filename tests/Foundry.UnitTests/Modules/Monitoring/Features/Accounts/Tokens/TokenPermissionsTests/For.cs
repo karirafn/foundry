@@ -10,6 +10,13 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Accounts.Tokens.TokenPer
 
 public sealed class For
 {
+    private static WritePermission? ProbedPermission(TokenPermission entry) => entry.VerifiedBy switch
+    {
+        PermissionVerification.WriteProbe probe => probe.Permission,
+        PermissionVerification.ReadProbe probe => probe.Permission,
+        _ => null,
+    };
+
     [Fact]
     public void EveryWritePermission_HasExactlyOneGitHubEntry()
     {
@@ -20,39 +27,59 @@ public sealed class For
         Dictionary<WritePermission, int> entriesPerPermission = Enum.GetValues<WritePermission>()
             .ToDictionary(
                 permission => permission,
-                permission => entries.Count(entry =>
-                    entry.VerifiedBy is PermissionVerification.WriteProbe probe && probe.Permission == permission));
+                permission => entries.Count(entry => ProbedPermission(entry) == permission));
 
         // Assert
         entriesPerPermission.Values.ShouldAllBe(count => count == 1);
     }
 
     [Fact]
-    public void EveryWriteProbeEntry_NamesADefinedWritePermission()
+    public void EveryProbeEntry_NamesADefinedWritePermission()
     {
         // Arrange
         IReadOnlyList<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitHub);
 
         // Act
-        IEnumerable<WritePermission> probed = entries
-            .Select(entry => entry.VerifiedBy)
-            .OfType<PermissionVerification.WriteProbe>()
-            .Select(probe => probe.Permission);
+        IEnumerable<WritePermission> probed = entries.Select(ProbedPermission).OfType<WritePermission>();
 
         // Assert
         probed.ShouldAllBe(permission => Enum.IsDefined(permission));
     }
 
     [Fact]
-    public void WhenProviderIsGitHub_WriteProbesRunContentsThenIssuesThenPullRequests()
+    public void EveryEntryKey_IsUniqueAcrossProvidersAndTheClassicAdminRole()
+    {
+        // Arrange
+        IEnumerable<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitHub)
+            .Concat(TokenPermissions.For(ProviderTypes.GitLab))
+            .Append(TokenPermissions.GitHubClassicAdminRole);
+
+        // Act
+        List<string> keys = entries.Select(entry => entry.Key).ToList();
+
+        // Assert
+        keys.ShouldBeUnique();
+    }
+
+    [Fact]
+    public void WhenProviderIsGitHub_ProbesRunInPermissionListOrder()
     {
         // Arrange
 
         // Act
-        IReadOnlyList<WritePermission> probes = TokenPermissions.GitHubWriteProbes;
+        IReadOnlyList<WritePermission> probes = TokenPermissions.GitHubProbes;
 
         // Assert
-        probes.ShouldBe([WritePermission.Contents, WritePermission.Issues, WritePermission.PullRequests]);
+        probes.ShouldBe(
+        [
+            WritePermission.Contents,
+            WritePermission.Issues,
+            WritePermission.PullRequests,
+            WritePermission.Administration,
+            WritePermission.Webhooks,
+            WritePermission.CommitStatuses,
+            WritePermission.Actions,
+        ]);
     }
 
     [Fact]
@@ -68,7 +95,7 @@ public sealed class For
     }
 
     [Fact]
-    public void WhenProviderIsGitHub_TemplateQueryListsWritePermissionsInOrder()
+    public void WhenProviderIsGitHub_TemplateQueryListsEveryTemplateParameterInOrder()
     {
         // Arrange
 
@@ -76,11 +103,28 @@ public sealed class For
         string query = TokenPermissions.GitHubTemplateQuery;
 
         // Assert
-        query.ShouldBe("contents=write&issues=write&pull_requests=write&workflows=write");
+        query.ShouldBe(
+            "contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write"
+            + "&statuses=read&actions=read&workflows=write");
     }
 
     [Fact]
-    public void WhenProviderIsGitLab_MinimumAccessLevelIsDeveloper()
+    public void WhenProviderIsGitHub_MetadataIsAlwaysGrantedAndWorkflowsIsNotVerified()
+    {
+        // Arrange
+        IReadOnlyList<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitHub);
+
+        // Act
+        TokenPermission metadata = entries.Single(entry => entry.Key == "metadata");
+        TokenPermission workflows = entries.Single(entry => entry.Key == "workflows");
+
+        // Assert
+        metadata.VerifiedBy.ShouldBeOfType<PermissionVerification.AlwaysGranted>();
+        workflows.VerifiedBy.ShouldBeOfType<PermissionVerification.NotVerified>();
+    }
+
+    [Fact]
+    public void WhenProviderIsGitLab_MinimumAccessLevelIsMaintainer()
     {
         // Arrange
 
@@ -88,56 +132,112 @@ public sealed class For
         int level = TokenPermissions.GitLabMinimumAccessLevel;
 
         // Assert
-        level.ShouldBe(30);
+        level.ShouldBe(40);
     }
 
     [Fact]
-    public void WhenProviderIsGitLab_RoleEntryIsNotShownInTheForm()
-    {
-        // Arrange
-        IReadOnlyList<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitLab);
-
-        // Act
-        TokenPermission role = entries.Single(entry => entry.VerifiedBy is PermissionVerification.GitLabRole);
-
-        // Assert
-        role.ShownInForm.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void LabelOf_Contents_ReturnsTheEntryLabel()
+    public void VersionFor_DiffersBetweenProviders()
     {
         // Arrange
 
         // Act
-        string label = TokenPermissions.LabelOf(WritePermission.Contents);
+        string gitHub = TokenPermissions.VersionFor(ProviderTypes.GitHub);
+        string gitLab = TokenPermissions.VersionFor(ProviderTypes.GitLab);
 
         // Assert
-        label.ShouldBe("Contents (read and write)");
+        gitHub.ShouldNotBe(gitLab);
     }
 
     [Fact]
-    public void LabelOf_Issues_ReturnsTheEntryLabel()
+    public void CurrentVersions_HoldsEveryProvidersVersion()
     {
         // Arrange
 
         // Act
-        string label = TokenPermissions.LabelOf(WritePermission.Issues);
+        IReadOnlySet<string> versions = TokenPermissions.CurrentVersions;
 
         // Assert
-        label.ShouldBe("Issues (read and write)");
+        versions.ShouldBe(
+            [TokenPermissions.VersionFor(ProviderTypes.GitHub), TokenPermissions.VersionFor(ProviderTypes.GitLab)],
+            ignoreOrder: true);
     }
 
     [Fact]
-    public void LabelOf_PullRequests_ReturnsTheEntryLabel()
+    public void GitHubMissingKeys_ForAFineGrainedToken_ReturnsEachMissingPermissionInListOrder()
+    {
+        // Arrange
+        WritePermission[] missing = [WritePermission.Webhooks, WritePermission.Administration];
+
+        // Act
+        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing, isFineGrainedToken: true);
+
+        // Assert
+        keys.ShouldBe(["administration", "repository_hooks"]);
+    }
+
+    [Fact]
+    public void GitHubMissingKeys_ForAClassicToken_ReportsAdministrationAndWebhooksAsTheAdminRole()
+    {
+        // Arrange
+        WritePermission[] missing = [WritePermission.Administration, WritePermission.Webhooks];
+
+        // Act
+        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing, isFineGrainedToken: false);
+
+        // Assert
+        keys.ShouldBe(["admin_role"]);
+    }
+
+    [Fact]
+    public void GitHubMissingKeys_ForAClassicToken_KeepsOtherPermissions()
+    {
+        // Arrange
+        WritePermission[] missing = [WritePermission.Contents, WritePermission.Webhooks];
+
+        // Act
+        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing, isFineGrainedToken: false);
+
+        // Assert
+        keys.ShouldBe(["contents", "admin_role"]);
+    }
+
+    [Fact]
+    public void LabelsOf_ReturnsLabelsInListOrder()
     {
         // Arrange
 
         // Act
-        string label = TokenPermissions.LabelOf(WritePermission.PullRequests);
+        IReadOnlyList<string> labels = TokenPermissions.LabelsOf(
+            ProviderTypes.GitHub,
+            ["repository_hooks", "administration", "admin_role"]);
 
         // Assert
-        label.ShouldBe("Pull requests (read and write)");
+        labels.ShouldBe(
+            ["Administration (read and write)", "Webhooks (read and write)", "Admin role on the repository"]);
+    }
+
+    [Fact]
+    public void LabelsOf_GitLabRoleKey_ReturnsMaintainerRole()
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> labels = TokenPermissions.LabelsOf(ProviderTypes.GitLab, [TokenPermissions.GitLabRoleKey]);
+
+        // Assert
+        labels.ShouldBe(["Maintainer role"]);
+    }
+
+    [Fact]
+    public void LabelsOf_SkipsKeysTheListNoLongerHolds()
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> labels = TokenPermissions.LabelsOf(ProviderTypes.GitHub, ["retired", "contents"]);
+
+        // Assert
+        labels.ShouldBe(["Contents (read and write)"]);
     }
 
     [Fact]

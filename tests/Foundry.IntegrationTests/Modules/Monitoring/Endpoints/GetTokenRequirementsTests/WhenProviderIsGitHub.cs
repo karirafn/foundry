@@ -47,12 +47,14 @@ public sealed class WhenProviderIsGitHub : IAsyncDisposable
                 "Contents (read and write)",
                 "Issues (read and write)",
                 "Pull requests (read and write)",
-                "Workflows (write)",
-                "Metadata (read)",
+                "Administration (read and write)",
+                "Webhooks (read and write)",
                 "Commit statuses (read)",
-                "Actions (read)"]),
+                "Actions (read)",
+                "Metadata (read)",
+                "Workflows (read and write)"]),
             () => dto.CreationUrlTemplate.ShouldContain("personal-access-tokens/new"),
-            () => dto.CreationUrlTemplate.ShouldContain("name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write"),
+            () => dto.CreationUrlTemplate.ShouldContain("name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=read&workflows=write"),
             () => dto.ResourceOwnerHint.ShouldNotBeNull());
     }
 }

@@ -220,4 +220,84 @@ public sealed class Serialization
         // Assert
         unknown.Reason.ShouldBe(UnknownReason.Transport);
     }
+
+    [Fact]
+    public void WhenDeniedWithMissingPermissionsSerialized_RoundTripsMissingPermissions()
+    {
+        // Arrange
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied()
+        {
+            MissingPermissions = ["administration", "repository_hooks"],
+        };
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Denied>()
+            .MissingPermissions.ShouldBe(["administration", "repository_hooks"]);
+    }
+
+    [Fact]
+    public void WhenDeniedLegacyJsonWithoutMissingPermissions_DeserializesWithEmptySet()
+    {
+        // Arrange
+        const string legacyJson = """{"$type":"denied","ProbedAt":"2026-11-19T10:00:00+00:00"}""";
+
+        // Act
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(legacyJson, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("granted")]
+    [InlineData("denied")]
+    [InlineData("unknown")]
+    public void WhenVerdictSerializedWithPermissionListVersion_RoundTripsTheVersion(string kind)
+    {
+        // Arrange
+        WriteProbeVerdict verdict = kind switch
+        {
+            "granted" => new WriteProbeVerdict.Granted { PermissionListVersion = "github-0123456789abcdef" },
+            "denied" => new WriteProbeVerdict.Denied { PermissionListVersion = "github-0123456789abcdef" },
+            _ => new WriteProbeVerdict.Unknown { PermissionListVersion = "github-0123456789abcdef" },
+        };
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        deserialized.ShouldNotBeNull().PermissionListVersion.ShouldBe("github-0123456789abcdef");
+    }
+
+    [Fact]
+    public void WhenGrantedLegacyJsonWithoutVersion_DeserializesWithNullVersion()
+    {
+        // Arrange
+        const string legacyJson = """{"$type":"granted"}""";
+
+        // Act
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(legacyJson, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Granted>().PermissionListVersion.ShouldBeNull();
+    }
+
+    [Fact]
+    public void DeniedVerdictsWithTheSameMissingPermissions_AreEqual()
+    {
+        // Arrange
+        WriteProbeVerdict.Denied first = new() { MissingPermissions = ["contents"] };
+        WriteProbeVerdict.Denied second = new() { MissingPermissions = ["contents"] };
+
+        // Act
+        bool equal = first.Equals(second);
+
+        // Assert
+        equal.ShouldBeTrue();
+    }
 }

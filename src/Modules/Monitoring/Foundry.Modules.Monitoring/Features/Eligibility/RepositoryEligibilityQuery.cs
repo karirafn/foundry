@@ -110,6 +110,6 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
     }
 
     private static RepositoryEligibilityInfo MapToInfo(MonitoredRepository repo, string providerType) =>
-        RepositoryMappings.ToEligibilityInfo(repo.Eligibility, providerType)
+        RepositoryMappings.ToEligibilityInfo(repo.Eligibility, repo.WriteProbeVerdict, providerType)
         ?? new RepositoryEligibilityInfo(repo.EligibilityStatus!, [], null);
 }

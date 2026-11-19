@@ -61,6 +61,32 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
         NoPushAccessPreamble(providerType) + $" for {slug}.";
 
     /// <summary>
+    /// Returns the cannot-push description naming what the token lacks. <paramref name="missingPermissionLabels"/>
+    /// holds display labels in permission-list order; when it is empty the generic description is returned.
+    /// </summary>
+    public static string CannotPushDescription(
+        string slug,
+        string providerType,
+        IReadOnlyList<string> missingPermissionLabels)
+    {
+        if (missingPermissionLabels.Count == 0)
+        {
+            return CannotPushDescription(slug, providerType);
+        }
+
+        return providerType switch
+        {
+            "gitlab" => $"Token's user needs the Maintainer role on {slug}.",
+            _ => $"Token is missing {JoinWithAnd(missingPermissionLabels)} for {slug}.",
+        };
+    }
+
+    private static string JoinWithAnd(IReadOnlyList<string> items) =>
+        items.Count == 1
+            ? items[0]
+            : $"{string.Join(", ", items.Take(items.Count - 1))} and {items[^1]}";
+
+    /// <summary>
     /// Returns the provider-aware sentence-case no-push access explanation used in the
     /// available-repositories response and as the picker group explanation on the frontend.
     /// </summary>

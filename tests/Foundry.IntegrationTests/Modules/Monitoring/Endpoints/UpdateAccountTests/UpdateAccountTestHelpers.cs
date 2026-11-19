@@ -51,6 +51,11 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
         }
 
+        if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+        {
+            return readProbe;
+        }
+
         // Extract the token from Authorization header (GitHub)
         string lastTokenSeen = string.Empty;
         if (request.Headers.TryGetValues("Authorization", out IEnumerable<string>? authValues))

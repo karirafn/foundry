@@ -119,6 +119,11 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
                 return Task.FromResult(new HttpResponseMessage(statusCode));
             }
 
+            if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+            {
+                return readProbe;
+            }
+
             HttpResponseMessage response = new(HttpStatusCode.OK)
             {
                 Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),

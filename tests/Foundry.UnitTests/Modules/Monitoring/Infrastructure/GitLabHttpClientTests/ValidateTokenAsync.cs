@@ -1,7 +1,6 @@
 using System.Net;
 
 using Foundry.Modules.Monitoring.Features.Accounts;
-using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
@@ -282,7 +281,7 @@ public sealed class ValidateTokenAsync
             .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, selfNoScopesJson);
         GitLabHttpClient sut = CreateSut(handler);
 
-        IReadOnlyList<string> expectedMissing = RequiredScopes.For(ProviderTypes.GitLab);
+        IReadOnlyList<string> expectedMissing = ["api"];
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(

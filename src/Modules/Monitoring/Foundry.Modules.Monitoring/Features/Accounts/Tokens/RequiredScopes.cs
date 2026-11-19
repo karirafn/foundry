@@ -8,7 +8,6 @@ internal static class RequiredScopes
 {
     internal static IReadOnlyList<string> For(string providerType) =>
         TokenPermissions.For(providerType)
-            .Where(entry => entry.ShownInForm)
             .Select(entry => entry.Label)
             .ToList();
 }

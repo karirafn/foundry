@@ -2,6 +2,8 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
@@ -26,6 +28,8 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.RepositoryPoller
 
 public sealed class PollAsync : IAsyncDisposable
 {
+    private static readonly string CurrentGitHubVersion = TokenPermissions.VersionFor(ProviderTypes.GitHub);
+
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher;
@@ -1077,7 +1081,7 @@ public sealed class PollAsync : IAsyncDisposable
     {
         // Arrange — Granted verdict is never due for re-probe; poll cycle must use the cheap path.
         MonitoredRepository repository = SeedRepository();
-        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted { PermissionListVersion = CurrentGitHubVersion });
         StubIssueProvider provider = new([]);
 
         // Act
@@ -1090,12 +1094,32 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPolling_AndGrantedVerdictWasCheckedAgainstAnOlderPermissionList_UsesFullEvaluation()
+    {
+        // Arrange — a verdict persisted before the permission list gained an entry carries no version.
+        MonitoredRepository repository = SeedRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task WhenPolling_AndVerdictIsUnknownWithinCooldown_UsesCheapEvaluation()
     {
         // Arrange — Unknown stamped within the cooldown is not due; use cheap path.
         MonitoredRepository repository = SeedRepository();
         repository.SetWriteProbeVerdict(
-            new WriteProbeVerdict.Unknown(Now - (MonitoredRepository.WriteProbeCooldown / 2)));
+            new WriteProbeVerdict.Unknown(Now - (MonitoredRepository.WriteProbeCooldown / 2))
+            {
+                PermissionListVersion = CurrentGitHubVersion,
+            });
         StubIssueProvider provider = new([]);
 
         // Act
@@ -1112,7 +1136,7 @@ public sealed class PollAsync : IAsyncDisposable
     {
         // Arrange — denied 30 minutes ago: no write probe yet.
         MonitoredRepository repository = SeedRepository();
-        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-30)));
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-30)) { PermissionListVersion = CurrentGitHubVersion });
         StubIssueProvider provider = new([]);
 
         // Act
@@ -1129,7 +1153,7 @@ public sealed class PollAsync : IAsyncDisposable
     {
         // Arrange — denied 61 minutes ago: the token may have gained the permission in place.
         MonitoredRepository repository = SeedRepository();
-        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-61)));
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Denied(Now.AddMinutes(-61)) { PermissionListVersion = CurrentGitHubVersion });
         StubIssueProvider provider = new([]);
 
         // Act

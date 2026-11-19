@@ -122,6 +122,11 @@ public sealed class WhenTokenLacksWriteAccess : IAsyncDisposable
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
             }
 
+            if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+            {
+                return readProbe;
+            }
+
             HttpResponseMessage response = new(HttpStatusCode.OK)
             {
                 Content = new StringContent(listingJson, Encoding.UTF8, "application/json"),

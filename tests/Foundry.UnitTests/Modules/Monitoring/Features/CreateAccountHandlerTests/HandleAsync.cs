@@ -567,6 +567,46 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenGitHubProbeReturnsSeveralMissingPermissions_ReturnsFailureNamingEveryLabel()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        MissingWriteProber missingProber = new(WritePermission.Administration, WritePermission.Webhooks);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: missingProber);
+        CreateAccount.Command command = new("github", "https://github.com", "github" + "_pat_" + "test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Message.ShouldBe(
+            "The token is missing the 'Administration (read and write)' and 'Webhooks (read and write)' permissions required by Foundry.");
+    }
+
+    [Fact]
+    public async Task WhenClassicTokenLacksAdministration_ReturnsFailureNamingTheAdminRole()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        MissingWriteProber missingProber = new(WritePermission.Administration);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: missingProber);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Message.ShouldBe(
+            "The token is missing the 'Admin role on the repository' permission required by Foundry.");
+    }
+
+    [Fact]
     public async Task WhenGitHubProbeReturnsMissingContents_ReturnsFailureNamingPermission()
     {
         // Arrange
@@ -1093,7 +1133,7 @@ public sealed class HandleAsync : IAsyncDisposable
             Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
     }
 
-    private sealed class MissingWriteProber(WritePermission permission) : IGitHubWriteProber
+    private sealed class MissingWriteProber(params WritePermission[] permissions) : IGitHubWriteProber
     {
         public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
             Uri apiBaseUrl,
@@ -1101,7 +1141,7 @@ public sealed class HandleAsync : IAsyncDisposable
             string token,
             CancellationToken cancellationToken) =>
             Task.FromResult(
-                Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)));
+                Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permissions)));
     }
 
     private sealed class FailingWriteProber : IGitHubWriteProber

@@ -315,20 +315,31 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     /// <summary>
     /// Returns <see langword="true"/> when the repository should have its write probe re-run on the next
-    /// poll cycle. For <see cref="WriteProbeVerdict.Unknown"/> that is when the probe was never attempted
+    /// poll cycle. Any verdict, <see cref="WriteProbeVerdict.Granted"/> included, whose
+    /// <see cref="WriteProbeVerdict.PermissionListVersion"/> is not in <paramref name="currentPermissionListVersions"/>
+    /// is due at once: it was checked against an older permission list. Otherwise, for
+    /// <see cref="WriteProbeVerdict.Unknown"/> that is when the probe was never attempted
     /// or <see cref="WriteProbeCooldown"/> has elapsed since <see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/>;
     /// for <see cref="WriteProbeVerdict.Denied"/> when <see cref="WriteProbeVerdict.Denied.ProbedAt"/> is
     /// unknown or <see cref="DeniedWriteProbeCooldown"/> has elapsed since it. Both use a strict &lt; boundary,
-    /// mirroring <see cref="IsDueForPoll"/>. Returns <see langword="false"/> for
-    /// <see cref="WriteProbeVerdict.Granted"/>, which stays event-triggered so steady-state polling sends no
-    /// write probes.
+    /// mirroring <see cref="IsDueForPoll"/>. A current <see cref="WriteProbeVerdict.Granted"/> stays
+    /// event-triggered so steady-state polling sends no write probes.
     /// </summary>
-    public bool IsDueForWriteProbe(DateTimeOffset now) => WriteProbeVerdict switch
+    public bool IsDueForWriteProbe(DateTimeOffset now, IReadOnlySet<string> currentPermissionListVersions)
     {
-        WriteProbeVerdict.Unknown unknown => HasCooldownElapsed(unknown.LastAttemptedAt, WriteProbeCooldown, now),
-        WriteProbeVerdict.Denied denied => HasCooldownElapsed(denied.ProbedAt, DeniedWriteProbeCooldown, now),
-        _ => false,
-    };
+        if (WriteProbeVerdict.PermissionListVersion is not { } version
+            || !currentPermissionListVersions.Contains(version))
+        {
+            return true;
+        }
+
+        return WriteProbeVerdict switch
+        {
+            WriteProbeVerdict.Unknown unknown => HasCooldownElapsed(unknown.LastAttemptedAt, WriteProbeCooldown, now),
+            WriteProbeVerdict.Denied denied => HasCooldownElapsed(denied.ProbedAt, DeniedWriteProbeCooldown, now),
+            _ => false,
+        };
+    }
 
     private static bool HasCooldownElapsed(DateTimeOffset? lastProbedAt, TimeSpan cooldown, DateTimeOffset now)
         => lastProbedAt is null || lastProbedAt.Value + cooldown < now;
