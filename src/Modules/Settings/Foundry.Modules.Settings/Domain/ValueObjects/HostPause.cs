@@ -6,13 +6,6 @@ namespace Foundry.Modules.Settings.Domain.ValueObjects;
 /// </summary>
 public sealed record HostPause
 {
-    private static readonly TimeSpan FirstProbeDelay = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan MaxProbeDelay = TimeSpan.FromMinutes(10);
-
-    // Past this many failed probes the doubled delay already exceeds MaxProbeDelay; capping the exponent keeps the
-    // arithmetic from overflowing on a long outage.
-    private const int MaxDoublings = 4;
-
     private HostPause(string host, DateTimeOffset pausedAt, int probeAttempts, DateTimeOffset nextProbeAt)
     {
         Host = host;
@@ -33,7 +26,7 @@ public sealed record HostPause
 
     /// <summary>A new pause on <paramref name="host"/> at <paramref name="now"/>; its first probe is a minute later.</summary>
     public static HostPause Start(string host, DateTimeOffset now) =>
-        new(Normalize(host), now, probeAttempts: 0, now + FirstProbeDelay);
+        new(Normalize(host), now, probeAttempts: 0, now + ProbeBackoff.FirstProbeDelay);
 
     /// <summary>Rebuilds a stored pause exactly as it was saved.</summary>
     internal static HostPause Restore(string host, DateTimeOffset pausedAt, int probeAttempts, DateTimeOffset nextProbeAt) =>
@@ -45,11 +38,7 @@ public sealed record HostPause
     /// </summary>
     public HostPause AfterUnreachableProbe(DateTimeOffset now)
     {
-        int doublings = Math.Min(ProbeAttempts + 1, MaxDoublings);
-        TimeSpan doubled = FirstProbeDelay * (1 << doublings);
-        TimeSpan delay = doubled < MaxProbeDelay ? doubled : MaxProbeDelay;
-
-        return new HostPause(Host, PausedAt, ProbeAttempts + 1, now + delay);
+        return new HostPause(Host, PausedAt, ProbeAttempts + 1, now + ProbeBackoff.DelayAfterUnreachableProbe(ProbeAttempts));
     }
 
     public bool IsProbeDue(DateTimeOffset now) => NextProbeAt <= now;

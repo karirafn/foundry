@@ -133,6 +133,40 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
         result.ShouldHaveSingleItem().Host.ShouldBe("github.com");
     }
 
+    [Fact]
+    public async Task WhenTheRootConfigDeclaresPackageSources_MarksTheRepository()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org Sources");
+        Guid declaringId = await SeedRepositoryAsync(accountId, "owner/declares", new RepositoryEligibility.Eligible());
+        Guid plainId = await SeedRepositoryAsync(accountId, "owner/plain", new RepositoryEligibility.Eligible());
+        await DeclarePackageSourceAsync(declaringId);
+
+        // Act
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync([declaringId, plainId]);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.Single(r => r.Id == declaringId).DeclaresPackageSources.ShouldBeTrue(),
+            () => result.Single(r => r.Id == plainId).DeclaresPackageSources.ShouldBeFalse());
+    }
+
+    private async Task DeclarePackageSourceAsync(Guid repositoryId)
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        MonitoredRepositoryId id = MonitoredRepositoryId.From(repositoryId);
+        MonitoredRepository repository = await dbContext.Set<MonitoredRepository>()
+            .SingleAsync(r => r.Id == id, TestContext.Current.CancellationToken);
+        repository.RecordRootListing(
+            new RootNuGetConfig.Declared(
+                "sha",
+                "<configuration />",
+                [DeclaredPackageSource.Create("feed", "https://nuget.example.com/v3/index.json").ValueOrThrow()]),
+            listingETag: null);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
     private async Task<IReadOnlyList<EligibleRepository>> QueryEligibleRepositoriesAsync(
         IReadOnlyCollection<Guid> repositoryIds)
     {

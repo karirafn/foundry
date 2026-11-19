@@ -48,14 +48,22 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
             .Select(MonitoredRepositoryId.From)
             .ToHashSet();
 
-        List<EligibleRepository> eligibleRepositories = await db.Set<MonitoredRepository>()
+        // Mapped in memory: DeclaresPackageSources is composed from several stored columns, not one SQL expression.
+        List<MonitoredRepository> eligibleRepositories = await db.Set<MonitoredRepository>()
             .AsNoTracking()
             .Where(r => typedIds.Contains(r.Id))
             .Where(r => r.EligibilityStatus == EligibleStatus)
-            .Select(r => new EligibleRepository(r.Id.Value, r.Position, r.MaxConcurrentWorkers, r.Host))
             .ToListAsync(cancellationToken);
 
-        return eligibleRepositories;
+        return
+        [
+            .. eligibleRepositories.Select(r => new EligibleRepository(
+                r.Id.Value,
+                r.Position,
+                r.MaxConcurrentWorkers,
+                r.Host,
+                r.DeclaresPackageSources)),
+        ];
     }
 
     public async Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(

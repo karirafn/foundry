@@ -145,6 +145,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             _ => new RootNuGetConfig.Absent(),
         };
 
+    /// <summary>
+    /// Whether the root <c>nuget.config</c> declares at least one Package Source, so the repository's workers restore
+    /// through the Package Source Proxy.
+    /// </summary>
+    internal bool DeclaresPackageSources => RootNuGetConfig is RootNuGetConfig.Declared { Sources.Count: > 0 };
+
     public static Result<MonitoredRepository> Create(
         RepositorySlug slug,
         string host,

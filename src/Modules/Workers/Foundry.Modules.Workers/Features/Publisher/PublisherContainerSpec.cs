@@ -105,6 +105,36 @@ internal static class PublisherContainerSpec
         });
     }
 
+    /// <summary>
+    /// A proxy-probe holds no token and needs no Hand-off volume: one unauthenticated request to
+    /// <paramref name="proxyUrl"/> under the same hardening and limits as a host probe, with the worker's
+    /// <paramref name="extraHostEntry"/> so it resolves the proxy's host as a worker does.
+    /// </summary>
+    public static WorkerContainerSpec ForProxyProbe(Uri proxyUrl, string extraHostEntry)
+    {
+        Dictionary<string, string> environment = new()
+        {
+            ["PROXY_URL"] = proxyUrl.AbsoluteUri,
+        };
+
+        Dictionary<string, string> labels = new()
+        {
+            [TransientLabelKey] = "true",
+        };
+
+        return WorkerHardeningSpec.ApplyToPublisher(new(
+            WorkerImageNames.PublisherImageName,
+            environment,
+            labels,
+            ["proxy-probe"])
+        {
+            MemoryLimitMb = ProbeMemoryLimitMb,
+            CpuLimit = ProbeCpuLimit,
+            PidsLimit = ProbePidsLimit,
+            ExtraHosts = [extraHostEntry],
+        });
+    }
+
     private static WorkerContainerSpec Build(
         WorkerRunId runId,
         Dictionary<string, string> environment,

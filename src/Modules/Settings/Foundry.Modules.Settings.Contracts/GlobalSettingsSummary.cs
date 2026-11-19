@@ -25,4 +25,5 @@ public sealed record GlobalSettingsSummary(
     int WebhookPort,
     string? WebhookPublicBaseUrl = null,
     int BackstopIntervalMinutes = 15,
-    int AwaitingInputReminderDelayHours = 72);
+    int AwaitingInputReminderDelayHours = 72,
+    PausedPackageProxy? PackageProxyPause = null);

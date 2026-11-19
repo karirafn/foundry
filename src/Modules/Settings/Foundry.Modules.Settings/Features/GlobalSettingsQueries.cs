@@ -79,6 +79,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
                 s.IsDispatchPaused,
                 s.AutoResumeOnUsageReset,
                 s.HostPauses,
+                s.PackageProxyPause,
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -91,7 +92,8 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
             row.UsageLimitResetsAt,
             row.IsDispatchPaused,
             row.AutoResumeOnUsageReset,
-            [.. row.HostPauses.Select(HostPauseMapper.ToPausedHost)]);
+            [.. row.HostPauses.Select(HostPauseMapper.ToPausedHost)],
+            PackageProxyPauseMapper.ToPausedPackageProxy(row.PackageProxyPause));
     }
 
     public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)

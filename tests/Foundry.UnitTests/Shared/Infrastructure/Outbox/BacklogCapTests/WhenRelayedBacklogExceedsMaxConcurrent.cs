@@ -122,6 +122,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator, NullWorkerOrchestrator>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ISystemNotificationBroadcaster>(new CapturingSystemNotificationBroadcaster());
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
         services.AddWorkerVerdicts();
