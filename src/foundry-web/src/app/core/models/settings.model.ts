@@ -78,6 +78,13 @@ export interface PausedHost {
   probeAttempts: number;
 }
 
+/** The Package Source Proxy found unreachable: dispatch for repositories with package sources is held until a probe reaches it. */
+export interface PackageProxyPause {
+  pausedAt: string;
+  probeAttempts: number;
+  nextProbeAt: string;
+}
+
 export interface GlobalSettingsResponse {
   maxConcurrent: number;
   timeoutMinutes: number;
@@ -101,6 +108,7 @@ export interface GlobalSettingsResponse {
   pidsLimit: number;
   additionalDenyRules: string[];
   pausedHosts: PausedHost[];
+  packageProxyPause: PackageProxyPause | null;
   /** The port Foundry serves /webhooks/* on, always bound (ADR 0116). */
   webhookPort: number;
   /** Public https base URL the operator's tunnel forwards to the webhook port (ADR 0085). */

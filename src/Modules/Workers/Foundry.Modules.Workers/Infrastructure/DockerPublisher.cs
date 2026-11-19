@@ -11,7 +11,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Workers.Infrastructure;
 
-internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<DockerPublisher> logger) : IPublisher
+internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<DockerPublisher> logger)
+    : IPublisher, IPackageProxyProbe
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
     private const string ManagedLabelKey = "foundry.managed";
@@ -22,7 +23,7 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
     /// <summary>Bounds a Publish that hangs; the attempt fails transiently and is retried with backoff.</summary>
     private static readonly TimeSpan PublishTimeout = TimeSpan.FromMinutes(15);
 
-    /// <summary>Bounds a probe: it is one ls-remote, so one that stalls this long is inconclusive.</summary>
+    /// <summary>Bounds a probe: it is one ls-remote or one request, so one that stalls this long is inconclusive.</summary>
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromMinutes(2);
 
     public async Task<PrepareOutcome> PrepareAsync(PrepareRequest request, CancellationToken cancellationToken)
@@ -124,6 +125,40 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
         {
             return new HostProbeOutcome.Inconclusive(
                 $"The Publisher probe could not run: {DockerWorkerOrchestrator.RedactDockerError(ex.Message)}");
+        }
+        finally
+        {
+            if (containerId is not null)
+            {
+                await TryRemoveAsync(containerId);
+            }
+        }
+    }
+
+    public async Task<PackageProxyProbeOutcome> ProbeAsync(Uri proxyUrl, string extraHostEntry, CancellationToken cancellationToken)
+    {
+        WorkerContainerSpec spec = PublisherContainerSpec.ForProxyProbe(proxyUrl, extraHostEntry);
+        string? containerId = null;
+
+        try
+        {
+            containerId = await runtime.CreateAndStartAsync(DockerWorkerOrchestrator.ToCreateParameters(spec), cancellationToken);
+
+            long? exitCode = await WaitWithinTimeoutAsync(containerId, ProbeTimeout, cancellationToken);
+
+            if (exitCode is null)
+            {
+                return new PackageProxyProbeOutcome.Inconclusive(
+                    $"The Publisher proxy-probe did not finish within {ProbeTimeout.TotalMinutes:0} minutes.");
+            }
+
+            string? log = await runtime.GetAllLogsAsync(containerId, cancellationToken);
+            return PackageProxyProbeOutputParser.Parse(log);
+        }
+        catch (DockerApiException ex)
+        {
+            return new PackageProxyProbeOutcome.Inconclusive(
+                $"The Publisher proxy-probe could not run: {DockerWorkerOrchestrator.RedactDockerError(ex.Message)}");
         }
         finally
         {

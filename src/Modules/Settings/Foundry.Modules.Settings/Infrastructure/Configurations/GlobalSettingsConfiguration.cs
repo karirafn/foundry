@@ -82,6 +82,16 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnType("TEXT")
             .HasColumnName("host_pauses");
 
+        // EF stores NULL for an absent pause without calling the converter, so the lambdas never see null.
+        ValueConverter<PackageProxyPause?, string> packageProxyPauseConverter = new(
+            pause => SerializePackageProxyPause(pause!),
+            json => DeserializePackageProxyPause(json));
+
+        builder.Property(s => s.PackageProxyPause)
+            .HasConversion(packageProxyPauseConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("package_proxy_pause");
+
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));
@@ -166,6 +176,17 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .Select(p => HostPause.Restore(p.Host, p.PausedAt, p.ProbeAttempts, p.NextProbeAt))
             .ToList();
 
+    private static string SerializePackageProxyPause(PackageProxyPause pause)
+        => JsonSerializer.Serialize(new StoredPackageProxyPause(pause.PausedAt, pause.ProbeAttempts, pause.NextProbeAt));
+
+    private static PackageProxyPause DeserializePackageProxyPause(string json)
+    {
+        StoredPackageProxyPause stored = JsonSerializer.Deserialize<StoredPackageProxyPause>(json)
+            ?? throw new InvalidOperationException($"Failed to deserialize the package-proxy pause from JSON: {json}");
+
+        return PackageProxyPause.Restore(stored.PausedAt, stored.ProbeAttempts, stored.NextProbeAt);
+    }
+
     private static string SerializeAllowedProviderHosts(IReadOnlyList<string> hosts)
         => JsonSerializer.Serialize(hosts);
 
@@ -224,4 +245,7 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
 
     // The stored shape, kept apart from HostPause so the column format never follows a domain refactor.
     private sealed record StoredHostPause(string Host, DateTimeOffset PausedAt, int ProbeAttempts, DateTimeOffset NextProbeAt);
+
+    // The stored shape, kept apart from PackageProxyPause so the column format never follows a domain refactor.
+    private sealed record StoredPackageProxyPause(DateTimeOffset PausedAt, int ProbeAttempts, DateTimeOffset NextProbeAt);
 }

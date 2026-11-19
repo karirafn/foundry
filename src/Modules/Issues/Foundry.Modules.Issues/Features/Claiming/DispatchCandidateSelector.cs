@@ -18,7 +18,9 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// <see cref="ClaimTimeRecheck"/> before it is selected; a candidate that gained a blocker, or a Fresh candidate whose
 /// branch already had work and was requeued as a Continuation, has left the queue, so the capacity-aware order is
 /// re-walked without it. Repositories on a paused provider host
-/// (<see cref="DispatchPauseState.PausedHosts"/>) are dropped before any candidate is considered.
+/// (<see cref="DispatchPauseState.PausedHosts"/>), and while the package proxy is paused
+/// (<see cref="DispatchPauseState.PackageProxyPause"/>) repositories that declare Package Sources, are dropped before any
+/// candidate is considered.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
     DbContext db,
@@ -51,18 +53,21 @@ internal sealed class DispatchCandidateSelector(
             return new SelectionOutcome.NoEligibleRepositories();
         }
 
-        // A host pause holds every queued kind on its host: they wait in the queue rather than each dispatching
-        // into an unreachable provider and failing.
+        // A host pause holds every queued kind on its host, and a package-proxy pause every queued kind of a repository
+        // that declares Package Sources: they wait in the queue rather than each dispatching into an unreachable
+        // endpoint and failing.
         DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
         List<EligibleRepository> eligibleRepos = allEligibleRepos
             .Where(repo => !IsOnPausedHost(repo, pauseState.PausedHosts))
+            .Where(repo => pauseState.PackageProxyPause is null || !repo.DeclaresPackageSources)
             .ToList();
 
         if (eligibleRepos.Count == 0)
         {
             logger.LogDebug(
-                "Every repository with queued work is on a paused provider host ({PausedHosts}); nothing to claim.",
-                string.Join(", ", pauseState.PausedHosts.Select(h => h.Host)));
+                "Every repository with queued work is on a paused provider host ({PausedHosts}) or held by the package-proxy pause ({PackageProxyPaused}); nothing to claim.",
+                string.Join(", ", pauseState.PausedHosts.Select(h => h.Host)),
+                pauseState.PackageProxyPause is not null);
             return new SelectionOutcome.NoCandidates();
         }
 

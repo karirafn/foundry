@@ -4,11 +4,13 @@ using Foundry.Modules.Settings.Contracts.Queries;
 namespace Foundry.Testing;
 
 /// <summary>
-/// <see cref="IGlobalSettingsQueries"/> whose dispatch-pause state holds only the given provider-host pauses; every
-/// other value is <see cref="NullGlobalSettingsQueries"/>'s.
+/// <see cref="IGlobalSettingsQueries"/> whose dispatch-pause state holds only the given provider-host pauses and, when
+/// set, <see cref="PackageProxyPause"/>; every other value is <see cref="NullGlobalSettingsQueries"/>'s.
 /// </summary>
 public sealed class PausedHostsGlobalSettingsQueries(params PausedHost[] pausedHosts) : IGlobalSettingsQueries
 {
+    public PausedPackageProxy? PackageProxyPause { get; init; }
+
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult<GlobalSettingsSummary?>(null);
 
@@ -31,7 +33,7 @@ public sealed class PausedHostsGlobalSettingsQueries(params PausedHost[] pausedH
 
 
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-        => Task.FromResult(new DispatchPauseState(null, false, false, pausedHosts));
+        => Task.FromResult(new DispatchPauseState(null, false, false, pausedHosts, PackageProxyPause));
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
         => Task.FromResult(ImageBuildStatus.Idle);

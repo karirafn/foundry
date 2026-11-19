@@ -2280,3 +2280,87 @@ probe_reports() {
     [[ "$output" != *"FOUNDRY_PROBE"* ]]
     [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
 }
+
+# ---------------------------------------------------------------------------
+# Proxy-probe mode (package-proxy pause)
+#
+# One unauthenticated request to PROXY_URL; any HTTP status line is reachable, no answer is unreachable.
+# ---------------------------------------------------------------------------
+
+proxy_probe_line() {
+    grep '^FOUNDRY_PROXY_PROBE ' <<< "$output"
+}
+
+# Starts an HTTP listener on 127.0.0.1 that answers every request 404, records each request's headers in
+# proxy_requests, and prints its port once it is listening.
+start_proxy_listener() {
+    local port_file="$BATS_TEST_TMPDIR/proxy_port"
+    node -e '
+        const fs = require("fs");
+        const [requestsFile, portFile] = process.argv.slice(1);
+        const server = require("http").createServer((req, res) => {
+            fs.appendFileSync(requestsFile, JSON.stringify({ url: req.url, headers: req.headers }) + "\n");
+            res.writeHead(404);
+            res.end();
+        });
+        server.listen(0, "127.0.0.1", () => fs.writeFileSync(portFile, String(server.address().port)));
+    ' "$BATS_TEST_TMPDIR/proxy_requests" "$port_file" > /dev/null 2>&1 3>&- &
+    local _
+    for _ in $(seq 1 100); do
+        [ -s "$port_file" ] && break
+        sleep 0.05
+    done
+    cat "$port_file"
+}
+
+@test "proxy-probe: a listener that answers 404 is reachable, asked once without a credential" {
+    command -v wget > /dev/null || {
+        echo "wget must be on PATH to run the proxy-probe tests" >&2
+        return 1
+    }
+    local port
+    port="$(start_proxy_listener)"
+    export PROXY_URL="http://127.0.0.1:$port/package-sources/"
+
+    run sh "$PUBLISHER" proxy-probe
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^FOUNDRY_PROXY_PROBE ' <<< "$output")" -eq 1 ]
+    [[ "$(proxy_probe_line)" == "FOUNDRY_PROXY_PROBE result=reachable detail="*"404"* ]]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/proxy_requests")" -eq 1 ]
+    grep -q '"url":"/package-sources/"' "$BATS_TEST_TMPDIR/proxy_requests"
+    ! grep -qi '"authorization"' "$BATS_TEST_TMPDIR/proxy_requests"
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+@test "proxy-probe: a closed port is unreachable, on one FOUNDRY_PROXY_PROBE line" {
+    command -v wget > /dev/null || {
+        echo "wget must be on PATH to run the proxy-probe tests" >&2
+        return 1
+    }
+    export PROXY_URL="http://127.0.0.1:1/package-sources/"
+
+    run sh "$PUBLISHER" proxy-probe
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^FOUNDRY_PROXY_PROBE ' <<< "$output")" -eq 1 ]
+    [[ "$(proxy_probe_line)" == "FOUNDRY_PROXY_PROBE result=unreachable detail="?* ]]
+}
+
+@test "proxy-probe: without PROXY_URL it fails without a FOUNDRY_PROXY_PROBE line" {
+    unset PROXY_URL
+
+    run sh "$PUBLISHER" proxy-probe
+
+    [ "$status" -ne 0 ]
+    [ -z "$(proxy_probe_line)" ]
+}
+
+@test "proxy-probe: a PROXY_URL that is not http or https fails without a FOUNDRY_PROXY_PROBE line" {
+    export PROXY_URL="file:///etc/passwd"
+
+    run sh "$PUBLISHER" proxy-probe
+
+    [ "$status" -ne 0 ]
+    [ -z "$(proxy_probe_line)" ]
+}

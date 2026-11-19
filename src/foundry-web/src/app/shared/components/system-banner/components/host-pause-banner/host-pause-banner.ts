@@ -27,11 +27,11 @@ interface HostPauseRow {
   readonly failedChecks: string | null;
 }
 
-function isSameLocalDay(a: Date, b: Date): boolean {
+export function isSameLocalDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function describeFailedChecks(probeAttempts: number): string | null {
+export function describeFailedChecks(probeAttempts: number): string | null {
   if (probeAttempts < 1) {
     return null;
   }

@@ -1,6 +1,6 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { GlobalSettingsResponse, PausedHost } from '../models/settings.model';
+import { GlobalSettingsResponse, PackageProxyPause, PausedHost } from '../models/settings.model';
 
 const PAUSE_DISPATCH_ERROR = "Couldn't pause dispatch. Try again.";
 const RESUME_DISPATCH_ERROR = "Couldn't resume dispatch. Try again.";
@@ -18,6 +18,9 @@ export class DispatchService {
   private readonly _pausedHostsSignal: WritableSignal<readonly PausedHost[]> = signal([]);
   readonly pausedHosts: Signal<readonly PausedHost[]> = this._pausedHostsSignal.asReadonly();
 
+  private readonly _packageProxyPauseSignal: WritableSignal<PackageProxyPause | null> = signal(null);
+  readonly packageProxyPause: Signal<PackageProxyPause | null> = this._packageProxyPauseSignal.asReadonly();
+
   private readonly _pausingSignal: WritableSignal<boolean> = signal(false);
   readonly pausing: Signal<boolean> = this._pausingSignal.asReadonly();
 
@@ -31,6 +34,7 @@ export class DispatchService {
     this._isDispatchPausedSignal.set(response.isDispatchPaused);
     this._usageLimitResetsAtSignal.set(response.usageLimitResetsAt);
     this._pausedHostsSignal.set(response.pausedHosts ?? []);
+    this._packageProxyPauseSignal.set(response.packageProxyPause ?? null);
   }
 
   pauseDispatch(): void {
