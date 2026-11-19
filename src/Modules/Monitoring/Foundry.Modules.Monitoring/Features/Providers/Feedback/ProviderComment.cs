@@ -7,6 +7,10 @@ namespace Foundry.Modules.Monitoring.Features.Providers.Feedback;
 /// schema declares <c>databaseId</c> nullable), in which case the comment can never match the
 /// posted-comment registry.
 /// </param>
+/// <param name="ReviewId">
+/// The GitHub review the comment belongs to (a review summary's own ID); <see langword="null"/> on GitLab and for
+/// conversation comments.
+/// </param>
 internal sealed record ProviderComment(
     ProviderCommentId? Id,
     string Body,
@@ -17,4 +21,5 @@ internal sealed record ProviderComment(
     string? FilePath,
     int? Line,
     CommentOrigin Origin,
-    bool ThreadResolved);
+    bool ThreadResolved,
+    ProviderCommentId? ReviewId = null);

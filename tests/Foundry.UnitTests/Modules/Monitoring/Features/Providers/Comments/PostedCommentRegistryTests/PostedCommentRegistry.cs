@@ -121,6 +121,46 @@ public sealed class PostedCommentRegistry : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAReviewIsRecordedAndSaved_LoadMatchesItsCommentsButNotAConversationCommentWithTheSameId()
+    {
+        // Arrange — GitHub numbers reviews apart from issue comments, so the kinds keep equal numbers apart
+        MonitoredRepository repository = SeedRepository("owner/repo");
+        await using (FoundryDbContext writeContext = NewContext())
+        {
+            new Registry(writeContext).Record(repository.Id, PostedCommentKey.Review(Id(500)), PostedAt);
+            await writeContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext readContext = NewContext();
+        Registry sut = new(readContext);
+
+        // Act
+        PostedCommentIds ids = await sut.LoadAsync(repository.Id, CancellationToken.None);
+
+        // Assert
+        ids.ShouldSatisfyAllConditions(
+            () => ids.Contains(new ProviderCommentBuilder().WithId(9).WithReviewId(500).WithOrigin(CommentOrigin.ReviewThread).Build()).ShouldBeTrue(),
+            () => ids.Contains(Conversation(500)).ShouldBeFalse());
+    }
+
+    [Fact]
+    public async Task WhenTheSameIdIsRecordedAsAConversationCommentAndAReview_SavesBoth()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository("owner/repo");
+        await using FoundryDbContext dbContext = NewContext();
+        Registry sut = new(dbContext);
+
+        // Act
+        sut.Record(repository.Id, Id(500), PostedAt);
+        sut.Record(repository.Id, PostedCommentKey.Review(Id(500)), PostedAt);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        (await dbContext.Set<PostedComment>().CountAsync(TestContext.Current.CancellationToken)).ShouldBe(2);
+    }
+
+    [Fact]
     public async Task WhenRepositoryIsDeleted_ItsEntriesAreDeleted()
     {
         // Arrange

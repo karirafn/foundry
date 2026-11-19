@@ -286,7 +286,7 @@ public sealed class GetReviewFeedbackAsync
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitLabIssueProvider sut = BuildSut(handler);
-        PostedCommentIds registry = new([ProviderCommentId.Create(302).ValueOrThrow()]);
+        PostedCommentIds registry = new([PostedCommentKey.Conversation(ProviderCommentId.Create(302).ValueOrThrow())]);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(
