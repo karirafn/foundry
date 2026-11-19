@@ -12,6 +12,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.RetryImageBuildTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -61,7 +63,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -83,7 +85,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         // Act
         await sut.HandleAsync(new RetryImageBuild.Command(), TestContext.Current.CancellationToken);
@@ -105,7 +107,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -128,7 +130,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -150,7 +152,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         // Act
         await sut.HandleAsync(new RetryImageBuild.Command(), TestContext.Current.CancellationToken);
@@ -165,7 +167,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        RetryImageBuild.Handler sut = new(dbContext, dispatcher);
+        RetryImageBuild.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Shared;
@@ -15,7 +16,7 @@ internal static class GetSettings
 {
     internal sealed record Query : IQuery<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext) : IQueryHandler<Query, GlobalSettingsSummary>
+    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe) : IQueryHandler<Query, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Query query,
@@ -30,7 +31,7 @@ internal static class GetSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

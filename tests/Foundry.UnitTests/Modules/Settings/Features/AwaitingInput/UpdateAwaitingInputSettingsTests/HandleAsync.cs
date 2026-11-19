@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.AwaitingInput.UpdateAwaitingInputSettingsTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -55,7 +57,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAwaitingInputSettings.Handler sut = new(dbContext);
+        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -73,7 +75,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAwaitingInputSettings.Handler sut = new(dbContext);
+        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -91,7 +93,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAwaitingInputSettings.Handler sut = new(dbContext);
+        UpdateAwaitingInputSettings.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

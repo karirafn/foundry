@@ -43,7 +43,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 IngressKestrelBinding.AddIngressEndpoints(
     builder,
-    new IngressPortSetting(WebhookIngressOptions.PortKey),
+    new IngressPortSetting(WebhookIngressOptions.PortKey, WebhookIngressOptions.DefaultPort),
     new IngressPortSetting(PackageSourceProxyOptions.ProxyPortKey, PackageSourceProxyOptions.DefaultProxyPort));
 builder.Services.ConfigureHttpJsonOptions(options =>
 {

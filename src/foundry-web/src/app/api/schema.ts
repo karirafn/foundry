@@ -1207,6 +1207,8 @@ export interface components {
             pidsLimit: number | string;
             additionalDenyRules: string[];
             pausedHosts: components["schemas"]["PausedHost"][];
+            /** Format: int32 */
+            webhookPort: number | string;
             webhookPublicBaseUrl?: null | string;
             /**
              * Format: int32

@@ -12,6 +12,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateWorkerImageConfigurationTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -75,7 +77,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
@@ -96,7 +98,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
@@ -119,7 +121,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
@@ -144,7 +146,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
@@ -168,7 +170,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
@@ -193,7 +195,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "my-registry/foundry-worker:v2",
@@ -218,7 +220,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
@@ -242,7 +244,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: DefaultImageTag,
@@ -267,7 +269,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "",
@@ -292,7 +294,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: ":latest",
@@ -317,7 +319,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "   ",
@@ -338,7 +340,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, dispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), dispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:v1",

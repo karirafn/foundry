@@ -8,7 +8,6 @@ using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -24,11 +23,9 @@ public sealed class RegisterAsync
 
     private static WebhookRegistrar BuildSut(
         RecordingBranchRulesProviderFactory factory,
-        string? publicBaseUrl = PublicBaseUrl,
-        int? port = 5099) =>
+        string? publicBaseUrl = PublicBaseUrl) =>
         new(
             new WebhookIngress(
-                Options.Create(new WebhookIngressOptions { Port = port }),
                 new StubWebhookSettingsQueries(publicBaseUrl)),
             factory,
             NullLogger<WebhookRegistrar>.Instance);
@@ -169,14 +166,12 @@ public sealed class RegisterAsync
         repository.WebhookStatus.ShouldBe(WebhookStatus.NotRegistered);
     }
 
-    [Theory]
-    [InlineData(null, 5099)]
-    [InlineData(PublicBaseUrl, null)]
-    public async Task WhenIngressIsNotConfigured_MakesNoCall(string? publicBaseUrl, int? port)
+    [Fact]
+    public async Task WhenNoPublicBaseUrlIsStored_MakesNoCall()
     {
         // Arrange
         RecordingBranchRulesProviderFactory factory = new();
-        WebhookRegistrar sut = BuildSut(factory, publicBaseUrl, port);
+        WebhookRegistrar sut = BuildSut(factory, publicBaseUrl: null);
         MonitoredRepository repository = NewRepository();
 
         // Act

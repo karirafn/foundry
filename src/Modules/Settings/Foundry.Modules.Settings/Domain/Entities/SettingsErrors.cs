@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -47,6 +48,41 @@ internal static class SettingsErrors
 
     internal static readonly Error InvalidWebhookPublicBaseUrl =
         new(InvalidWebhookPublicBaseUrlCode, $"The webhook public base URL must be an absolute https URL without query or fragment, at most {GlobalSettings.MaxWebhookPublicBaseUrlLength} characters.");
+
+    internal static readonly Error WebhookPublicBaseUrlRequired =
+        new(InvalidWebhookPublicBaseUrlCode, "Enter the public https URL your tunnel or proxy serves.");
+
+    internal static readonly Error UndeliverableWebhookHost =
+        new(InvalidWebhookPublicBaseUrlCode, "GitHub and GitLab can't deliver to this address. Use the public https address your tunnel or proxy serves — not localhost or a loopback, link-local or unspecified IP address.");
+
+    internal const string WebhookPublicBaseUrlUnreachableCode = "Settings.WebhookPublicBaseUrlUnreachable";
+
+    /// <summary>The self-probe through <paramref name="url"/> did not reach this Foundry (ADR 0116).</summary>
+    internal static Error WebhookPublicBaseUrlUnreachable(WebhookProbeFailure failure, WebhookPublicBaseUrl url, int webhookPort)
+    {
+        Uri uri = new(url.Value);
+        string host = uri.Host;
+        string detail = failure switch
+        {
+            WebhookProbeFailure.Dns =>
+                $"Couldn't resolve {host}. Check the URL for typos and that its DNS record or tunnel hostname exists. A quick tunnel gets a new address each time it starts — copy the current one.",
+            WebhookProbeFailure.Tls =>
+                $"{host} answered, but its HTTPS certificate was rejected. Make sure the tunnel or proxy serves a valid, unexpired certificate for {host} from a public certificate authority.",
+            WebhookProbeFailure.Timeout =>
+                $"{host} didn't answer within 10 seconds. Check that the tunnel or proxy is running and forwards to port {webhookPort} on the Foundry host. If the proxy sits behind the same router as Foundry, the router may not route requests back to its own public address.",
+            WebhookProbeFailure.OtherInstance =>
+                $"A server at {host} answered, but it isn't this Foundry. Point the tunnel or proxy at port {webhookPort} — the webhook port — not Foundry's main port or another service."
+                + (EndsWithWebhooksSegment(uri) ? " Remove /webhooks from the end of the URL — Foundry adds it." : string.Empty),
+            WebhookProbeFailure.HttpStatus status =>
+                $"{host} answered with HTTP {status.StatusCode} instead of passing the request to Foundry. Check for an access policy, login page, redirect or firewall rule in front of /webhooks/*.",
+            _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown webhook probe failure."),
+        };
+
+        return new Error(WebhookPublicBaseUrlUnreachableCode, detail);
+    }
+
+    private static bool EndsWithWebhooksSegment(Uri uri) =>
+        uri.AbsolutePath.TrimEnd('/').EndsWith("/webhooks", StringComparison.OrdinalIgnoreCase);
 
     internal const string InvalidProviderHostCode = "Settings.InvalidProviderHost";
 

@@ -10,7 +10,6 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -50,7 +49,6 @@ public sealed class RegisterNotRegisteredAsync : IAsyncDisposable
             new RepositoryEligibilityDiffer(_dbContext, new UnusedEvaluator()),
             new WebhookRegistrar(
                 new WebhookIngress(
-                    Options.Create(new WebhookIngressOptions { Port = 5099 }),
                     new StubWebhookSettingsQueries("https://hooks.example.com")),
                 factory,
                 NullLogger<WebhookRegistrar>.Instance),

@@ -1,1 +1,47 @@
 @use '../settings-shared' as *;
+@use '../../../../styles/controls' as *;
+
+.general-settings {
+  &__webhook-port {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__readonly-value {
+    font-family: var(--fd-font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--fd-text-primary);
+  }
+
+  &__disclosure > summary {
+    cursor: pointer;
+    color: var(--fd-text-link);
+    font-size: 0.875rem;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__probe-status {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    min-height: 1.25rem;
+  }
+
+  &__field-hint,
+  &__field-error,
+  &__probe-status {
+    overflow-wrap: break-word;
+  }
+
+  &__save-btn[aria-disabled='true'] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}

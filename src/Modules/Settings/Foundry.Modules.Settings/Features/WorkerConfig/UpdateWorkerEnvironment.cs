@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
@@ -19,7 +20,7 @@ internal static class UpdateWorkerEnvironment
         double CpuLimit,
         int PidsLimit) : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext)
+    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
@@ -51,7 +52,7 @@ internal static class UpdateWorkerEnvironment
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

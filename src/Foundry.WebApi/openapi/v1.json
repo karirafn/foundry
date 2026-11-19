@@ -3719,7 +3719,8 @@
           "cpuLimit",
           "pidsLimit",
           "additionalDenyRules",
-          "pausedHosts"
+          "pausedHosts",
+          "webhookPort"
         ],
         "type": "object",
         "properties": {
@@ -3845,6 +3846,14 @@
             "items": {
               "$ref": "#/components/schemas/PausedHost"
             }
+          },
+          "webhookPort": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "webhookPublicBaseUrl": {
             "type": [

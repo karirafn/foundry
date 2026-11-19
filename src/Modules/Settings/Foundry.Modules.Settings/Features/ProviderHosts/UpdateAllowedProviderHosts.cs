@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Shared;
@@ -15,7 +16,7 @@ internal static class UpdateAllowedProviderHosts
 {
     internal sealed record Command(IReadOnlyList<string> Hosts) : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
+    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe) : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Command command,
@@ -37,7 +38,7 @@ internal static class UpdateAllowedProviderHosts
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

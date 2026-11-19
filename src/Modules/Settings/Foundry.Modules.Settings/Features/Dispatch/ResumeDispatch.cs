@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
@@ -18,6 +19,7 @@ internal static class ResumeDispatch
 
     internal sealed class Handler(
         DbContext dbContext,
+        IWebhookIngressProbe ingressProbe,
         IIntegrationEventDispatcher integrationEventDispatcher)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -39,7 +41,7 @@ internal static class ResumeDispatch
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

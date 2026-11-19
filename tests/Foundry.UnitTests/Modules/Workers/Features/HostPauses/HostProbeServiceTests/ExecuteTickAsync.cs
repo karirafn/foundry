@@ -20,6 +20,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Workers.Features.HostPauses.HostProbeServiceTests;
 
 public sealed class ExecuteTickAsync : IAsyncDisposable
@@ -39,6 +41,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         services.AddDbContext<FoundryDbContext>(options => options.UseSqlite(_connection));
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
         services.AddScoped<IGlobalSettingsQueries, GlobalSettingsQueries>();
+        services.AddSingleton<IWebhookIngressProbe>(new StubWebhookIngressProbe());
         OneRepositoryPerHost repositories = new();
         services.AddSingleton<IHostRepositoryQueries>(repositories);
         services.AddSingleton<IRepositoryDispatchQueries>(repositories);

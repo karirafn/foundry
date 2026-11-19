@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
@@ -18,6 +19,7 @@ internal static class RetryImageBuild
 
     internal sealed class Handler(
         DbContext dbContext,
+        IWebhookIngressProbe ingressProbe,
         IIntegrationEventDispatcher integrationEventDispatcher)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -44,7 +46,7 @@ internal static class RetryImageBuild
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return GlobalSettingsMapper.ToSummary(settings);
+            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
         }
     }
 

@@ -169,6 +169,13 @@ public static class MonitoringModule
         services.AddScoped<WebhookRegistrar>();
         services.AddScoped<AccountWebhookRegistrar>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
+        // The self-probe (ADR 0116) sends exactly one request: the default resilience handler (retries and its own
+        // timeouts) is cleared, redirects are not followed, and the probe applies its own 10 s timeout.
+        services.AddHttpClient(WebhookIngressProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler { AllowAutoRedirect = false })
+            .ConfigureAdditionalHttpMessageHandlers(static (handlers, _) => handlers.Clear());
+        services.TryAddSingleton<WebhookIngressProbe>();
+        services.TryAddSingleton<IWebhookIngressProbe>(static sp => sp.GetRequiredService<WebhookIngressProbe>());
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredRebasePending, IssueEnteredRebasePendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredMergePending, IssueEnteredMergePendingHandler>();
@@ -193,6 +200,7 @@ public static class MonitoringModule
         app.MapPackageSourceEndpoints();
         ReceiveGitHubWebhook.Endpoint.Map(app);
         ReceiveGitLabWebhook.Endpoint.Map(app);
+        ReceiveWebhookProbe.Endpoint.Map(app);
         ProxyPackageSourceRequest.Endpoint.Map(app);
         return app;
     }

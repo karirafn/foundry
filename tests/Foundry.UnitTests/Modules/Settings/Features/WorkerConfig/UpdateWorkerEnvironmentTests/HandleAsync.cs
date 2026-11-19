@@ -12,6 +12,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateWorkerEnvironmentTests;
 
 public sealed class HandleAsync : IAsyncLifetime
@@ -67,7 +69,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext);
+        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
         UpdateWorkerEnvironment.Command command = CreateCommand();
 
         // Act
@@ -88,7 +90,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await SeedSettingsAsync();
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateWorkerEnvironment.Handler sut = new(dbContext);
+            UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
             UpdateWorkerEnvironment.Command command = CreateCommand(memoryLimitMb: 2048);
 
             // Act
@@ -108,7 +110,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext);
+        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -133,7 +135,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext);
+        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

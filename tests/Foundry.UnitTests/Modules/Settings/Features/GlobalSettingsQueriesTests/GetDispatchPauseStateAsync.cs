@@ -11,6 +11,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsQueriesTests;
 
 public sealed class GetDispatchPauseStateAsync : IAsyncDisposable
@@ -54,7 +56,7 @@ public sealed class GetDispatchPauseStateAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         DispatchPauseState result = await sut.GetDispatchPauseStateAsync(TestContext.Current.CancellationToken);
@@ -82,7 +84,7 @@ public sealed class GetDispatchPauseStateAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         DispatchPauseState result = await sut.GetDispatchPauseStateAsync(TestContext.Current.CancellationToken);
@@ -100,7 +102,7 @@ public sealed class GetDispatchPauseStateAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         DispatchPauseState result = await sut.GetDispatchPauseStateAsync(TestContext.Current.CancellationToken);

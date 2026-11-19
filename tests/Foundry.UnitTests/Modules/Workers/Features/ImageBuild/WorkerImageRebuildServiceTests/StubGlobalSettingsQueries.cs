@@ -36,7 +36,8 @@ internal sealed class StubGlobalSettingsQueries(
         CpuLimit: 2.0,
         PidsLimit: 512,
         AdditionalDenyRules: [],
-        PausedHosts: []);
+        PausedHosts: [],
+        WebhookPort: 5099);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);

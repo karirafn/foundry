@@ -9,6 +9,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsQueriesTests;
 
 public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
@@ -50,7 +52,7 @@ public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         IReadOnlyList<string> result =
@@ -65,7 +67,7 @@ public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         IReadOnlyList<string> result =
@@ -87,7 +89,7 @@ public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         IReadOnlyList<string> result =

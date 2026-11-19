@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
@@ -7,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Settings.Features;
 
-internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettingsQueries
+internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngressProbe ingressProbe) : IGlobalSettingsQueries
 {
     public async Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
     {
@@ -15,7 +16,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
-        return settings is null ? null : GlobalSettingsMapper.ToSummary(settings);
+        return settings is null ? null : GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
     }
 
     public async Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)

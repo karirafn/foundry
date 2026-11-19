@@ -9,6 +9,8 @@ using Shouldly;
 
 using Xunit;
 
+using Foundry.UnitTests.Modules.Settings.Features;
+
 namespace Foundry.UnitTests.Modules.Settings.Features.GlobalSettingsQueriesTests;
 
 public sealed class GetPollIntervalSecondsAsync : IAsyncDisposable
@@ -50,7 +52,7 @@ public sealed class GetPollIntervalSecondsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         int result = await sut.GetPollIntervalSecondsAsync(TestContext.Current.CancellationToken);
@@ -64,7 +66,7 @@ public sealed class GetPollIntervalSecondsAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
 
         // Act
         int result = await sut.GetPollIntervalSecondsAsync(TestContext.Current.CancellationToken);

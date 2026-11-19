@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.IntegrationTests.Shared;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -47,6 +48,7 @@ public sealed class WhenRegisteringAutomatically : IAsyncDisposable
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.Configure<WebhookIngressOptions>(options => options.Port = WebhookTestHost.WebhookPort);
+            services.AddSingleton<IWebhookIngressProbe>(new StubWebhookIngressProbe(WebhookTestHost.WebhookPort, new WebhookProbeResult.Reached()));
 
             services.RemoveAll<IIssueProviderFactory>();
             services.AddSingleton(_state);
