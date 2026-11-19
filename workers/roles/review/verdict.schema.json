@@ -4,10 +4,10 @@
   "required": ["summary", "findings", "dimensions", "criteria", "tests"],
   "properties": {
     "summary": {
-      "description": "What the change does and your overall judgment of it, in a few sentences.",
+      "description": "What the change does and your overall judgment of it, in one or two short plain sentences.",
       "type": "string",
       "minLength": 1,
-      "maxLength": 2000
+      "maxLength": 300
     },
     "findings": {
       "description": "Every problem you found, one per finding. Empty when you found none.",
@@ -58,10 +58,11 @@
             }
           },
           "body": {
-            "description": "What is wrong, why it matters, and what would fix it.",
+            "description": "What is wrong and what would fix it, in one short plain line without Markdown.",
             "type": "string",
             "minLength": 1,
-            "maxLength": 2000
+            "maxLength": 300,
+            "pattern": "^[^\\r\\n]+$"
           }
         }
       }
@@ -102,9 +103,10 @@
             "enum": ["met", "unmet", "not_verifiable"]
           },
           "evidence": {
-            "description": "Where the change meets or misses the criterion (files, tests), or why it cannot be verified.",
+            "description": "Where the change meets or misses the criterion (a file or test), or why it cannot be verified, in one short plain line.",
             "type": "string",
-            "maxLength": 1000
+            "maxLength": 200,
+            "pattern": "^[^\\r\\n]+$"
           }
         }
       }
@@ -121,9 +123,10 @@
           "enum": ["adequate", "missing", "not_needed"]
         },
         "reason": {
-          "description": "Why you judged the tests that way.",
+          "description": "Why you judged the tests that way, in one short plain line.",
           "type": "string",
-          "maxLength": 1000
+          "maxLength": 200,
+          "pattern": "^[^\\r\\n]+$"
         },
         "coveringTests": {
           "description": "The repository-relative paths of the test files that cover the change.",

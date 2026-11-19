@@ -20,6 +20,8 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
 
     public Error? IdentityError { get; init; }
 
+    public Error? PostError { get; init; }
+
     public Task<Result<string>> OpenPullRequestAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,
@@ -42,6 +44,11 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
         string body,
         CancellationToken cancellationToken)
     {
+        if (PostError is not null)
+        {
+            return Task.FromResult(Result.Fail(PostError));
+        }
+
         _summaries.Add((pullRequestUrl, body));
         return Task.FromResult(Result.Ok());
     }

@@ -17,6 +17,7 @@ using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Publishing;
+using Foundry.Modules.Workers.Features.Reviews;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Roles.Models;
 using Foundry.Modules.Workers.Features.Runs;
@@ -89,6 +90,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
         services.AddIntegrationEventHandler<IssueClosedWithUnpublishedRun, IssueClosedWithUnpublishedRunHandler>();
+        services.AddIntegrationEventHandler<ReviewRunCompleted, ReviewCommentPoster>();
         services.AddIntegrationEventHandler<WorkerImageSettingsChanged, WorkerImageSettingsChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
