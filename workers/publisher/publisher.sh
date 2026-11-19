@@ -10,8 +10,10 @@
 #               FOUNDRY_BASE default_branch=<name> default_sha=<sha> [branch_sha=<sha>]
 #             With REVIEW_BRANCH and REVIEW_COMMIT (a review run, ADR 0114) it also bundles the reviewed commit as
 #             refs/foundry/review, writes the review packet <handoff>/in/review/diff.patch (the commit's diff against
-#             its merge base with the default branch), and prints one line per changed path and the diff's patch-id:
+#             its merge base with the default branch), and prints one line per changed path, one line per hunk with the
+#             range of lines it adds (for inline review comments), and the diff's patch-id:
 #               FOUNDRY_REVIEW_PATH <A|M|D><TAB><path as git prints it>
+#               FOUNDRY_REVIEW_LINES <path as git prints it> <start>-<end>   (per hunk that adds lines)
 #               FOUNDRY_REVIEW_PATCH_ID <id>      (absent when the diff is empty)
 #             An ls-remote that cannot reach the provider is retried after each of UNREACHABLE_RETRY_DELAYS,
 #             with one stderr line per retry. Every failure prints the bootstrap-failure sentinel on stderr:
@@ -309,7 +311,7 @@ prepare_review_commit() {
 }
 
 # write_review_packet — writes in/review/diff.patch (world-readable, beside its final name and renamed, like the
-# base bundle), then prints the changed paths and the diff's patch-id.
+# base bundle), then prints the changed paths, each hunk's added-line range and the diff's patch-id.
 write_review_packet() {
     { mkdir -p "$HANDOFF_DIR/in/review" && chmod 0755 "$HANDOFF_DIR/in/review"; } 2> "$git_err" \
         || fail "could not create the review packet directory: $(last_error)"
@@ -333,8 +335,28 @@ write_review_packet() {
     fi
 
     # -U0: the id must stay equal across a clean rebase that changes the context lines around a hunk.
-    review_diff -U0 > "$WORK_DIR/review.U0.patch" 2> "$git_err" \
+    review_diff -U0 --src-prefix=a/ --dst-prefix=b/ > "$WORK_DIR/review.U0.patch" 2> "$git_err" \
         || fail "computing the review patch-id failed: $(last_error)"
+    # A hunk header "@@ -a[,b] +c[,d] @@" adds lines c..c+d-1 (d defaults to 1); d=0 adds none. The "+++" line names
+    # the new path as git prints it: "b/<path>", or "\"b/<path>\"" when quoted, with a tab after a path holding a space.
+    awk '
+        /^\+\+\+ / {
+            path = substr($0, 5)
+            sub(/\t$/, "", path)
+            if (path == "/dev/null") { path = "" }
+            else if (substr(path, 1, 3) == "\"b/") { path = "\"" substr(path, 4) }
+            else if (substr(path, 1, 2) == "b/") { path = substr(path, 3) }
+            next
+        }
+        /^@@ / && path != "" {
+            added = $3
+            sub(/^\+/, "", added)
+            count = 1
+            comma = index(added, ",")
+            if (comma > 0) { count = substr(added, comma + 1) + 0; added = substr(added, 1, comma - 1) }
+            if (count > 0) { printf "FOUNDRY_REVIEW_LINES %s %d-%d\n", path, added, added + count - 1 }
+        }
+    ' "$WORK_DIR/review.U0.patch"
     patch_id="$(git patch-id --stable < "$WORK_DIR/review.U0.patch" | awk '{ print $1; exit }')"
     if [ -n "$patch_id" ]; then
         printf 'FOUNDRY_REVIEW_PATCH_ID %s\n' "$patch_id"
