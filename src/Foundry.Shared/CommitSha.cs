@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Foundry.Modules.Workers.Domain.ValueObjects;
+namespace Foundry.Shared;
 
 /// <summary>A full git object name: 40 lowercase hex digits (SHA-1) or 64 (SHA-256).</summary>
 public readonly partial record struct CommitSha

@@ -1,10 +1,10 @@
-using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.CommitShaTests;
+namespace Foundry.UnitTests.Shared.CommitShaTests;
 
 public sealed class From
 {

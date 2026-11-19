@@ -1,3 +1,4 @@
+using Foundry.Shared;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.UnitTests.Modules.Workers.Domain.Entities.States.PublishingRunTests;

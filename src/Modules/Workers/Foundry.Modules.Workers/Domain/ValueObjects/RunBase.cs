@@ -1,3 +1,5 @@
+using Foundry.Shared;
+
 namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
