@@ -21,6 +21,12 @@ internal static class ReviewVerdictComment
     {
         ArgumentNullException.ThrowIfNull(verdict);
 
+        // The approval's own comment already holds its findings; a carried one only says why it still applies.
+        if (verdict.CarriedFrom is { } carriedFrom)
+        {
+            return $"Approval carried to `{ShortSha(verdict.ReviewedCommit)}`: the change is unchanged since the review of `{ShortSha(carriedFrom.ReviewedCommit)}`.";
+        }
+
         ReviewFinding[] blocking = [.. verdict.Findings.Where(finding => finding.Severity == ReviewSeverity.Blocking)];
         ReviewFinding[] advisory = [.. verdict.Findings.Where(finding => finding.Severity == ReviewSeverity.Advisory)];
 

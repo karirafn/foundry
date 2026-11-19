@@ -115,6 +115,29 @@ public sealed class CompletedRun : WorkerRun
         return completed;
     }
 
+    /// <summary>
+    /// A review that completed without a container: its approval carried from an earlier review of the same change
+    /// (ADR 0113).
+    /// </summary>
+    internal static CompletedRun FromStarting(StartingRun starting, RecordedReviewVerdict carriedVerdict)
+    {
+        CompletedRun completed = new(
+            starting.Id,
+            starting.IssueId,
+            starting.CreatedAt,
+            exitCode: 0,
+            DateTimeOffset.UtcNow,
+            branchName: null,
+            pullRequestUrl: null,
+            resultSummary: null,
+            starting.Role,
+            starting.Image);
+
+        completed.RecordReviewVerdict(carriedVerdict);
+        completed.CarryDispatchFactsFrom(starting);
+        return completed;
+    }
+
     internal static CompletedRun FromActive(
         ActiveRun active,
         int exitCode,

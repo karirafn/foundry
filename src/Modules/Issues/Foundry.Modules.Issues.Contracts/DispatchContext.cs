@@ -50,8 +50,15 @@ public abstract record DispatchContext
     /// <summary>
     /// A review run (ADR 0113): it judges the pull request at <paramref name="ReviewedCommit"/> on
     /// <paramref name="BranchName"/> and returns a verdict. It pushes nothing, so the run itself gets no branch.
+    /// <paramref name="CarriedPatchId"/> is the patch-id of the issue's latest approval, or <see langword="null"/> when
+    /// it has none to carry: when the change prepared for this review has the same patch-id, the approval carries to
+    /// the new head without a run.
     /// </summary>
-    public sealed record Review(string BranchName, string PullRequestUrl, string ReviewedCommit) : DispatchContext
+    public sealed record Review(
+        string BranchName,
+        string PullRequestUrl,
+        string ReviewedCommit,
+        string? CarriedPatchId = null) : DispatchContext
     {
         public override DispatchRole Role => DispatchRole.Review;
     }

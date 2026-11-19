@@ -5144,6 +5144,16 @@
               "null",
               "string"
             ]
+          },
+          "carriedFrom": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewCarry"
+              }
+            ]
           }
         }
       },
@@ -5426,6 +5436,22 @@
           "workerRunId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "ReviewCarry": {
+        "required": [
+          "runId",
+          "reviewedCommit"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewedCommit": {
+            "type": "string"
           }
         }
       },

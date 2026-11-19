@@ -254,4 +254,18 @@ public sealed class Compose
             () => comment.ShouldMatch(@"- _\d+ more omitted\._"),
             () => comment.Split('\n')[0].ShouldBe("> [!CAUTION]"));
     }
+
+    [Fact]
+    public void ACarriedApproval_IsAOneLineNoteNamingTheNewHeadAndTheReviewedCommit()
+    {
+        // Arrange
+        RecordedReviewVerdict carried = Verdict(findings: [Advisory("Consider a constant.")])
+            .CarryTo("fedcba9876543210fedcba9876543210fedcba98", WorkerRunId.New());
+
+        // Act
+        string comment = ReviewVerdictComment.Compose(carried);
+
+        // Assert
+        comment.ShouldBe("Approval carried to `fedcba9`: the change is unchanged since the review of `0123456`.");
+    }
 }

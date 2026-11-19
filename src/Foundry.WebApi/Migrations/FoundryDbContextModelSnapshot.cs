@@ -128,6 +128,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("labels");
 
+                    b.Property<string>("LatestReview")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("latest_review");
+
                     b.Property<Guid>("MonitoredRepositoryId")
                         .HasColumnType("TEXT")
                         .HasColumnName("monitored_repository_id");

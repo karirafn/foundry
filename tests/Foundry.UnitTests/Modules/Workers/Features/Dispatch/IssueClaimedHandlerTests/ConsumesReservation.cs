@@ -63,6 +63,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             _orchestrator,
             new FakePublisher(),
             new NullDomainEventDispatcher(),
+            new CapturingIntegrationEventDispatcher(),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             _providerQueries,

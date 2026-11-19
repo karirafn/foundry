@@ -109,6 +109,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             orchestrator ?? new AlwaysFailingOrchestrator(),
             new FakePublisher(),
             domainDispatcher,
+            integrationEventDispatcher,
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),
             postExitProviderQueries ?? new BranchCreationFailsQueries(),

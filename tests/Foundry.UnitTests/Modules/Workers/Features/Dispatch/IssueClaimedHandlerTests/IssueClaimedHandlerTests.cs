@@ -41,6 +41,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly CapturingIntegrationEventDispatcher _integrationEvents = new();
 
     public HandleAsync()
     {
@@ -91,6 +92,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
             publisher ?? new FakePublisher(),
             new NullDomainEventDispatcher(),
+            _integrationEvents,
             settingsQueries ?? new StubGlobalSettingsQueries(),
             credentialQueries ?? new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),

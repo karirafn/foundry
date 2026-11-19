@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
+using WorkerRunCompletedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunCompleted;
 using WorkerRunFailedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
 using WorkerRunStartedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunStarted;
 
@@ -101,6 +102,23 @@ public sealed class StartingRun : WorkerRun
         ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName, monitoredRepositoryId);
         AddDomainEvent(new WorkerRunStartedEvent(Id, IssueId));
         return active;
+    }
+
+    /// <summary>
+    /// Completes the review without starting a container (ADR 0113): the change it was dispatched to review is unchanged
+    /// since an earlier approval, so <paramref name="carriedVerdict"/> is that approval carried to the new head.
+    /// </summary>
+    public CompletedRun CompleteCarried(RecordedReviewVerdict carriedVerdict)
+    {
+        ArgumentNullException.ThrowIfNull(carriedVerdict);
+        if (carriedVerdict.CarriedFrom is null || SuppliedReviewFacts is null)
+        {
+            throw new InvalidOperationException("Only a review run with its supplied facts completes with a carried approval.");
+        }
+
+        CompletedRun completed = CompletedRun.FromStarting(this, carriedVerdict);
+        AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, BranchName: null, PullRequestUrl: null));
+        return completed;
     }
 
     public FailedRun Fail(FailureReason reason)

@@ -41,7 +41,12 @@ public sealed class ReviewQueuedIssue : QueuedIssue, IReviewStepState
     /// <summary>A review run pushes nothing, so it gets no branch; its context names the branch it reads.</summary>
     public override BranchNameValue? DispatchBranchName => null;
 
-    public override DispatchContext Context => new DispatchContext.Review(BranchName, PullRequestUrl, ReviewedCommit);
+    /// <summary>
+    /// Carries the patch-id of the issue's latest approval, so dispatch can complete the review as carried when the
+    /// change is unchanged since that approval (ADR 0113).
+    /// </summary>
+    public override DispatchContext Context =>
+        new DispatchContext.Review(BranchName, PullRequestUrl, ReviewedCommit, LatestReview?.CarriablePatchId);
 
     public WorkerRunId WorkerRunId { get; private set; }
 
