@@ -40,6 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new WorkerRunFailedHandler(
             _dbContext,
             _dispatcher,
+            new NullWorkerRunQueries(),
             NullLogger<WorkerRunFailedHandler>.Instance);
     }
 

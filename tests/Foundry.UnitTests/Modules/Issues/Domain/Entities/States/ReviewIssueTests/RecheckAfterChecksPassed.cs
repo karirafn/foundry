@@ -128,7 +128,7 @@ public sealed class RecheckAfterChecksPassed
         ChecksPendingIssue checksPending = review.RecheckAfterChecksPassed(TransitionedAt).ShouldNotBeNull();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, "0a1b2c3d", TransitionedAt);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, "0a1b2c3d", TransitionedAt);
 
         // Assert
         next.ShouldBeOfType<MergePendingIssue>();
@@ -142,7 +142,7 @@ public sealed class RecheckAfterChecksPassed
         ChecksPendingIssue checksPending = review.RecheckAfterChecksPassed(TransitionedAt).ShouldNotBeNull();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, "0a1b2c3d", TransitionedAt);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: false, "0a1b2c3d", TransitionedAt);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBe(new ChecksOutcome.Passed());
@@ -157,7 +157,7 @@ public sealed class RecheckAfterChecksPassed
         IReadOnlyList<FailingCheck> failing = [new FailingCheck("test", "failed", "https://ci.example/2")];
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(failing), autoMerge: true, "0a1b2c3d", TransitionedAt);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(failing), autoMerge: true, reviewPullRequests: false, "0a1b2c3d", TransitionedAt);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.StillFailing>();

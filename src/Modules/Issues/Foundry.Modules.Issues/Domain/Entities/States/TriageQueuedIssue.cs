@@ -35,7 +35,7 @@ public sealed class TriageQueuedIssue : QueuedIssue
     {
     }
 
-    public override int TierRank => 2;
+    public override int TierRank => 3;
 
     /// <summary>A triage run gets no branch.</summary>
     public override BranchName? DispatchBranchName => null;

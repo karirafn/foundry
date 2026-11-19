@@ -57,6 +57,27 @@ internal sealed class ProviderPullRequestClosedHandler(
                 break;
             }
 
+            case ReviewQueuedIssue reviewQueuedIssue:
+            {
+                ContinuableFailedIssue failed = reviewQueuedIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(reviewQueuedIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case ReviewInProgressIssue reviewInProgressIssue:
+            {
+                ContinuableFailedIssue failed = reviewInProgressIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(reviewInProgressIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case ReviewFailedIssue reviewFailedIssue:
+            {
+                ContinuableFailedIssue failed = reviewFailedIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(reviewFailedIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             case AwaitingInputIssue { ResumeTarget: ResumeTarget.Revision } awaitingInputIssue:
             {
                 ContinuableFailedIssue failed = awaitingInputIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
@@ -66,7 +87,7 @@ internal sealed class ProviderPullRequestClosedHandler(
 
             default:
                 logger.LogWarning(
-                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue, MergePendingIssue or AwaitingInputIssue on a pull request (state: {State}); ignoring.",
+                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not in review, a review step, checks pending, rebase pending, merge pending or awaiting input on a pull request (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

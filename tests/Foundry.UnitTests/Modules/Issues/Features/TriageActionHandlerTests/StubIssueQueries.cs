@@ -41,6 +41,9 @@ internal sealed class StubIssueQueries : IIssueQueries
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyDictionary<int, IssueSnapshot>>(new Dictionary<int, IssueSnapshot>());
 
+    public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ReviewStepIssueInfo>>([]);
+
     public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

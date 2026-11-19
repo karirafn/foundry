@@ -405,6 +405,52 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem().AutoMerge.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task WhenVerdictResolves_ReviewPullRequestsIsOffByDefault()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Green()),
+            });
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: 42, Now, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+            .ReviewPullRequests.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenReviewPullRequestsIsSetInTheDatabase_VerdictCarriesIt()
+    {
+        // Arrange — no endpoint sets the flag yet (ADR 0113 ships it dark), so it is set on the stored row.
+        MonitoredRepository repository = SeedRepository();
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE monitored_repositories SET review_pull_requests = 1",
+            TestContext.Current.CancellationToken);
+        await _dbContext.Entry(repository).ReloadAsync(TestContext.Current.CancellationToken);
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Green()),
+            });
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: 42, Now, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+            .ReviewPullRequests.ShouldBeTrue();
+    }
+
     // --- NoneDetected within grace window → no event ---
 
     [Fact]
@@ -730,6 +776,9 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
+
+        public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<ReviewStepIssueInfo>>([]);
 
         public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
             MonitoredRepositoryId repositoryId,

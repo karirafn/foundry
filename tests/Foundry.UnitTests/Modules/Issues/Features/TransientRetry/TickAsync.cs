@@ -387,6 +387,24 @@ public sealed class TickAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTransientReviewFailureIsDue_QueuesTheReviewOfTheSameCommitAgain()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        ReviewFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(34)
+            .WithVerifiedHeadSha("0a1b2c3d")
+            .WithFailedAt(now.AddMinutes(-2))
+            .ReviewFailed();
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(failed, streak: 1, now);
+
+        // Assert
+        persisted.ShouldBeOfType<ReviewQueuedIssue>().ReviewedCommit.ShouldBe("0a1b2c3d");
+    }
+
+    [Fact]
     public async Task WhenARevisionFailureIsNotAutoRetryable_ItStaysParked()
     {
         // Arrange

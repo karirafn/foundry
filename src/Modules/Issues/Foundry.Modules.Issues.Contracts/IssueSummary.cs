@@ -7,7 +7,7 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <para>
 /// <paramref name="Stage"/>, <paramref name="NeedsAction"/>, <paramref name="AwaitsDispatch"/> and
 /// <paramref name="CodeStep"/> place the issue on the board (#851): the server decides, the dashboard renders.
-/// <paramref name="Stage"/> is one of <see cref="TriageStage"/>, <see cref="ImplementStage"/>,
+/// <paramref name="Stage"/> is one of <see cref="TriageStage"/>, <see cref="ImplementStage"/>, <see cref="ReviewStage"/>,
 /// <see cref="AwaitingReviewStage"/> or <see cref="DoneStage"/>; <paramref name="CodeStep"/> is one of
 /// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/>,
 /// <see cref="ChecksStep"/> or <see cref="MergingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
@@ -15,7 +15,8 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <para>
 /// <paramref name="RunKind"/> is the kind of worker run the issue runs next (#1059): one of <see cref="TriageRunKind"/>,
 /// <see cref="FreshRunKind"/>, <see cref="ContinuationRunKind"/>, <see cref="ReviewFixRunKind"/>,
-/// <see cref="ChecksFixRunKind"/>, <see cref="ConflictFixRunKind"/> or <see cref="InputResumeRunKind"/>, or
+/// <see cref="ChecksFixRunKind"/>, <see cref="ConflictFixRunKind"/>, <see cref="InputResumeRunKind"/> or
+/// <see cref="ReviewRunKind"/>, or
 /// <see langword="null"/> when the state has no run ahead.
 /// </para>
 /// <para>
@@ -62,6 +63,7 @@ public sealed record IssueSummary(
 
     public const string TriageStage = "triage";
     public const string ImplementStage = "implement";
+    public const string ReviewStage = "review";
     public const string AwaitingReviewStage = "awaiting_review";
     public const string DoneStage = "done";
 
@@ -72,6 +74,7 @@ public sealed record IssueSummary(
     public const string ChecksFixRunKind = "checks_fix";
     public const string ConflictFixRunKind = "conflict_fix";
     public const string InputResumeRunKind = "input_resume";
+    public const string ReviewRunKind = "review";
 
     public const string PublishingStep = "publishing";
     public const string PublishRetryingStep = "publish_retrying";

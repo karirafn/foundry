@@ -31,7 +31,7 @@ public sealed class ResolveVerdict
         DateTimeOffset now = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, Head, now);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, Head, now);
 
         // Assert
         MergePendingIssue mergePending = next.ShouldBeOfType<MergePendingIssue>();
@@ -57,7 +57,7 @@ public sealed class ResolveVerdict
         DateTimeOffset now = new(2026, 11, 14, 12, 0, 0, TimeSpan.Zero);
 
         // Act
-        checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, Head, now);
+        checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, Head, now);
 
         // Assert
         IssueMergePending raised = checksPending.DomainEvents.OfType<IssueMergePending>().ShouldHaveSingleItem();
@@ -73,7 +73,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
@@ -90,7 +90,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>();
@@ -105,7 +105,7 @@ public sealed class ResolveVerdict
             .ChecksPendingFromRevision();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
@@ -131,7 +131,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(outcome, autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(outcome, autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBe(outcome);
@@ -146,7 +146,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(Failing), autoMerge, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(Failing), autoMerge, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionQueuedIssue revision = next.ShouldBeOfType<RevisionQueuedIssue>();
@@ -160,7 +160,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().WithFailingChecks(Failing).ChecksPendingAtCap();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(Failing), autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(Failing), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.StillFailing>();
@@ -179,7 +179,7 @@ public sealed class ResolveVerdict
 
         // Act
         Issue next = checksPending.ResolveVerdict(
-            new ChecksOutcome.StillFailing(infrastructure), autoMerge: true, Head, DateTimeOffset.UtcNow);
+            new ChecksOutcome.StillFailing(infrastructure), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome
@@ -196,6 +196,7 @@ public sealed class ResolveVerdict
         checksPending.ResolveVerdict(
             new ChecksOutcome.StillFailing([new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]),
             autoMerge: false,
+            reviewPullRequests: false,
             Head,
             DateTimeOffset.UtcNow);
 
@@ -212,7 +213,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(outcome, autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(outcome, autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBe(outcome);
@@ -229,6 +230,7 @@ public sealed class ResolveVerdict
         checksPending.ResolveVerdict(
             new ChecksOutcome.InfrastructureFailed([new FailingCheck("build", "ci_quota_exceeded", null, IsInfrastructureFailure: true)]),
             autoMerge: false,
+            reviewPullRequests: false,
             Head,
             DateTimeOffset.UtcNow);
 
@@ -248,7 +250,7 @@ public sealed class ResolveVerdict
 
         // Act
         Issue next = checksPending.ResolveVerdict(
-            new ChecksOutcome.StillFailing([infrastructure, fixable]), autoMerge: false, Head, DateTimeOffset.UtcNow);
+            new ChecksOutcome.StillFailing([infrastructure, fixable]), autoMerge: false, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionQueuedIssue revision = next.ShouldBeOfType<RevisionQueuedIssue>();
@@ -269,7 +271,7 @@ public sealed class ResolveVerdict
         ChecksPendingIssue checksPending = new IssueBuilder().WithFailingChecks(mixed).ChecksPendingAtCap();
 
         // Act
-        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(mixed), autoMerge: true, Head, DateTimeOffset.UtcNow);
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.StillFailing(mixed), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome

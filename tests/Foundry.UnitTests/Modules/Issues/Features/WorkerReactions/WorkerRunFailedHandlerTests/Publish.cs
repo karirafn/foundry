@@ -37,6 +37,7 @@ public sealed class Publish : IAsyncDisposable
         _sut = new WorkerRunFailedHandler(
             _dbContext,
             new CapturingDomainEventDispatcher(),
+            new NullWorkerRunQueries(),
             NullLogger<WorkerRunFailedHandler>.Instance);
     }
 

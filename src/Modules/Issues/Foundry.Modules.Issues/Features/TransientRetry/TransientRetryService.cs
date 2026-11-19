@@ -91,6 +91,7 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             ..await LoadAsync<ContinuableFailedIssue>(db, cancellationToken),
             ..await LoadAsync<TriageFailedIssue>(db, cancellationToken),
             ..await LoadAsync<RevisionFailedIssue>(db, cancellationToken),
+            ..await LoadAsync<ReviewFailedIssue>(db, cancellationToken),
         ];
 
         return [.. candidates.Where(i => ((IAutoRetryableFailedState)i).FailedAt <= coarseCutoff)];
@@ -151,6 +152,8 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
                 // A transient triage failure retries triage, never skips it (ADR 0097).
                 TriageFailedIssue triageFailed => triageFailed.RetryTriage(now),
                 RevisionFailedIssue revisionFailed => revisionFailed.Retry(now),
+                // A transient review failure reviews the same commit again (ADR 0113).
+                ReviewFailedIssue reviewFailed => reviewFailed.Retry(now),
                 _ => throw new UnreachableException($"Unexpected issue state after guard: {live.GetType().Name}"),
             };
 

@@ -54,5 +54,11 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("merge_outcome");
+
+        builder.Property(i => i.ReviewOutcome)
+            .HasConversion(ReviewOutcomeJsonConversion.Converter, ReviewOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("review_outcome");
     }
 }

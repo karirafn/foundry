@@ -16,6 +16,7 @@ internal static class DispatchRoleMapping
     {
         DispatchRole.Implement => WorkerRole.Implement,
         DispatchRole.Triage => WorkerRole.Triage,
+        DispatchRole.Review => WorkerRole.Review,
         _ => throw new UnreachableException($"Unhandled DispatchRole: {role}"),
     };
 }

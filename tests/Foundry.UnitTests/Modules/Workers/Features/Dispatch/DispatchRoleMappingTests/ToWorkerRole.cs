@@ -54,6 +54,16 @@ public sealed class ToWorkerRole
     }
 
     [Fact]
+    public void WhenReview_MapsToReviewWorkerRole()
+    {
+        // Act
+        WorkerRole role = DispatchRoleMapping.ToWorkerRole(DispatchRole.Review);
+
+        // Assert
+        role.ShouldBe(WorkerRole.Review);
+    }
+
+    [Fact]
     public void WhenUndefinedDispatchRole_Throws()
     {
         // Arrange

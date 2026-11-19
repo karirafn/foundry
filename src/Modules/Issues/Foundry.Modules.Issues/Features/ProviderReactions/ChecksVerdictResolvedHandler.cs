@@ -58,6 +58,7 @@ internal sealed class ChecksVerdictResolvedHandler(
         Issue next = checksPendingIssue.ResolveVerdict(
             outcome,
             @event.AutoMerge,
+            @event.ReviewPullRequests,
             @event.HeadSha,
             timeProvider.GetUtcNow());
         await db.TransitionAsync(checksPendingIssue, next, domainEventDispatcher, cancellationToken);

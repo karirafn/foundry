@@ -67,6 +67,27 @@ internal sealed class ProviderIssueClosedHandler(
                 break;
             }
 
+            case ReviewQueuedIssue reviewQueuedIssue:
+            {
+                CompletedIssue completed = reviewQueuedIssue.Complete(now);
+                await db.TransitionAsync(reviewQueuedIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case ReviewInProgressIssue reviewInProgressIssue:
+            {
+                CompletedIssue completed = reviewInProgressIssue.Complete(now);
+                await db.TransitionAsync(reviewInProgressIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case ReviewFailedIssue reviewFailedIssue:
+            {
+                CompletedIssue completed = reviewFailedIssue.Complete(now);
+                await db.TransitionAsync(reviewFailedIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             case PublishFailedIssue publishFailedIssue:
             {
                 CompletedIssue completed = publishFailedIssue.Complete(now);
@@ -76,7 +97,7 @@ internal sealed class ProviderIssueClosedHandler(
 
             default:
                 logger.LogWarning(
-                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue, MergePendingIssue, AwaitingInputIssue, PublishBlockedIssue or PublishFailedIssue (state: {State}); ignoring.",
+                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not in review, a review step, checks pending, rebase pending, merge pending, awaiting input, publish blocked or publish failed (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

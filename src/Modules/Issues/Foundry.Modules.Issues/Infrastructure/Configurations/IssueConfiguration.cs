@@ -78,6 +78,15 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 "ck_issues_merge_pending_fields",
                 "state <> 'merge_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND merge_head_sha IS NOT NULL AND entered_merge_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
             t.HasCheckConstraint(
+                "ck_issues_review_queued_fields",
+                "state <> 'review_queued' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL AND checks_outcome IS NOT NULL AND reviewed_commit IS NOT NULL AND review_auto_merge IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_review_in_progress_fields",
+                "state <> 'review_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL AND checks_outcome IS NOT NULL AND reviewed_commit IS NOT NULL AND review_auto_merge IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_review_failed_fields",
+                "state <> 'review_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL AND checks_outcome IS NOT NULL AND reviewed_commit IS NOT NULL AND review_auto_merge IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+            t.HasCheckConstraint(
                 "ck_issues_awaiting_input_fields",
                 "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
             t.HasCheckConstraint(
@@ -245,6 +254,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<PublishFailedIssue>("publish_failed")
             .HasValue<PublishBlockedIssue>("publish_blocked")
             .HasValue<BranchDivergedIssue>("branch_diverged")
+            .HasValue<ReviewQueuedIssue>("review_queued")
+            .HasValue<ReviewInProgressIssue>("review_in_progress")
+            .HasValue<ReviewFailedIssue>("review_failed")
             .IsComplete(true);
 
         builder.Property<string>("state")

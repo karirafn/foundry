@@ -93,6 +93,10 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
             .HasDefaultValue(false)
             .HasColumnName("merge_when_checks_pass");
 
+        builder.Property(r => r.ReviewPullRequests)
+            .HasDefaultValue(false)
+            .HasColumnName("review_pull_requests");
+
         builder.Property(r => r.MaxConcurrentWorkers)
             .HasDefaultValue(MonitoredRepository.DefaultMaxConcurrentWorkers)
             .HasColumnName("max_concurrent_workers");
