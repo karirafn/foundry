@@ -63,7 +63,16 @@ public sealed record WorkerRunDetail(
     /// review facts.
     /// </summary>
     public bool? ProductionChangedWithoutTests { get; init; }
+
+    /// <summary>
+    /// The acceptance criteria code supplied to a review run (ADR 0114), in order, which its verdict answers by id;
+    /// <see langword="null"/> for a run without supplied review facts.
+    /// </summary>
+    public IReadOnlyList<WorkerRunReviewCriterion>? ReviewCriteria { get; init; }
 }
+
+/// <summary>An acceptance criterion supplied to a review run: its id (<c>AC1</c>…) and its text from the issue.</summary>
+public sealed record WorkerRunReviewCriterion(string Id, string Text);
 
 /// <summary>One tool a run's container reported, such as <c>csharp-ls</c> <c>0.28.0</c>.</summary>
 public sealed record WorkerRunTool(string Name, string Version);

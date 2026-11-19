@@ -7271,6 +7271,15 @@
               "null",
               "boolean"
             ]
+          },
+          "reviewCriteria": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/WorkerRunReviewCriterion"
+            }
           }
         }
       },
@@ -7366,6 +7375,21 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "WorkerRunReviewCriterion": {
+        "required": [
+          "id",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
           }
         }
       },

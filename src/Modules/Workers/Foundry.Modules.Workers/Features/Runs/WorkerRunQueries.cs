@@ -150,6 +150,9 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 : null,
             ReviewVerdict = run.ReviewVerdict,
             ProductionChangedWithoutTests = run.SuppliedReviewFacts?.ProductionChangedWithoutTests,
+            ReviewCriteria = run.SuppliedReviewFacts is { } facts
+                ? [.. facts.Criteria.Select(criterion => new WorkerRunReviewCriterion(criterion.Id, criterion.Text))]
+                : null,
         };
     }
 

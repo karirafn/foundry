@@ -104,6 +104,39 @@ public sealed class GetWorkerRunDetailAsync_ReviewVerdict : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AReviewRunWithSuppliedFacts_ShowsTheSuppliedCriteriaWithTheirIds()
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New(), WorkerRole.Review);
+        starting.RecordSuppliedReviewFacts(Facts(criteriaCount: 2));
+        await SeedAsync(starting);
+
+        // Act
+        WorkerRunDetail detail = await GetDetailAsync(starting.Id);
+
+        // Assert
+        detail.ReviewCriteria.ShouldNotBeNull().ShouldBe(
+        [
+            new WorkerRunReviewCriterion("AC1", "Criterion 1."),
+            new WorkerRunReviewCriterion("AC2", "Criterion 2."),
+        ]);
+    }
+
+    [Fact]
+    public async Task ARunWithoutSuppliedReviewFacts_ShowsNoCriteria()
+    {
+        // Arrange
+        FailedRun failed = PublishingRunFixture.ActiveRun().Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: null);
+        await SeedAsync(failed);
+
+        // Act
+        WorkerRunDetail detail = await GetDetailAsync(failed.Id);
+
+        // Assert
+        detail.ReviewCriteria.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task ARunWithoutSuppliedReviewFacts_ShowsNoTestFlag()
     {
         // Arrange
