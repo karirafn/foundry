@@ -37,7 +37,13 @@ const RETRY_FRESH_SUCCESS = 'Branch discarded. Issue queued fresh; status is upd
 const TRIAGE_FAILED_CONFLICT_ERROR = 'This issue is no longer in Triage failed.';
 
 /** An operator action on an issue that POSTs to its own endpoint and reloads the detail. */
-export type IssueAction = 'retry_triage' | 'skip_triage' | 'retriage' | 'continue_without_answer' | 'retry_post';
+export type IssueAction =
+  | 'retry_triage'
+  | 'skip_triage'
+  | 'retriage'
+  | 'continue_without_answer'
+  | 'retry_post'
+  | 'retry_review';
 
 const AWAITING_INPUT_CONFLICT_ERROR = 'This issue is no longer awaiting input.';
 
@@ -80,6 +86,12 @@ const ISSUE_ACTIONS: Readonly<Record<IssueAction, IssueActionCopy>> = {
     conflictError: 'Only a question whose post failed can be posted again. It may have been posted already.',
     error: 'Failed to retry posting the questions.',
   },
+  retry_review: {
+    path: 'retry-review',
+    success: 'Review queued again. Issue status is updating.',
+    conflictError: "This issue's review is no longer skipped.",
+    error: 'Failed to retry review.',
+  },
 };
 // Issue ids are GUID-like; anything else (from the wire or a URL) is rejected before use.
 export const SAFE_ID_RE = /^[\w-]+$/;
@@ -96,7 +108,13 @@ function toPublishPhase(value: string | null | undefined): PublishPhase | null {
   return value === 'publishing' || value === 'retrying' ? value : null;
 }
 
-const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>(['triage', 'implement', 'awaiting_review', 'done']);
+const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>([
+  'triage',
+  'implement',
+  'review',
+  'awaiting_review',
+  'done',
+]);
 const KNOWN_CODE_STEPS: ReadonlySet<string> = new Set<string>(CODE_STEPS);
 
 // Narrows the wire value to a known stage; a stage this dashboard doesn't know reads as null, and
@@ -434,6 +452,11 @@ export class IssueService {
     this._runIssueAction(id, 'retry_post');
   }
 
+  /** Queues the review of a `review` issue whose review was skipped again, for the same commit. */
+  retryReview(id: string): void {
+    this._runIssueAction(id, 'retry_review');
+  }
+
   private _runIssueAction(id: string, action: IssueAction): void {
     const copy = ISSUE_ACTIONS[action];
     this._issueActionErrorSignal.set(null);
@@ -568,6 +591,8 @@ export class IssueService {
       providerType: i.providerType ?? null,
       publishPhase: toPublishPhase(i.publishPhase),
       checksOutcome: i.checksOutcome ?? null,
+      reviewOutcome: i.reviewOutcome ?? null,
+      reviewSkippedReason: i.reviewSkippedReason ?? null,
       repositoryId: i.repositoryId,
       enteredStateAt: i.enteredStateAt,
       ...toPlacement(i),

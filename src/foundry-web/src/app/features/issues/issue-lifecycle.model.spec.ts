@@ -32,6 +32,9 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'publish_failed',
   'publish_blocked',
   'branch_diverged',
+  'review_queued',
+  'review_in_progress',
+  'review_failed',
 ]);
 
 describe('issue-lifecycle model', () => {
@@ -63,6 +66,9 @@ describe('issue-lifecycle model', () => {
       'publish_failed',
       'publish_blocked',
       'branch_diverged',
+      'review_queued',
+      'review_in_progress',
+      'review_failed',
     ]);
 
     // Act / Assert

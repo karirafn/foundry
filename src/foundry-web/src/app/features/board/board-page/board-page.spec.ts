@@ -455,6 +455,51 @@ describe('BoardPageComponent', () => {
       expect(link.getAttribute('href')).toBe('https://github.com/acme/api/pull/3');
       expect(text(link)).toBe('Review PR ↗ (opens GitHub in a new tab)');
     });
+
+    it('keeps the review link and explains a review that did not finish', async () => {
+      // Act
+      const { el } = await loaded([
+        item('r', 7, {
+          stage: 'awaiting_review',
+          state: 'review',
+          needsAction: true,
+          providerType: 'github',
+          reviewOutcome: 'skipped',
+          reviewSkippedReason: 'verdict_invalid',
+          pullRequestUrl: 'https://github.com/acme/api/pull/3',
+        }),
+      ]);
+
+      // Assert
+      const card = el.querySelector('fd-needs-card')!;
+      expect(text(card.querySelector('.needs-card__why'))).toBe(
+        "Checks passed; the review didn't finish: invalid verdict",
+      );
+      expect(text(card.querySelector('a'))).toBe('Review PR ↗ (opens GitHub in a new tab)');
+    });
+
+    it('shows a failed review run in the Review stage, the third of four pips', async () => {
+      // Act
+      const { el } = await loaded([
+        item('f', 8, {
+          stage: 'review',
+          state: 'review_failed',
+          needsAction: false,
+          runKind: null,
+          failureClassification: 'transient_api_error',
+        }),
+      ]);
+
+      // Assert
+      const chip = el.querySelector('fd-needs-card fd-stage-chip')!;
+      expect(text(chip)).toBe('Stage: Review');
+      expect([...chip.querySelectorAll('.stage-chip__pip')].map((p) => p.getAttribute('data-pip'))).toEqual([
+        'past',
+        'past',
+        'current',
+        'next',
+      ]);
+    });
   });
 
   describe('In progress', () => {

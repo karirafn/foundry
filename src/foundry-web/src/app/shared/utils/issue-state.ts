@@ -22,7 +22,10 @@ export type IssueState =
   | 'triage_failed'
   | 'publish_failed'
   | 'publish_blocked'
-  | 'branch_diverged';
+  | 'branch_diverged'
+  | 'review_queued'
+  | 'review_in_progress'
+  | 'review_failed';
 
 // Display-only cap for the "attempt n of MAX" label on the fixing-checks revision callout.
 // Mirrors the server-side ChecksPendingIssue.ChecksMaxFixPushes value.
@@ -32,12 +35,13 @@ export const MAX_CHECKS_FIX_ATTEMPTS = 2;
 // Mirrors the server-side RebasePendingIssue.MaxRebaseConflictAttempts value.
 export const MAX_REBASE_CONFLICT_ATTEMPTS = 2;
 
-// Live states: a worker is running: implementing, revising or triaging.
+// Live states: a worker is running: implementing, revising, triaging or reviewing.
 // continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
 export const WORKING_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'in_progress',
   'revision_in_progress',
   'triage_in_progress',
+  'review_in_progress',
 ]);
 
 // Retryable states: the backend accepts a manual retry request for these.

@@ -2718,6 +2718,14 @@ describe('IssueService (triage actions)', () => {
       conflict: 'Only a question whose post failed can be posted again. It may have been posted already.',
       generic: 'Failed to retry posting the questions.',
     },
+    {
+      action: 'retry_review' as const,
+      call: (svc: IssueService, id: string) => svc.retryReview(id),
+      path: 'retry-review',
+      success: 'Review queued again. Issue status is updating.',
+      conflict: "This issue's review is no longer skipped.",
+      generic: 'Failed to retry review.',
+    },
   ];
 
   for (const c of cases) {
@@ -2928,10 +2936,66 @@ describe('IssueService board placement (#851)', () => {
 
     // Act
     svc.loadIssues();
-    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, stage: 'review' }], nextCursor: null });
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, stage: 'deploy' }], nextCursor: null });
 
     // Assert
     expect(svc.issues()[0].stage).toBeNull();
+  });
+
+  it.each(['review_queued', 'review_in_progress', 'review_failed'])(
+    'keeps a %s issue in the Review stage',
+    (state) => {
+      // Arrange
+      const { svc, http } = setup();
+
+      // Act
+      svc.loadIssues();
+      http.expectOne('/api/issues').flush({
+        items: [{ ...placedItem, state, stage: 'review', runKind: 'review' }],
+        nextCursor: null,
+      });
+
+      // Assert
+      expect(svc.issues()).toEqual([expect.objectContaining({ state, stage: 'review' })]);
+    },
+  );
+
+  it.each(['review', 'findings_fix'])('keeps the %s run kind', (runKind) => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, runKind }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].runKind).toBe(runKind);
+  });
+
+  it('maps a skipped review and its reason so the board can show it', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [
+        {
+          ...placedItem,
+          state: 'review',
+          stage: 'awaiting_review',
+          needsAction: true,
+          reviewOutcome: 'skipped',
+          reviewSkippedReason: 'verdict_invalid',
+        },
+      ],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0]).toEqual(
+      expect.objectContaining({ reviewOutcome: 'skipped', reviewSkippedReason: 'verdict_invalid' }),
+    );
   });
 
   it('narrows an unknown code step to null', () => {

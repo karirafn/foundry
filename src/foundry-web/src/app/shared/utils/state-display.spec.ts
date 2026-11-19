@@ -128,6 +128,33 @@ describe('triage state display', () => {
   });
 });
 
+describe('review step state display', () => {
+  it('should give the three review step states their labels, aria labels and badge classes', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.review_queued).toBe('REVIEW QUEUED');
+    expect(STATE_LABELS.review_in_progress).toBe('REVIEWING');
+    expect(STATE_LABELS.review_failed).toBe('REVIEW FAILED');
+    expect(STATE_ARIA_LABELS.review_queued).toBe('review queued');
+    expect(STATE_ARIA_LABELS.review_in_progress).toBe('reviewing');
+    expect(STATE_ARIA_LABELS.review_failed).toBe('review failed');
+    expect(STATE_CSS_CLASSES.review_queued).toBe('badge--review-queued');
+    expect(STATE_CSS_CLASSES.review_in_progress).toBe('badge--review-in-progress');
+    expect(STATE_CSS_CLASSES.review_failed).toBe('badge--review-failed');
+  });
+
+  it('should treat review_in_progress as a working state with the working accent', () => {
+    // Arrange / Act / Assert
+    expect(WORKING_STATES.has('review_in_progress')).toBe(true);
+    expect(cardAccentFor('review_in_progress')).toBe('working');
+  });
+
+  it('should give review_queued and review_failed no card accent', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('review_queued')).toBeNull();
+    expect(cardAccentFor('review_failed')).toBeNull();
+  });
+});
+
 describe('triage state sets', () => {
   it('should treat triage_in_progress as a working state', () => {
     // Arrange / Act / Assert
@@ -229,6 +256,9 @@ describe('resolveStateDisplay', () => {
     { kind: 'input_provided', state: 'revision_queued', label: 'RESUME QUEUED', ariaLabel: 'resume queued' },
     { kind: 'input_provided', state: 'revision_in_progress', label: 'RESUMING', ariaLabel: 'resuming' },
     { kind: 'input_provided', state: 'revision_failed', label: 'RESUME FAILED', ariaLabel: 'resume failed' },
+    { kind: 'review_findings', state: 'revision_queued', label: 'FINDINGS FIX QUEUED', ariaLabel: 'findings fix queued' },
+    { kind: 'review_findings', state: 'revision_in_progress', label: 'FIXING FINDINGS', ariaLabel: 'fixing findings' },
+    { kind: 'review_findings', state: 'revision_failed', label: 'FINDINGS FIX FAILED', ariaLabel: 'findings fix failed' },
     { kind: 'review_feedback', state: 'revision_queued', label: 'REV QUEUED', ariaLabel: 'revision queued' },
     { kind: 'review_feedback', state: 'revision_in_progress', label: 'REV IN PROGRESS', ariaLabel: 'revision in progress' },
     { kind: 'review_feedback', state: 'revision_failed', label: 'REV FAILED', ariaLabel: 'revision failed' },

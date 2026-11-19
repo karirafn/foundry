@@ -1,5 +1,6 @@
 import { CodeStep, IssueStage, IssueSummary, RunKind } from '../issues/issue.model';
 import { formatMergeSkippedReason } from '../issues/merge-outcome.format';
+import { formatReviewSkippedReason } from '../issues/review-outcome.format';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { getFailureCategoryDisplay } from '../../shared/utils/failure-category';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
@@ -12,10 +13,11 @@ export type BoardStage = Exclude<IssueStage, 'done'>;
 export const STAGE_LABELS: Readonly<Record<BoardStage, string>> = {
   triage: 'Triage',
   implement: 'Implement',
+  review: 'Review',
   awaiting_review: 'Your review',
 };
 
-export const STAGE_ORDER: readonly BoardStage[] = ['triage', 'implement', 'awaiting_review'];
+export const STAGE_ORDER: readonly BoardStage[] = ['triage', 'implement', 'review', 'awaiting_review'];
 
 /** The label that starts work on an issue; the backend constant `WebhookRelevance.TriggerLabel`. */
 export const TRIGGER_LABEL = 'foundry';
@@ -134,8 +136,15 @@ interface ReasonCopy extends NeedsReason {
   readonly explanation: (issue: IssueSummary) => string;
 }
 
+function failedRole(issue: IssueSummary): string {
+  if (issue.state === 'triage_failed' || issue.stage === 'triage') {
+    return 'Triage';
+  }
+  return issue.state === 'review_failed' || issue.stage === 'review' ? 'Review' : 'Implement';
+}
+
 function failedExplanation(issue: IssueSummary): string {
-  const role = issue.state === 'triage_failed' || issue.stage === 'triage' ? 'Triage' : 'Implement';
+  const role = failedRole(issue);
   const classification = issue.failureClassification;
   if (!classification) {
     return 'The run failed';
@@ -158,6 +167,7 @@ const STATE_REASONS: Readonly<Partial<Record<IssueSummary['state'], ReasonCopy>>
   continuable_failed: FAILED,
   revision_failed: FAILED,
   triage_failed: FAILED,
+  review_failed: { label: 'Review failed', tone: 'warning', explanation: failedExplanation },
   publish_failed: {
     label: 'Publish failed',
     tone: 'error',
@@ -203,6 +213,20 @@ function mergeSkippedExplanation(issue: IssueSummary): string {
     : "Checks passed; Foundry didn't merge";
 }
 
+function reviewSkippedExplanation(issue: IssueSummary): string {
+  const reason = formatReviewSkippedReason(issue.reviewSkippedReason);
+  return reason !== null
+    ? `Checks passed; the review didn't finish: ${reason}`
+    : "Checks passed; the review didn't finish";
+}
+
+// Warning: the reviewer never judged the pull request, so a person reviews it unaided or retries.
+const REVIEW_SKIPPED: ReasonCopy = {
+  label: 'Review skipped',
+  tone: 'warning',
+  explanation: reviewSkippedExplanation,
+};
+
 const MERGE_SKIPPED: ReasonCopy = {
   label: 'Merge skipped',
   tone: 'warning',
@@ -216,6 +240,9 @@ function reasonCopy(issue: IssueSummary): ReasonCopy {
     }
     if (issue.checksOutcome === 'infrastructure_failed') {
       return INFRA_FAILED;
+    }
+    if (issue.reviewOutcome === 'skipped') {
+      return REVIEW_SKIPPED;
     }
     if (issue.mergeOutcome === 'skipped') {
       return MERGE_SKIPPED;
@@ -249,7 +276,9 @@ export function isRunning(issue: IssueSummary): boolean {
 
 /** The band an issue belongs in, from the server's facts only; the first matching rule wins. */
 export function bandFor(issue: IssueSummary): BoardBand | null {
-  if (issue.needsAction) {
+  // A failed review run waits for its automatic retry with no worker, step or queue slot, so it
+  // shows with the failures, as every other auto-retryable failed state does, rather than vanish.
+  if (issue.needsAction || issue.state === 'review_failed') {
     return 'needs';
   }
   if (isRunning(issue)) {

@@ -1891,6 +1891,46 @@ describe('IssueCardComponent', () => {
     });
   }
 
+  // --- Review outcome badge (ADR 0113): a review that failed open is badged ---
+
+  it('should render "Review skipped: <reason>" badge for a skipped reviewOutcome', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', reviewOutcome: 'skipped', reviewSkippedReason: 'verdict_invalid' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__review-badge');
+    expect(badge?.textContent?.trim()).toBe('Review skipped: invalid verdict');
+    expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
+  });
+
+  it('should include the review badge label in the card aria-label', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', reviewOutcome: 'skipped', reviewSkippedReason: 'model_unavailable' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__toggle')?.getAttribute('aria-label')).toContain('Review skipped: model unavailable.');
+  });
+
+  it('should not render a review badge when the review was not skipped', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', reviewOutcome: null };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__review-badge')).toBeNull();
+  });
+
   // --- Rebase outcome badge (#684): only skipped and conflict are badged ---
 
   it('should render "Rebase conflict" badge for conflict rebaseOutcome', () => {
