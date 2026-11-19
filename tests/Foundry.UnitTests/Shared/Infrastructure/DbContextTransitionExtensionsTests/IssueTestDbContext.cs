@@ -44,6 +44,7 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
             builder.Ignore(x => x.OpenClarification);
             builder.Ignore(x => x.TriageVerdict);
             builder.Ignore(x => x.ConflictingTriageKind);
+            builder.Ignore(x => x.LatestReview);
             builder.Property<IssueKind?>("_labelledKind")
                 .HasConversion(
                     (ValueConverter)new ValueConverter<IssueKind, string>(
