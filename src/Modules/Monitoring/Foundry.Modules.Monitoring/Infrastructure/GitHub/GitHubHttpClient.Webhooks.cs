@@ -200,13 +200,13 @@ internal sealed partial class GitHubHttpClient
     internal static GitHubHookWriteDto BuildHookPayload(WebhookHookSpec spec, bool includeName) =>
         new(
             Name: includeName ? "web" : null,
-            Active: true,
+            Active: WebhookHookSettings.GitHubActive,
             Events: [.. GitHubWebhookEventMapper.SubscribedEvents],
             Config: new GitHubHookConfigWriteDto(
                 Url: spec.PayloadUrl,
-                ContentType: "json",
+                ContentType: WebhookHookSettings.GitHubContentType,
                 Secret: spec.Secret,
-                InsecureSsl: "0"));
+                InsecureSsl: WebhookHookSettings.GitHubInsecureSsl));
 
     private static async Task<Error> ErrorFromWebhookFailureAsync(
         HttpResponseMessage response,

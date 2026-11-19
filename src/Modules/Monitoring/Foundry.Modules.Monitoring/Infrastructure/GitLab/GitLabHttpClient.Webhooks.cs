@@ -194,12 +194,12 @@ internal sealed partial class GitLabHttpClient
         {
             ["url"] = spec.PayloadUrl,
             ["token"] = spec.Secret,
-            ["enable_ssl_verification"] = true,
+            ["enable_ssl_verification"] = WebhookHookSettings.GitLabEnableSslVerification,
         };
 
-        foreach (string trigger in GitLabWebhookEventMapper.AllTriggers)
+        foreach (KeyValuePair<string, bool> flag in WebhookHookSettings.GitLabTriggerFlags())
         {
-            payload[trigger] = GitLabWebhookEventMapper.SubscribedTriggers.Contains(trigger, StringComparer.Ordinal);
+            payload[flag.Key] = flag.Value;
         }
 
         return payload;

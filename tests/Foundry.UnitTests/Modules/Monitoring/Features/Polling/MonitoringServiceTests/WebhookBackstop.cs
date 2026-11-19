@@ -35,6 +35,8 @@ public sealed class WebhookBackstop : IAsyncDisposable
 {
     private const int WebhookPort = 5099;
     private static readonly DateTimeOffset Now = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
+    private const string PublicBaseUrl = "https://hooks.example.com";
+    private static readonly string CurrentStamp = WebhookSpecStamp.For(WebhookProvider.GitHub, PublicBaseUrl);
 
     private readonly SqliteConnection _connection;
 
@@ -387,6 +389,182 @@ public sealed class WebhookBackstop : IAsyncDisposable
         (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Active);
     }
 
+    [Fact]
+    public async Task WhenEveryStampIsCurrent_CatchUpMakesNoRegistrationCall()
+    {
+        // Arrange
+        MonitoredRepositoryId[] repoIds =
+        [
+            await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5), slug: "owner/one"),
+            await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5), slug: "owner/two"),
+            await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5), slug: "owner/three"),
+        ];
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true),
+            startupCatchUp: true);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.GetIssuesCallCount.ShouldBe(repoIds.Length);
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenTheSubscribedEventsChanged_CatchUpReRegistersEveryRepositoryWithTheNewStamp()
+    {
+        // Arrange — registered before an event was added to the subscribed list.
+        string oldStamp = WebhookSpecStamp.ForGitHub(
+            [.. GitHubWebhookEventMapper.SubscribedEvents.Where(e => e != "push")],
+            PublicBaseUrl);
+        MonitoredRepositoryId[] repoIds =
+        [
+            await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5), slug: "owner/one", specStamp: oldStamp),
+            await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-5), slug: "owner/two", specStamp: oldStamp),
+            await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-5), slug: "owner/three", specStamp: oldStamp),
+        ];
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true),
+            startupCatchUp: true);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(repoIds.Length);
+        foreach (MonitoredRepositoryId repoId in repoIds)
+        {
+            (await LoadAsync(repoId)).WebhookSpecStamp.ShouldBe(CurrentStamp);
+        }
+    }
+
+    [Fact]
+    public async Task WhenTheStampIsCurrent_TheStepMakesNoProviderCall()
+    {
+        // Arrange — due for a scheduled poll at the backstop.
+        await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.GetIssuesCallCount.ShouldBe(1);
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenNeverRegistered_TheScheduledPollRegistersItOnce()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-1));
+        CountingIssueProvider provider = new([]);
+        FixedProviderFactory factory = new(provider);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true, factory: factory));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(1);
+        MonitoredRepository repo = await LoadAsync(repoId);
+        repo.WebhookSpecStamp.ShouldBe(CurrentStamp);
+        repo.WebhookStatus.ShouldBe(WebhookStatus.Pending);
+    }
+
+    [Fact]
+    public async Task WhenIngressIsNotConfigured_TheStepDoesNothing()
+    {
+        // Arrange
+        await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-1));
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: false, registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenRegistrationFailedHalfAnHourAgo_TheStepDoesNotRetry()
+    {
+        // Arrange
+        await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-1), registrationFailedAt: Now.AddMinutes(-30));
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenRegistrationFailedMoreThanAnHourAgo_TheStepRetries()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync(
+            active: false,
+            lastPolledAt: Now.AddMinutes(-1),
+            registrationFailedAt: Now.AddHours(-1).AddSeconds(-1));
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(1);
+        (await LoadAsync(repoId)).WebhookRegistrationFailedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheWriteProbeVerdictIsDenied_TheStepDoesNotRegister()
+    {
+        // Arrange
+        await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-1), verdict: new WriteProbeVerdict.Denied(Now));
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenOneRepositoryCannotBeRegistered_TheOthersStillAre()
+    {
+        // Arrange
+        MonitoredRepositoryId brokenId = await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-1), slug: "owner/broken");
+        MonitoredRepositoryId healthyId = await SeedRepoAsync(active: false, lastPolledAt: Now.AddMinutes(-1), slug: "owner/healthy");
+        CountingIssueProvider provider = new([]);
+        provider.FailingWebhookSlugs.Add("owner/broken");
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(brokenId)).WebhookRegistrationFailedAt.ShouldNotBeNull();
+        (await LoadAsync(healthyId)).WebhookSpecStamp.ShouldBe(CurrentStamp);
+    }
+
     private async Task<MonitoredRepositoryId> SeedNeverPolledRepoAsync()
     {
         await using FoundryDbContext db = CreateDbContext();
@@ -419,19 +597,34 @@ public sealed class WebhookBackstop : IAsyncDisposable
         DateTimeOffset lastPolledAt,
         bool isActive = true,
         RepositoryEligibility? eligibility = null,
-        bool silent = false)
+        bool silent = false,
+        string slug = "owner/repo",
+        string? specStamp = null,
+        DateTimeOffset? registrationFailedAt = null,
+        WriteProbeVerdict? verdict = null)
     {
         await using FoundryDbContext db = CreateDbContext();
+        int position = await db.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
         MonitoredRepository repo = MonitoredRepository.Create(
-            RepositorySlug.Create("owner/repo").ValueOrThrow(),
+            RepositorySlug.Create(slug).ValueOrThrow(),
             "github.com",
-            null).ValueOrThrow();
-        repo.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+            null,
+            position).ValueOrThrow();
+        repo.SetWriteProbeVerdict(verdict ?? new WriteProbeVerdict.Granted());
+
+        if (active || specStamp is not null)
+        {
+            repo.MarkWebhookRegistered(specStamp ?? CurrentStamp);
+        }
 
         if (active)
         {
-            repo.MarkWebhookRegistered();
             repo.RecordWebhookDelivery();
+        }
+
+        if (registrationFailedAt is { } failedAt)
+        {
+            repo.RecordWebhookRegistrationFailed(failedAt);
         }
 
         if (silent)
@@ -508,11 +701,12 @@ public sealed class WebhookBackstop : IAsyncDisposable
 
         services.AddSingleton(Options.Create(new WebhookIngressOptions { Port = WebhookPort }));
         services.AddScoped<IWebhookSettingsQueries>(_ => new StubWebhookSettingsQueries(
-            ingressConfigured ? "https://hooks.example.com" : null));
+            ingressConfigured ? PublicBaseUrl : null));
         services.AddScoped<WebhookIngress>();
 
         if (registerWebhooks)
         {
+            services.AddSingleton(TimeProvider.System);
             services.AddScoped<WebhookRegistrar>();
         }
 

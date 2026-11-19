@@ -21,6 +21,9 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
     private const int HostMaxLength = 253;
     private const int EligibilityStatusMaxLength = 20;
     private const int WebhookStatusMaxLength = 20;
+
+    // A lowercase hex SHA-256 (WebhookSpecStamp).
+    private const int WebhookSpecStampLength = 64;
     private const int BlobShaMaxLength = 64;
     private const int ETagMaxLength = 200;
 
@@ -176,6 +179,15 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
             .HasDefaultValue(WebhookStatus.NotRegistered)
             .HasSentinel(WebhookStatus.NotConfigured)
             .HasColumnName("webhook_status");
+
+        builder.Property(r => r.WebhookSpecStamp)
+            .HasMaxLength(WebhookSpecStampLength)
+            .IsUnicode(false)
+            .IsRequired(false)
+            .HasColumnName("webhook_spec_stamp");
+
+        builder.Property(r => r.WebhookRegistrationFailedAt)
+            .HasColumnName("webhook_registration_failed_at");
 
         ValueConverter<IReadOnlyList<DeclaredPackageSource>, string> packageSourcesConverter = new(
             sources => SerializePackageSources(sources),

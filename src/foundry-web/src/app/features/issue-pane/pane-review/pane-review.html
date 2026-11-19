@@ -1,0 +1,117 @@
+@if (loading()) {
+  <section class="pane-review" [attr.aria-labelledby]="headingId">
+    <h3 class="pane-review__heading" [id]="headingId">Review</h3>
+    <div class="pane-review__skeleton" aria-busy="true">
+      <span class="sr-only">Loading review…</span>
+      <span class="pane-review__bar" aria-hidden="true"></span>
+      <span class="pane-review__bar" aria-hidden="true"></span>
+      <span class="pane-review__bar pane-review__bar--short" aria-hidden="true"></span>
+    </div>
+  </section>
+} @else if (review(); as r) {
+  <section class="pane-review" [attr.aria-labelledby]="headingId">
+    <h3 class="pane-review__heading" [id]="headingId">Review</h3>
+
+    <p class="pane-review__line pane-review__outcome">
+      <span class="badge pane-review__chip" [class]="'pane-review__chip--' + r.outcome.tone">{{ r.outcome.label }}</span>&ngsp;
+      @if (r.carriedFrom; as carried) {
+        <span class="pane-review__note pane-review__carried">
+          Carried from &ngsp;<span class="pane-review__mono" [attr.title]="carried.fullSha">{{ carried.shortSha }}</span>
+        </span>&ngsp;
+      }
+      <span class="pane-review__note pane-review__reviewed">
+        Reviewed &ngsp;<span class="pane-review__mono" [attr.title]="r.reviewed.fullSha">{{ r.reviewed.shortSha }}</span>
+      </span>
+    </p>
+
+    <p
+      class="pane-review__summary"
+      [id]="summaryId"
+      [class.pane-review__summary--clamped]="r.summaryLong && !summaryExpanded()"
+    >{{ r.summary }}</p>
+    @if (r.summaryLong) {
+      <button
+        type="button"
+        class="pane-review__more"
+        [attr.aria-expanded]="summaryExpanded()"
+        [attr.aria-controls]="summaryId"
+        (click)="toggleSummary()"
+      >{{ summaryExpanded() ? 'Show less' : 'Show more' }}</button>
+    }
+
+    @if (r.findings; as findings) {
+      <details class="pane-review__disclosure" [open]="findings.open">
+        <summary>{{ findings.title }}</summary>
+        <ul class="pane-review__items">
+          @for (f of findings.items; track $index) {
+            <li class="pane-review__item">
+              <span class="pane-review__line">
+                <span class="badge pane-review__chip" [class]="'pane-review__chip--' + f.severity.tone">{{ f.severity.label }}</span>&ngsp;
+                <span class="pane-review__mono pane-review__path">{{ f.location }}</span>&ngsp;
+                <span class="pane-review__note">{{ f.category }}</span>
+                @if (f.rule) {
+                  &ngsp;<span class="pane-review__mono pane-review__note">{{ f.rule }}</span>
+                }
+              </span>&ngsp;
+              <span class="pane-review__body">{{ f.body }}</span>
+            </li>
+          }
+        </ul>
+      </details>
+    }
+
+    @if (r.criteria.items.length > 0) {
+      <details class="pane-review__disclosure">
+        <summary>{{ r.criteria.title }}</summary>
+        <ul class="pane-review__items">
+          @for (c of r.criteria.items; track c.id) {
+            <li class="pane-review__item">
+              <span class="pane-review__line">
+                <span class="pane-review__mono">{{ c.id }}</span>&ngsp;
+                <span class="badge pane-review__chip" [class]="'pane-review__chip--' + c.status.tone">{{ c.status.label }}</span>
+                @if (c.text) {
+                  &ngsp;<span>{{ c.text }}</span>
+                }
+              </span>&ngsp;
+              <span class="pane-review__note pane-review__body">{{ c.evidence }}</span>
+            </li>
+          }
+        </ul>
+      </details>
+    } @else {
+      <p class="pane-review__empty">No acceptance criteria found; a person reviews.</p>
+    }
+
+    @if (r.tests.productionChangedWithoutTests) {
+      <p class="pane-review__line pane-review__check">
+        <span class="badge pane-review__chip pane-review__chip--warning">Foundry check: production changed, no test changed</span>
+      </p>
+    }
+    <details class="pane-review__disclosure">
+      <summary>{{ r.tests.title }}</summary>
+      <p class="pane-review__body">{{ r.tests.reason }}</p>
+      @if (r.tests.coveringTests.length > 0) {
+        <ul class="pane-review__covering">
+          @for (path of r.tests.coveringTests; track $index) {
+            <li class="pane-review__mono pane-review__path">{{ path }}</li>
+          }
+        </ul>
+      }
+    </details>
+
+    <details class="pane-review__disclosure">
+      <summary>{{ r.dimensions.title }}</summary>
+      <dl class="pane-review__dimensions">
+        @for (d of r.dimensions.rows; track d.label) {
+          <dt>{{ d.label }}</dt>
+          <dd>
+            <span [class]="'pane-review__status pane-review__status--' + d.status.tone">{{ d.status.label }}</span>
+            @if (d.note) {
+              &ngsp;<span class="pane-review__note">{{ d.note }}</span>
+            }
+          </dd>
+        }
+      </dl>
+    </details>
+  </section>
+}

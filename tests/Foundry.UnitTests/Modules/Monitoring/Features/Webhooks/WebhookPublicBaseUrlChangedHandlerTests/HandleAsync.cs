@@ -53,6 +53,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WebhookIngress(
                     new StubWebhookSettingsQueries(NewBaseUrl)),
                 factory,
+                TimeProvider.System,
                 NullLogger<WebhookRegistrar>.Instance),
             NullLogger<WebhookPublicBaseUrlChangedHandler>.Instance);
 
@@ -77,7 +78,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         if (status != WebhookStatus.NotRegistered)
         {
-            repo.MarkWebhookRegistered();
+            repo.MarkWebhookRegistered("stamp");
         }
 
         if (status is WebhookStatus.Active or WebhookStatus.Silent)

@@ -100,6 +100,7 @@ public sealed record TriageVerdictDetails(
 /// <paramref name="MergeOutcome"/> and <paramref name="MergeSkippedReason"/> are set only for a <c>review</c> issue that
 /// left merge-pending without a merge (ADR 0105). <paramref name="ReviewOutcome"/> and
 /// <paramref name="ReviewSkippedReason"/> are set only for a <c>review</c> issue whose review run failed open (ADR 0113).
+/// <paramref name="ReviewRunId"/> is the run of the issue's latest review verdict, in any state, once one was handled.
 /// <paramref name="RebasePendingReason"/> is set only for
 /// <c>rebase_pending</c>: <c>after_run</c> or <c>catch_up</c>. <paramref name="CatchUpRound"/> and
 /// <paramref name="CatchUpRoundLimit"/> are set while a catch-up (ADR 0111) has started: in <c>rebase_pending</c> or
@@ -135,7 +136,8 @@ public sealed record IssueStateDetails(
     int? CatchUpRoundLimit = null,
     MergeWaitDetails? MergeWait = null,
     string? ReviewOutcome = null,
-    string? ReviewSkippedReason = null);
+    string? ReviewSkippedReason = null,
+    Guid? ReviewRunId = null);
 
 /// <summary>
 /// A merge-pending issue's place in its repository's catch-up queue (ADR 0111): <paramref name="Position"/> is 1-based,

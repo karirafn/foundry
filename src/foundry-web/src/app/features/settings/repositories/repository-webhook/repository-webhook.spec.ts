@@ -105,13 +105,30 @@ describe('RepositoryWebhookComponent', () => {
     expect(el.textContent).toContain('every 15 minutes');
   });
 
-  it('explains how to configure webhooks when ingress is not configured', () => {
+  it('says Foundry registers a not-registered webhook automatically, before the manual details', () => {
+    // Arrange & Act
+    const { el } = setup(NOT_REGISTERED);
+
+    // Assert
+    const hint = el.querySelector('.repository-webhook__hint');
+    expect(hint?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      "Foundry registers this webhook automatically once the account's token can manage webhooks. To add it by hand instead, use the details below.",
+    );
+    const details = el.querySelector('.repository-webhook__details');
+    expect(details).not.toBeNull();
+    expect(hint!.compareDocumentPosition(details!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('points at Dispatch settings when Foundry has no webhook URL', () => {
     // Arrange & Act
     const { el } = setup({ ...NOT_REGISTERED, status: 'not-configured', payloadUrl: null });
 
     // Assert
-    expect(el.querySelector('.repository-webhook__status-value')?.textContent?.trim()).toBe('Not configured');
-    expect(el.textContent).toContain('Webhooks:Port');
+    expect(el.querySelector('.repository-webhook__status-value')?.textContent?.trim()).toBe('No webhook URL');
+    expect(el.querySelector('.repository-webhook__hint')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'Foundry has no webhook URL yet. Set it in Dispatch settings; until then this repository polls at its normal interval.',
+    );
+    expect(el.textContent).not.toContain('Webhooks:Port');
     expect(el.querySelector('.repository-webhook__details')).toBeNull();
   });
 
@@ -213,13 +230,30 @@ describe('RepositoryWebhookComponent', () => {
     );
   });
 
-  it('says the register action uses the account token', () => {
+  it('points at Dispatch settings when registration is skipped for a missing webhook URL', () => {
+    // Arrange
+    const { fixture, httpMock, el } = setup(NOT_REGISTERED);
+
+    // Act
+    registerButton(el).click();
+    httpMock.expectOne(`${BASE}/register`).flush({
+      webhook: NOT_REGISTERED,
+      outcome: { kind: 'skipped', reason: 'not-configured' },
+    });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.repository-webhook__outcome')?.textContent?.trim()).toBe(
+      'Foundry has no webhook URL yet, so nothing was registered. Set it in Dispatch settings.',
+    );
+  });
+  it('says Foundry registers the webhook automatically and the action registers it now', () => {
     // Arrange & Act
     const { el } = setup(NOT_REGISTERED);
 
     // Assert
     expect(el.querySelector('.repository-webhook__register .repository-webhook__hint')?.textContent?.replace(/\s+/g, ' ').trim())
-      .toBe('Foundry can create or update this webhook on GitHub itself, using the account token.');
+      .toBe("Foundry registers this webhook on GitHub automatically. Use this to create or update it now with the account's token.");
   });
 
   it('shows an error when the registration request fails', () => {

@@ -94,8 +94,7 @@ internal static partial class UpdateAccount
         OptedInBranchRuleApplier branchRuleApplier,
         ProviderHostGuard hostGuard,
         IDomainEventDispatcher domainEventDispatcher,
-        TimeProvider timeProvider,
-        AccountWebhookRegistrar? webhookRegistrar = null)
+        TimeProvider timeProvider)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -191,18 +190,14 @@ internal static partial class UpdateAccount
             await domainEventDispatcher.DispatchAsync(events, cancellationToken);
 
             // The writes run after the commit and never fail it. Only a newly supplied account token
-            // triggers them: it may hold the permissions the previous token lacked (ADR 0115).
+            // triggers them: it may hold the permissions the previous token lacked (ADR 0115). Webhooks
+            // the old token could not register are registered by the next scheduled poll.
             if (command.Token is not null)
             {
                 affectedRepositories = await branchRuleApplier.ApplyAsync(
                     credential,
                     affectedRepositories,
                     cancellationToken);
-
-                if (webhookRegistrar is not null)
-                {
-                    await webhookRegistrar.RegisterNotRegisteredAsync(credential, cancellationToken);
-                }
             }
 
             CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(

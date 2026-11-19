@@ -1364,6 +1364,8 @@ export interface components {
             mergeWait?: null | components["schemas"]["MergeWaitDetails"];
             reviewOutcome?: null | string;
             reviewSkippedReason?: null | string;
+            /** Format: uuid */
+            reviewRunId?: null | string;
         };
         IssueSummary: {
             /** Format: uuid */
@@ -1981,6 +1983,8 @@ export interface components {
             confirmedFindings?: components["schemas"]["WorkerRunConfirmedFinding"][];
             toolchain?: null | components["schemas"]["WorkerRunTool"][];
             reviewVerdict?: null | components["schemas"]["RecordedReviewVerdict"];
+            productionChangedWithoutTests?: null | boolean;
+            reviewCriteria?: null | components["schemas"]["WorkerRunReviewCriterion"][];
         };
         WorkerRunPublishDetail: {
             headSha: string;
@@ -2003,6 +2007,10 @@ export interface components {
             reason: string;
             /** Format: int64 */
             sizeBytes: number | string;
+        };
+        WorkerRunReviewCriterion: {
+            id: string;
+            text: string;
         };
         WorkerRunSecretFinding: {
             path: string;
