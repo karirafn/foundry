@@ -31,6 +31,9 @@ $badge-state-backgrounds: (
   triage-failed: var(--fd-state-failed),
   usage-limited: var(--fd-state-usage-limited),
   publish-failed: var(--fd-state-failed),
+  review-queued: var(--fd-state-queued),
+  review-in-progress: var(--fd-state-in-progress),
+  review-failed: var(--fd-state-failed),
   // A secret was detected and nothing was pushed.
   publish-blocked: var(--fd-state-failed),
 );

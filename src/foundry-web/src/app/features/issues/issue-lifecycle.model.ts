@@ -24,6 +24,9 @@ export const ACTIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'publish_failed',
   'publish_blocked',
   'branch_diverged',
+  'review_queued',
+  'review_in_progress',
+  'review_failed',
 ]);
 
 export const RESOLVED_STATES: ReadonlySet<IssueState> = new Set<IssueState>([

@@ -22,7 +22,7 @@ export type PublishPhase = 'publishing' | 'retrying';
  * The part of the lifecycle that owns the issue, as the server declares it. `done` is a known value
  * that the board never places.
  */
-export type IssueStage = 'triage' | 'implement' | 'awaiting_review' | 'done';
+export type IssueStage = 'triage' | 'implement' | 'review' | 'awaiting_review' | 'done';
 
 export const CODE_STEPS = [
   'publishing',
@@ -54,6 +54,10 @@ export interface IssueSummary {
   mergeOutcome?: string | null;
   /** Set when mergeOutcome is `skipped`: why Foundry did not merge. */
   mergeSkippedReason?: string | null;
+  /** Set on a review issue whose review run failed open: `skipped` (ADR 0113). */
+  reviewOutcome?: string | null;
+  /** Set when reviewOutcome is `skipped`: the review run's failure category, such as `verdict_invalid`. */
+  reviewSkippedReason?: string | null;
   pullRequestUrl?: string | null;
   providerType?: string | null;
   revisionTriggerKind?: RevisionTriggerKind | null;
@@ -214,6 +218,9 @@ export interface IssueStateDetails {
   /** Set on a review issue Foundry did not merge itself: `disabled` or `skipped` (ADR 0105). */
   mergeOutcome?: string | null;
   mergeSkippedReason?: string | null;
+  /** Set on a review issue whose review run failed open: `skipped` (ADR 0113). */
+  reviewOutcome?: string | null;
+  reviewSkippedReason?: string | null;
   awaitingInput?: AwaitingInputDetails | null;
   /** Set when the state is branch_diverged: the issue branch on the provider (URL built by the API). */
   branchUrl?: string | null;
@@ -260,13 +267,14 @@ export interface IssueDetail extends IssueSummary {
   clarifications: Clarification[];
 }
 
-// Live states: a worker is running: implementing, revising or triaging.
+// Live states: a worker is running: implementing, revising, triaging or reviewing.
 // continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
 export const LIVE_STATES: ReadonlySet<IssueState> = WORKING_STATES;
 
-// The four queued tiers dispatched in Dispatch Order: revision > continuation > triage > fresh.
+// The five queued tiers dispatched in Dispatch Order: revision > review > continuation > triage > fresh.
 export const QUEUED_TIER_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'revision_queued',
+  'review_queued',
   'continuation_queued',
   'triage_queued',
   'queued',

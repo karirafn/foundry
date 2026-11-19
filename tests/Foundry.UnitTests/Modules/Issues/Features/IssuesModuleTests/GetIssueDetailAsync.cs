@@ -932,6 +932,25 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewAfterSkippedReview_StateDetailsCarryReviewOutcomeAndReason()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().ReviewSkipped();
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueStateDetails stateDetails = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.ReviewOutcome.ShouldBe("skipped"),
+            () => stateDetails.ReviewSkippedReason.ShouldBe("verdict_invalid"));
+    }
+
+    [Fact]
     public async Task WhenReviewAfterSkippedMerge_StateDetailsCarryMergeOutcomeAndReason()
     {
         // Arrange

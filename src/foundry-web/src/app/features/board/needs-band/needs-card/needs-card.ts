@@ -62,8 +62,9 @@ export class NeedsCardComponent {
 
   protected readonly reviewLink: Signal<ReviewLink | null> = computed(() => {
     const { issue, reason } = this.item();
-    // A skipped merge still leaves a pull request for the person to review.
-    const reviewable = reason.tone === 'ready' || (issue.state === 'review' && issue.mergeOutcome === 'skipped');
+    // A skipped merge or review still leaves a pull request for the person to review.
+    const skipped = issue.mergeOutcome === 'skipped' || issue.reviewOutcome === 'skipped';
+    const reviewable = reason.tone === 'ready' || (issue.state === 'review' && skipped);
     if (!reviewable || !issue.pullRequestUrl) {
       return null;
     }

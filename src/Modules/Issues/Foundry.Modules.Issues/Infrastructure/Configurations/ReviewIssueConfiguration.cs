@@ -60,5 +60,9 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("review_outcome");
+
+        builder.Property(i => i.AutoMerge)
+            .HasDefaultValue(false)
+            .HasColumnName("review_auto_merge");
     }
 }

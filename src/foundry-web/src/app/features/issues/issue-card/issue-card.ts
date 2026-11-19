@@ -20,6 +20,7 @@ import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, agentActivitySummary } 
 import { ProviderTerminology, providerTerminology } from '../../../shared/utils/provider.util';
 import { RebaseOutcomeBadge, rebaseOutcomeBadge } from '../rebase-outcome.format';
 import { MergeOutcomeBadge, mergeOutcomeBadge } from '../merge-outcome.format';
+import { ReviewOutcomeBadge, reviewOutcomeBadge } from '../review-outcome.format';
 import {
   describeTokenTotal,
   formatCost as _formatCostImpl,
@@ -176,6 +177,15 @@ function isUntracked(tokens: TokenTotal): boolean {
                 [attr.aria-label]="rebase.label"
                 aria-hidden="true"
               >{{ rebase.label }}</span>
+            }
+            @if (_reviewOutcomeDisplay(); as review) {
+              <span
+                class="badge issue-card__checks-badge issue-card__review-badge"
+                [class]="review.cssClass"
+                role="img"
+                [attr.aria-label]="review.label"
+                aria-hidden="true"
+              >{{ review.label }}</span>
             }
             @if (_mergeOutcomeDisplay(); as merge) {
               <span
@@ -378,6 +388,9 @@ export class IssueCardComponent {
   protected readonly _rebaseOutcomeDisplay = computed((): RebaseOutcomeBadge | null =>
     rebaseOutcomeBadge(this.issue().rebaseOutcome, this.issue().rebaseSkippedReason));
 
+  protected readonly _reviewOutcomeDisplay = computed((): ReviewOutcomeBadge | null =>
+    reviewOutcomeBadge(this.issue().reviewOutcome, this.issue().reviewSkippedReason));
+
   protected readonly _mergeOutcomeDisplay = computed((): MergeOutcomeBadge | null =>
     mergeOutcomeBadge(this.issue().mergeOutcome, this.issue().mergeSkippedReason));
 
@@ -502,13 +515,15 @@ export class IssueCardComponent {
     const checksPart = outcome ? ` ${outcome.label}.` : '';
     const rebase = this._rebaseOutcomeDisplay();
     const rebasePart = rebase ? ` ${rebase.label}.` : '';
+    const review = this._reviewOutcomeDisplay();
+    const reviewPart = review ? ` ${review.label}.` : '';
     const merge = this._mergeOutcomeDisplay();
     const mergePart = merge ? ` ${merge.label}.` : '';
     const waitingPart = this._isChecksPending() ? ' Waiting on checks.' : '';
     const runStatsPart = this._buildRunStatsAriaText();
     const publishPart = this._buildPublishAriaText();
     const activityPart = this._buildActivityAriaText();
-    return `${base}${warningPart}${checksPart}${rebasePart}${mergePart}${waitingPart}${runStatsPart}${publishPart}${activityPart}`;
+    return `${base}${warningPart}${checksPart}${rebasePart}${reviewPart}${mergePart}${waitingPart}${runStatsPart}${publishPart}${activityPart}`;
   });
 
   private _buildQueuePositionAriaClause(): string {

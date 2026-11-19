@@ -12,6 +12,7 @@ import {
 import { getFailureCategoryDisplay } from '../../shared/utils/failure-category';
 import { providerDisplayName, providerTerminology } from '../../shared/utils/provider.util';
 import { formatRebaseSkippedReason } from '../issues/rebase-outcome.format';
+import { formatReviewSkippedReason } from '../issues/review-outcome.format';
 
 export type CalloutTone = 'neutral' | 'working' | 'warning' | 'error' | 'success';
 
@@ -27,7 +28,8 @@ export type PaneAction =
   | 'confirm_false_positives'
   | 'retriage'
   | 'continue_without_answer'
-  | 'retry_post';
+  | 'retry_post'
+  | 'retry_review';
 
 export interface CalloutChip {
   readonly label: string;
@@ -145,6 +147,14 @@ class CalloutSource {
 
   get checksInfrastructureFailed(): boolean {
     return (this.summary?.checksOutcome ?? this.details?.checksOutcome) === 'infrastructure_failed';
+  }
+
+  get reviewSkipped(): boolean {
+    return (this.summary?.reviewOutcome ?? this.details?.reviewOutcome) === 'skipped';
+  }
+
+  get reviewSkippedReason(): string | null {
+    return this.summary?.reviewSkippedReason ?? this.details?.reviewSkippedReason ?? null;
   }
 
   get mergeSkipped(): boolean {
@@ -287,6 +297,8 @@ function revisionTitle(src: CalloutSource): string {
       return `Resolving conflicts (attempt ${s.rebaseConflictAttempts ?? 1} of ${MAX_REBASE_CONFLICT_ATTEMPTS})`;
     case 'review_feedback':
       return 'Addressing review';
+    case 'review_findings':
+      return 'Fixing review findings';
     default:
       return 'Revision';
   }
@@ -307,6 +319,10 @@ function revisionMessage(src: CalloutSource): string {
         : 'Conflict-resolution run queued — the rebase onto the default branch conflicted.';
     case 'review_feedback':
       return running ? 'A worker is addressing reviewer feedback.' : 'Queued to address reviewer feedback.';
+    case 'review_findings':
+      return running
+        ? "A worker is fixing what Foundry's review found."
+        : "Queued to fix what Foundry's review found.";
     default:
       return running ? `A worker is revising the ${src.pullRequest}.` : `Queued to revise the ${src.pullRequest}.`;
   }
@@ -320,6 +336,8 @@ function revisionFailedTitle(src: CalloutSource): string {
       return 'Conflict resolution failed';
     case 'input_provided':
       return 'Resume failed';
+    case 'review_findings':
+      return 'Findings fix failed';
     default:
       return 'Revision failed';
   }
@@ -540,6 +558,13 @@ function checksPendingCallout(src: CalloutSource): Draft {
   return d;
 }
 
+function reviewSkippedLine(src: CalloutSource): string {
+  const reason = formatReviewSkippedReason(src.reviewSkippedReason);
+  return reason === null
+    ? "Checks passed, but Foundry's review didn't finish."
+    : `Checks passed, but Foundry's review didn't finish: ${reason}.`;
+}
+
 function mergeSkippedLine(src: CalloutSource): string {
   const provider = src.providerName;
   const pr = src.pullRequest;
@@ -606,6 +631,11 @@ function reviewCallout(src: CalloutSource): Draft {
     d.shows.add('failing_checks');
   } else if (src.checksInfrastructureFailed) {
     d = infrastructureFailedCallout(src);
+  } else if (src.reviewSkipped) {
+    d = draft('warning', 'Review skipped', [
+      reviewSkippedLine(src),
+      `Review the ${src.pullRequest} on ${src.providerName}, or retry the review.`,
+    ]);
   } else if (src.mergeSkipped) {
     d = draft('warning', 'Merge skipped', [
       mergeSkippedLine(src),
@@ -699,6 +729,15 @@ function winningCallout(src: CalloutSource): Draft {
       return mergePendingCallout(src);
     case 'review':
       return reviewCallout(src);
+    case 'review_queued':
+      return draft('neutral', 'Waiting for review', [
+        `Checks passed. Waiting for a worker to review the ${src.pullRequest}.`,
+        ...positionLine(src),
+      ]);
+    case 'review_in_progress':
+      return draft('working', 'Reviewing', [`A review worker is checking the ${src.pullRequest} against the issue.`]);
+    case 'review_failed':
+      return withFailureBody(draft('warning', 'Review run failed'), src);
     case 'detected':
     case 'triage_queued':
       return draft('neutral', 'Waiting for triage', ['Waiting for a worker to triage this issue.', ...positionLine(src)]);
@@ -760,6 +799,9 @@ function actionsFor(src: CalloutSource): PaneAction[] {
   }
   if (RETRIAGEABLE_STATES.has(state)) {
     actions.push('retriage');
+  }
+  if (state === 'review' && src.reviewSkipped) {
+    actions.push('retry_review');
   }
   if (state === 'awaiting_input') {
     // A failed post is fixed by posting again; continuing gives up on the answer, so it comes second.

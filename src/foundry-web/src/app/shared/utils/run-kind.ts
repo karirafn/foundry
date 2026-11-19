@@ -1,5 +1,14 @@
 /** The kind of worker run an issue runs, or runs next, as the server declares it (#1059). */
-export type RunKind = 'triage' | 'fresh' | 'continuation' | 'review_fix' | 'checks_fix' | 'conflict_fix' | 'input_resume';
+export type RunKind =
+  | 'triage'
+  | 'fresh'
+  | 'continuation'
+  | 'review_fix'
+  | 'checks_fix'
+  | 'conflict_fix'
+  | 'input_resume'
+  | 'review'
+  | 'findings_fix';
 
 /**
  * The board's lead-tag label for each run kind. A record over the full union, so a kind without a
@@ -13,4 +22,6 @@ export const RUN_KIND_LABELS: Readonly<Record<RunKind, string>> = {
   checks_fix: 'checks fix',
   conflict_fix: 'conflict',
   input_resume: 'resume',
+  review: 'review',
+  findings_fix: 'findings fix',
 };

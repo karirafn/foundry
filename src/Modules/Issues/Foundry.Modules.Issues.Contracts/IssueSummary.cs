@@ -27,6 +27,8 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <para>
 /// <paramref name="MergeOutcome"/> is set for a <c>review</c> issue that left merge-pending without a merge:
 /// <c>disabled</c> or <c>skipped</c>, with <paramref name="MergeSkippedReason"/> for <c>skipped</c> (ADR 0105).
+/// <paramref name="ReviewOutcome"/> is set for a <c>review</c> issue whose review run failed open: <c>skipped</c>, with
+/// <paramref name="ReviewSkippedReason"/> holding the run's failure category token (ADR 0113).
 /// </para>
 /// </summary>
 public sealed record IssueSummary(
@@ -56,7 +58,9 @@ public sealed record IssueSummary(
     string? ProviderType = null,
     string? RevisionTriggerKind = null,
     string? PublishPhase = null,
-    string? RunKind = null)
+    string? RunKind = null,
+    string? ReviewOutcome = null,
+    string? ReviewSkippedReason = null)
 {
     public const string PublishingPhase = "publishing";
     public const string RetryingPhase = "retrying";

@@ -507,6 +507,7 @@ describe('buildCallout', () => {
       ['input_provided', {}, 'Resuming after input', 'A worker is applying the answers to the open questions.'],
       ['rebase_conflict', {}, 'Resolving conflicts (attempt 1 of 2)', 'Resolving conflicts with the default branch — a worker is running.'],
       ['review_feedback', {}, 'Addressing review', 'A worker is addressing reviewer feedback.'],
+      ['review_findings', {}, 'Fixing review findings', "A worker is fixing what Foundry's review found."],
     ] as const)('shows a revision in progress for %s with its chip label as title, offering Stop worker', (trigger, extra, title, line) => {
       // Act
       const callout = buildCallout(
@@ -1001,6 +1002,158 @@ describe('buildCallout', () => {
         ],
       });
       expect(callout.actions).toEqual([]);
+    });
+  });
+
+  describe('review step (ADR 0113)', () => {
+    it('shows a queued review with its queue position and no actions', () => {
+      // Act
+      const callout = buildCallout(detail('review_queued'), null, summary({ state: 'review_queued' }), 2);
+
+      // Assert
+      expect(callout.tone).toBe('neutral');
+      expect(callout.title).toBe('Waiting for review');
+      expect(callout.lines).toEqual([
+        'Checks passed. Waiting for a worker to review the pull request.',
+        '#2 in the dispatch queue.',
+      ]);
+      expect(callout.actions).toEqual([]);
+    });
+
+    it('shows a running review in merge-request terms, offering Stop worker', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review_in_progress'),
+        run({ role: 'review' }),
+        summary({ state: 'review_in_progress', providerType: 'gitlab' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('working');
+      expect(callout.title).toBe('Reviewing');
+      expect(callout.lines).toEqual(['A review worker is checking the merge request against the issue.']);
+      expect(callout.actions).toEqual(['stop_worker']);
+    });
+
+    it('shows a failed review run with its failure and the pending automatic retry', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review_failed', {
+          failureReason: 'API overloaded',
+          transientRetry: { attemptNumber: 1, maxAttempts: 3, isExhausted: false, nextAttemptDueAt: null },
+        }),
+        run({ role: 'review', state: 'failed', failureCategory: 'transient_api_error' }),
+        null,
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('warning');
+      expect(callout.title).toBe('Review run failed');
+      expect(callout.chip?.label).toBe('CLAUDE API ERROR');
+      expect(callout.lines).toEqual([
+        'API overloaded',
+        'Attempt 1 of 3. Automatic retry pending — next attempt shortly.',
+      ]);
+      expect(callout.actions).toEqual([]);
+    });
+
+    it('shows a skipped review with its reason, offering Retry review', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { checksOutcome: 'passed', reviewOutcome: 'skipped', reviewSkippedReason: 'verdict_invalid' }),
+        null,
+        summary({
+          state: 'review',
+          checksOutcome: 'passed',
+          reviewOutcome: 'skipped',
+          reviewSkippedReason: 'verdict_invalid',
+          pullRequestUrl: 'https://github.com/acme/api/pull/7',
+        }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('warning');
+      expect(callout.title).toBe('Review skipped');
+      expect(callout.lines).toEqual([
+        "Checks passed, but Foundry's review didn't finish: invalid verdict.",
+        'Review the pull request on GitHub, or retry the review.',
+      ]);
+      expect(callout.links.map((l) => l.label)).toEqual(['View PR']);
+      expect(callout.actions).toEqual(['retry_review']);
+    });
+
+    it('reads the skipped review from the detail on a deep link without a summary', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { reviewOutcome: 'skipped', reviewSkippedReason: null }),
+        null,
+        null,
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Review skipped');
+      expect(callout.lines[0]).toBe("Checks passed, but Foundry's review didn't finish.");
+      expect(callout.actions).toEqual(['retry_review']);
+    });
+
+    it('puts CI that could not run ahead of a skipped review', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { checksOutcome: 'infrastructure_failed', reviewOutcome: 'skipped' }),
+        null,
+        null,
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe("CI couldn't run");
+      expect(callout.actions).toEqual(['retry_review']);
+    });
+
+    it('puts a skipped review ahead of a skipped merge', () => {
+      // Act
+      const callout = buildCallout(
+        detail('review', { reviewOutcome: 'skipped', mergeOutcome: 'skipped', mergeSkippedReason: 'head_moved' }),
+        null,
+        null,
+        null,
+      );
+
+      // Assert
+      expect(callout.title).toBe('Review skipped');
+    });
+
+    it('offers no Retry review when the review was not skipped', () => {
+      // Act
+      const callout = buildCallout(detail('review', { checksOutcome: 'passed' }), null, null, null);
+
+      // Assert
+      expect(callout.actions).toEqual([]);
+    });
+
+    it.each([
+      ['revision_queued', 'neutral', "Queued to fix what Foundry's review found."],
+      ['revision_in_progress', 'working', "A worker is fixing what Foundry's review found."],
+    ] as const)('titles a %s findings fix apart from addressing review', (state, tone, line) => {
+      // Act
+      const callout = buildCallout(detail(state, { revisionTriggerKind: 'review_findings' }), null, null, null);
+
+      // Assert
+      expect(callout.tone).toBe(tone);
+      expect(callout.title).toBe('Fixing review findings');
+      expect(callout.lines).toEqual([line]);
+    });
+
+    it('titles a failed findings fix', () => {
+      // Act
+      const callout = buildCallout(detail('revision_failed', { revisionTriggerKind: 'review_findings' }), null, null, null);
+
+      // Assert
+      expect(callout.title).toBe('Findings fix failed');
     });
   });
 

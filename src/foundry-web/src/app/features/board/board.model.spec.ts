@@ -73,7 +73,7 @@ function ids(items: readonly { issue: IssueSummary }[]): string[] {
 
 describe('STAGE_LABELS', () => {
   it('names the stages in sentence case', () => {
-    expect(STAGE_ORDER.map((s) => STAGE_LABELS[s])).toEqual(['Triage', 'Implement', 'Your review']);
+    expect(STAGE_ORDER.map((s) => STAGE_LABELS[s])).toEqual(['Triage', 'Implement', 'Review', 'Your review']);
   });
 });
 
@@ -310,6 +310,70 @@ describe('buildBoardBands', () => {
     expect(bands.pipeline[0].runKind).toBe('checks_fix');
   });
 
+  it('places a queued review in the pipeline in the Review stage with its run kind', () => {
+    // Arrange
+    const issue = queued('r', { state: 'review_queued', stage: 'review', runKind: 'review' });
+
+    // Act
+    const bands = buildBoardBands([issue], ['r'], []);
+
+    // Assert
+    expect(bands.pipeline).toEqual([
+      expect.objectContaining({ stage: 'review', runKind: 'review', slot: { kind: 'position', position: 1 } }),
+    ]);
+  });
+
+  it('places a running review with the workers in the Review stage', () => {
+    // Arrange
+    const issue = buildIssue({ id: 'r', state: 'review_in_progress', stage: 'review', runKind: 'review' });
+
+    // Act
+    const bands = buildBoardBands([issue], [], []);
+
+    // Assert
+    expect(bands.workers).toEqual([expect.objectContaining({ stage: 'review', runKind: 'review' })]);
+  });
+
+  it('places a review run waiting for its automatic retry with the failures, in the Review stage', () => {
+    // Arrange
+    const issue = buildIssue({
+      id: 'f',
+      state: 'review_failed',
+      stage: 'review',
+      needsAction: false,
+      runKind: null,
+      failureClassification: 'transient_api_error',
+    });
+
+    // Act
+    const bands = buildBoardBands([issue], [], []);
+
+    // Assert
+    expect(bands.needs).toEqual([
+      expect.objectContaining({
+        stage: 'review',
+        reason: { label: 'Review failed', tone: 'warning' },
+        explanation: 'Review run failed: claude api error',
+      }),
+    ]);
+  });
+
+  it('places a running findings fix with the workers under its run kind', () => {
+    // Arrange
+    const issue = buildIssue({
+      id: 'f',
+      state: 'revision_in_progress',
+      revisionTriggerKind: 'review_findings',
+      runKind: 'findings_fix',
+    });
+
+    // Act
+    const bands = buildBoardBands([issue], [], []);
+
+    // Assert
+    expect(bands.workers).toEqual([expect.objectContaining({ runKind: 'findings_fix' })]);
+  });
+
   it('leaves a pipeline issue without a known run kind unplaced', () => {
     // Arrange
     const issue = queued('q', { runKind: null });
@@ -501,6 +565,12 @@ describe('needs explanations', () => {
     ).toBe('Triage run failed: non-zero exit');
   });
 
+  it('names the review role for a failed review run', () => {
+    expect(
+      explanation({ state: 'review_failed', stage: 'review', failureClassification: 'transient_api_error' }),
+    ).toBe('Review run failed: claude api error');
+  });
+
   it('falls back when a failed run has no classification', () => {
     expect(explanation({ state: 'failed' })).toBe('The run failed');
   });
@@ -530,6 +600,15 @@ describe('needs explanations', () => {
     ],
     [{ state: 'review', mergeOutcome: 'skipped' }, "Checks passed; Foundry didn't merge"],
     [{ state: 'review', mergeOutcome: 'disabled' }, 'Ready for your review'],
+    [
+      { state: 'review', reviewOutcome: 'skipped', reviewSkippedReason: 'verdict_invalid' },
+      "Checks passed; the review didn't finish: invalid verdict",
+    ],
+    [
+      { state: 'review', reviewOutcome: 'skipped', reviewSkippedReason: 'from_the_future' },
+      "Checks passed; the review didn't finish: from_the_future",
+    ],
+    [{ state: 'review', reviewOutcome: 'skipped' }, "Checks passed; the review didn't finish"],
     [{ state: 'unchanged' }, 'The run made no changes'],
     [{ state: 'rebase_pending' }, "Open to see what's needed"],
   ] as [Partial<IssueSummary>, string][])('explains %o as %s', (overrides, text) => {
@@ -592,6 +671,29 @@ describe('needsReason', () => {
         buildIssue({ state: 'review', needsAction: true, mergeOutcome: 'skipped', mergeSkippedReason: 'unauthorized' }),
       ),
     ).toEqual({ label: 'Merge skipped', tone: 'warning' });
+  });
+
+  it('reads a skipped review as a warning', () => {
+    expect(
+      needsReason(
+        buildIssue({ state: 'review', needsAction: true, reviewOutcome: 'skipped', reviewSkippedReason: 'verdict_invalid' }),
+      ),
+    ).toEqual({ label: 'Review skipped', tone: 'warning' });
+  });
+
+  it('reads a skipped review before a skipped merge', () => {
+    expect(
+      needsReason(
+        buildIssue({ state: 'review', needsAction: true, reviewOutcome: 'skipped', mergeOutcome: 'skipped' }),
+      )?.label,
+    ).toBe('Review skipped');
+  });
+
+  it('reads a failed review run as a warning', () => {
+    expect(needsReason(buildIssue({ state: 'review_failed', needsAction: true }))).toEqual({
+      label: 'Review failed',
+      tone: 'warning',
+    });
   });
 
   it('reads red checks before a skipped merge', () => {

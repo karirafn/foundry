@@ -93,6 +93,7 @@ function fakeIssueService() {
     retriage: vi.fn(),
     continueWithoutAnswer: vi.fn(),
     retryQuestionPost: vi.fn(),
+    retryReview: vi.fn(),
   };
 }
 
@@ -462,6 +463,76 @@ describe('PaneActionsComponent', () => {
         'Triage queued again. Issue status is updating.',
       );
       expect(succeeded).toEqual(['retry_triage']);
+    });
+  });
+
+  describe('review actions', () => {
+    it('retries a skipped review straight away, with no confirmation', () => {
+      // Arrange
+      const { button, openDialog, render, service } = setup('review', ['retry_review']);
+
+      // Act
+      button('Retry review')!.click();
+      render();
+
+      // Assert
+      expect(service.retryReview).toHaveBeenCalledWith('abc');
+      expect(openDialog()).toBeNull();
+    });
+
+    it('names the issue in the Retry review button for screen readers', () => {
+      // Arrange
+      const { button } = setup('review', ['retry_review']);
+
+      // Act
+      const label = button('Retry review')!.getAttribute('aria-label');
+
+      // Assert
+      expect(label).toBe('Retry review for issue #42');
+    });
+
+    it('reads Retrying review… and is disabled while the retry is pending', () => {
+      // Arrange
+      const { el, render, service } = setup('review', ['retry_review']);
+
+      // Act
+      service.issueActionPending.set('retry_review');
+      render();
+
+      // Assert
+      const retry = el.querySelector<HTMLButtonElement>('button[aria-label="Retry review for issue #42"]')!;
+      expect(retry.textContent?.trim()).toBe('Retrying review…');
+      expect(retry.disabled).toBe(true);
+    });
+
+    it('announces the retry once the action is gone', () => {
+      // Arrange
+      const { fixture, el, button, render, service, succeeded } = setup('review', ['retry_review']);
+      button('Retry review')!.click();
+
+      // Act
+      service.issueActionSuccess.set('Review queued again. Issue status is updating.');
+      fixture.componentRef.setInput('detail', issue('review_queued'));
+      fixture.componentRef.setInput('actions', []);
+      render();
+
+      // Assert
+      expect(el.querySelector('.pane-actions__success--triage')?.textContent?.trim()).toBe(
+        'Review queued again. Issue status is updating.',
+      );
+      expect(succeeded).toEqual(['retry_review']);
+    });
+
+    it('shows the conflict message when the review is no longer skipped', () => {
+      // Arrange
+      const { render, service, error } = setup('review', ['retry_review']);
+
+      // Act
+      service.issueActionError.set("This issue's review is no longer skipped.");
+      render();
+
+      // Assert
+      expect(error()).toBe("This issue's review is no longer skipped.");
     });
   });
 

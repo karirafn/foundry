@@ -39,6 +39,7 @@ const ISSUE_ACTIONS: ReadonlySet<PaneAction> = new Set<PaneAction>([
   'retriage',
   'continue_without_answer',
   'retry_post',
+  'retry_review',
 ]);
 
 let nextId = 0;
@@ -368,6 +369,11 @@ export class PaneActionsComponent {
     this.confirmRetriageOpen.set(false);
     this._serviceAction = 'retriage';
     this.issueService.retriage(this.detail().id);
+  }
+
+  protected retryReview(): void {
+    this._serviceAction = 'retry_review';
+    this.issueService.retryReview(this.detail().id);
   }
 
   protected retryQuestionPost(): void {

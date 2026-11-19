@@ -89,6 +89,15 @@
             (click)="confirmRetriageOpen.set(true)"
           >{{ triagePending() === 'retriage' ? 'Re-triaging…' : 'Re-triage' }}</button>
         }
+        @case ('retry_review') {
+          <button
+            type="button"
+            [class]="buttonClass(action, first)"
+            [disabled]="triagePending() !== null"
+            [attr.aria-label]="'Retry review for issue #' + d.issueNumber"
+            (click)="retryReview()"
+          >{{ triagePending() === 'retry_review' ? 'Retrying review…' : 'Retry review' }}</button>
+        }
         @case ('retry_post') {
           <button
             type="button"

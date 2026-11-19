@@ -22,6 +22,8 @@ describe('RunKindTagComponent', () => {
     checks_fix: 'checks fix',
     conflict_fix: 'conflict',
     input_resume: 'resume',
+    review: 'review',
+    findings_fix: 'findings fix',
   };
 
   it.each(Object.entries(expectedLabels) as [RunKind, string][])('should label the %s run kind "%s"', (kind, label) => {

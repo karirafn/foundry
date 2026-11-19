@@ -28,6 +28,9 @@ export const STATE_LABELS: Record<IssueState, string> = {
   publish_failed: 'PUBLISH FAILED',
   publish_blocked: 'SECRET DETECTED',
   branch_diverged: 'BRANCH DIVERGED',
+  review_queued: 'REVIEW QUEUED',
+  review_in_progress: 'REVIEWING',
+  review_failed: 'REVIEW FAILED',
 };
 
 export const STATE_ARIA_LABELS: Record<IssueState, string> = {
@@ -55,6 +58,9 @@ export const STATE_ARIA_LABELS: Record<IssueState, string> = {
   publish_failed: 'publish failed',
   publish_blocked: 'secret detected, nothing pushed',
   branch_diverged: 'branch diverged',
+  review_queued: 'review queued',
+  review_in_progress: 'reviewing',
+  review_failed: 'review failed',
 };
 
 export const STATE_CSS_CLASSES: Record<IssueState, string> = {
@@ -82,6 +88,9 @@ export const STATE_CSS_CLASSES: Record<IssueState, string> = {
   publish_failed: 'badge--publish-failed',
   publish_blocked: 'badge--publish-blocked',
   branch_diverged: 'badge--branch-diverged',
+  review_queued: 'badge--review-queued',
+  review_in_progress: 'badge--review-in-progress',
+  review_failed: 'badge--review-failed',
 };
 
 export function cardAccentFor(state: IssueState): 'working' | 'ready' | null {
@@ -133,6 +142,11 @@ const REVISION_TRIGGER_LABELS: Record<RevisionTriggerKind, Record<RevisionState,
     revision_queued: { label: 'RESUME QUEUED', ariaLabel: 'resume queued' },
     revision_in_progress: { label: 'RESUMING', ariaLabel: 'resuming' },
     revision_failed: { label: 'RESUME FAILED', ariaLabel: 'resume failed' },
+  },
+  review_findings: {
+    revision_queued: { label: 'FINDINGS FIX QUEUED', ariaLabel: 'findings fix queued' },
+    revision_in_progress: { label: 'FIXING FINDINGS', ariaLabel: 'fixing findings' },
+    revision_failed: { label: 'FINDINGS FIX FAILED', ariaLabel: 'findings fix failed' },
   },
   review_feedback: {
     revision_queued: { label: STATE_LABELS.revision_queued, ariaLabel: STATE_ARIA_LABELS.revision_queued },

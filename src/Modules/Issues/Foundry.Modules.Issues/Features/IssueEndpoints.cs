@@ -17,6 +17,7 @@ internal static class IssueEndpoints
         RetryIssue.Endpoint.Map(group);
         RetryIssueFresh.Endpoint.Map(group);
         RetryTriage.Endpoint.Map(group);
+        RetryReview.Endpoint.Map(group);
         SkipTriage.Endpoint.Map(group);
         Retriage.Endpoint.Map(group);
         AwaitingInput.ContinueWithoutAnswer.Endpoint.Map(group);
