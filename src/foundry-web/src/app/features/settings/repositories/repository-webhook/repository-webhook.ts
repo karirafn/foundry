@@ -45,9 +45,8 @@ import {
         @switch (info.status) {
           @case ('not-configured') {
             <p class="repository-webhook__hint">
-              Webhooks are off. Set the webhook port in the host configuration (<code>Webhooks:Port</code>) and a
-              Webhook Public Base URL in <a routerLink="/settings/dispatch">Dispatch settings</a>. Until then this
-              repository polls at its normal interval.
+              Foundry has no webhook URL yet. Set it in <a routerLink="/settings/dispatch">Dispatch settings</a>; until
+              then this repository polls at its normal interval.
             </p>
           }
           @case ('active') {
@@ -74,6 +73,12 @@ import {
               <p class="repository-webhook__hint">
                 A scheduled poll found a change no delivery announced, so this repository is back on its normal
                 poll interval. The next verified delivery makes the webhook active again.
+              </p>
+            }
+            @if (info.status === 'not-registered') {
+              <p class="repository-webhook__hint">
+                Foundry registers this webhook automatically once the account's token can manage webhooks. To add
+                it by hand instead, use the details below.
               </p>
             }
 
@@ -138,8 +143,8 @@ import {
         @if (info.status !== 'not-configured') {
           <div class="repository-webhook__register">
             <p class="repository-webhook__hint">
-              Foundry can create or update this webhook on {{ info.provider === 'gitlab' ? 'GitLab' : 'GitHub' }}
-              itself, using the account token.
+              Foundry registers this webhook on {{ info.provider === 'gitlab' ? 'GitLab' : 'GitHub' }}
+              automatically. Use this to create or update it now with the account's token.
             </p>
             <button
               type="button"
