@@ -42,6 +42,7 @@ internal static class GlobalSettingsMapper
             webhookPort,
             settings.WebhookPublicBaseUrl?.Value,
             settings.BackstopIntervalMinutes,
-            settings.AwaitingInputReminderDelayHours);
+            settings.AwaitingInputReminderDelayHours,
+            PackageProxyPauseMapper.ToPausedPackageProxy(settings.PackageProxyPause));
     }
 }

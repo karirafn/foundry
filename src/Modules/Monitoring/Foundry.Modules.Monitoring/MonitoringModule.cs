@@ -159,6 +159,7 @@ public static class MonitoringModule
         services.AddOptions<PackageSourceProxyOptions>().BindConfiguration(PackageSourceProxyOptions.SectionName);
         services.AddIngressEntry(static sp =>
             new IngressEntry(sp.GetRequiredService<IOptions<PackageSourceProxyOptions>>().Value.ProxyPort, PackageSourceProxyOptions.PathPrefix));
+        services.AddSingleton<IPackageSourceProxyAddress, PackageSourceProxyAddress>();
         services.AddScoped<ProxyPackageSourceRequest.Handler>();
         services.TryAddSingleton<WebhookNudgeQueue>();
         services.AddScoped<WebhookIngress>();

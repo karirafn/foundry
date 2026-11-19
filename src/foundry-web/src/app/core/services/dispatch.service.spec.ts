@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DispatchService } from './dispatch.service';
-import { GlobalSettingsResponse, PausedHost } from '../models/settings.model';
+import { GlobalSettingsResponse, PackageProxyPause, PausedHost } from '../models/settings.model';
 
 function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalSettingsResponse {
   return {
@@ -27,6 +27,7 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     pidsLimit: 512,
     additionalDenyRules: [],
     pausedHosts: [],
+    packageProxyPause: null,
     webhookPort: 5099,
     ...overrides,
   };
@@ -116,6 +117,35 @@ describe('DispatchService', () => {
 
     // Assert
     expect(service.pausedHosts()).toEqual([]);
+  });
+
+  it('should set packageProxyPause from updateFromSettings response', () => {
+    // Arrange
+    const pause: PackageProxyPause = {
+      pausedAt: '2026-07-01T07:39:00Z',
+      probeAttempts: 2,
+      nextProbeAt: '2026-07-01T07:52:00Z',
+    };
+
+    // Act
+    service.updateFromSettings(buildResponse({ packageProxyPause: pause }));
+
+    // Assert
+    expect(service.packageProxyPause()).toEqual(pause);
+  });
+
+  it('should treat a response without packageProxyPause as no package-proxy pause', () => {
+    // Arrange
+    service.updateFromSettings(buildResponse({
+      packageProxyPause: { pausedAt: '2026-07-01T07:39:00Z', probeAttempts: 0, nextProbeAt: '2026-07-01T07:40:00Z' },
+    }));
+    const { packageProxyPause: _omitted, ...withoutPackageProxyPause } = buildResponse();
+
+    // Act
+    service.updateFromSettings(withoutPackageProxyPause as GlobalSettingsResponse);
+
+    // Assert
+    expect(service.packageProxyPause()).toBeNull();
   });
 
   // Cycle 2: updateFromSettings populates isDispatchPaused

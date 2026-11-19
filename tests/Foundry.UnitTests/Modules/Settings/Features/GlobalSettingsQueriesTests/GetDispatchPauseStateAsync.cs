@@ -113,4 +113,48 @@ public sealed class GetDispatchPauseStateAsync : IAsyncDisposable
             () => result.AutoResumeOnUsageReset.ShouldBeTrue(),
             () => result.UsageLimitResetsAt.ShouldBeNull());
     }
+
+    [Fact]
+    public async Task WhenThePackageProxyIsPaused_ReturnsThePauseAsStored()
+    {
+        // Arrange
+        DateTimeOffset pausedAt = new(2026, 11, 19, 7, 39, 0, TimeSpan.Zero);
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.PausePackageProxy(pausedAt);
+            settings.RecordPackageProxyProbeUnreachable(pausedAt.AddMinutes(1));
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+
+        // Act
+        DispatchPauseState result = await sut.GetDispatchPauseStateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PackageProxyPause.ShouldBe(new PausedPackageProxy(pausedAt, 1, pausedAt.AddMinutes(3)));
+    }
+
+    [Fact]
+    public async Task WhenThePackageProxyIsNotPaused_ReturnsNoPackageProxyPause()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            seedDb.Set<GlobalSettings>().Add(GlobalSettings.Create());
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+
+        // Act
+        DispatchPauseState result = await sut.GetDispatchPauseStateAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.PackageProxyPause.ShouldBeNull();
+    }
 }

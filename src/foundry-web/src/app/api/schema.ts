@@ -1220,6 +1220,7 @@ export interface components {
              * @default 72
              */
             awaitingInputReminderDelayHours: number | string;
+            packageProxyPause?: null | components["schemas"]["PausedPackageProxy"];
         };
         HttpValidationProblemDetails: {
             type?: null | string;
@@ -1431,6 +1432,14 @@ export interface components {
         };
         PausedHost: {
             host: string;
+            /** Format: date-time */
+            pausedAt: string;
+            /** Format: int32 */
+            probeAttempts: number | string;
+            /** Format: date-time */
+            nextProbeAt: string;
+        };
+        PausedPackageProxy: {
             /** Format: date-time */
             pausedAt: string;
             /** Format: int32 */

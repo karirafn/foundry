@@ -5,13 +5,14 @@ import { DispatchBannerComponent } from './components/dispatch-banner/dispatch-b
 import { DockerBannerComponent } from './components/docker-banner/docker-banner';
 import { CreditsBannerComponent } from './components/credits-banner/credits-banner';
 import { HostPauseBannerComponent } from './components/host-pause-banner/host-pause-banner';
+import { PackageProxyPauseBannerComponent } from './components/package-proxy-pause-banner/package-proxy-pause-banner';
 import { AccountTokenBannerComponent } from './components/account-token-banner/account-token-banner';
 import { AccountTokenExpiryBannerComponent } from './components/account-token-expiry-banner/account-token-expiry-banner';
 
 @Component({
   selector: 'fd-system-banner',
   standalone: true,
-  imports: [SystemNotificationsComponent, DockerBannerComponent, ImageBuildBannerComponent, CreditsBannerComponent, DispatchBannerComponent, AccountTokenBannerComponent, HostPauseBannerComponent, AccountTokenExpiryBannerComponent],
+  imports: [SystemNotificationsComponent, DockerBannerComponent, ImageBuildBannerComponent, CreditsBannerComponent, DispatchBannerComponent, AccountTokenBannerComponent, HostPauseBannerComponent, PackageProxyPauseBannerComponent, AccountTokenExpiryBannerComponent],
   templateUrl: './system-banner.html',
   styleUrl: './system-banner.scss',
 })

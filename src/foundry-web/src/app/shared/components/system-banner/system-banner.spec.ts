@@ -53,6 +53,7 @@ function createMockDispatchService() {
     usageLimitResetsAt: usageLimitSignal.asReadonly(),
     resuming: resumingSignal.asReadonly(),
     pausedHosts: pausedHostsSignal.asReadonly(),
+    packageProxyPause: signal(null).asReadonly(),
     resumeDispatch: vi.fn(),
   };
 }
@@ -189,14 +190,30 @@ describe('SystemBannerComponent', () => {
       ]);
     });
 
-    it('should render fd-account-token-expiry-banner last, after fd-host-pause-banner', () => {
+    it('should render fd-package-proxy-pause-banner directly after fd-host-pause-banner', () => {
       // Arrange / Act
       const { fixture } = setup();
       const el = fixture.nativeElement as HTMLElement;
 
       // Assert
       const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
-      expect(children.slice(-2)).toEqual(['fd-host-pause-banner', 'fd-account-token-expiry-banner']);
+      const hostPauseIndex = children.indexOf('fd-host-pause-banner');
+      expect(hostPauseIndex).toBeGreaterThanOrEqual(0);
+      expect(children[hostPauseIndex + 1]).toBe('fd-package-proxy-pause-banner');
+    });
+
+    it('should render fd-account-token-expiry-banner last, after the partial-pause banners', () => {
+      // Arrange / Act
+      const { fixture } = setup();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const children = Array.from(el.children).map((c) => c.tagName.toLowerCase());
+      expect(children.slice(-3)).toEqual([
+        'fd-host-pause-banner',
+        'fd-package-proxy-pause-banner',
+        'fd-account-token-expiry-banner',
+      ]);
     });
 
     it('should show the invalid-token and expiry banners at once as separate regions', () => {

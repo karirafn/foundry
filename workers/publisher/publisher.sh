@@ -22,11 +22,15 @@
 #             publish() below for the steps and the FOUNDRY_PUBLISH result line.
 #   probe   — one ls-remote HEAD, to tell whether the provider can be reached (a host pause's probe); see
 #             probe() below for its FOUNDRY_PROBE line.
+#   proxy-probe — one unauthenticated request to PROXY_URL, to tell whether the Package Source Proxy can be
+#             reached (the package-proxy pause's probe); see proxy_probe() below for its FOUNDRY_PROXY_PROBE line.
 #
-# Environment (every mode):
+# Environment (prepare, publish and probe):
 #   CLONE_URL   — the repository's https clone URL (required)
 #   GIT_PAT     — the provider token, delivered to git only through GIT_ASKPASS (required)
 #   RUN_BRANCH  — the run's branch (prepare: existing branches only; publish: required; probe: unused)
+# Proxy-probe mode only:
+#   PROXY_URL   — the proxy's base URL as a worker sees it (required); no token is used
 # Prepare mode only, both or neither:
 #   REVIEW_BRANCH — the pull request's source branch, fetched so REVIEW_COMMIT is reachable
 #   REVIEW_COMMIT — the reviewed commit, 40 lowercase hex digits
@@ -1057,12 +1061,58 @@ probe() {
     exit 0
 }
 
+# ===========================================================================
+# Proxy-probe mode (package-proxy pause)
+#
+# Tells whether the Package Source Proxy can be reached now: one unauthenticated request to PROXY_URL, the proxy's
+# base URL as a worker sees it. Prints one stdout line:
+#   FOUNDRY_PROXY_PROBE result=reachable|unreachable detail=<one line>
+# reachable when any HTTP status line came back, whatever its status (a 404 at the base path included): the proxy
+# answered. unreachable otherwise (DNS failure, refused or unreachable connection, timeout). There is no retry here;
+# Foundry's probe schedule is the retry. Exit status: 0 whenever the line was printed; non-zero, with no line, for
+# invalid input. The options used (-S, -T, -t, -O) are the ones BusyBox wget, which the image carries, and GNU wget
+# share.
+# ===========================================================================
+PROXY_PROBE_TIMEOUT_SECONDS=10
+
+proxy_probe() {
+    : "${PROXY_URL:?PROXY_URL is required}"
+
+    case "$PROXY_URL" in
+        http://* | https://*) ;;
+        *)
+            echo "PROXY_URL must be an http:// or https:// URL" >&2
+            exit 1
+            ;;
+    esac
+
+    wget_err="$(mktemp)"
+    trap 'rm -f "$wget_err"' EXIT
+
+    # -S prints the server's status line on stderr, which is what tells an HTTP error (an answer) from no answer.
+    if wget -S -T "$PROXY_PROBE_TIMEOUT_SECONDS" -t 1 -O /dev/null "$PROXY_URL" 2> "$wget_err"; then
+        printf 'FOUNDRY_PROXY_PROBE result=reachable detail=%s\n' "the proxy answered"
+        exit 0
+    fi
+
+    status_line="$(tr -d '\r' < "$wget_err" | grep -m 1 -o 'HTTP/[0-9.]* [0-9][0-9][0-9].*' || true)"
+    if [ -n "$status_line" ]; then
+        printf 'FOUNDRY_PROXY_PROBE result=reachable detail=the proxy answered %s\n' "$(one_line "$status_line")"
+        exit 0
+    fi
+
+    error="$(grep -v '^ *$' "$wget_err" | tail -n 1 || true)"
+    printf 'FOUNDRY_PROXY_PROBE result=unreachable detail=%s\n' "$(one_line "${error:-no HTTP response}")"
+    exit 0
+}
+
 case "${1:-}" in
     prepare) prepare ;;
     publish) publish ;;
     probe) probe ;;
+    proxy-probe) proxy_probe ;;
     *)
-        echo "usage: publisher.sh prepare|publish|probe" >&2
+        echo "usage: publisher.sh prepare|publish|probe|proxy-probe" >&2
         exit 64
         ;;
 esac

@@ -532,6 +532,71 @@ public sealed class SelectAsync : IAsyncDisposable
             .ShouldBeOfType<FreshQueuedIssue>();
     }
 
+    private static PausedHostsGlobalSettingsQueries PackageProxyPaused() =>
+        new() { PackageProxyPause = new PausedPackageProxy(DateTimeOffset.UtcNow, ProbeAttempts: 0, DateTimeOffset.UtcNow.AddMinutes(1)) };
+
+    [Fact]
+    public async Task WhenThePackageProxyIsPaused_SkipsARepositoryWithPackageSourcesAndSelectsOneWithout()
+    {
+        // Arrange — the repository with sources has the higher priority, so only the gate keeps it from winning.
+        MonitoredRepositoryId sourcesRepoId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId plainRepoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(sourcesRepoId, issueNumber: 1);
+        FreshQueuedIssue plain = SeedQueuedIssue(plainRepoId, issueNumber: 2);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+            [
+                new EligibleRepository(sourcesRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: true),
+                new EligibleRepository(plainRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: false),
+            ]),
+            settingsQueries: PackageProxyPaused());
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(plain.Id);
+    }
+
+    [Fact]
+    public async Task WhenThePackageProxyIsPausedAndEveryRepositoryHasPackageSources_ReturnsNoCandidates()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repoId);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: true)]),
+            settingsQueries: PackageProxyPaused());
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.NoCandidates>();
+    }
+
+    [Fact]
+    public async Task WhenThePackageProxyIsNotPaused_SelectsARepositoryWithPackageSources()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repoId);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: true)]),
+            settingsQueries: new PausedHostsGlobalSettingsQueries());
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(queued.Id);
+    }
+
     private static PausedHost PausedHostFor(string host) =>
         new(host, DateTimeOffset.UtcNow, ProbeAttempts: 0, DateTimeOffset.UtcNow.AddMinutes(1));
 

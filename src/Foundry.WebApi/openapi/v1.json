@@ -3878,6 +3878,16 @@
             ],
             "format": "int32",
             "default": 72
+          },
+          "packageProxyPause": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PausedPackageProxy"
+              }
+            ]
           }
         }
       },
@@ -4856,6 +4866,32 @@
           "host": {
             "type": "string"
           },
+          "pausedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "probeAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "nextProbeAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PausedPackageProxy": {
+        "required": [
+          "pausedAt",
+          "probeAttempts",
+          "nextProbeAt"
+        ],
+        "type": "object",
+        "properties": {
           "pausedAt": {
             "type": "string",
             "format": "date-time"

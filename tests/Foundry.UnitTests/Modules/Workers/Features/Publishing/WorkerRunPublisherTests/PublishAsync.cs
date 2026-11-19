@@ -563,6 +563,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
                 _events,
                 new NullIntegrationEventProcessor(),
                 domainEvents,
+                _broadcaster,
                 TimeProvider.System,
                 NullLogger<WorkerOutcomeApplier>.Instance),
             _orchestrator,
