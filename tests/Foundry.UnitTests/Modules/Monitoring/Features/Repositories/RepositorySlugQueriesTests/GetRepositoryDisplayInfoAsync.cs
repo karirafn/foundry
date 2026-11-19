@@ -199,4 +199,22 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
             () => result[nested.Id].ProviderType.ShouldBe("gitlab"),
             () => result[shallow.Id].ProviderType.ShouldBe("github"));
     }
+
+    [Fact]
+    public async Task WhenRepositoryIsRemoved_StillReturnsItsSlug()
+    {
+        // Arrange
+        MonitoredRepository repo = await AddRepositoryAsync("acme/removed", "github.com");
+        repo.Remove(DateTimeOffset.UtcNow);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        IReadOnlySet<MonitoredRepositoryId> ids = new HashSet<MonitoredRepositoryId> { repo.Id };
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo> result =
+            await _sut.GetRepositoryDisplayInfoAsync(ids, TestContext.Current.CancellationToken);
+
+        // Assert
+        result[repo.Id].Slug.ShouldBe("acme/removed");
+    }
 }

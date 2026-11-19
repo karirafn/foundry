@@ -1,9 +1,12 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Events;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
@@ -22,9 +25,11 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.DeleteRepositoryHandlerT
 public sealed class HandleAsync : IAsyncDisposable
 {
     private const string AccountToken = "github_pat_account";
+    private static readonly DateTimeOffset Now = new(2026, 11, 19, 10, 0, 0, TimeSpan.Zero);
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly CapturingDomainEventDispatcher _domainEvents = new();
 
     public HandleAsync()
     {
@@ -71,10 +76,14 @@ public sealed class HandleAsync : IAsyncDisposable
     private DeleteRepository.Handler CreateHandler(RecordingBranchRulesProviderFactory? factory = null) =>
         new(
             _dbContext,
-            new RepositoryWebhookDeleter(
-                new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
-                factory ?? new RecordingBranchRulesProviderFactory(),
-                NullLogger<RepositoryWebhookDeleter>.Instance));
+            new RepositoryRemoval(
+                _dbContext,
+                new RepositoryWebhookDeleter(
+                    new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+                    factory ?? new RecordingBranchRulesProviderFactory(),
+                    NullLogger<RepositoryWebhookDeleter>.Instance),
+                _domainEvents),
+            new FixedTimeProvider(Now));
 
     private async Task<bool> ExistsAsync(MonitoredRepository repository)
     {
@@ -212,5 +221,98 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         result.IsSuccess.ShouldBeTrue();
         (await ExistsAsync(repository)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task KeepsTheRowMarkedRemoved()
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        DeleteRepository.Handler sut = CreateHandler();
+
+        // Act
+        await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value), CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        MonitoredRepository stored = await _dbContext.Set<MonitoredRepository>()
+            .IgnoreQueryFilters([MonitoredRepositoryConfiguration.RemovedRepositoryFilter])
+            .SingleAsync(r => r.Id == repository.Id, CancellationToken.None);
+        stored.RemovedAt.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task DispatchesTheRemovedDomainEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        DeleteRepository.Handler sut = CreateHandler();
+
+        // Act
+        await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value), CancellationToken.None);
+
+        // Assert
+        _domainEvents.DispatchedEvents.ShouldBe([new MonitoredRepositoryRemovedDomainEvent(repository.Id)]);
+    }
+
+    [Fact]
+    public async Task DeletesOnlyTheRemovedRepositorysOwnedRows()
+    {
+        // Arrange
+        MonitoredRepository removed = CreateRepo("alice", 0);
+        MonitoredRepository kept = CreateRepo("bob", 1);
+        foreach (MonitoredRepositoryId id in new[] { removed.Id, kept.Id })
+        {
+            _dbContext.Set<IssueWatch>().Add(IssueWatch.Start(id, 1, baselineBodyHash: null, baselineHead: null));
+            _dbContext.Set<PendingMerge>().Add(PendingMerge.Start(id, 1, Now));
+            _dbContext.Set<PendingRebase>().Add(PendingRebase.Start(id, 1, Now));
+            _dbContext.Set<PostedComment>().Add(PostedComment.Record(
+                id,
+                PostedCommentKey.Conversation(ProviderCommentId.Create(1).ValueOrThrow()),
+                Now));
+        }
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        DeleteRepository.Handler sut = CreateHandler();
+
+        // Act
+        await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), removed.Id.Value), CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<IssueWatch>().Select(w => w.MonitoredRepositoryId).ToListAsync(CancellationToken.None))
+            .ShouldBe([kept.Id]);
+        (await _dbContext.Set<PendingMerge>().Select(m => m.MonitoredRepositoryId).ToListAsync(CancellationToken.None))
+            .ShouldBe([kept.Id]);
+        (await _dbContext.Set<PendingRebase>().Select(r => r.MonitoredRepositoryId).ToListAsync(CancellationToken.None))
+            .ShouldBe([kept.Id]);
+        (await _dbContext.Set<PostedComment>().Select(c => c.MonitoredRepositoryId).ToListAsync(CancellationToken.None))
+            .ShouldBe([kept.Id]);
+    }
+
+    [Fact]
+    public async Task WhenAlreadyRemoved_ReturnsNotFound()
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        await CreateHandler().HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+        DeleteRepository.Handler sut = CreateHandler();
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<bool>.Failure>().Error.Code.ShouldBe(RepositoryErrors.NotFoundCode);
+        _domainEvents.DispatchedEvents.Count.ShouldBe(1);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

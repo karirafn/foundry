@@ -7,6 +7,8 @@ internal static class MonitoredRepositoryErrors
     internal const string InvalidMaxConcurrentWorkersCode = "Repository.InvalidMaxConcurrentWorkers";
     internal const string PollIntervalNotPositiveCode = "Repository.PollIntervalNotPositive";
     internal const string PollIntervalTooLargeCode = "Repository.PollIntervalTooLarge";
+    internal const string AlreadyRemovedCode = "Repository.AlreadyRemoved";
+    internal const string NotRemovedCode = "Repository.NotRemoved";
 
     internal static Error InvalidMaxConcurrentWorkers(int value) =>
         new(
@@ -18,4 +20,10 @@ internal static class MonitoredRepositoryErrors
 
     internal static Error PollIntervalTooLarge(int maxSeconds) =>
         new(PollIntervalTooLargeCode, $"Poll interval must not exceed {maxSeconds} seconds.");
+
+    internal static Error AlreadyRemoved() =>
+        new(AlreadyRemovedCode, "The repository has already been removed.");
+
+    internal static Error NotRemoved() =>
+        new(NotRemovedCode, "Only a removed repository can be restored.");
 }

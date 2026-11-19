@@ -211,4 +211,90 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }
+
+    private async Task<MonitoredRepository> SeedRemovedRepositoryAsync(string slug, int position)
+    {
+        MonitoredRepository repository = MonitoredRepository.Create(
+            RepositorySlug.Create(slug).ValueOrThrow(),
+            "github.com",
+            TimeSpan.FromSeconds(60),
+            position).ValueOrThrow();
+        _dbContext.Set<MonitoredRepository>().Add(repository);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        repository.Remove(DateTimeOffset.UtcNow);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+        return repository;
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryWasRemoved_RestoresItWithTheSameId()
+    {
+        // Arrange
+        Guid accountId = await SeedCredentialAsync();
+        MonitoredRepository removed = await SeedRemovedRepositoryAsync("owner/repo", position: 0);
+        CreateRepository.Handler sut = BuildHandler();
+        CreateRepository.Command command = new(accountId, "owner/repo", PollIntervalSeconds: 300, MaxConcurrentWorkers: 3);
+
+        // Act
+        Result<CreateRepositoryResponse> result = await sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        RepositorySummary summary = result.ShouldBeOfType<Result<CreateRepositoryResponse>.Success>().Value.Repository;
+        summary.Id.ShouldBe(removed.Id.Value);
+        summary.MaxConcurrentWorkers.ShouldBe(3);
+        _dbContext.ChangeTracker.Clear();
+        MonitoredRepository stored = await _dbContext.Set<MonitoredRepository>().SingleAsync(CancellationToken.None);
+        stored.Id.ShouldBe(removed.Id);
+        stored.RemovedAt.ShouldBeNull();
+        stored.PollInterval.ShouldBe(TimeSpan.FromSeconds(300));
+        stored.WebhookHookId.ShouldBe(removed.WebhookHookId);
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryWasRemoved_PlacesItAtTheEndOfThePositionOrder()
+    {
+        // Arrange
+        Guid accountId = await SeedCredentialAsync();
+        MonitoredRepository removed = await SeedRemovedRepositoryAsync("owner/repo", position: 0);
+        MonitoredRepository survivor = MonitoredRepository.Create(
+            RepositorySlug.Create("owner/other").ValueOrThrow(),
+            "github.com",
+            null,
+            position: 0).ValueOrThrow();
+        _dbContext.Set<MonitoredRepository>().Add(survivor);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        CreateRepository.Handler sut = BuildHandler();
+
+        // Act
+        await sut.HandleAsync(new CreateRepository.Command(accountId, "owner/repo", null), CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        List<MonitoredRepository> ordered = await _dbContext.Set<MonitoredRepository>()
+            .OrderBy(r => r.Position)
+            .ToListAsync(CancellationToken.None);
+        ordered.Select(r => r.Id).ShouldBe([survivor.Id, removed.Id]);
+        ordered.Select(r => r.Position).ShouldBe([0, 1]);
+    }
+
+    [Fact]
+    public async Task WhenTheRestoreSettingsAreInvalid_LeavesTheRepositoryRemoved()
+    {
+        // Arrange
+        Guid accountId = await SeedCredentialAsync();
+        await SeedRemovedRepositoryAsync("owner/repo", position: 0);
+        CreateRepository.Handler sut = BuildHandler();
+
+        // Act
+        Result<CreateRepositoryResponse> result = await sut.HandleAsync(
+            new CreateRepository.Command(accountId, "owner/repo", PollIntervalSeconds: 0),
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<CreateRepositoryResponse>.Failure>().Error.Code
+            .ShouldBe(MonitoredRepositoryErrors.PollIntervalNotPositiveCode);
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<MonitoredRepository>().AnyAsync(CancellationToken.None)).ShouldBeFalse();
+    }
 }
