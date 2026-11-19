@@ -50,6 +50,37 @@ public sealed class RewriteJson
     }
 
     [Fact]
+    public void AProjectDownloadUrlOfAGroupFeed_IsRepointedAtTheProxyKeepingPathAndQuery()
+    {
+        // Arrange
+        string json = """{"packageContent":"https://gitlab.com/api/v4/projects/9/packages/nuget/download/Foo/1.0.0/foo.1.0.0.nupkg?v=1"}""";
+
+        // Act
+        string rewritten = Rewrite(json);
+
+        // Assert
+        rewritten.ShouldBe(
+            """{"packageContent":"http://host.docker.internal:5287/package-sources/0f8fad5b-d9cb-469f-a165-70867728950e/api/v4/projects/9/packages/nuget/download/Foo/1.0.0/foo.1.0.0.nupkg?v=1"}""");
+    }
+
+    [Fact]
+    public void AProjectDownloadUrlOfAProjectFeed_IsLeftAlone()
+    {
+        // Arrange
+        ProxiedPackageSource projectFeed = new(
+            SourceId,
+            new Uri("https://gitlab.com/api/v4/projects/9/packages/nuget/index.json"),
+            new Uri("http://host.docker.internal:5287/package-sources/"));
+        string json = """{"packageContent":"https://gitlab.com/api/v4/projects/8/packages/nuget/download/Foo/1.0.0/foo.1.0.0.nupkg"}""";
+
+        // Act
+        byte[]? rewritten = projectFeed.RewriteJson(Encoding.UTF8.GetBytes(json));
+
+        // Assert
+        Encoding.UTF8.GetString(rewritten.ShouldNotBeNull()).ShouldBe(json);
+    }
+
+    [Fact]
     public void ABodyThatIsNotJson_IsNotRewritten()
     {
         // Act

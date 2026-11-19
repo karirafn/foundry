@@ -43,6 +43,11 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
 
     private const string ThirdPartyServiceIndexUrl = "https://packages.example/v3/index.json";
 
+    private const string DownloadPath =
+        "/api/v4/projects/9/packages/nuget/download/Contoso.Common/1.0.0/contoso.common.1.0.0.nupkg";
+
+    private const string PackageContent = Origin + DownloadPath;
+
     private readonly FakePackageSourceUpstream _upstream = new();
     private readonly FoundryWebAppFactory _factory;
 
@@ -360,6 +365,227 @@ public sealed class WhenAWorkerReadsAPackageSource : IAsyncDisposable
 
         // Assert
         response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+    }
+
+    [Fact]
+    public async Task AGroupFeedRegistration_HasItsProjectDownloadUrlsRepointedAtTheProxy()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedRegistration(PackageContent);
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            ProxyPath(seeded.SourceId, "metadata/contoso.common/index.json"),
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        string body = await ReadBodyAsync(response);
+        body.ShouldContain($"\"http://host.docker.internal:{ProxyPort}/package-sources/{seeded.SourceId}{DownloadPath}\"");
+    }
+
+    [Fact]
+    public async Task AGroupFeedDownloadTheRegistrationLists_StreamsThroughWithTheSameCredential()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedRegistration(PackageContent);
+        byte[] package = [.. Enumerable.Range(0, 200_000).Select(i => (byte)(i % 251))];
+        _upstream.Bytes(PackageContent, package);
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}{DownloadPath}",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+        using MemoryStream received = new();
+        await response.Response.Body.CopyToAsync(received, TestContext.Current.CancellationToken);
+        received.ToArray().ShouldBe(package);
+        _upstream.Requests.ShouldAllBe(r => r.Authorization == Basic(AccountName, AccountToken));
+        _upstream.Requests.ShouldContain(r => r.Url.AbsoluteUri == Origin + Directory + "metadata/contoso.common/index.json");
+    }
+
+    [Fact]
+    public async Task AGroupFeedHeadDownloadTheRegistrationLists_IsForwarded()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedRegistration(PackageContent);
+        _upstream.Bytes(PackageContent, [1, 2, 3]);
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Head,
+            $"/package-sources/{seeded.SourceId}{DownloadPath}",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+        _upstream.Requests.ShouldContain(r => r.Url.AbsoluteUri == PackageContent && r.Method == HttpMethod.Head);
+    }
+
+    [Theory]
+    [InlineData("/api/v4/projects/9/packages/nuget/download/Contoso.Common/2.0.0/contoso.common.2.0.0.nupkg")]
+    [InlineData("/api/v4/projects/10/packages/nuget/download/Contoso.Common/1.0.0/contoso.common.1.0.0.nupkg")]
+    public async Task AGroupFeedDownloadTheRegistrationDoesNotList_Returns404(string downloadPath)
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedRegistration(PackageContent);
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}{downloadPath}",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        _upstream.Requests.ShouldNotContain(r => r.Url.AbsolutePath.Contains("/download/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AGroupFeedDownloadListedOnAPageOfTheRegistration_StreamsThrough()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedServiceIndex();
+        string pageUrl = Origin + Directory + "metadata/contoso.common/page/1.0.0/1.0.0.json";
+        _upstream.Json(
+            Origin + Directory + "metadata/contoso.common/index.json",
+            $$"""{"count":2,"items":[{"@id":"{{Origin}}{{Directory}}metadata/contoso.common/page/0.1.0/0.9.0.json","count":1},{"@id":"{{pageUrl}}","count":1}]}""");
+        _upstream.Json(
+            Origin + Directory + "metadata/contoso.common/page/0.1.0/0.9.0.json",
+            """{"items":[{"catalogEntry":{"version":"0.9.0"},"packageContent":"https://gitlab.com/api/v4/projects/9/packages/nuget/download/Contoso.Common/0.9.0/contoso.common.0.9.0.nupkg"}]}""");
+        _upstream.Json(pageUrl, $$"""{"items":[{"catalogEntry":{"version":"1.0.0"},"packageContent":"{{PackageContent}}"}]}""");
+        _upstream.Bytes(PackageContent, [1, 2, 3]);
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}{DownloadPath}",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status200OK);
+        _upstream.Requests.ShouldContain(r => r.Url.AbsoluteUri == pageUrl);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError, "could not read")]
+    [InlineData(HttpStatusCode.Unauthorized, "refused Foundry's credential")]
+    public async Task AGroupFeedRegistrationThatFails_Becomes502NamingTheSource(HttpStatusCode status, string reason)
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedServiceIndex();
+        _upstream.Status(Origin + Directory + "metadata/contoso.common/index.json", status);
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}{DownloadPath}",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        string body = await ReadBodyAsync(response);
+        body.ShouldSatisfyAllConditions(
+            () => body.ShouldContain(ServiceIndexUrl),
+            () => body.ShouldContain(reason),
+            () => body.TrimEnd().ShouldNotContain('\n'));
+        response.Response.Headers.WWWAuthenticate.ShouldBeEmpty();
+        _upstream.Requests.ShouldNotContain(r => r.Url.AbsoluteUri == PackageContent);
+    }
+
+    [Fact]
+    public async Task AGroupFeedRegistrationThatIsNotJson_Returns404()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync();
+        ServeGroupFeedServiceIndex();
+        _upstream.Json(Origin + Directory + "metadata/contoso.common/index.json", "<html>sign in</html>", "text/html");
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}{DownloadPath}",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+    }
+
+    [Fact]
+    public async Task AProjectDownloadPathOfAProjectFeed_Returns404()
+    {
+        // Arrange
+        Seeded seeded = await SeedAsync(sourceUrl: Origin + "/api/v4/projects/9/packages/nuget/index.json");
+
+        // Act
+        HttpContext response = await SendAsync(
+            HttpMethods.Get,
+            $"/package-sources/{seeded.SourceId}/api/v4/projects/8/packages/nuget/download/Foo/1.0.0/foo.1.0.0.nupkg",
+            ProxyPort,
+            Basic("foundry-run", seeded.Token));
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
+        _upstream.Requests.ShouldBeEmpty();
+    }
+
+    /// <summary>GitLab's group-feed service index: search and registrations only, no download resource.</summary>
+    private void ServeGroupFeedServiceIndex() =>
+        _upstream.Json(
+            ServiceIndexUrl,
+            $$"""
+            {
+              "version": "3.0.0",
+              "resources": [
+                { "@id": "{{Origin}}{{Directory}}query", "@type": "SearchQueryService" },
+                { "@id": "{{Origin}}{{Directory}}metadata", "@type": "RegistrationsBaseUrl" },
+                { "@id": "{{Origin}}{{Directory}}metadata", "@type": "RegistrationsBaseUrl/3.6.0" }
+              ]
+            }
+            """);
+
+    /// <summary>The service index and an inline registration index listing <paramref name="packageContent"/>.</summary>
+    private void ServeGroupFeedRegistration(string packageContent)
+    {
+        ServeGroupFeedServiceIndex();
+        _upstream.Json(
+            Origin + Directory + "metadata/contoso.common/index.json",
+            $$"""
+            {
+              "count": 1,
+              "items": [
+                {
+                  "@id": "{{Origin}}{{Directory}}metadata/contoso.common/index.json",
+                  "lower": "1.0.0",
+                  "upper": "1.0.0",
+                  "count": 1,
+                  "items": [
+                    {
+                      "@id": "{{Origin}}{{Directory}}metadata/contoso.common/1.0.0.json",
+                      "packageContent": "{{packageContent}}",
+                      "catalogEntry": { "id": "Contoso.Common", "version": "1.0.0", "packageContent": "{{packageContent}}" }
+                    }
+                  ]
+                }
+              ]
+            }
+            """);
     }
 
     private static string ProxyPath(Guid sourceId, string fileUnderDirectory) =>

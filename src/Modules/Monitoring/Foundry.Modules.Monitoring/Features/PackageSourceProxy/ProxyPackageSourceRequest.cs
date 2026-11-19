@@ -95,7 +95,7 @@ internal static class ProxyPackageSourceRequest
 
             ProxiedPackageSource proxied = new(packageSourceId, source.ServiceIndexUrl, options.Value.WorkerBaseUrl);
             string below = BelowSourceId(request.Path, sourceId);
-            if (proxied.UpstreamUrlFor(below, request.QueryString.ToUriComponent()) is not { } upstreamUrl)
+            if (proxied.UpstreamUrlFor(below, request.QueryString.ToUriComponent()) is not { } proxiedRequest)
             {
                 response.StatusCode = StatusCodes.Status404NotFound;
                 return;
@@ -110,11 +110,16 @@ internal static class ProxyPackageSourceRequest
                 return;
             }
 
+            if (proxiedRequest is ProxiedRequest.GroupFeedDownload download
+                && !await ConfirmDownloadAsync(proxied, source.ServiceIndexUrl, download, credential, response, cancellationToken))
+            {
+                return;
+            }
 
             Result<HttpResponseMessage> sent = await upstreamClient.SendAsync(
                 source.ServiceIndexUrl,
                 upstreamMethod,
-                upstreamUrl,
+                proxiedRequest.Url,
                 credential,
                 cancellationToken);
 
@@ -139,6 +144,53 @@ internal static class ProxyPackageSourceRequest
             }
 
             await RelayAsync(upstream, proxied, upstreamMethod, response, cancellationToken);
+        }
+
+        /// <summary>
+        /// Whether the group feed's registration index lists <paramref name="download"/>; when it does not, or cannot be
+        /// read, the refusal is already written to <paramref name="response"/>.
+        /// </summary>
+        private async Task<bool> ConfirmDownloadAsync(
+            ProxiedPackageSource proxied,
+            Uri serviceIndexUrl,
+            ProxiedRequest.GroupFeedDownload download,
+            UpstreamCredential? credential,
+            HttpResponse response,
+            CancellationToken cancellationToken)
+        {
+            DownloadConfirmation confirmation = await GroupFeedDownloadConfirmation.ConfirmAsync(
+                upstreamClient,
+                proxied,
+                serviceIndexUrl,
+                download,
+                credential,
+                cancellationToken);
+
+            switch (confirmation)
+            {
+                case DownloadConfirmation.Listed:
+                    return true;
+                case DownloadConfirmation.CredentialRefused:
+                    logger.LogWarning("Package source {Url} refused Foundry's credential.", serviceIndexUrl);
+                    await BadGatewayAsync(response, $"The package source {serviceIndexUrl} refused Foundry's credential.", cancellationToken);
+                    return false;
+                case DownloadConfirmation.Unreadable { Reason: var reason }:
+                    logger.LogWarning(
+                        "Package source proxy could not read the registration of {PackageId} from {Url}: {Reason}",
+                        download.PackageId,
+                        serviceIndexUrl,
+                        reason);
+                    await BadGatewayAsync(
+                        response,
+                        $"Foundry could not read the package source {serviceIndexUrl} to confirm a download of {download.PackageId}.",
+                        cancellationToken);
+                    return false;
+                case DownloadConfirmation.NotListed:
+                    response.StatusCode = StatusCodes.Status404NotFound;
+                    return false;
+                default:
+                    throw new System.Diagnostics.UnreachableException($"Unhandled download confirmation {confirmation}.");
+            }
         }
 
         /// <summary>The credential the probe uses for <paramref name="repository"/>: the registered one first, then its account.</summary>
@@ -213,28 +265,6 @@ internal static class ProxyPackageSourceRequest
             }
         }
 
-        /// <summary>
-        /// Reads <paramref name="stream"/> up to <see cref="MonitoringModule.MaxResponseContentBufferSize"/>: the bytes
-        /// read, and whether that was the whole body.
-        /// </summary>
-        private static async Task<(byte[] Head, bool Complete)> ReadBoundedAsync(Stream stream, CancellationToken cancellationToken)
-        {
-            using MemoryStream buffer = new();
-            byte[] chunk = new byte[81920];
-            int read;
-
-            while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
-            {
-                await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
-                if (buffer.Length > MonitoringModule.MaxResponseContentBufferSize)
-                {
-                    return (buffer.ToArray(), false);
-                }
-            }
-
-            return (buffer.ToArray(), true);
-        }
-
         private static async Task BadGatewayAsync(HttpResponse response, string message, CancellationToken cancellationToken)
         {
             response.StatusCode = StatusCodes.Status502BadGateway;
@@ -254,6 +284,28 @@ internal static class ProxyPackageSourceRequest
                     CancellationToken cancellationToken) => handler.HandleAsync(context, sourceId, cancellationToken))
                 .ExcludeFromDescription();
         }
+    }
+
+    /// <summary>
+    /// Reads <paramref name="stream"/> up to <see cref="MonitoringModule.MaxResponseContentBufferSize"/>: the bytes
+    /// read, and whether that was the whole body.
+    /// </summary>
+    internal static async Task<(byte[] Head, bool Complete)> ReadBoundedAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        using MemoryStream buffer = new();
+        byte[] chunk = new byte[81920];
+        int read;
+
+        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
+            if (buffer.Length > MonitoringModule.MaxResponseContentBufferSize)
+            {
+                return (buffer.ToArray(), false);
+            }
+        }
+
+        return (buffer.ToArray(), true);
     }
 
     private static UpstreamMethod? MethodOf(string method) =>
