@@ -1,5 +1,6 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -73,5 +74,36 @@ public sealed class GetJobTraceAsync
 
         // Assert
         result.ShouldBeOfType<Result<string>.Failure>().Error.Code.ShouldBe(JobLogErrors.UnavailableCode);
+    }
+
+    [Fact]
+    public async Task WhenTheTraceIsLargerThanTheBufferCap_ReturnsItsLastTailBytes()
+    {
+        // Arrange
+        long length = MonitoringModule.MaxResponseContentBufferSize + 1024;
+        GeneratedTraceHandler handler = new(length);
+        GitLabHttpClient client = new(
+            new HttpClient(handler) { MaxResponseContentBufferSize = MonitoringModule.MaxResponseContentBufferSize },
+            NullLogger<GitLabHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+            new InMemoryProviderRateBudget(),
+            TimeProvider.System);
+
+        // Act
+        Result<string> result = await client.GetJobTraceAsync(
+            ApiBaseUrl, Slug, 7, "glpat-token", TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<string>.Success>().Value
+            .ShouldBe(GeneratedLogStream.TextOf(length - JobLogTailReader.JobLogTailBytes, length));
+    }
+
+    private sealed class GeneratedTraceHandler(long length) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new GeneratedLogStream(0, length)),
+            });
     }
 }
