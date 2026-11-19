@@ -406,7 +406,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenVerdictResolves_ReviewPullRequestsIsOffByDefault()
+    public async Task WhenVerdictResolves_ReviewPullRequestsIsOnByDefault()
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
@@ -423,18 +423,16 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
-            .ReviewPullRequests.ShouldBeFalse();
+            .ReviewPullRequests.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task WhenReviewPullRequestsIsSetInTheDatabase_VerdictCarriesIt()
+    public async Task WhenReviewPullRequestsIsTurnedOff_VerdictCarriesIt()
     {
-        // Arrange — no endpoint sets the flag yet (ADR 0113 ships it dark), so it is set on the stored row.
+        // Arrange
         MonitoredRepository repository = SeedRepository();
-        await _dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE monitored_repositories SET review_pull_requests = 1",
-            TestContext.Current.CancellationToken);
-        await _dbContext.Entry(repository).ReloadAsync(TestContext.Current.CancellationToken);
+        repository.SetReviewPullRequests(false);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
         StubIssueProvider provider = new(
             checksResults: new Dictionary<string, Result<Checks>>
@@ -448,7 +446,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
-            .ReviewPullRequests.ShouldBeTrue();
+            .ReviewPullRequests.ShouldBeFalse();
     }
 
     // --- NoneDetected within grace window → no event ---

@@ -31,6 +31,7 @@ function repository(eligibility: RepositoryEligibility | null): RepositorySummar
     maxConcurrentWorkers: 1,
     rebaseAfterRun: true,
     mergeWhenChecksPass: false,
+    reviewPullRequests: true,
     lastPolledAt: null,
     eligibility,
   };

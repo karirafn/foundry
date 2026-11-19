@@ -126,6 +126,7 @@ function repo(overrides: Partial<RepositorySummary> = {}): RepositorySummary {
     maxConcurrentWorkers: 1,
     rebaseAfterRun: true,
     mergeWhenChecksPass: false,
+    reviewPullRequests: true,
     lastPolledAt: null,
     eligibility: { status: 'eligible', violations: [], reason: null },
     webhookStatus: 'not-configured',
@@ -198,12 +199,20 @@ describe('repositorySettingTags', () => {
     expect(repositorySettingTags(repo({ mergeWhenChecksPass: true }))).toEqual(['Merges on pass']);
   });
 
+  it('tags review off', () => {
+    expect(repositorySettingTags(repo({ reviewPullRequests: false }))).toEqual(['No review']);
+  });
+
   it('tags rebase off', () => {
     expect(repositorySettingTags(repo({ rebaseAfterRun: false }))).toEqual(['No rebase']);
   });
 
   it('returns every non-default tag in order', () => {
-    expect(repositorySettingTags(repo({ maxConcurrentWorkers: 3, mergeWhenChecksPass: true, rebaseAfterRun: false })))
-      .toEqual(['3 workers', 'Merges on pass', 'No rebase']);
+    expect(repositorySettingTags(repo({
+      maxConcurrentWorkers: 3,
+      reviewPullRequests: false,
+      mergeWhenChecksPass: true,
+      rebaseAfterRun: false,
+    }))).toEqual(['3 workers', 'No review', 'Merges on pass', 'No rebase']);
   });
 });

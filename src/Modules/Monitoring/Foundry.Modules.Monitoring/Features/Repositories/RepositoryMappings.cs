@@ -36,7 +36,8 @@ internal static class RepositoryMappings
             repo.UntrackSuppressedSince,
             ToWebhookStatusToken(repo.EffectiveWebhookStatus(webhookIngressConfigured)),
             repo.RebaseAfterRun,
-            repo.MergeWhenChecksPass);
+            repo.MergeWhenChecksPass,
+            repo.ReviewPullRequests);
 
     internal static string ToWebhookStatusToken(WebhookStatus status) =>
         status switch

@@ -37,6 +37,7 @@ const REPO_1: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };

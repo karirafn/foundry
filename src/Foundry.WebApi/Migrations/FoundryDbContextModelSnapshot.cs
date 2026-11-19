@@ -465,7 +465,7 @@ namespace Foundry.WebApi.Migrations
                     b.Property<bool>("ReviewPullRequests")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
-                        .HasDefaultValue(false)
+                        .HasDefaultValue(true)
                         .HasColumnName("review_pull_requests");
 
                     b.Property<string>("RootListingETag")

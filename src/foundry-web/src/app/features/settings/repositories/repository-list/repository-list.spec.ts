@@ -20,6 +20,7 @@ const MOCK_REPO: RepositorySummary = {
   maxConcurrentWorkers: 2,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -38,6 +39,7 @@ const MOCK_REPO_2: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -56,6 +58,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: {
     status: 'ineligible',
@@ -80,6 +83,7 @@ const MOCK_REPO_MULTI_VIOLATIONS: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: {
     status: 'ineligible',
@@ -105,6 +109,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: null,
   eligibility: null,
 };
@@ -123,6 +128,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: null },
 };
@@ -141,6 +147,7 @@ const MOCK_REPO_RATE_LIMITED: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: 'rate-limited' },
 };
@@ -159,6 +166,7 @@ const MOCK_REPO_PAUSED: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -1061,6 +1069,7 @@ describe('RepositoryListComponent', () => {
       maxConcurrentWorkers: 1,
       rebaseAfterRun: true,
       mergeWhenChecksPass: false,
+      reviewPullRequests: true,
       webhookStatus: 'not-configured',
     };
     const SECOND: RepositorySummary = { ...BASE, id: '00000000-0000-0000-0000-000000000102', slug: 'acme/web', position: 1 };

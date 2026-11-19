@@ -52,6 +52,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   maxConcurrentWorkers: 1,
   rebaseAfterRun: true,
   mergeWhenChecksPass: false,
+  reviewPullRequests: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -662,6 +663,7 @@ describe('RepositoryFormComponent', () => {
       maxConcurrentWorkers: 1,
       applyBranchRules: true,
       rebaseAfterRun: true,
+      reviewPullRequests: true,
       mergeWhenChecksPass: false,
     });
   });
@@ -689,6 +691,7 @@ describe('RepositoryFormComponent', () => {
       isActive: true,
       maxConcurrentWorkers: 1,
       rebaseAfterRun: true,
+      reviewPullRequests: true,
       mergeWhenChecksPass: false,
     });
   });
@@ -761,6 +764,59 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     expect((emitted as UpdateRepositoryRequest).rebaseAfterRun).toBe(true);
+  });
+
+  // Review pull requests toggle (ADR 0113)
+  it('should seed the Review pull requests toggle from the repository in edit mode', () => {
+    // Arrange / Act
+    const { el } = setup({ repository: { ...MOCK_REPOSITORY, reviewPullRequests: false } });
+
+    // Assert
+    const toggle = el.querySelector('#repository-review-pull-requests') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(toggle.getAttribute('aria-describedby')).toBe('repository-review-pull-requests-hint');
+    expect(el.querySelector('label[for="repository-review-pull-requests"]')?.textContent).toContain('Review pull requests');
+    expect(el.querySelector('#repository-review-pull-requests-hint')?.textContent?.trim()).toBe(
+      "When every check passes, the review role reviews the pull request before Foundry merges it or hands it to you. If the review can't finish, the issue waits in your review.",
+    );
+  });
+
+  it('should show the Review pull requests toggle checked when adding a repository', () => {
+    // Arrange / Act
+    const { el } = setup({ repository: null, accounts: [MOCK_ACCOUNT], availableRepositories: MOCK_AVAILABLE });
+
+    // Assert
+    const toggle = el.querySelector('#repository-review-pull-requests') as HTMLInputElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.checked).toBe(true);
+  });
+
+  it('should place the Review pull requests toggle above Merge when checks pass', () => {
+    // Arrange / Act
+    const { el } = setup({ repository: MOCK_REPOSITORY });
+
+    // Assert
+    const review = el.querySelector('#repository-review-pull-requests') as HTMLInputElement;
+    const merge = el.querySelector('#repository-merge-when-checks-pass') as HTMLInputElement;
+    expect(review.compareDocumentPosition(merge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('should send reviewPullRequests false in UpdateRepositoryRequest when the toggle is turned off', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ repository: { ...MOCK_REPOSITORY, reviewPullRequests: true } });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    const toggle = el.querySelector('#repository-review-pull-requests') as HTMLInputElement;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act
+    (el.querySelector('.repository-form__save-btn') as HTMLButtonElement).click();
+
+    // Assert
+    expect((emitted as UpdateRepositoryRequest).reviewPullRequests).toBe(false);
   });
 
   // Merge when checks pass toggle (ADR 0105)
