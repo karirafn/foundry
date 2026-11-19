@@ -285,6 +285,35 @@ describe('SetupReposStepComponent', () => {
     expect(emitted).toBe(true);
   });
 
+  it('should hide the Back button when showBack is false', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.componentRef.setInput('showBack', false);
+
+    // Act
+    fixture.detectChanges();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('button.setup-repos-step__back-btn')).toBeNull();
+    expect(el.querySelector('button.setup-repos-step__skip-btn')).toBeTruthy();
+  });
+
+  it('should make its heading programmatically focusable', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
+
+    // Assert
+    const heading = (fixture.nativeElement as HTMLElement).querySelector('h2');
+    expect(heading?.getAttribute('tabindex')).toBe('-1');
+  });
+
   // Cycle 9: Skip button emits complete output without creating repos
   it('should emit the complete event and not call createRepository when Skip is clicked', () => {
     // Arrange

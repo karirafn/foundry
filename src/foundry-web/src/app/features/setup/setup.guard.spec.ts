@@ -21,6 +21,10 @@ const MOCK_ACCOUNT: AccountSummary = {
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
+const SETTINGS_WITH_URL = { webhookPort: 5099, webhookPublicBaseUrl: 'https://hooks.example.com' };
+const SETTINGS_WITHOUT_URL = { webhookPort: 5099, webhookPublicBaseUrl: null };
+const SERVER_ERROR = { status: 500, statusText: 'Internal Server Error' };
+
 function setup() {
   TestBed.configureTestingModule({
     providers: [
@@ -43,7 +47,6 @@ function runGuard(): Promise<boolean | UrlTree> {
 describe('setupGuard', () => {
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
-  // Cycle 1: redirects to /setup when accounts list is empty
   it('should redirect to /setup when accounts list is empty', async () => {
     // Arrange
     const { router, httpMock } = setup();
@@ -51,6 +54,7 @@ describe('setupGuard', () => {
     // Act
     const resultPromise = runGuard();
     httpMock.expectOne('/api/accounts').flush([]);
+    httpMock.expectOne('/api/settings').flush(SETTINGS_WITH_URL);
     const result = await resultPromise;
 
     // Assert
@@ -58,38 +62,79 @@ describe('setupGuard', () => {
     expect(router.serializeUrl(result as UrlTree)).toBe('/setup');
   });
 
-  // Cycle 2: allows navigation when accounts exist
-  it('should return true when accounts exist', async () => {
+  it('should redirect to /setup when an account exists but no webhook public base URL is stored', async () => {
+    // Arrange
+    const { router, httpMock } = setup();
+
+    // Act
+    const resultPromise = runGuard();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    httpMock.expectOne('/api/settings').flush(SETTINGS_WITHOUT_URL);
+    const result = await resultPromise;
+
+    // Assert
+    expect(result).toBeInstanceOf(UrlTree);
+    expect(router.serializeUrl(result as UrlTree)).toBe('/setup');
+  });
+
+  it('should redirect to /setup when the stored webhook public base URL is empty', async () => {
+    // Arrange
+    const { router, httpMock } = setup();
+
+    // Act
+    const resultPromise = runGuard();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    httpMock.expectOne('/api/settings').flush({ ...SETTINGS_WITH_URL, webhookPublicBaseUrl: '' });
+    const result = await resultPromise;
+
+    // Assert
+    expect(router.serializeUrl(result as UrlTree)).toBe('/setup');
+  });
+
+  it('should return true when an account and the webhook public base URL both exist', async () => {
     // Arrange
     const { httpMock } = setup();
 
     // Act
     const resultPromise = runGuard();
     httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    httpMock.expectOne('/api/settings').flush(SETTINGS_WITH_URL);
     const result = await resultPromise;
 
     // Assert
     expect(result).toBe(true);
   });
 
-  // Cycle 3: allows navigation when the API returns a server error (API is up but erroring — setup is not the problem)
+  // API is up but erroring — setup is not the problem
   it('should return true when the accounts request returns a server error', async () => {
     // Arrange
     const { httpMock } = setup();
 
     // Act
     const resultPromise = runGuard();
-    httpMock.expectOne('/api/accounts').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    httpMock.expectOne('/api/accounts').flush('Server Error', SERVER_ERROR);
+    httpMock.match('/api/settings');
     const result = await resultPromise;
 
     // Assert
     expect(result).toBe(true);
   });
 
-  // Cycle 4: allows navigation when the API is unreachable (network error — fresh install may not have API running)
+  it('should return true when the settings request returns a server error', async () => {
+    // Arrange
+    const { httpMock } = setup();
+
+    // Act
+    const resultPromise = runGuard();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    httpMock.expectOne('/api/settings').flush('Server Error', SERVER_ERROR);
+    const result = await resultPromise;
+
+    // Assert
+    expect(result).toBe(true);
+  });
+
+  // Network error — a fresh install may not have the API running
   it('should return true when the accounts request fails with a network error', async () => {
     // Arrange
     const { httpMock } = setup();
@@ -97,6 +142,7 @@ describe('setupGuard', () => {
     // Act
     const resultPromise = runGuard();
     httpMock.expectOne('/api/accounts').error(new ProgressEvent('network error'));
+    httpMock.match('/api/settings');
     const result = await resultPromise;
 
     // Assert

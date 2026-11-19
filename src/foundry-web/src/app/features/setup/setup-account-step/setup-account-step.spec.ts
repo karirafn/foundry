@@ -85,6 +85,18 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
 describe('SetupAccountStepComponent', () => {
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
+  it('should make its heading programmatically focusable', () => {
+    // Arrange
+    const { fixture } = setup();
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const heading = (fixture.nativeElement as HTMLElement).querySelector('h2');
+    expect(heading?.getAttribute('tabindex')).toBe('-1');
+  });
+
   // Step 9: Name field absent
   it('should not render an account name input', () => {
     // Arrange / Act
