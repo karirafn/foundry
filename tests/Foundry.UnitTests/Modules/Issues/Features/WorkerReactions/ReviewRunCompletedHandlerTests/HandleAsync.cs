@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
@@ -143,5 +144,63 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         (await ReloadAsync(reviewing)).ShouldBeOfType<ReviewIssue>();
+    }
+
+    [Fact]
+    public async Task WhenChangesRequested_TheIssueQueuesAFindingsFixCarryingTheReviewsFindings()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        ReviewInProgressIssue reviewing = SeedReviewInProgress(workerRunId, autoMerge: true);
+        ReviewFinding blocking = new("src/a.cs", 3, ReviewSeverity.Blocking, ReviewCategory.Correctness, null, "Off by one.");
+        ReviewFinding advisory = new("src/b.cs", null, ReviewSeverity.Advisory, ReviewCategory.Quality, null, "Rename.");
+        ReviewUnmetCriterion unmet = new("AC2", "Retries on 5xx.", "No retry path.");
+        ReviewRunCompleted @event = Completed(reviewing, workerRunId, ReviewVerdictOutcome.ChangesRequested) with
+        {
+            BlockingFindings = [blocking],
+            UnmetCriteria = ["AC2"],
+            TestsAssessment = ReviewTestsAssessment.Missing,
+            AdvisoryFindings = [advisory],
+            UnmetCriterionDetails = [unmet],
+            TestsReason = "No test covers the retry.",
+        };
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        RevisionQueuedIssue queued = (await ReloadAsync(reviewing)).ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFindings findings = queued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFindings>();
+        queued.ShouldSatisfyAllConditions(
+            () => queued.ReviewFixAttempts.ShouldBe(1),
+            () => queued.HasPersonFeedback.ShouldBeFalse(),
+            () => findings.Findings.ShouldBe([blocking, advisory]),
+            () => findings.UnmetCriteria.ShouldBe([unmet]),
+            () => findings.TestsAssessment.ShouldBe(ReviewTestsAssessment.Missing),
+            () => findings.TestsReason.ShouldBe("No test covers the retry."));
+    }
+
+    [Fact]
+    public async Task WhenChangesRequestedByAnEventWithoutDetails_TheFindingsFixKeepsTheUnmetCriterionIds()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        ReviewInProgressIssue reviewing = SeedReviewInProgress(workerRunId, autoMerge: false);
+        ReviewRunCompleted @event = Completed(reviewing, workerRunId, ReviewVerdictOutcome.ChangesRequested) with
+        {
+            UnmetCriteria = ["AC1"],
+        };
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        RevisionTrigger.ReviewFindings findings = (await ReloadAsync(reviewing))
+            .ShouldBeOfType<RevisionQueuedIssue>()
+            .Trigger.ShouldBeOfType<RevisionTrigger.ReviewFindings>();
+        findings.ShouldSatisfyAllConditions(
+            () => findings.UnmetCriteria.Select(criterion => criterion.Id).ShouldBe(["AC1"]),
+            () => findings.Findings.ShouldBeEmpty(),
+            () => findings.TestsReason.ShouldBeEmpty());
     }
 }

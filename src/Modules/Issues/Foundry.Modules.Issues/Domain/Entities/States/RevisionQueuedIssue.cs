@@ -112,6 +112,28 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
+    /// <summary>
+    /// The reviewer requested changes (ADR 0113): the revision spends one of the round's review fix runs and leaves
+    /// <see cref="Issue.HasPersonFeedback"/> as it was, so auto-merge survives it. Its pushed fix gets the full checks
+    /// fix budget, as new code does, and the next review pass reads comments after the reviewed state's cutoff.
+    /// </summary>
+    internal static RevisionQueuedIssue FromReviewInProgress(
+        ReviewInProgressIssue source,
+        RevisionTrigger.ReviewFindings findings,
+        DateTimeOffset transitionedAt)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
+        revisionQueued.CopySharedPropertiesFrom(source);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.Trigger = findings;
+        revisionQueued.RecordReviewFix();
+        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        return revisionQueued;
+    }
+
     internal static RevisionQueuedIssue FromChecksPendingFix(
         ChecksPendingIssue source,
         IReadOnlyList<FailingCheck> failingChecks,

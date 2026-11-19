@@ -93,6 +93,19 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public bool HasPersonFeedback { get; private set; }
 
+    /// <summary>
+    /// The most review-driven revisions (<see cref="RevisionTrigger.ReviewFindings"/>) a round of review may start
+    /// before a changes-requested verdict goes to a person instead (ADR 0113). Bounds a reviewer/implementer loop.
+    /// </summary>
+    public const int ReviewMaxFixRuns = 2;
+
+    /// <summary>
+    /// How many review-driven revisions the current round has started. Carried through every transition with the
+    /// shared properties, so no detour (a failed run, a question, a rebase) resets it; only a person-triggered round
+    /// (a person's review feedback, or a push while in review) starts it again at zero.
+    /// </summary>
+    public int ReviewFixAttempts { get; private set; }
+
     /// <summary>The round still waiting for input, or <see langword="null"/> when every round is answered.</summary>
     public Clarification? OpenClarification =>
         Clarifications.Count > 0 && Clarifications[^1].IsOpen ? Clarifications[^1] : null;
@@ -206,12 +219,29 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         TriageVerdict = source.TriageVerdict;
         Clarifications = source.Clarifications;
         HasPersonFeedback = source.HasPersonFeedback;
+        ReviewFixAttempts = source.ReviewFixAttempts;
     }
 
-    /// <summary>A person's review feedback drives this revision: Foundry no longer merges on its own.</summary>
+    /// <summary>The reviewer's findings drive this revision: it spends one of the round's review fix runs.</summary>
+    private protected void RecordReviewFix()
+    {
+        ReviewFixAttempts++;
+    }
+
+    /// <summary>A person started a new round of review: the reviewer gets its full fix budget again.</summary>
+    private protected void ResetReviewFixAttempts()
+    {
+        ReviewFixAttempts = 0;
+    }
+
+    /// <summary>
+    /// A person's review feedback drives this revision: Foundry no longer merges on its own, and the person's round
+    /// gives the reviewer its full fix budget again.
+    /// </summary>
     private protected void RecordPersonFeedback()
     {
         HasPersonFeedback = true;
+        ResetReviewFixAttempts();
     }
 
     // Only a label decides the label half: a classification derived from labels is Labelled or Unclassified.

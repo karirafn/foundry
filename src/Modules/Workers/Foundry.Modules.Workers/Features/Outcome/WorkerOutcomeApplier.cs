@@ -268,7 +268,10 @@ internal sealed class WorkerOutcomeApplier(
                         reviewed.Verdict.BlockingFindings,
                         reviewed.Verdict.UnmetCriteria,
                         recorded.Tests.Assessment,
-                        timeProvider.GetUtcNow())],
+                        timeProvider.GetUtcNow(),
+                        reviewed.Verdict.AdvisoryFindings,
+                        reviewed.Verdict.UnmetCriterionDetails,
+                        recorded.Tests.Reason)],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, reviewedRun, alongside, domainEventDispatcher, cancellationToken);

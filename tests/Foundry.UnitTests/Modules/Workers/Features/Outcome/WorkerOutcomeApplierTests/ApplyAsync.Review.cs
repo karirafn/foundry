@@ -127,4 +127,32 @@ public sealed partial class ApplyAsync
             () => completed.TestsAssessment.ShouldBe(ReviewTestsAssessment.NotNeeded),
             () => dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldBeEmpty());
     }
+
+    [Fact]
+    public async Task WhenAReviewCompletes_ReviewRunCompletedCarriesAdvisoryFindingsUnmetCriterionTextWithEvidenceAndTheTestsReason()
+    {
+        // Arrange
+        SuppliedReviewFacts facts = Facts(criteriaCount: 2);
+        SeedActiveReviewRun(facts);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator(), dispatcher);
+        WorkerOutcome.ReviewCompleted outcome = ReviewCompletedFor(
+            Verdict(
+                findings: [Finding("security"), Finding("correctness", severity: "advisory")],
+                dimensionStatuses: new() { ["security"] = "findings" },
+                criteria: [Criterion("AC1", "met"), Criterion("AC2", "unmet")]),
+            facts);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        ReviewRunCompleted completed = dispatcher.Captured.OfType<ReviewRunCompleted>().ShouldHaveSingleItem();
+        completed.ShouldSatisfyAllConditions(
+            () => completed.AdvisoryFindings.ShouldNotBeNull().ShouldHaveSingleItem().Category.ShouldBe(ReviewCategory.Correctness),
+            () => completed.UnmetCriterionDetails.ShouldBe([new ReviewUnmetCriterion("AC2", "Criterion 2.", "See tests.")]),
+            () => completed.TestsReason.ShouldBe("Covered."));
+    }
 }

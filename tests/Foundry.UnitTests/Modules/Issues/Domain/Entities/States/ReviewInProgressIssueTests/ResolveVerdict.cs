@@ -17,6 +17,9 @@ public sealed class ResolveVerdict
 {
     private const string Head = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
 
+    private static readonly RevisionTrigger.ReviewFindings NoFindings =
+        new([], [], ReviewTestsAssessment.Adequate, "Covered.");
+
     [Fact]
     public void WhenApprovedOnPassedChecksWithAutoMerge_ReturnsMergePendingPinnedToTheReviewedCommit()
     {
@@ -29,7 +32,7 @@ public sealed class ResolveVerdict
             .ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         MergePendingIssue mergePending = next.ShouldBeOfType<MergePendingIssue>();
@@ -49,7 +52,7 @@ public sealed class ResolveVerdict
         ReviewInProgressIssue reviewing = new IssueBuilder().WithVerifiedHeadSha(Head).WithAutoMerge(false).ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
@@ -69,7 +72,7 @@ public sealed class ResolveVerdict
             .ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>();
@@ -91,24 +94,160 @@ public sealed class ResolveVerdict
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Act
-        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().HasPersonFeedback.ShouldBeTrue();
     }
 
-    [Theory]
-    [InlineData(ReviewVerdictOutcome.ApprovedForPerson)]
-    [InlineData(ReviewVerdictOutcome.ChangesRequested)]
-    public void WhenNotApproved_ReturnsReviewEvenWithAutoMerge(ReviewVerdictOutcome outcome)
+    [Fact]
+    public void WhenApprovedForPerson_ReturnsReviewEvenWithAutoMerge()
     {
         // Arrange
         ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
 
         // Act
-        Issue next = reviewing.ResolveVerdict(outcome, DateTimeOffset.UtcNow);
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ApprovedForPerson, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<ReviewIssue>().ReviewOutcome.ShouldBeNull();
     }
+
+    [Fact]
+    public void WhenChangesRequestedWithFixRunsLeft_QueuesAFindingsFixOnTheSameBranch()
+    {
+        // Arrange
+        ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
+        RevisionTrigger.ReviewFindings findings = Findings();
+
+        // Act
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, findings, DateTimeOffset.UtcNow);
+
+        // Assert
+        RevisionQueuedIssue queued = next.ShouldBeOfType<RevisionQueuedIssue>();
+        queued.ShouldSatisfyAllConditions(
+            () => queued.Trigger.ShouldBeSameAs(findings),
+            () => queued.ReviewFixAttempts.ShouldBe(1),
+            () => queued.BranchName.ShouldBe(reviewing.BranchName),
+            () => queued.PullRequestUrl.ShouldBe(reviewing.PullRequestUrl),
+            () => queued.PriorFeedbackCutoffAt.ShouldBe(reviewing.FeedbackCutoffAt),
+            () => queued.RunKind.ShouldBe(RunKind.FindingsFix),
+            () => reviewing.DomainEvents.OfType<IssueRevisionQueued>().ShouldHaveSingleItem());
+    }
+
+    [Fact]
+    public void WhenChangesRequested_TheFindingsFixLeavesHasPersonFeedbackUnset()
+    {
+        // Arrange
+        ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
+
+        // Act
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+
+        // Assert
+        next.HasPersonFeedback.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenChangesRequestedAfterPersonFeedback_TheFindingsFixKeepsHasPersonFeedback()
+    {
+        // Arrange
+        ReviewInProgressIssue reviewing = ReviewingAfterPersonFeedback();
+
+        // Act
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+
+        // Assert
+        next.ShouldBeOfType<RevisionQueuedIssue>().HasPersonFeedback.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenChangesRequestedAgainAfterOneFindingsFix_QueuesTheSecondFindingsFix()
+    {
+        // Arrange
+        ReviewInProgressIssue reviewing = ReviewingAfterFindingsFixes(new IssueBuilder().ReviewInProgress(), fixes: 1);
+
+        // Act
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+
+        // Assert
+        next.ShouldBeOfType<RevisionQueuedIssue>().ReviewFixAttempts.ShouldBe(2);
+    }
+
+    [Fact]
+    public void WhenChangesRequestedWithTheFixBudgetSpent_ReturnsReview()
+    {
+        // Arrange
+        ReviewInProgressIssue reviewing = ReviewingAfterFindingsFixes(
+            new IssueBuilder().WithAutoMerge(true).ReviewInProgress(),
+            fixes: Issue.ReviewMaxFixRuns);
+
+        // Act
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ChangesRequested, Findings(), DateTimeOffset.UtcNow);
+
+        // Assert
+        ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
+        review.ShouldSatisfyAllConditions(
+            () => review.ReviewOutcome.ShouldBeNull(),
+            () => review.ReviewFixAttempts.ShouldBe(Issue.ReviewMaxFixRuns),
+            () => reviewing.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem());
+    }
+
+    [Fact]
+    public void WhenApprovedAfterAFindingsFix_TheBudgetStaysSpent()
+    {
+        // Arrange
+        ReviewInProgressIssue reviewing = ReviewingAfterFindingsFixes(
+            new IssueBuilder().WithAutoMerge(true).ReviewInProgress(),
+            fixes: 1);
+
+        // Act
+        Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, NoFindings, DateTimeOffset.UtcNow);
+
+        // Assert
+        next.ShouldBeOfType<MergePendingIssue>().ReviewFixAttempts.ShouldBe(1);
+    }
+
+    private static RevisionTrigger.ReviewFindings Findings() =>
+        new(
+            [new ReviewFinding("src/a.cs", 3, ReviewSeverity.Blocking, ReviewCategory.Correctness, null, "Off by one.")],
+            [new ReviewUnmetCriterion("AC1", "Retries on 5xx.", "No retry path.")],
+            ReviewTestsAssessment.Missing,
+            "No test covers the retry.");
+
+    private static ReviewInProgressIssue ReviewingAfterPersonFeedback()
+    {
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithReviewComments([new ReviewComment("Please rename this.")])
+            .ChecksPendingFromRevision();
+        return ReviewAgain(checksPending);
+    }
+
+    // Each fix runs, publishes and passes checks, so the next review sees the spent budget carried through.
+    private static ReviewInProgressIssue ReviewingAfterFindingsFixes(ReviewInProgressIssue reviewing, int fixes)
+    {
+        for (int i = 0; i < fixes; i++)
+        {
+            RevisionQueuedIssue queued = (RevisionQueuedIssue)reviewing.ResolveVerdict(
+                ReviewVerdictOutcome.ChangesRequested,
+                Findings(),
+                DateTimeOffset.UtcNow);
+            ChecksPendingIssue checksPending = queued
+                .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
+                .MarkRebasePending(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
+            reviewing = ReviewAgain(checksPending);
+        }
+
+        return reviewing;
+    }
+
+    private static ReviewInProgressIssue ReviewAgain(ChecksPendingIssue checksPending) =>
+        ((ReviewQueuedIssue)checksPending.ResolveVerdict(
+                new ChecksOutcome.Passed(),
+                autoMerge: true,
+                reviewPullRequests: true,
+                Head,
+                DateTimeOffset.UtcNow))
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 }

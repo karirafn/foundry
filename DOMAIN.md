@@ -579,7 +579,7 @@ The live value is also copied onto `ChecksVerdictResolved.AutoMerge` when the po
 
 ### Has Person Feedback
 
-`Issue.HasPersonFeedback` — non-nullable `bool`, default `false` (column `has_person_feedback`; existing rows migrate to `false`). Set once a person's review feedback drives a revision (`RevisionTrigger.ReviewFeedback` from `review`, `checks_pending` or `merge_pending`) and carried through every transition with the shared properties, so nothing in the issue's lifetime clears it — a retry on a new pull request included, which fails safe to review. While it is true, a `Passed` verdict with Merge When Checks Pass on routes to `review`, never to `merge_pending`: the person sees the fix before it lands. Other revision triggers (`FailedChecks`, `RebaseConflict`, `InputProvided`) never set it ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md) § "Person in the loop").
+`Issue.HasPersonFeedback` — non-nullable `bool`, default `false` (column `has_person_feedback`; existing rows migrate to `false`). Set once a person's review feedback drives a revision (`RevisionTrigger.ReviewFeedback` from `review`, `checks_pending` or `merge_pending`) and carried through every transition with the shared properties, so nothing in the issue's lifetime clears it — a retry on a new pull request included, which fails safe to review. While it is true, a `Passed` verdict with Merge When Checks Pass on routes to `review`, never to `merge_pending`: the person sees the fix before it lands. Other revision triggers (`ReviewFindings`, `FailedChecks`, `RebaseConflict`, `InputProvided`) never set it, so auto-merge survives a [findings fix](#review-fix-attempts) ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md) § "Person in the loop").
 The merge step reads the pull request's review feedback since `FeedbackCutoffAt` before it merges. Actionable comments resolve `MergeResolved` with outcome `feedback`, which revises the issue (`MergePendingIssue.Revise`) and never merges; comments still inside the quiet period postpone the merge to a not-before nudge at `HeldBackUntil` without counting a transient failure. A failed read counts against the merge's transient budget.
 
 ### Branch Rules Outcome
@@ -683,19 +683,19 @@ Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` ann
 
 ## Run Kind
 
-The kind of worker run an issue is running, or will run when it's next dispatched (#1059). It is declared by the issue state (`Issue.RunKind`, `null` for states with no run ahead) and shown as the board's lead tag on Pipeline and Blocked rows and on worker cards. Values are `Triage`, `Fresh`, `Continuation`, `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` and `Review`; `ReviewFix` to `InputResume` split a `Revision` by its [Revision Trigger](#revision-trigger) (`ReviewFeedback`, `FailedChecks`, `RebaseConflict`, `InputProvided`). Run Kind is related to [Dispatch Context](#dispatch-context) but is not the same thing. Dispatch Context is the payload handed to the worker and exists only on queued states. Run Kind is a flat display fact that also covers in-flight and blocked states. It always implies the [Worker Role](#worker-role): `Triage` → triage, `Review` → review, everything else → implement.
+The kind of worker run an issue is running, or will run when it's next dispatched (#1059). It is declared by the issue state (`Issue.RunKind`, `null` for states with no run ahead) and shown as the board's lead tag on Pipeline and Blocked rows and on worker cards. Values are `Triage`, `Fresh`, `Continuation`, `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume`, `Review` and `FindingsFix`; `ReviewFix` to `InputResume` and `FindingsFix` split a `Revision` by its [Revision Trigger](#revision-trigger) (`ReviewFeedback`, `FailedChecks`, `RebaseConflict`, `InputProvided`, `ReviewFindings`). `FindingsFix` (the reviewer's findings) stays distinct from `ReviewFix` (a person's feedback). Run Kind is related to [Dispatch Context](#dispatch-context) but is not the same thing. Dispatch Context is the payload handed to the worker and exists only on queued states. Run Kind is a flat display fact that also covers in-flight and blocked states. It always implies the [Worker Role](#worker-role): `Triage` → triage, `Review` → review, everything else → implement.
 
 - `detected`, `triage_queued`, `triage_blocked` → `Triage`.
 - `queued`, `blocked` → `Fresh`.
 - `continuation_queued` → `Continuation`.
-- `revision_queued` → `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`, by its trigger.
+- `revision_queued` → `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`, by its trigger.
 - `triage_in_progress` → `Triage`.
 - `in_progress` → `Fresh` or `Continuation`, by its origin (see [In-Progress Issue](#in-progress-issue), #1060).
-- `revision_in_progress` → `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`, by its trigger.
+- `revision_in_progress` → `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`, by its trigger.
 - `review_queued`, `review_in_progress` → `Review` ([ADR 0113](docs/adr/0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)).
 - Every other state → `null`.
 
-Served on `IssueSummary.RunKind` as `triage | fresh | continuation | review_fix | checks_fix | conflict_fix | input_resume | review`, or null. The board labels them `triage`, `implement`, `continue`, `review fix`, `checks fix`, `conflict` and `resume`; screen readers hear "Run: <label>". A Pipeline, Blocked or worker issue whose run kind is null or unknown to the dashboard is left unplaced rather than tagged with a guess. The live announcement for a worker that starts reads "#<n> started: <label>".
+Served on `IssueSummary.RunKind` as `triage | fresh | continuation | review_fix | checks_fix | conflict_fix | input_resume | review | findings_fix`, or null. The board labels them `triage`, `implement`, `continue`, `review fix`, `checks fix`, `conflict` and `resume`; screen readers hear "Run: <label>". A Pipeline, Blocked or worker issue whose run kind is null or unknown to the dashboard is left unplaced rather than tagged with a guess. The live announcement for a worker that starts reads "#<n> started: <label>".
 
 ## Tracker Context
 
@@ -716,9 +716,10 @@ The number and title of each open issue in the repository, excluding the issue i
 ## Revision Trigger
 
 Why a revision run was queued — a polymorphic value carried by `RevisionQueuedIssue`, `RevisionInProgressIssue`, and `RevisionFailedIssue` (and surfaced on `DispatchContext.Revision`) in place of comment-specific fields.
-Four variants:
+Five variants:
 
 - **`ReviewFeedback`** — a human reviewer requested changes; carries `Comments`, `OmittedCommentCount`, and `NewestConsumedCommentAt`.
+- **`ReviewFindings`** (`$type` `review_findings`) — Foundry's review run requested changes ([ADR 0113](docs/adr/0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)); carries a snapshot of the verdict: `Findings` (blocking first, then advisory, each in verdict order, with path, line, category and rule), `UnmetCriteria` (id, the criterion's text and the reviewer's evidence), `TestsAssessment` and `TestsReason`. The snapshot comes from `ReviewRunCompleted`, so the prompt needs nothing from the review run. The prompt renders blocking findings as `path:line — body (category: …; rule: …)`, the unmet criteria with their evidence, the tests assessment, and advisory findings under a "Consider" heading; over the prompt budget it keeps blocking findings, then unmet criteria, then the tests assessment, then advisory findings, cuts the first entry that misses and notes how many were dropped. It never sets [Has Person Feedback](#has-person-feedback), and it spends one [Review Fix Attempt](#review-fix-attempts). It consumes no comments, so the next review cutoff keeps the reviewed state's.
 - **`FailedChecks`** — the PR's provider checks went red within the fix budget; carries the `FailingChecks`.
 - **`RebaseConflict`** (`$type` `rebase_conflict`) — the post-run rebase conflicted with the default branch within the conflict budget (see [Rebase Conflict Attempts](#rebase-conflict-attempts)); payload-free. The worker rebases the branch onto the default branch with `git rebase origin/HEAD`, resolves every conflict at each stop (preserving both the branch's intent and the default branch's changes), continues with `git rebase --continue` and runs the tests; it discovers the conflicting paths from `git rebase` itself and never merges ([ADR 0101](docs/adr/0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)). The [Publisher](#publisher) pushes the rebased tip with a lease. A rebase that resolves every conflict by taking the default branch drops every run commit, so the publish is `NothingToPublish`; a run that rebases cleanly leaves the branch zero commits behind, so the next rebase step records `UpToDate`.
 - **`InputProvided`** (`$type` `input_provided`) — a person answered the questions an earlier run asked (see [AwaitingInputIssue](#awaitinginputissue)); payload-free. The answer lives on the issue's [clarification log](#clarification), which every implement prompt renders. It consumes no review comments, so the next review cutoff anchors to the run's start time and the answer comment is not read again as feedback.
@@ -736,6 +737,12 @@ When a red verdict arrives that names at least one fixable failing check and the
 At the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
 A red verdict naming no failing check also transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`, and spends no attempt.
 A red verdict whose failing checks are all infrastructure failures (at least one, every one with `IsInfrastructureFailure`; `Checks.Red.IsInfrastructureFailure`) resolves to `ChecksOutcome.InfrastructureFailed` (discriminator `infrastructure_failed`) carrying every failing check: CI couldn't run, so the issue goes to `ReviewIssue` without a fix run and without spending an attempt, and the card and pane ask the person to retry the failed jobs on the provider. Like any non-`Passed` verdict, a green retry on the same head is picked up by the review pass's re-read ([Verified Head](#verified-head)). A mixed verdict (script and infrastructure failures) stays `StillFailing`.
+
+## Review Fix Attempts
+
+The number of `ReviewFindings` revisions (findings fixes) the current round of review has started — `Issue.ReviewFixAttempts`, column `review_fix_attempts`, default 0 ([ADR 0113](docs/adr/0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)). It lives on the `Issue` base and is carried through every transition with the shared properties, like [Has Person Feedback](#has-person-feedback), so no state can drop it by forgetting a copy.
+A `ChangesRequested` verdict below the cap (`Issue.ReviewMaxFixRuns`, = 2) queues a findings fix and increments it; at the cap the verdict goes to `review`, so a reviewer and an implementer cannot loop. A failed findings-fix run leaves it unchanged, and an approval after a findings fix keeps it.
+A person-triggered round resets it to 0: a `ReviewFeedback` revision, or the pull request head moving while in `review` ([ADR 0106](docs/adr/0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md)). A checks rerun on the same head (`ReviewIssue.RecheckAfterChecksPassed`) is not a person's round and keeps it.
 
 ## Rebase Conflict Attempts
 
@@ -1018,7 +1025,7 @@ Transitions: `Claim()` → `ReviewInProgressIssue`; `Complete()` → `CompletedI
 `review_in_progress`: a review worker is judging the pull request at `ReviewedCommit` ([ADR 0113](docs/adr/0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)). Stage Review, [Run Kind](#run-kind) `Review`. Its `WorkerRunId` is the review run. It holds a worker slot like any running worker and counts against the Repository Worker Limit (`InFlightWorkerCountQuery`). Display group: In flow.
 Leaves by its run:
 
-- **`ReviewRunCompleted`** with the same run id (a replay guard: any other run or state is ignored) → `ResolveVerdict(outcome)`: `Approved` with `ChecksOutcome` `Passed`, `AutoMerge` on and no [person feedback](#has-person-feedback) → `MergePendingIssue` pinned to `ReviewedCommit`; every other outcome (`Approved` otherwise, `ApprovedForPerson`, `ChangesRequested`) → `ReviewIssue`. A pull request without checks (`NoneDetected`) never merges itself, approved or not ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md)).
+- **`ReviewRunCompleted`** with the same run id (a replay guard: any other run or state is ignored) → `ResolveVerdict(outcome, findings)`: `ChangesRequested` with [Review Fix Attempts](#review-fix-attempts) below 2 → a `RevisionQueuedIssue` with a `ReviewFindings` trigger (a findings fix); `Approved` with `ChecksOutcome` `Passed`, `AutoMerge` on and no [person feedback](#has-person-feedback) → `MergePendingIssue` pinned to `ReviewedCommit`; every other outcome (`Approved` otherwise, `ApprovedForPerson`, `ChangesRequested` at the cap) → `ReviewIssue`. A pull request without checks (`NoneDetected`) never merges itself, approved or not ([ADR 0105](docs/adr/0105-foundry-merges-pull-requests-itself-after-its-checks-gate.md)).
 - **`WorkerRunFailed`** with the same run id → `MarkRunFailed`: a category with an [automatic retry](#transient-retry) whose streak, this failure included, is short of its maximum → `ReviewFailedIssue`; any other failure, and an exhausted streak → `ReviewIssue` with [Review Outcome](#review-outcome) `Skipped(<category>)`. The handler reads the streak, so `review_failed` only ever holds an issue with a retry left. No failure reaches `merge_pending`: a failed review fails open to a person.
 
 `Complete()` and `Fail()` follow closure as for `review_queued`.
@@ -1040,9 +1047,9 @@ Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `B
 
 A lifecycle state for an issue queued for a revision run on its existing pull request.
 Carries `BranchName`, `PullRequestUrl` and `Trigger` (a [`RevisionTrigger`](#revision-trigger): review feedback, failed checks, a rebase conflict or provided input), plus `ChecksFixAttempts`, `RebaseConflictAttempts` and a nullable `PriorFeedbackCutoffAt`.
-Created by `Revise()` on `ReviewIssue`, `ChecksPendingIssue` and `MergePendingIssue` when actionable review feedback is detected, by a checks fix from `ChecksPendingIssue`, by a rebase conflict from `RebasePendingIssue`, by an answer from `AwaitingInputIssue`, and by a retry from `RevisionFailedIssue`.
+Created by `Revise()` on `ReviewIssue`, `ChecksPendingIssue` and `MergePendingIssue` when actionable review feedback is detected, by a review that requested changes from `ReviewInProgressIssue` (a findings fix), by a checks fix from `ChecksPendingIssue`, by a rebase conflict from `RebasePendingIssue`, by an answer from `AwaitingInputIssue`, and by a retry from `RevisionFailedIssue`.
 Claimed with priority over regular `FreshQueuedIssue` to minimize open issue count.
-Its [Run Kind](#run-kind) follows its trigger: `ReviewFix`, `ChecksFix`, `ConflictFix` or `InputResume`.
+Its [Run Kind](#run-kind) follows its trigger: `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`.
 Transitions: `Claim()` → `RevisionInProgressIssue`.
 
 ## In-Progress Issue

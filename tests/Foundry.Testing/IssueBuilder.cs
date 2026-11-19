@@ -260,6 +260,13 @@ public sealed class IssueBuilder
 
     public ReviewInProgressIssue ReviewInProgress() => ReviewQueued().Claim(_workerRunId, _transitionedAt);
 
+    /// <summary>Builds a findings fix (ADR 0113): the review of <see cref="ReviewInProgress"/> requested changes.</summary>
+    public RevisionQueuedIssue RevisionQueuedFromReviewFindings() =>
+        (RevisionQueuedIssue)ReviewInProgress().ResolveVerdict(
+            ReviewVerdictOutcome.ChangesRequested,
+            new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Missing, "No test covers the change."),
+            _transitionedAt);
+
     /// <summary>Builds a <see cref="ReviewFailedIssue"/>: the review run failed transiently on its first attempt.</summary>
     public ReviewFailedIssue ReviewFailed() =>
         (ReviewFailedIssue)ReviewInProgress().MarkRunFailed(

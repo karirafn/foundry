@@ -90,9 +90,31 @@ public sealed class ChecksPendingIssue : Issue
 
     /// <summary>
     /// New commits reached a review issue's pull request: the checks gate starts over with a fresh fix budget,
-    /// because every new budget follows a person's push, the same rule review feedback follows.
+    /// because every new budget follows a person's push, the same rule review feedback follows. The push starts a
+    /// person's round, so the reviewer's fix budget starts over too (ADR 0106, ADR 0113).
     /// </summary>
     internal static ChecksPendingIssue FromReview(ReviewIssue source, DateTimeOffset transitionedAt)
+    {
+        ChecksPendingIssue checksPending = FromReviewKeepingReviewFixes(source, transitionedAt);
+        checksPending.ResetReviewFixAttempts();
+        return checksPending;
+    }
+
+    /// <summary>
+    /// A review issue's checks read green on the same commits after a rerun: the gate confirms the green verdict
+    /// and routes it. Nobody pushed, so the fix budget starts exhausted: a red second read (a flaky job between the
+    /// two reads) goes to review instead of spending fix runs on unchanged code (ADR 0108). No person's round
+    /// started either, so the reviewer's fix budget carries on.
+    /// </summary>
+    internal static ChecksPendingIssue FromReviewAfterChecksRerun(ReviewIssue source, DateTimeOffset transitionedAt)
+    {
+        ChecksPendingIssue checksPending = FromReviewKeepingReviewFixes(source, transitionedAt);
+        checksPending.ChecksFixAttempts = ChecksMaxFixPushes;
+        checksPending.Reason = new ChecksPendingReason.ChecksRerun();
+        return checksPending;
+    }
+
+    private static ChecksPendingIssue FromReviewKeepingReviewFixes(ReviewIssue source, DateTimeOffset transitionedAt)
     {
         ChecksPendingIssue checksPending = new(source.Id, transitionedAt);
         checksPending.CopySharedPropertiesFrom(source);
@@ -105,19 +127,6 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = source.RebaseOutcome;
         checksPending.Reason = new ChecksPendingReason.HeadMoved();
-        return checksPending;
-    }
-
-    /// <summary>
-    /// A review issue's checks read green on the same commits after a rerun: the gate confirms the green verdict
-    /// and routes it. Nobody pushed, so the fix budget starts exhausted: a red second read (a flaky job between the
-    /// two reads) goes to review instead of spending fix runs on unchanged code (ADR 0108).
-    /// </summary>
-    internal static ChecksPendingIssue FromReviewAfterChecksRerun(ReviewIssue source, DateTimeOffset transitionedAt)
-    {
-        ChecksPendingIssue checksPending = FromReview(source, transitionedAt);
-        checksPending.ChecksFixAttempts = ChecksMaxFixPushes;
-        checksPending.Reason = new ChecksPendingReason.ChecksRerun();
         return checksPending;
     }
 

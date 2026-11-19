@@ -18,4 +18,7 @@ public enum RunKind
 
     /// <summary>The review role judges a green pull request before it merges or reaches a person (ADR 0113).</summary>
     Review,
+
+    /// <summary>The implement role addresses the findings of a review that requested changes (ADR 0113).</summary>
+    FindingsFix,
 }

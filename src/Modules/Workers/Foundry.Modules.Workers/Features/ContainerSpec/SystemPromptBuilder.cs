@@ -519,6 +519,10 @@ internal static partial class SystemPromptBuilder
         {
             Trigger = feedback with { Comments = [] },
         },
+        DispatchContext.Revision { Trigger: RevisionTrigger.ReviewFindings findings } revision => revision with
+        {
+            Trigger = findings with { Findings = [], UnmetCriteria = [], TestsReason = string.Empty },
+        },
         DispatchContext.Revision { Trigger: RevisionTrigger.FailedChecks failed } revision => revision with
         {
             Trigger = failed with { FailingChecks = [] },
@@ -600,6 +604,27 @@ internal static partial class SystemPromptBuilder
                     BranchName,
                     "{pullRequestUrl}",
                     new RevisionTrigger.ReviewFeedback([new ReviewComment("{reviewComment}")], 0, null)).TrimStart('\n')),
+            new(
+                "review-findings",
+                "Fixing review findings",
+                PromptSectionCondition.Revision,
+                BuildReviewFindingsSection(
+                    string.Empty,
+                    BranchName,
+                    new RevisionTrigger.ReviewFindings(
+                        [
+                            new ReviewFinding(
+                                "{path}",
+                                1,
+                                ReviewSeverity.Blocking,
+                                ReviewCategory.Correctness,
+                                new ReviewRule("{principle}", null, null),
+                                "{findingBody}"),
+                            new ReviewFinding("{path}", 1, ReviewSeverity.Advisory, ReviewCategory.Quality, null, "{findingBody}"),
+                        ],
+                        [new ReviewUnmetCriterion("{criterionId}", "{criterionText}", "{evidence}")],
+                        ReviewTestsAssessment.Missing,
+                        "{testsReason}")).TrimStart('\n')),
             new(
                 "failing-checks",
                 "Fixing failing checks",
@@ -722,6 +747,7 @@ internal static partial class SystemPromptBuilder
         revision.Trigger switch
         {
             RevisionTrigger.ReviewFeedback rf => BuildRevisionSection(promptFloor, revision.BranchName, revision.PullRequestUrl, rf),
+            RevisionTrigger.ReviewFindings findings => BuildReviewFindingsSection(promptFloor, revision.BranchName, findings),
             RevisionTrigger.FailedChecks fc => BuildFailingChecksSection(promptFloor, revision.BranchName, fc, failingJobLogs),
             RevisionTrigger.RebaseConflict => BuildRebaseConflictSection(promptFloor, revision.BranchName),
             RevisionTrigger.InputProvided => BuildInputProvidedSection(promptFloor, revision.BranchName),

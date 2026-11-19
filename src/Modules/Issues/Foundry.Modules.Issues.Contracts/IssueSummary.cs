@@ -15,8 +15,8 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <para>
 /// <paramref name="RunKind"/> is the kind of worker run the issue runs next (#1059): one of <see cref="TriageRunKind"/>,
 /// <see cref="FreshRunKind"/>, <see cref="ContinuationRunKind"/>, <see cref="ReviewFixRunKind"/>,
-/// <see cref="ChecksFixRunKind"/>, <see cref="ConflictFixRunKind"/>, <see cref="InputResumeRunKind"/> or
-/// <see cref="ReviewRunKind"/>, or
+/// <see cref="ChecksFixRunKind"/>, <see cref="ConflictFixRunKind"/>, <see cref="InputResumeRunKind"/>,
+/// <see cref="ReviewRunKind"/> or <see cref="FindingsFixRunKind"/>, or
 /// <see langword="null"/> when the state has no run ahead.
 /// </para>
 /// <para>
@@ -75,6 +75,7 @@ public sealed record IssueSummary(
     public const string ConflictFixRunKind = "conflict_fix";
     public const string InputResumeRunKind = "input_resume";
     public const string ReviewRunKind = "review";
+    public const string FindingsFixRunKind = "findings_fix";
 
     public const string PublishingStep = "publishing";
     public const string PublishRetryingStep = "publish_retrying";

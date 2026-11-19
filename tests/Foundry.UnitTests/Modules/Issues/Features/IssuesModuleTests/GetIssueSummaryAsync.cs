@@ -692,6 +692,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     [InlineData("failed_checks", "checks_fix")]
     [InlineData("rebase_conflict", "conflict_fix")]
     [InlineData("input_provided", "input_resume")]
+    [InlineData("review_findings", "findings_fix")]
     public async Task WhenRevisionQueued_RunKindNamesTheTrigger(string triggerKind, string expectedRunKind)
     {
         // Arrange
@@ -747,6 +748,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             "failed_checks" => builder.ChecksPending().FixChecks([new FailingCheck("ci/build", "failure", null)],
             DateTimeOffset.UtcNow),
             "rebase_conflict" => builder.RebasePending().ResolveConflict(DateTimeOffset.UtcNow),
+            "review_findings" => builder.RevisionQueuedFromReviewFindings(),
             "input_provided" => (RevisionQueuedIssue)builder
                 .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
                 .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
