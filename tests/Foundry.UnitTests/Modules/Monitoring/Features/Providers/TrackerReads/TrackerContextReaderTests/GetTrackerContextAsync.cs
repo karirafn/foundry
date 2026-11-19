@@ -602,7 +602,7 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
         public Task<Result<bool>> DeleteBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(RepositorySlug slug, string branchName, CommitSha? publishedHead, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>

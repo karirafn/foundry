@@ -465,6 +465,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));

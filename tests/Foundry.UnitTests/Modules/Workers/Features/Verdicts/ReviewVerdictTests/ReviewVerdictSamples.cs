@@ -1,7 +1,7 @@
-using Foundry.Shared;
 using System.Text.Json.Nodes;
 
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.Verdicts.ReviewVerdictTests;
 

@@ -166,7 +166,7 @@ public sealed class ComposeAsync
             throw new NotSupportedException();
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
-            RepositorySlug slug, string branchName, CancellationToken cancellationToken)
+            RepositorySlug slug, string branchName, CommitSha? publishedHead, CancellationToken cancellationToken)
             => Task.FromResult(Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
         public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(

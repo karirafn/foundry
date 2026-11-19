@@ -57,6 +57,7 @@ public sealed class StubBranchWorkQueries : IPostExitProviderQueries
     public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,
+        CommitSha? publishedHead,
         CancellationToken cancellationToken) =>
         Task.FromResult(
             Result<MergeRequestByBranch>.Fail(new Error("Stub.NotConfigured", "This stub only answers branch commit reads.")));

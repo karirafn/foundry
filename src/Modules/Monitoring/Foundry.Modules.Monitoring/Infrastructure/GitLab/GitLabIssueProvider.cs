@@ -356,9 +356,10 @@ internal sealed partial class GitLabIssueProvider(
     public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,
+        CommitSha? publishedHead,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetMergeRequestByBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+        return httpClient.GetMergeRequestByBranchAsync(apiBaseUrl, slug, branchName, token, publishedHead, cancellationToken);
     }
 
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(

@@ -40,6 +40,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -73,6 +74,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -107,6 +109,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -141,6 +144,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -181,6 +185,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -221,6 +226,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -245,6 +251,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -267,6 +274,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -290,6 +298,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -322,6 +331,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -344,6 +354,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "glpat_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert — GitLab defaults state=all but we make it explicit for self-documentation
@@ -352,5 +363,108 @@ public sealed class GetMergeRequestByBranchAsync
         request.RequestUri.AbsolutePath.ShouldBe("/api/v4/projects/group%2Fproject/merge_requests");
         request.RequestUri.Query.ShouldContain("source_branch=feat%2Fmy-branch");
         request.RequestUri.Query.ShouldContain("state=all");
+    }
+
+    private const string PublishedSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string OtherSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    private static string MergeRequestJson(int iid, string state, string updatedAt, string? sha) =>
+        $$"""
+          {
+            "iid": {{iid}},
+            "web_url": "https://gitlab.com/group/project/-/merge_requests/{{iid}}",
+            "state": "{{state}}",
+            "updated_at": "{{updatedAt}}"{{(sha is null ? string.Empty : $",\n    \"sha\": \"{sha}\"")}}
+          }
+        """;
+
+    private static async Task<MergeRequestByBranch> LookUpWithPublishedHeadAsync(params string[] items)
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, $"[{string.Join(",", items)}]");
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "feat/my-branch",
+            "glpat_token",
+            CommitSha.From(PublishedSha),
+            CancellationToken.None);
+
+        return result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>().Value;
+    }
+
+    [Fact]
+    public async Task WhenOnlyClosedMrHeadDiffersFromPublishedHead_ReturnsPresenceNone()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(5, "closed", "2026-06-01T10:00:00.000Z", OtherSha));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
+    }
+
+    [Fact]
+    public async Task WhenClosedMrHeadMatchesPublishedHead_ReturnsPresenceClosed()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(5, "closed", "2026-06-01T10:00:00.000Z", PublishedSha));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(
+            MergeRequestPresence.Closed,
+            "https://gitlab.com/group/project/-/merge_requests/5"));
+    }
+
+    [Fact]
+    public async Task WhenOnlyMergedMrHeadDiffersFromPublishedHead_ReturnsPresenceNone()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(5, "merged", "2026-06-01T10:00:00.000Z", OtherSha));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
+    }
+
+    [Fact]
+    public async Task WhenMergedMrHeadMatchesPublishedHead_ReturnsPresenceMerged()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(5, "merged", "2026-06-01T10:00:00.000Z", PublishedSha));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(
+            MergeRequestPresence.Merged,
+            "https://gitlab.com/group/project/-/merge_requests/5"));
+    }
+
+    [Fact]
+    public async Task WhenOpenMrAndStaleMergedMr_ReturnsPresenceOpen()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(4, "merged", "2026-06-01T10:00:00.000Z", OtherSha),
+            MergeRequestJson(5, "opened", "2026-06-01T09:00:00.000Z", OtherSha));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(
+            MergeRequestPresence.Open,
+            "https://gitlab.com/group/project/-/merge_requests/5"));
+    }
+
+    [Fact]
+    public async Task WhenClosedMrHasNoSha_ReturnsPresenceNone()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(5, "closed", "2026-06-01T10:00:00.000Z", sha: null));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
     }
 }

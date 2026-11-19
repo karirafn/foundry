@@ -40,6 +40,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -74,6 +75,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -109,6 +111,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -144,6 +147,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -186,6 +190,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -228,6 +233,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -252,6 +258,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -274,6 +281,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -297,6 +305,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -319,6 +328,7 @@ public sealed class GetMergeRequestByBranchAsync
             ValidSlug,
             "feat/my-branch",
             "ghp_token",
+            publishedHead: null,
             CancellationToken.None);
 
         // Assert
@@ -327,5 +337,147 @@ public sealed class GetMergeRequestByBranchAsync
         request.RequestUri.AbsolutePath.ShouldBe("/repos/owner/repo/pulls");
         request.RequestUri.Query.ShouldContain("state=all");
         request.RequestUri.Query.ShouldContain("head=owner%3Afeat%2Fmy-branch");
+    }
+
+    private const string PublishedSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string OtherSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    private static async Task<MergeRequestByBranch> LookUpWithPublishedHeadAsync(string json)
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "feat/my-branch",
+            "ghp_token",
+            CommitSha.From(PublishedSha),
+            CancellationToken.None);
+
+        return result.ShouldBeOfType<Result<MergeRequestByBranch>.Success>().Value;
+    }
+
+    [Fact]
+    public async Task WhenOnlyClosedPrHeadDiffersFromPublishedHead_ReturnsPresenceNone()
+    {
+        // Arrange
+        string json = $$"""
+            [
+              {
+                "html_url": "https://github.com/owner/repo/pull/42",
+                "state": "closed",
+                "merged_at": null,
+                "updated_at": "2026-06-01T10:00:00Z",
+                "head": { "ref": "feat/my-branch", "sha": "{{OtherSha}}" }
+              }
+            ]
+            """;
+
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(json);
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
+    }
+
+    [Fact]
+    public async Task WhenClosedPrHeadMatchesPublishedHead_ReturnsPresenceClosed()
+    {
+        // Arrange
+        string json = $$"""
+            [
+              {
+                "html_url": "https://github.com/owner/repo/pull/42",
+                "state": "closed",
+                "merged_at": null,
+                "updated_at": "2026-06-01T10:00:00Z",
+                "head": { "ref": "feat/my-branch", "sha": "{{PublishedSha}}" }
+              }
+            ]
+            """;
+
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(json);
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.Closed, "https://github.com/owner/repo/pull/42"));
+    }
+
+    [Fact]
+    public async Task WhenOnlyMergedPrHeadDiffersFromPublishedHead_ReturnsPresenceNone()
+    {
+        // Arrange
+        string json = $$"""
+            [
+              {
+                "html_url": "https://github.com/owner/repo/pull/42",
+                "state": "closed",
+                "merged_at": "2026-06-01T10:00:00Z",
+                "updated_at": "2026-06-01T10:00:00Z",
+                "head": { "ref": "feat/my-branch", "sha": "{{OtherSha}}" }
+              }
+            ]
+            """;
+
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(json);
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
+    }
+
+    [Fact]
+    public async Task WhenOpenPrAndStaleMergedPr_ReturnsPresenceOpen()
+    {
+        // Arrange
+        string json = $$"""
+            [
+              {
+                "html_url": "https://github.com/owner/repo/pull/41",
+                "state": "closed",
+                "merged_at": "2026-06-01T10:00:00Z",
+                "updated_at": "2026-06-01T10:00:00Z",
+                "head": { "ref": "feat/my-branch", "sha": "{{OtherSha}}" }
+              },
+              {
+                "html_url": "https://github.com/owner/repo/pull/42",
+                "state": "open",
+                "merged_at": null,
+                "updated_at": "2026-06-01T09:00:00Z",
+                "head": { "ref": "feat/my-branch", "sha": "{{OtherSha}}" }
+              }
+            ]
+            """;
+
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(json);
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
+    }
+
+    [Fact]
+    public async Task WhenClosedPrHasNoHeadSha_ReturnsPresenceNone()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "html_url": "https://github.com/owner/repo/pull/42",
+                "state": "closed",
+                "merged_at": null,
+                "updated_at": "2026-06-01T10:00:00Z",
+                "head": { "ref": "feat/my-branch" }
+              }
+            ]
+            """;
+
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(json);
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
     }
 }

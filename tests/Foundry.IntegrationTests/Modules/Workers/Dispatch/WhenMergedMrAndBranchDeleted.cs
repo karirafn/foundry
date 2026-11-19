@@ -169,6 +169,7 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken)
         {
             MergeRequestByBranch mergedMr = new(MergeRequestPresence.Merged, prUrl);

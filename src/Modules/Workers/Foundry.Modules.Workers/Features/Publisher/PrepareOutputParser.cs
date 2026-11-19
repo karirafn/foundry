@@ -1,9 +1,9 @@
-using Foundry.Shared;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
 namespace Foundry.Modules.Workers.Features.Publisher;

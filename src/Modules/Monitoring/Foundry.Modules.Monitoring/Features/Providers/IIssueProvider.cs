@@ -286,6 +286,7 @@ internal interface IIssueProvider
     Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,
+        CommitSha? publishedHead,
         CancellationToken cancellationToken);
 
     Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(

@@ -108,6 +108,7 @@ internal sealed class WorkerOutcomeResolver(
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
             branched.MonitoredRepositoryId,
             branched.BranchName.Value,
+            branched.PublishedHead,
             cancellationToken);
 
         if (mrResult is Result<MergeRequestByBranch>.Failure mrFailure)
@@ -165,6 +166,7 @@ internal sealed class WorkerOutcomeResolver(
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
             branched.MonitoredRepositoryId,
             branched.BranchName.Value,
+            branched.PublishedHead,
             cancellationToken);
 
         if (mrResult is not Result<MergeRequestByBranch>.Success { Value: { WebUrl: not null } mr })
@@ -354,6 +356,7 @@ internal sealed class WorkerOutcomeResolver(
             Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
                 run.MonitoredRepositoryId,
                 run.BranchName.Value,
+                run.PublishedHead,
                 cancellationToken);
 
             if (mrResult is Result<MergeRequestByBranch>.Success { Value: { Presence: not MergeRequestPresence.None } mr })
@@ -414,5 +417,7 @@ internal sealed class WorkerOutcomeResolver(
         public MonitoredRepositoryId MonitoredRepositoryId => Run.MonitoredRepositoryId;
 
         public WorkerRole Role => Run.Role;
+
+        public CommitSha? PublishedHead => Run.PublishedHead;
     }
 }

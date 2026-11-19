@@ -78,6 +78,7 @@ internal sealed class PostExitProviderQueries(
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,
+        CommitSha? publishedHead,
         CancellationToken cancellationToken)
     {
         Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
@@ -90,7 +91,7 @@ internal sealed class PostExitProviderQueries(
         }
 
         (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
-        return await provider.GetMergeRequestByBranchAsync(repo.Slug, branchName, cancellationToken);
+        return await provider.GetMergeRequestByBranchAsync(repo.Slug, branchName, publishedHead, cancellationToken);
     }
 
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(

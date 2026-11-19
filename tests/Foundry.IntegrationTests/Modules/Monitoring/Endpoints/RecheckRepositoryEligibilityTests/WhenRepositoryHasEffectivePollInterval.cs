@@ -188,6 +188,7 @@ public sealed class WhenRepositoryHasEffectivePollInterval : IAsyncDisposable
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
+            CommitSha? publishedHead,
             CancellationToken cancellationToken) =>
             Task.FromResult(
                 Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));

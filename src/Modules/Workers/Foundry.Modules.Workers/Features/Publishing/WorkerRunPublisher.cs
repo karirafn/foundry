@@ -181,6 +181,7 @@ internal sealed class WorkerRunPublisher(
         Result<MergeRequestByBranch> mergeRequest = await postExitProviderQueries.GetMergeRequestByBranchAsync(
             run.MonitoredRepositoryId,
             run.BranchName.Value,
+            run.PublishedHead,
             cancellationToken);
 
         if (mergeRequest is Result<MergeRequestByBranch>.Failure lookupFailure)

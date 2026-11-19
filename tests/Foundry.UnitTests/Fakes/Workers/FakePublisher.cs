@@ -1,6 +1,6 @@
-using Foundry.Shared;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Shared;
 
 namespace Foundry.UnitTests.Fakes.Workers;
 
