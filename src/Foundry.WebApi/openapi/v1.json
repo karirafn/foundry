@@ -4573,6 +4573,13 @@
               "null",
               "string"
             ]
+          },
+          "reviewRunId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -7257,6 +7264,12 @@
               {
                 "$ref": "#/components/schemas/RecordedReviewVerdict"
               }
+            ]
+          },
+          "productionChangedWithoutTests": {
+            "type": [
+              "null",
+              "boolean"
             ]
           }
         }

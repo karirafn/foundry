@@ -149,6 +149,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 ? [.. toolchain.Entries.Select(entry => new WorkerRunTool(entry.Name, entry.Version))]
                 : null,
             ReviewVerdict = run.ReviewVerdict,
+            ProductionChangedWithoutTests = run.SuppliedReviewFacts?.ProductionChangedWithoutTests,
         };
     }
 

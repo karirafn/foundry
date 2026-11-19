@@ -86,6 +86,37 @@ public sealed class GetWorkerRunDetailAsync_ReviewVerdict : IAsyncDisposable
         detail.ReviewVerdict.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AReviewRunWithSuppliedFacts_ShowsWhetherProductionChangedWithoutTests(bool productionWithoutTests)
+    {
+        // Arrange
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New(), WorkerRole.Review);
+        starting.RecordSuppliedReviewFacts(Facts(productionWithoutTests: productionWithoutTests));
+        await SeedAsync(starting);
+
+        // Act
+        WorkerRunDetail detail = await GetDetailAsync(starting.Id);
+
+        // Assert
+        detail.ProductionChangedWithoutTests.ShouldBe(productionWithoutTests);
+    }
+
+    [Fact]
+    public async Task ARunWithoutSuppliedReviewFacts_ShowsNoTestFlag()
+    {
+        // Arrange
+        FailedRun failed = PublishingRunFixture.ActiveRun().Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: null);
+        await SeedAsync(failed);
+
+        // Act
+        WorkerRunDetail detail = await GetDetailAsync(failed.Id);
+
+        // Assert
+        detail.ProductionChangedWithoutTests.ShouldBeNull();
+    }
+
     private async Task SeedAsync(WorkerRun run)
     {
         _dbContext.Set<WorkerRun>().Add(run);

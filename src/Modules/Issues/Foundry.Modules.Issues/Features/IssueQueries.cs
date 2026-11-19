@@ -627,6 +627,7 @@ internal sealed class IssueQueries(
             BuildStateDetails(issue, transientRetry),
             cancellationToken);
         stateDetails = await WithReminderDueAsync(issue, stateDetails, cancellationToken);
+        stateDetails = WithLatestReview(issue, stateDetails);
 
         return new IssueDetail(
             Id: issue.Id.Value,
@@ -666,6 +667,30 @@ internal sealed class IssueQueries(
         {
             AwaitingInput = awaitingInput with { ReminderDueAt = awaiting.Reminder.DueAt(posted.PostedAt, reminderDelay) },
         };
+    }
+
+    /// <summary>
+    /// Adds the run of the issue's latest review verdict (ADR 0113). It outlives the review states: during a findings
+    /// fix the current run is the fix run, while the verdict that explains it belongs to the review run.
+    /// </summary>
+    private static IssueStateDetails? WithLatestReview(Issue issue, IssueStateDetails? stateDetails)
+    {
+        if (issue.LatestReview is not { } latestReview)
+        {
+            return stateDetails;
+        }
+
+        IssueStateDetails details = stateDetails ?? new IssueStateDetails(
+            WorkerRunId: null,
+            BranchName: null,
+            FeedbackCutoffAt: null,
+            FailureReason: null,
+            FailedAt: null,
+            CompletedAt: null,
+            BlockedBy: null,
+            TransientRetry: null);
+
+        return details with { ReviewRunId = latestReview.RunId.Value };
     }
 
     private static List<ClarificationDetails> BuildClarificationDetails(Issue issue) =>

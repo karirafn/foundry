@@ -56,6 +56,13 @@ public sealed record WorkerRunDetail(
     /// <see langword="null"/> for any other run and for a review run that ended without a valid verdict.
     /// </summary>
     public RecordedReviewVerdict? ReviewVerdict { get; init; }
+
+    /// <summary>
+    /// Whether code found that the reviewed change adds or modifies production code while adding or modifying no test
+    /// (ADR 0114), independent of the reviewer's own tests assessment; <see langword="null"/> for a run without supplied
+    /// review facts.
+    /// </summary>
+    public bool? ProductionChangedWithoutTests { get; init; }
 }
 
 /// <summary>One tool a run's container reported, such as <c>csharp-ls</c> <c>0.28.0</c>.</summary>
