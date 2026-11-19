@@ -2,6 +2,8 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Polling;
@@ -39,6 +41,8 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.RepositoryPoller
 /// </summary>
 public sealed class PollCallInvariance : IAsyncDisposable
 {
+    private static readonly string CurrentGitHubVersion = TokenPermissions.VersionFor(ProviderTypes.GitHub);
+
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
@@ -73,7 +77,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
     {
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         MonitoredRepository repository = MonitoredRepository.Create(repoSlug, "github.com", null, position).ValueOrThrow();
-        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted { PermissionListVersion = CurrentGitHubVersion });
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();
         return repository;

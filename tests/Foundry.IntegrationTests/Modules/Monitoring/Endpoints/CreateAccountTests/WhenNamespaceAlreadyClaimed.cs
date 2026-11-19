@@ -150,6 +150,11 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
             }
 
+            if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+            {
+                return readProbe;
+            }
+
             HttpResponseMessage response = new(statusCode)
             {
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),

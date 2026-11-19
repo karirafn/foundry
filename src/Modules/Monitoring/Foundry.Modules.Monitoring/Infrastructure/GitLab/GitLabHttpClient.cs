@@ -139,7 +139,7 @@ internal sealed partial class GitLabHttpClient(
         }
 
         HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
-        List<string> missing = RequiredScopes.For(ProviderTypes.GitLab)
+        List<string> missing = TokenPermissions.GitLabScopes
             .Where(s => !granted.Contains(s))
             .ToList();
 

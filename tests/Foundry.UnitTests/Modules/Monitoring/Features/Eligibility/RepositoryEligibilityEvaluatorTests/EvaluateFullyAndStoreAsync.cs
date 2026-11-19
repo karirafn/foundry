@@ -1,6 +1,8 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
@@ -434,6 +436,124 @@ public sealed class EvaluateFullyAndStoreAsync
 
         // Assert
         repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBe(Now);
+    }
+
+    private static GitHubCredential CreateGitHubCredential(string token) =>
+        GitHubCredential.Create(
+            AccountName.Create("test").ValueOrThrow(),
+            new IssuedToken(token, new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+
+    private static GitLabCredential CreateGitLabCredential() =>
+        GitLabCredential.Create(
+            AccountName.Create("test").ValueOrThrow(),
+            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+
+    private static string FineGrainedToken => "github" + "_pat_" + "abc123";
+
+    [Fact]
+    public async Task WhenFineGrainedTokenLacksAdministrationAndWebhooks_DeniedNamesBothPermissions()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateGitHubCredential(FineGrainedToken)),
+            writeProber: new MissingWriteProber(WritePermission.Administration, WritePermission.Webhooks));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>()
+            .MissingPermissions.ShouldBe(["administration", "repository_hooks"]);
+    }
+
+    [Fact]
+    public async Task WhenClassicTokenLacksAdministrationAndWebhooks_DeniedNamesTheAdminRole()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateGitHubCredential("ghp_" + "classic")),
+            writeProber: new MissingWriteProber(WritePermission.Administration, WritePermission.Webhooks));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>()
+            .MissingPermissions.ShouldBe(["admin_role"]);
+    }
+
+    [Fact]
+    public async Task WhenGitLabCanPushReturnsFalse_DeniedNamesTheMaintainerRole()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateGitLabCredential()),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection), canPushResult: Result<bool>.Ok(false)));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>()
+            .MissingPermissions.ShouldBe(["maintainer_role"]);
+    }
+
+    [Fact]
+    public async Task WhenGitHubProbeIsGranted_VerdictCarriesTheGitHubPermissionListVersion()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateGitHubCredential("token")),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)),
+            writeProber: new GrantedWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.PermissionListVersion.ShouldBe(TokenPermissions.VersionFor(ProviderTypes.GitHub));
+    }
+
+    [Fact]
+    public async Task WhenGitLabCanPushReturnsFalse_VerdictCarriesTheGitLabPermissionListVersion()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateGitLabCredential()),
+            providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection), canPushResult: Result<bool>.Ok(false)));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.PermissionListVersion.ShouldBe(TokenPermissions.VersionFor(ProviderTypes.GitLab));
+    }
+
+    [Fact]
+    public async Task WhenWriteProberThrows_UnknownVerdictCarriesThePermissionListVersion()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(CreateGitHubCredential("token")),
+            writeProber: new ThrowingWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>()
+            .PermissionListVersion.ShouldBe(TokenPermissions.VersionFor(ProviderTypes.GitHub));
     }
 
     [Fact]
@@ -1116,7 +1236,7 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     // Returns Missing with the given permission — simulates insufficient write access
-    private sealed class MissingWriteProber(WritePermission permission) : IGitHubWriteProber
+    private sealed class MissingWriteProber(params WritePermission[] permissions) : IGitHubWriteProber
     {
         public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
             Uri apiBaseUrl,
@@ -1124,7 +1244,7 @@ public sealed class EvaluateFullyAndStoreAsync
             string token,
             CancellationToken cancellationToken)
             => Task.FromResult(
-                Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)));
+                Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permissions)));
     }
 
     // Returns transport failure — simulates unreachable GitHub API

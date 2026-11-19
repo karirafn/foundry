@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
@@ -252,18 +253,20 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Branch on whether a fresh write probe is due: an Unknown verdict never attempted or past its
+        // Branch on whether a fresh write probe is due: a verdict checked against an older permission list
+        // (any kind, Granted included, so a newly required permission is checked on the next poll), an
+        // Unknown verdict never attempted or past its
         // 15-minute cooldown, or a Denied verdict with no probe time or past its one-hour cooldown (a
         // permission gained in place on the provider raises no credential event). Repositories with no
         // credential early-return Ineligible(NoCredential) inside both evaluation paths before any probe
         // is issued, so a credential-less repo whose verdict is due stays due at zero API cost.
-        if (repository.IsDueForWriteProbe(now))
+        if (repository.IsDueForWriteProbe(now, TokenPermissions.CurrentVersions))
         {
             await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, now, cancellationToken);
         }
         else
         {
-            // Verdict is Granted, or Unknown or Denied within its cooldown — use the cheap path.
+            // Verdict is current: Granted, or Unknown or Denied within its cooldown — use the cheap path.
             await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
         }
     }

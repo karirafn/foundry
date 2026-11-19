@@ -23,8 +23,18 @@ internal static class CredentialErrors
     internal static Error DuplicateNamespace(string host) =>
         new(DuplicateNamespaceCode, $"One or more namespaces derived for this token are already claimed by another credential on host '{host}'.");
 
-    internal static Error MissingWritePermission(string permissionName) =>
-        new(MissingWritePermissionCode, $"The token is missing the '{permissionName}' permission required by Foundry.");
+    internal static Error MissingWritePermission(IReadOnlyList<string> permissionLabels) =>
+        new(MissingWritePermissionCode, permissionLabels.Count == 1
+            ? $"The token is missing the '{permissionLabels[0]}' permission required by Foundry."
+            : $"The token is missing the {QuotedList(permissionLabels)} permissions required by Foundry.");
+
+    private static string QuotedList(IReadOnlyList<string> labels)
+    {
+        string[] quoted = [.. labels.Select(label => $"'{label}'")];
+        return quoted.Length <= 1
+            ? string.Join(string.Empty, quoted)
+            : $"{string.Join(", ", quoted[..^1])} and {quoted[^1]}";
+    }
 
     internal static Error ProviderMismatch(string detectedProvider) =>
         new(ProviderMismatchCode,

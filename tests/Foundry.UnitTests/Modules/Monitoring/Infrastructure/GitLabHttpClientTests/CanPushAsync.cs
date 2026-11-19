@@ -26,9 +26,9 @@ public sealed class CanPushAsync
         RepositorySlug.Create("group/project").ValueOrThrow();
 
     [Fact]
-    public async Task WhenProjectAccessLevelIsDeveloper_ReturnsTrue()
+    public async Task WhenProjectAccessLevelIsDeveloper_ReturnsFalse()
     {
-        // Arrange — access_level 30 = Developer (threshold)
+        // Arrange — access_level 30 = Developer, below the Maintainer role Foundry needs
         string json = """
             {
               "id": 1,
@@ -53,7 +53,7 @@ public sealed class CanPushAsync
         // Assert
         result.IsSuccess.ShouldBeTrue();
         Result<bool>.Success success = result.ShouldBeOfType<Result<bool>.Success>();
-        success.Value.ShouldBeTrue();
+        success.Value.ShouldBeFalse();
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class CanPushAsync
     [Fact]
     public async Task WhenProjectAccessLevelIsReporter_ReturnsFalse()
     {
-        // Arrange — access_level 20 = Reporter (below Developer)
+        // Arrange — access_level 20 = Reporter (below Maintainer)
         string json = """
             {
               "id": 1,
@@ -121,14 +121,14 @@ public sealed class CanPushAsync
     [Fact]
     public async Task WhenGroupAccessMeetsThresholdAndProjectAccessIsLower_ReturnsTrue()
     {
-        // Arrange — group_access Developer (30), project_access Reporter (20) — max wins
+        // Arrange — group_access Maintainer (40), project_access Reporter (20) — max wins
         string json = """
             {
               "id": 1,
               "default_branch": "main",
               "permissions": {
                 "project_access": { "access_level": 20 },
-                "group_access": { "access_level": 30 }
+                "group_access": { "access_level": 40 }
               }
             }
             """;

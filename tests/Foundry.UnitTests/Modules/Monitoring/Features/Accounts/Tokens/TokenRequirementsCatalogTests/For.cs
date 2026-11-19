@@ -27,12 +27,14 @@ public sealed class For
                 "Contents (read and write)",
                 "Issues (read and write)",
                 "Pull requests (read and write)",
-                "Workflows (write)",
-                "Metadata (read)",
+                "Administration (read and write)",
+                "Webhooks (read and write)",
                 "Commit statuses (read)",
-                "Actions (read)"]),
+                "Actions (read)",
+                "Metadata (read)",
+                "Workflows (read and write)"]),
             () => result.CreationUrlTemplate.ShouldBe(
-                "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write"));
+                "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=read&workflows=write"));
     }
 
     [Fact]
@@ -48,7 +50,7 @@ public sealed class For
         result.ShouldSatisfyAllConditions(
             () => result.ProviderType.ShouldBe("gitlab"),
             () => result.TokenTypeLabel.ShouldBe("GitLab personal access token"),
-            () => result.Scopes.ShouldBe(["api"]),
+            () => result.Scopes.ShouldBe(["api", "Maintainer role"]),
             () => result.CreationUrlTemplate.ShouldBe("{baseUrl}/-/user_settings/personal_access_tokens"));
     }
 

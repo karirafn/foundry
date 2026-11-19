@@ -2,6 +2,8 @@ using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
@@ -65,10 +67,12 @@ internal sealed class RepositoryEligibilityEvaluator(
                 throw new UnreachableException($"Unhandled TokenUsability variant: {usability.GetType().Name}");
         }
 
+        string permissionListVersion = TokenPermissions.VersionFor(ProviderTypeOf(credential));
         RepositoryEligibility eligibility;
         try
         {
-            WriteProbeVerdict verdict = await RunWriteProbeAsync(repo, credential, token, now, cancellationToken);
+            WriteProbeVerdict verdict = await RunWriteProbeAsync(repo, credential, token, now, cancellationToken)
+                with { PermissionListVersion = permissionListVersion };
             repo.SetWriteProbeVerdict(verdict);
 
             eligibility = await _composer.ComposeAsync(
@@ -91,7 +95,7 @@ internal sealed class RepositoryEligibilityEvaluator(
             // a previous cycle and re-open eligibility to Eligible without a fresh write probe
             // succeeding. Stamping LastAttemptedAt = now ensures the next automatic retry is
             // one cooldown away rather than immediate.
-            repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(LastAttemptedAt: now));
+            repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(LastAttemptedAt: now) { PermissionListVersion = permissionListVersion });
             eligibility = new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed);
         }
 
@@ -262,8 +266,13 @@ internal sealed class RepositoryEligibilityEvaluator(
             return new WriteProbeVerdict.Unknown(LastAttemptedAt: now, Reason: reason);
         }
 
-        return probe is WritePermissionProbeResult.Missing
+        return probe is WritePermissionProbeResult.Missing missing
             ? new WriteProbeVerdict.Denied(ProbedAt: now)
+            {
+                MissingPermissions = TokenPermissions.GitHubMissingKeys(
+                    missing.Permissions,
+                    GitHubTokenKind.IsFineGrainedPat(token)),
+            }
             : new WriteProbeVerdict.Granted();
     }
 
@@ -281,8 +290,14 @@ internal sealed class RepositoryEligibilityEvaluator(
         {
             // Transport failure — stamp the attempt time so the next automatic retry is one cooldown away.
             Result<bool>.Failure => new WriteProbeVerdict.Unknown(LastAttemptedAt: now),
-            Result<bool>.Success { Value: false } => new WriteProbeVerdict.Denied(ProbedAt: now),
+            Result<bool>.Success { Value: false } => new WriteProbeVerdict.Denied(ProbedAt: now)
+            {
+                MissingPermissions = [TokenPermissions.GitLabRoleKey],
+            },
             _ => new WriteProbeVerdict.Granted(),
         };
     }
+
+    private static string ProviderTypeOf(Credential credential) =>
+        credential is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub;
 }

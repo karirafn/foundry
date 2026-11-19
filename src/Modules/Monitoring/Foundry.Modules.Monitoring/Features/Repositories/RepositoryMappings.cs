@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
@@ -31,7 +32,7 @@ internal static class RepositoryMappings
             repo.PollInterval is { } ownInterval ? (int)ownInterval.TotalSeconds : defaultPollIntervalSeconds,
             repo.PollInterval is null,
             repo.LastPolledAt,
-            ToEligibilityInfo(repo.Eligibility, providerType),
+            ToEligibilityInfo(repo.Eligibility, repo.WriteProbeVerdict, providerType),
             repo.UntrackSuppressedSince,
             ToWebhookStatusToken(repo.EffectiveWebhookStatus(webhookIngressConfigured)),
             repo.RebaseAfterRun,
@@ -50,6 +51,7 @@ internal static class RepositoryMappings
 
     internal static RepositoryEligibilityInfo? ToEligibilityInfo(
         RepositoryEligibility? eligibility,
+        WriteProbeVerdict writeProbeVerdict,
         string providerType) =>
         eligibility switch
         {
@@ -58,7 +60,7 @@ internal static class RepositoryMappings
             RepositoryEligibility.Ineligible ineligible => new RepositoryEligibilityInfo(
                 "ineligible",
                 ineligible.Violations
-                    .Select(v => new EligibilityViolationInfo(v.Rule, DeriveDescription(v.Rule, providerType)))
+                    .Select(v => new EligibilityViolationInfo(v.Rule, DeriveDescription(v.Rule, providerType, MissingPermissionLabels(writeProbeVerdict, providerType))))
                     .ToList(),
                 null),
             RepositoryEligibility.Unreachable unreachable => new RepositoryEligibilityInfo(
@@ -68,12 +70,17 @@ internal static class RepositoryMappings
             _ => throw new UnreachableException(),
         };
 
-    private static string DeriveDescription(string rule, string providerType)
+    private static IReadOnlyList<string> MissingPermissionLabels(WriteProbeVerdict verdict, string providerType) =>
+        verdict is WriteProbeVerdict.Denied denied
+            ? TokenPermissions.LabelsOf(providerType, denied.MissingPermissions)
+            : [];
+
+    private static string DeriveDescription(string rule, string providerType, IReadOnlyList<string> missingPermissionLabels)
     {
         if (rule.StartsWith(EligibilityViolationInfo.CannotPushRulePrefix + ":", StringComparison.Ordinal))
         {
             string slug = rule[(EligibilityViolationInfo.CannotPushRulePrefix.Length + 1)..];
-            return EligibilityViolationInfo.CannotPushDescription(slug, providerType);
+            return EligibilityViolationInfo.CannotPushDescription(slug, providerType, missingPermissionLabels);
         }
 
         if (rule.StartsWith(EligibilityViolationInfo.NoCredentialRulePrefix + ":", StringComparison.Ordinal))

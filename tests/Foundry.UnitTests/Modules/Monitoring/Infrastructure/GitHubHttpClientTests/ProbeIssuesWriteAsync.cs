@@ -132,7 +132,7 @@ public sealed class ProbeIssuesWriteAsync
             result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
         WritePermissionProbeResult.Missing missing =
             success.Value.ShouldBeOfType<WritePermissionProbeResult.Missing>();
-        missing.Permission.ShouldBe(WritePermission.Issues);
+        missing.Permissions.ShouldBe([WritePermission.Issues]);
     }
 
     [Fact]

@@ -6,8 +6,9 @@ internal abstract class WritePermissionProbeResult
 
     internal sealed class Granted : WritePermissionProbeResult;
 
-    internal sealed class Missing(WritePermission permission) : WritePermissionProbeResult
+    /// <summary>The token lacks every permission in <see cref="Permissions"/>, in probe order.</summary>
+    internal sealed class Missing(IReadOnlyList<WritePermission> permissions) : WritePermissionProbeResult
     {
-        public WritePermission Permission { get; } = permission;
+        public IReadOnlyList<WritePermission> Permissions { get; } = permissions;
     }
 }

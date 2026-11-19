@@ -137,11 +137,16 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            // Probe POSTs (/git/refs, /issues, /pulls) always return 422 (Granted)
+            // Probe POSTs always return 422 and read probes 200 (Granted)
             // so write-permission probing succeeds regardless of the token used.
             if (StaticListingFakeHandler.IsProbePost(request))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            }
+
+            if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+            {
+                return readProbe;
             }
 
             string token = string.Empty;

@@ -21,14 +21,16 @@ public sealed class For
             "Contents (read and write)",
             "Issues (read and write)",
             "Pull requests (read and write)",
-            "Workflows (write)",
-            "Metadata (read)",
+            "Administration (read and write)",
+            "Webhooks (read and write)",
             "Commit statuses (read)",
-            "Actions (read)"]);
+            "Actions (read)",
+            "Metadata (read)",
+            "Workflows (read and write)"]);
     }
 
     [Fact]
-    public void WhenProviderIsGitLab_ReturnsApiScope()
+    public void WhenProviderIsGitLab_ReturnsApiScopeAndMaintainerRole()
     {
         // Arrange
 
@@ -36,7 +38,7 @@ public sealed class For
         IReadOnlyList<string> scopes = RequiredScopes.For("gitlab");
 
         // Assert
-        scopes.ShouldBe(["api"]);
+        scopes.ShouldBe(["api", "Maintainer role"]);
     }
 
     [Fact]
@@ -52,14 +54,16 @@ public sealed class For
             "Contents (read and write)",
             "Issues (read and write)",
             "Pull requests (read and write)",
-            "Workflows (write)",
-            "Metadata (read)",
+            "Administration (read and write)",
+            "Webhooks (read and write)",
             "Commit statuses (read)",
-            "Actions (read)"]);
+            "Actions (read)",
+            "Metadata (read)",
+            "Workflows (read and write)"]);
     }
 
     [Fact]
-    public void WhenProviderIsGitLabUppercase_ReturnsApiScope()
+    public void WhenProviderIsGitLabUppercase_ReturnsApiScopeAndMaintainerRole()
     {
         // Arrange
 
@@ -67,7 +71,7 @@ public sealed class For
         IReadOnlyList<string> scopes = RequiredScopes.For("GitLab");
 
         // Assert
-        scopes.ShouldBe(["api"]);
+        scopes.ShouldBe(["api", "Maintainer role"]);
     }
 
     [Fact]

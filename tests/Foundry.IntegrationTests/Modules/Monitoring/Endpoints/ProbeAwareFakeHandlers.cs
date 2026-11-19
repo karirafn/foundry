@@ -22,6 +22,11 @@ internal sealed class ProbeGrantedFakeHandler : DelegatingHandler
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
         }
 
+        if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+        {
+            return readProbe;
+        }
+
         HttpResponseMessage response = new(HttpStatusCode.OK)
         {
             Content = new StringContent(EmptyListingJson, Encoding.UTF8, "application/json"),
@@ -45,6 +50,11 @@ internal sealed class ProbeBlockedFakeHandler : DelegatingHandler
         if (StaticListingFakeHandler.IsProbePost(request))
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        }
+
+        if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+        {
+            return readProbe;
         }
 
         HttpResponseMessage response = new(HttpStatusCode.OK)

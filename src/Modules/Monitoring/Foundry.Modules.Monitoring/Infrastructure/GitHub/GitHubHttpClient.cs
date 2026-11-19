@@ -33,7 +33,6 @@ internal sealed partial class GitHubHttpClient(
     private const string ApiVersion = "2026-03-10";
     private const string TokenExpirationHeader = "github-authentication-token-expiration";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
-    private const string FineGrainedPatPrefix = "github_pat_";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
@@ -1010,7 +1009,7 @@ internal sealed partial class GitHubHttpClient(
 
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
-            return IsFineGrainedPat(token)
+            return GitHubTokenKind.IsFineGrainedPat(token)
                 ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry))
                 : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login, tokenExpiry));
         }
@@ -1103,27 +1102,119 @@ internal sealed partial class GitHubHttpClient(
         return ClassifyProbeResponse(response, WritePermission.PullRequests);
     }
 
+    public async Task<Result<WritePermissionProbeResult>> ProbeAdministrationWriteAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        using HttpResponseMessage response = await SendEmptyPostAsync(apiBaseUrl, slug, "rulesets", token, cancellationToken);
+
+        RecordRestHeadroom(response);
+        return ClassifyStrictWriteProbeResponse(response, WritePermission.Administration);
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeWebhooksWriteAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        using HttpResponseMessage response = await SendEmptyPostAsync(apiBaseUrl, slug, "hooks", token, cancellationToken);
+
+        RecordRestHeadroom(response);
+        return ClassifyStrictWriteProbeResponse(response, WritePermission.Webhooks);
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeCommitStatusesReadAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        Result<string> defaultBranch = await GetDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken);
+        if (defaultBranch is not Result<string>.Success { Value: string defaultBranchName })
+        {
+            return defaultBranch is Result<string>.Failure branchFailure
+                ? Result<WritePermissionProbeResult>.Fail(branchFailure.Error)
+                : throw new UnreachableException("Unhandled Result variant.");
+        }
+
+        string branch = Uri.EscapeDataString(defaultBranchName);
+        using HttpResponseMessage response = await SendGetAsync(
+            apiBaseUrl, slug, $"commits/{branch}/statuses?per_page=1", token, cancellationToken);
+
+        RecordRestHeadroom(response);
+        return ClassifyReadProbeResponse(response, WritePermission.CommitStatuses);
+    }
+
+    public async Task<Result<WritePermissionProbeResult>> ProbeActionsReadAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        using HttpResponseMessage response = await SendGetAsync(
+            apiBaseUrl, slug, "actions/runs?per_page=1", token, cancellationToken);
+
+        RecordRestHeadroom(response);
+        return ClassifyReadProbeResponse(response, WritePermission.Actions);
+    }
+
+    /// <summary>
+    /// Runs every probe the permission list names, in its order, and returns every permission the token
+    /// lacks so the operator learns them all in one pass. Stops at the first indeterminate probe.
+    /// </summary>
     public async Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
         CancellationToken cancellationToken)
     {
-        foreach (WritePermission permission in TokenPermissions.GitHubWriteProbes)
+        List<WritePermission> missing = [];
+        foreach (WritePermission permission in TokenPermissions.GitHubProbes)
         {
-            Result<WritePermissionProbeResult> result = await ProbeWriteAsync(
+            Result<WritePermissionProbeResult> result = await ProbeAsync(
                 permission, apiBaseUrl, slug, token, cancellationToken);
 
-            if (!IsGranted(result))
+            switch (result)
             {
-                return result;
+                case Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult.Missing probeMissing }:
+                    missing.AddRange(probeMissing.Permissions);
+                    break;
+                case Result<WritePermissionProbeResult>.Success:
+                    break;
+                default:
+                    return result;
             }
         }
 
-        return Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted());
+        return missing.Count == 0
+            ? Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted())
+            : Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(missing));
     }
 
-    private Task<Result<WritePermissionProbeResult>> ProbeWriteAsync(
+    private Task<Result<WritePermissionProbeResult>> ProbeAsync(
         WritePermission permission,
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -1134,11 +1225,44 @@ internal sealed partial class GitHubHttpClient(
             WritePermission.Contents => ProbeContentsWriteAsync(apiBaseUrl, slug, token, cancellationToken),
             WritePermission.Issues => ProbeIssuesWriteAsync(apiBaseUrl, slug, token, cancellationToken),
             WritePermission.PullRequests => ProbePullRequestsWriteAsync(apiBaseUrl, slug, token, cancellationToken),
-            _ => throw new UnreachableException($"No write probe for {permission}."),
+            WritePermission.Administration => ProbeAdministrationWriteAsync(apiBaseUrl, slug, token, cancellationToken),
+            WritePermission.Webhooks => ProbeWebhooksWriteAsync(apiBaseUrl, slug, token, cancellationToken),
+            WritePermission.CommitStatuses => ProbeCommitStatusesReadAsync(apiBaseUrl, slug, token, cancellationToken),
+            WritePermission.Actions => ProbeActionsReadAsync(apiBaseUrl, slug, token, cancellationToken),
+            _ => throw new UnreachableException($"No probe for {permission}."),
         };
 
-    private static bool IsGranted(Result<WritePermissionProbeResult> result) =>
-        result is Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult.Granted };
+    private async Task<HttpResponseMessage> SendEmptyPostAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string repositoryPath,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, RepositoryUri(apiBaseUrl, slug, repositoryPath));
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        return await httpClient.SendAsync(request, cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> SendGetAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string repositoryPath,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, RepositoryUri(apiBaseUrl, slug, repositoryPath));
+        AddGitHubHeaders(request, token);
+        return await httpClient.SendAsync(request, cancellationToken);
+    }
+
+    private static Uri RepositoryUri(Uri apiBaseUrl, RepositorySlug slug, string repositoryPath)
+    {
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        return new Uri(EnsureTrailingSlash(apiBaseUrl), $"repos/{owner}/{repo}/{repositoryPath}");
+    }
 
     public async Task<Result<bool>> GetPushPermissionAsync(
         Uri apiBaseUrl,
@@ -1495,6 +1619,40 @@ internal sealed partial class GitHubHttpClient(
         return Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, selected.HtmlUrl));
     }
 
+    /// <summary>
+    /// Classifies the Administration and Webhooks probes. Unlike <see cref="ClassifyProbeResponse"/> a 404
+    /// is not read as granted: a server without the endpoint (GitHub Enterprise Server without rulesets)
+    /// answers 404, and that must never make a repository eligible.
+    /// </summary>
+    private static Result<WritePermissionProbeResult> ClassifyStrictWriteProbeResponse(
+        HttpResponseMessage response,
+        WritePermission permission) =>
+        response.StatusCode switch
+        {
+            HttpStatusCode.UnprocessableEntity => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            _ => ClassifyRefusal(response, permission),
+        };
+
+    private static Result<WritePermissionProbeResult> ClassifyReadProbeResponse(
+        HttpResponseMessage response,
+        WritePermission permission) =>
+        response.StatusCode switch
+        {
+            HttpStatusCode.OK => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            _ => ClassifyRefusal(response, permission),
+        };
+
+    private static Result<WritePermissionProbeResult> ClassifyRefusal(
+        HttpResponseMessage response,
+        WritePermission permission) =>
+        response.StatusCode switch
+        {
+            HttpStatusCode.Forbidden when IsRateLimited(response) =>
+                Result<WritePermissionProbeResult>.Fail(GitHubErrors.RateLimitExhausted),
+            HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing([permission])),
+            _ => Result<WritePermissionProbeResult>.Fail(ErrorFromNonSuccess(response)),
+        };
+
     private static Result<WritePermissionProbeResult> ClassifyProbeResponse(
         HttpResponseMessage response,
         WritePermission permission)
@@ -1507,7 +1665,7 @@ internal sealed partial class GitHubHttpClient(
             // Returning Fail here prevents the caller from recording a spurious Denied verdict.
             HttpStatusCode.Forbidden when IsRateLimited(response) =>
                 Result<WritePermissionProbeResult>.Fail(GitHubErrors.RateLimitExhausted),
-            HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)),
+            HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing([permission])),
             // Any other status — including 401 (token expired or revoked mid-probe) and any
             // unexpected 2xx (which would mean the probe actually created an object) — is
             // indeterminate and fails closed to preserve non-destructiveness and fail-closed
@@ -1529,9 +1687,6 @@ internal sealed partial class GitHubHttpClient(
         string uriString = uri.ToString();
         return uriString.EndsWith('/') ? uri : new Uri(uriString + '/');
     }
-
-    private static bool IsFineGrainedPat(string token) =>
-        token.StartsWith(FineGrainedPatPrefix, StringComparison.Ordinal);
 
     private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
     {

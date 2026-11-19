@@ -39,8 +39,8 @@ internal sealed class TokenKeyedValidateTokenStub(Dictionary<string, string> tok
 
 /// <summary>
 /// A fake HttpMessageHandler for the GitHub listing endpoint.
-/// Returns a fixed listing JSON for GET requests; returns 422 (Granted) for probe POSTs
-/// to /git/refs, /issues, and /pulls so that write-permission probing passes by default.
+/// Returns a fixed listing JSON for GET requests; returns 422 (Granted) for probe POSTs and 200 for
+/// the read probes so that permission probing passes by default.
 /// </summary>
 internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string responseBody) : DelegatingHandler
 {
@@ -51,6 +51,11 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
         if (IsProbePost(request))
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+        }
+
+        if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+        {
+            return readProbe;
         }
 
         HttpResponseMessage response = new(statusCode)
@@ -70,14 +75,49 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
         string path = request.RequestUri?.AbsolutePath ?? string.Empty;
         return path.EndsWith("/git/refs", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith("/issues", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase);
+            || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/rulesets", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/hooks", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The granted answer to the read probes and the default-branch lookup the commit-statuses probe
+    /// makes first, or <see langword="null"/> for any other request.
+    /// </summary>
+    internal static Task<HttpResponseMessage>? GrantedReadProbeResponse(HttpRequestMessage request)
+    {
+        if (request.Method != HttpMethod.Get)
+        {
+            return null;
+        }
+
+        string path = request.RequestUri?.AbsolutePath ?? string.Empty;
+        string[] segments = path.Trim('/').Split('/');
+        string? body = segments switch
+        {
+            ["repos", _, _] => """{"default_branch":"main"}""",
+            ["repos", _, _, "commits", _, "statuses"] => "[]",
+            ["repos", _, _, "actions", "runs"] => """{"total_count":0,"workflow_runs":[]}""",
+            _ => null,
+        };
+
+        if (body is null)
+        {
+            return null;
+        }
+
+        HttpResponseMessage response = new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        return Task.FromResult(response);
     }
 }
 
 /// <summary>
 /// A fake HttpMessageHandler for the GitHub listing endpoint.
 /// Returns a listing JSON keyed by the Bearer token in the Authorization header.
-/// Returns 422 (Granted) for probe POSTs to /git/refs, /issues, and /pulls.
+/// Returns 422 (Granted) for probe POSTs and 200 for the read probes.
 /// Falls back to "[]" for unknown tokens on listing requests.
 /// </summary>
 internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> tokenToListing) : DelegatingHandler
@@ -89,6 +129,11 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
         if (StaticListingFakeHandler.IsProbePost(request))
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+        }
+
+        if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
+        {
+            return readProbe;
         }
 
         string token = string.Empty;
