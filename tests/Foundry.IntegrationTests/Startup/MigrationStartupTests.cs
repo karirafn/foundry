@@ -23,7 +23,7 @@ public sealed class MigrationStartupTests : IAsyncDisposable
 
     public MigrationStartupTests()
     {
-        _factory = new FoundryWebAppFactory();
+        _factory = FoundryWebAppFactory.WithEmptyDatabase();
         _client = _factory.CreateClient();
     }
 

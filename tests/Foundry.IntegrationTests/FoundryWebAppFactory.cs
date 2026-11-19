@@ -27,6 +27,7 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
     };
 
     private const string LegacyApplicationNameSetting = "DataProtection:LegacyApplicationName";
+    private const string InMemoryDataSource = ":memory:";
 
     private readonly SqliteConnection _connection;
     private readonly Action<IServiceCollection>? _serviceOverrides;
@@ -38,36 +39,19 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
     private string? _legacyApplicationName;
 
     public FoundryWebAppFactory()
+        : this(OpenMigratedDatabase(InMemoryDataSource), serviceOverrides: null, databaseFile: null)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
     }
 
-    private FoundryWebAppFactory(Action<IServiceCollection> serviceOverrides)
+    private FoundryWebAppFactory(SqliteConnection connection, Action<IServiceCollection>? serviceOverrides, FileInfo? databaseFile)
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _serviceOverrides = serviceOverrides;
-    }
-
-    private FoundryWebAppFactory(Action<IServiceCollection> serviceOverrides, FileInfo databaseFile)
-    {
-        // Concurrent hosted services cannot share one SqliteConnection, so this mode runs on a database
-        // file that every DbContext opens its own connection to, as production does.
-        _connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databaseFile.FullName }.ToString());
-        _connection.Open();
-        // In the default rollback journal a reader's shared lock makes a concurrent UPDATE ... RETURNING fail with
-        // "database is locked" when it commits, and Microsoft.Data.Sqlite does not retry that commit. With every hosted
-        // service polling, any read can race a write, so the test failed by chance. WAL lets readers and the one writer
-        // run concurrently; the mode is stored in the file, so every connection the host opens uses it.
-        using (SqliteCommand journalMode = _connection.CreateCommand())
-        {
-            journalMode.CommandText = "PRAGMA journal_mode=WAL;";
-            journalMode.ExecuteNonQuery();
-        }
-
+        _connection = connection;
         _serviceOverrides = serviceOverrides;
         _databaseFile = databaseFile;
+
+        // The test server takes the request scheme from this address, so requests arrive as HTTPS and
+        // UseHttpsRedirection passes them on without looking up an HTTPS port.
+        ClientOptions.BaseAddress = new Uri("https://localhost");
     }
 
     public SqliteConnection Connection => _connection;
@@ -84,14 +68,53 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         };
 
     public static FoundryWebAppFactory WithOverrides(Action<IServiceCollection> serviceOverrides) =>
-        new(serviceOverrides);
+        new(OpenMigratedDatabase(InMemoryDataSource), serviceOverrides, databaseFile: null);
+
+    /// <summary>
+    /// A host whose database starts empty, so its startup in <c>Program.cs</c> applies every migration.
+    /// Every other host starts from a copy of <see cref="MigratedDatabaseTemplate"/>.
+    /// </summary>
+    public static FoundryWebAppFactory WithEmptyDatabase() =>
+        new(OpenDatabase(InMemoryDataSource), serviceOverrides: null, databaseFile: null);
 
     /// <summary>
     /// The composed host: every hosted service runs at its production cadence against a fresh database
     /// file, and <paramref name="boundaryFakes"/> replaces only the external boundaries.
     /// </summary>
-    public static FoundryWebAppFactory WithHostedServices(Action<IServiceCollection> boundaryFakes) =>
-        new(boundaryFakes, new FileInfo(Path.Combine(Path.GetTempPath(), $"foundry-smoke-{Guid.NewGuid():N}.db")));
+    public static FoundryWebAppFactory WithHostedServices(Action<IServiceCollection> boundaryFakes)
+    {
+        // Concurrent hosted services cannot share one SqliteConnection, so this mode runs on a database
+        // file that every DbContext opens its own connection to, as production does.
+        FileInfo databaseFile = new(Path.Combine(Path.GetTempPath(), $"foundry-smoke-{Guid.NewGuid():N}.db"));
+        SqliteConnection connection = OpenMigratedDatabase(databaseFile.FullName);
+
+        // In the default rollback journal a reader's shared lock makes a concurrent UPDATE ... RETURNING fail with
+        // "database is locked" when it commits, and Microsoft.Data.Sqlite does not retry that commit. With every hosted
+        // service polling, any read can race a write, so the test failed by chance. WAL lets readers and the one writer
+        // run concurrently; the mode is stored in the file, so every connection the host opens uses it. It is set after
+        // the template copy, which overwrites the file's header and with it the journal mode.
+        using (SqliteCommand journalMode = connection.CreateCommand())
+        {
+            journalMode.CommandText = "PRAGMA journal_mode=WAL;";
+            journalMode.ExecuteNonQuery();
+        }
+
+        return new FoundryWebAppFactory(connection, boundaryFakes, databaseFile);
+    }
+
+    private static SqliteConnection OpenMigratedDatabase(string dataSource)
+    {
+        SqliteConnection connection = OpenDatabase(dataSource);
+        MigratedDatabaseTemplate.CopyInto(connection);
+        return connection;
+    }
+
+    private static SqliteConnection OpenDatabase(string dataSource)
+    {
+        SqliteConnection connection = new(new SqliteConnectionStringBuilder { DataSource = dataSource }.ToString());
+        connection.Open();
+        return connection;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
