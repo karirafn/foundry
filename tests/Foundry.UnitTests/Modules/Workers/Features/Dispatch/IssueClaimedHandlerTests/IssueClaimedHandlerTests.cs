@@ -35,7 +35,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
 
-public sealed class HandleAsync : IAsyncDisposable
+public sealed partial class HandleAsync : IAsyncDisposable
 {
     private const string EmptyGitPatMessage = "No Git PAT configured for this account. Set the account token in Settings.";
 
