@@ -126,6 +126,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("monitored_repository_id");
 
+                    b.Property<int>("ReviewFixAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("review_fix_attempts");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(500)

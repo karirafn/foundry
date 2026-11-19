@@ -81,6 +81,12 @@ public sealed record ReviewDimension(ReviewCategory Category, ReviewDimensionSta
 /// <summary>A reviewer's answer for one supplied acceptance criterion, by its id (<c>AC1</c>…).</summary>
 public sealed record ReviewCriterionAnswer(string Id, ReviewCriterionStatus Status, string Evidence);
 
+/// <summary>
+/// A supplied acceptance criterion the reviewer judged unmet: its id (<c>AC1</c>…), its text from the issue, and the
+/// reviewer's evidence.
+/// </summary>
+public sealed record ReviewUnmetCriterion(string Id, string Text, string Evidence);
+
 /// <summary>A reviewer's judgment of the change's tests, with the test files it says cover the change.</summary>
 public sealed record ReviewTests(ReviewTestsAssessment Assessment, string Reason, IReadOnlyList<string> CoveringTests);
 

@@ -13,6 +13,13 @@ namespace Foundry.Modules.Workers.Contracts;
 /// <param name="BlockingFindings">The verdict's blocking findings, in the verdict's order.</param>
 /// <param name="UnmetCriteria">The ids of the criteria the reviewer judged unmet.</param>
 /// <param name="DecidedAt">When Foundry derived the outcome.</param>
+/// <param name="AdvisoryFindings">The verdict's advisory findings, in the verdict's order.</param>
+/// <param name="UnmetCriterionDetails">The unmet criteria with their text and the reviewer's evidence.</param>
+/// <param name="TestsReason">The reviewer's reason for <paramref name="TestsAssessment"/>.</param>
+/// <remarks>
+/// The last three are optional so an event enqueued before they existed still deserializes from the outbox; such an
+/// event reads as carrying none.
+/// </remarks>
 public sealed record ReviewRunCompleted(
     Guid IssueId,
     WorkerRunId WorkerRunId,
@@ -22,4 +29,7 @@ public sealed record ReviewRunCompleted(
     IReadOnlyList<ReviewFinding> BlockingFindings,
     IReadOnlyList<string> UnmetCriteria,
     ReviewTestsAssessment TestsAssessment,
-    DateTimeOffset DecidedAt) : IIntegrationEvent;
+    DateTimeOffset DecidedAt,
+    IReadOnlyList<ReviewFinding>? AdvisoryFindings = null,
+    IReadOnlyList<ReviewUnmetCriterion>? UnmetCriterionDetails = null,
+    string? TestsReason = null) : IIntegrationEvent;

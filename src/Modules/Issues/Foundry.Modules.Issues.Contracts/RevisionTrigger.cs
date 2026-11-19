@@ -1,12 +1,14 @@
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Contracts;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(ReviewFeedback), "review_feedback")]
+[JsonDerivedType(typeof(ReviewFindings), "review_findings")]
 [JsonDerivedType(typeof(FailedChecks), "failed_checks")]
 [JsonDerivedType(typeof(RebaseConflict), "rebase_conflict")]
 [JsonDerivedType(typeof(InputProvided), "input_provided")]
@@ -24,6 +26,23 @@ public abstract record RevisionTrigger
         DateTimeOffset? NewestConsumedCommentAt) : RevisionTrigger
     {
         public override string Discriminator => "review_feedback";
+    }
+
+    /// <summary>
+    /// The reviewer requested changes (ADR 0113): the worker addresses the review's findings on the existing branch.
+    /// Unlike <see cref="ReviewFeedback"/>, no person drove it, so auto-merge survives it.
+    /// </summary>
+    /// <param name="Findings">The review's findings, blocking first then advisory, each in the verdict's order.</param>
+    /// <param name="UnmetCriteria">The acceptance criteria the reviewer judged unmet, with its evidence.</param>
+    /// <param name="TestsAssessment">The reviewer's judgment of the change's tests.</param>
+    /// <param name="TestsReason">The reviewer's reason for <paramref name="TestsAssessment"/>.</param>
+    public sealed record ReviewFindings(
+        IReadOnlyList<ReviewFinding> Findings,
+        IReadOnlyList<ReviewUnmetCriterion> UnmetCriteria,
+        ReviewTestsAssessment TestsAssessment,
+        string TestsReason) : RevisionTrigger
+    {
+        public override string Discriminator => "review_findings";
     }
 
     public sealed record FailedChecks(IReadOnlyList<FailingCheck> FailingChecks) : RevisionTrigger

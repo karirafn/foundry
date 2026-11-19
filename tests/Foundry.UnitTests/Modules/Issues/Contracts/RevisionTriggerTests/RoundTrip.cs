@@ -1,7 +1,9 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
@@ -58,6 +60,61 @@ public sealed class RoundTrip
             () => result.FailingChecks[0].Name.ShouldBe("ci/build"),
             () => result.FailingChecks[1].Name.ShouldBe("ci/lint"),
             () => result.FailingChecks[1].DetailsUrl.ShouldBeNull());
+    }
+
+    [Fact]
+    public void WhenReviewFindingsEmbeddedInDispatchContext_RoundTripsThroughOutboxSerializerWithStableTypeToken()
+    {
+        // Arrange
+        ReviewFinding finding = new(
+            "src/a.cs",
+            7,
+            ReviewSeverity.Blocking,
+            ReviewCategory.Conventions,
+            new ReviewRule(null, "CLAUDE.md", "No `var`."),
+            "Uses var.");
+        DispatchContext.Revision revision = new(
+            BranchName: "feat/42-fix-it",
+            PullRequestUrl: "https://github.com/owner/repo/pull/42",
+            Trigger: new RevisionTrigger.ReviewFindings(
+                [finding],
+                [new ReviewUnmetCriterion("AC1", "Retries on 5xx.", "No retry.")],
+                ReviewTestsAssessment.Adequate,
+                "Covered."));
+
+        // Act
+        string json = JsonSerializer.Serialize<DispatchContext>(revision, OutboxSerializerOptions.Default);
+        DispatchContext? deserialized = JsonSerializer.Deserialize<DispatchContext>(json, OutboxSerializerOptions.Default);
+
+        // Assert
+        RevisionTrigger.ReviewFindings result = deserialized.ShouldBeOfType<DispatchContext.Revision>()
+            .Trigger.ShouldBeOfType<RevisionTrigger.ReviewFindings>();
+        result.ShouldSatisfyAllConditions(
+            () => json.ShouldContain("\"$type\":\"review_findings\""),
+            () => result.Discriminator.ShouldBe("review_findings"),
+            () => result.Findings.ShouldBe([finding]),
+            () => result.UnmetCriteria.ShouldBe([new ReviewUnmetCriterion("AC1", "Retries on 5xx.", "No retry.")]),
+            () => result.TestsAssessment.ShouldBe(ReviewTestsAssessment.Adequate),
+            () => result.TestsReason.ShouldBe("Covered."));
+    }
+
+    [Theory]
+    [InlineData(typeof(RevisionTrigger.ReviewFeedback), "review_feedback")]
+    [InlineData(typeof(RevisionTrigger.ReviewFindings), "review_findings")]
+    [InlineData(typeof(RevisionTrigger.FailedChecks), "failed_checks")]
+    [InlineData(typeof(RevisionTrigger.RebaseConflict), "rebase_conflict")]
+    [InlineData(typeof(RevisionTrigger.InputProvided), "input_provided")]
+    public void EachTriggerTypeToken_IsUnchanged(Type triggerType, string token)
+    {
+        // Act
+        string? declared = typeof(RevisionTrigger)
+            .GetCustomAttributes(typeof(JsonDerivedTypeAttribute), inherit: false)
+            .Cast<JsonDerivedTypeAttribute>()
+            .SingleOrDefault(attribute => attribute.DerivedType == triggerType)?
+            .TypeDiscriminator as string;
+
+        // Assert
+        declared.ShouldBe(token);
     }
 
     [Fact]

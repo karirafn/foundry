@@ -501,6 +501,7 @@ internal sealed class IssueQueries(
             RunKind.ConflictFix => IssueSummary.ConflictFixRunKind,
             RunKind.InputResume => IssueSummary.InputResumeRunKind,
             RunKind.Review => IssueSummary.ReviewRunKind,
+            RunKind.FindingsFix => IssueSummary.FindingsFixRunKind,
             null => null,
             _ => throw new InvalidOperationException($"Unknown run kind: {runKind}"),
         };

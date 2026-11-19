@@ -33,6 +33,7 @@ public sealed class RunKindByState
         ["revision_queued (failed checks)"] = () => new IssueBuilder().ChecksPending()
             .FixChecks([new FailingCheck("ci/build", "failure", null)], DateTimeOffset.UtcNow),
         ["revision_queued (rebase conflict)"] = () => new IssueBuilder().RebasePending().ResolveConflict(DateTimeOffset.UtcNow),
+        ["revision_queued (review findings)"] = () => new IssueBuilder().RevisionQueuedFromReviewFindings(),
         ["revision_queued (input provided)"] = () => (RevisionQueuedIssue)new IssueBuilder()
             .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
             .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
@@ -46,6 +47,8 @@ public sealed class RunKindByState
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
         ["revision_in_progress (rebase conflict)"] = () => new IssueBuilder().RebasePending()
             .ResolveConflict(DateTimeOffset.UtcNow).Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
+        ["revision_in_progress (review findings)"] = () => new IssueBuilder().RevisionQueuedFromReviewFindings()
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
         ["revision_in_progress (input provided)"] = () => ((RevisionQueuedIssue)new IssueBuilder()
             .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
             .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow))
@@ -80,6 +83,7 @@ public sealed class RunKindByState
         ("revision_queued (review feedback)", RunKind.ReviewFix),
         ("revision_queued (failed checks)", RunKind.ChecksFix),
         ("revision_queued (rebase conflict)", RunKind.ConflictFix),
+        ("revision_queued (review findings)", RunKind.FindingsFix),
         ("revision_queued (input provided)", RunKind.InputResume),
         ("continuation_queued", RunKind.Continuation),
         ("in_progress (fresh)", RunKind.Fresh),
@@ -87,6 +91,7 @@ public sealed class RunKindByState
         ("revision_in_progress (review feedback)", RunKind.ReviewFix),
         ("revision_in_progress (failed checks)", RunKind.ChecksFix),
         ("revision_in_progress (rebase conflict)", RunKind.ConflictFix),
+        ("revision_in_progress (review findings)", RunKind.FindingsFix),
         ("revision_in_progress (input provided)", RunKind.InputResume),
         ("rebase_pending", null),
         ("checks_pending", null),

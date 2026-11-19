@@ -29,6 +29,7 @@ public sealed class DescribeSections
             ("fresh", PromptSectionCondition.Fresh),
             ("continuation", PromptSectionCondition.Continuation),
             ("review-feedback", PromptSectionCondition.Revision),
+            ("review-findings", PromptSectionCondition.Revision),
             ("failing-checks", PromptSectionCondition.Revision),
             ("rebase-conflict", PromptSectionCondition.RebaseConflict),
             ("input-provided", PromptSectionCondition.Revision),

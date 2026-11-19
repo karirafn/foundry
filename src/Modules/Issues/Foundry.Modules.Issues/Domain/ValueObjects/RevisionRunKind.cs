@@ -10,6 +10,7 @@ internal static class RevisionRunKind
     internal static RunKind Of(RevisionTrigger trigger) => trigger switch
     {
         RevisionTrigger.ReviewFeedback => RunKind.ReviewFix,
+        RevisionTrigger.ReviewFindings => RunKind.FindingsFix,
         RevisionTrigger.FailedChecks => RunKind.ChecksFix,
         RevisionTrigger.RebaseConflict => RunKind.ConflictFix,
         RevisionTrigger.InputProvided => RunKind.InputResume,

@@ -83,14 +83,29 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
     /// <item><b>Merge:</b> <see cref="ReviewVerdictOutcome.Approved"/> on a <see cref="ChecksOutcome.Passed"/> verdict
     /// with <see cref="AutoMerge"/> on and no person's feedback → <see cref="MergePendingIssue"/>, pinned to
     /// <see cref="ReviewedCommit"/>. A pull request without checks never merges itself (ADR 0105).</item>
+    /// <item><b>Fix:</b> <see cref="ReviewVerdictOutcome.ChangesRequested"/> while the round has review fix runs left
+    /// (<see cref="Issue.ReviewMaxFixRuns"/>) → a <see cref="RevisionTrigger.ReviewFindings"/> revision addressing
+    /// <paramref name="findings"/>.</item>
     /// <item><b>Person:</b> everything else → <see cref="ReviewIssue"/>.</item>
     /// </list>
     /// </summary>
-    public Issue ResolveVerdict(ReviewVerdictOutcome outcome, DateTimeOffset transitionedAt)
+    public Issue ResolveVerdict(
+        ReviewVerdictOutcome outcome,
+        RevisionTrigger.ReviewFindings findings,
+        DateTimeOffset transitionedAt)
     {
+        ArgumentNullException.ThrowIfNull(findings);
+
         if (!Enum.IsDefined(outcome))
         {
             throw new UnreachableException($"Unhandled review verdict outcome: {outcome}");
+        }
+
+        if (outcome is ReviewVerdictOutcome.ChangesRequested && ReviewFixAttempts < ReviewMaxFixRuns)
+        {
+            RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromReviewInProgress(this, findings, transitionedAt);
+            AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+            return revisionQueued;
         }
 
         if (outcome is ReviewVerdictOutcome.Approved

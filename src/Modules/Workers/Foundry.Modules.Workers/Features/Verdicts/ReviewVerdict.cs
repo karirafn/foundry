@@ -177,6 +177,22 @@ internal sealed partial record ReviewVerdict(
         public IReadOnlyList<string> UnmetCriteria =>
             [.. Verdict.Criteria.Where(answer => answer.Status == ReviewCriterionStatus.Unmet).Select(answer => answer.Id)];
 
+        /// <summary>The verdict's advisory findings, in its order.</summary>
+        public IReadOnlyList<ReviewFinding> AdvisoryFindings =>
+            [.. Verdict.Findings.Where(finding => finding.Severity == ReviewSeverity.Advisory)];
+
+        /// <summary>
+        /// The criteria judged unmet, in the verdict's order, each with its supplied text and the reviewer's evidence.
+        /// A valid verdict answers exactly the supplied ids, so every unmet id has its text.
+        /// </summary>
+        public IReadOnlyList<ReviewUnmetCriterion> UnmetCriterionDetails =>
+            [.. Verdict.Criteria
+                .Where(answer => answer.Status == ReviewCriterionStatus.Unmet)
+                .Select(answer => new ReviewUnmetCriterion(
+                    answer.Id,
+                    Facts.Criteria.Single(criterion => criterion.Id == answer.Id).Text,
+                    answer.Evidence))];
+
         /// <summary>The verdict as its run records it: with its outcome and the commit and patch-id it judged.</summary>
         public RecordedReviewVerdict ToRecorded() =>
             new(
