@@ -23,9 +23,7 @@ internal sealed class ClaudeApiCredentialReader(
     public async Task<Result<ClaudeApiCredential>> ReadAsync(CancellationToken cancellationToken)
     {
         // AuthMode uses a ValueConverter (decrypt + JSON) that cannot be projected into SQL.
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         switch (account?.AuthMode)
         {

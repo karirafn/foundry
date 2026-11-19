@@ -18,8 +18,7 @@ internal sealed class WorkerCreditsExhaustedHandler(
 {
     public async Task HandleAsync(WorkerCreditsExhausted @event, CancellationToken cancellationToken)
     {
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
         if (account is null)
         {

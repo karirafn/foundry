@@ -54,8 +54,7 @@ internal static class UpdateAuthMode
             Command command,
             CancellationToken cancellationToken)
         {
-            ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-                .FirstOrDefaultAsync(cancellationToken);
+            ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
             if (account is null)
             {

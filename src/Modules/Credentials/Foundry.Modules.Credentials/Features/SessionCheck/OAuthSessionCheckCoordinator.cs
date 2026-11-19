@@ -120,9 +120,7 @@ internal sealed class OAuthSessionCheckCoordinator(
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         if (account is null
             || account.AuthMode is not AuthMode.OAuth
@@ -163,8 +161,7 @@ internal sealed class OAuthSessionCheckCoordinator(
         IIntegrationEventDispatcher dispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
         if (account is null || account.UpdatedAt != observedUpdatedAt)
         {

@@ -15,9 +15,7 @@ internal sealed class CredentialGate(DbContext dbContext, ILoginSessionState log
             return false;
         }
 
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         if (account is null)
         {

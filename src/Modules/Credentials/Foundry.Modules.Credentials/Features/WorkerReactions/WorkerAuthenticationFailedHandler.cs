@@ -20,8 +20,7 @@ internal sealed class WorkerAuthenticationFailedHandler(
 {
     public async Task HandleAsync(WorkerAuthenticationFailed @event, CancellationToken cancellationToken)
     {
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
         if (account is null)
         {

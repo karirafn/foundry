@@ -69,8 +69,7 @@ internal sealed class CreditProbeCoordinator(
         ISystemNotificationBroadcaster broadcaster =
             scope.ServiceProvider.GetRequiredService<ISystemNotificationBroadcaster>();
 
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
         if (account is null)
         {

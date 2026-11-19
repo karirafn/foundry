@@ -83,9 +83,7 @@ internal sealed class UsagePollCoordinator(
         {
             DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-            ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(cancellationToken);
+            ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
             if (account is null || !account.CanReportUsage)
             {
@@ -162,9 +160,7 @@ internal sealed class UsagePollCoordinator(
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         // Skip: no account configured yet.
         if (account is null)

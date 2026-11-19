@@ -26,8 +26,7 @@ internal sealed class LoginSuccessCommitter(
         IIntegrationEventDispatcher eventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountAsync(cancellationToken);
 
         if (account is null)
         {

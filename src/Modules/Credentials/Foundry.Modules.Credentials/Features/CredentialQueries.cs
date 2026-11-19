@@ -20,9 +20,7 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
     public async Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
     {
         // AuthMode uses a ValueConverter (decrypt + JSON) that cannot be projected into SQL.
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         if (account is null)
         {
@@ -43,9 +41,7 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
         // Full entity load is required here: AuthMode uses a ValueConverter that
         // applies decrypt + JSON deserialization, which cannot be expressed as a
         // SQL projection. EF Core cannot translate the converter into a SELECT.
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         if (account is null)
         {
@@ -63,18 +59,14 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
 
     public async Task<bool> IsValidAsync(CancellationToken cancellationToken)
     {
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         return account?.Validity is CredentialValidity.Valid;
     }
 
     public async Task<ClaudeAccountSummary?> GetSummaryAsync(CancellationToken cancellationToken)
     {
-        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+        ClaudeAccount? account = await dbContext.FindClaudeAccountNoTrackingAsync(cancellationToken);
 
         return account is null ? null : ToSummary(account);
     }
