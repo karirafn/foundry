@@ -890,6 +890,12 @@ The provider client also scopes "blocked by" links to the same repository or pro
 Link entries whose project or repository cannot be determined are kept as blockers (fail-safe toward blocking).
 When a blocker's state is missing or unrecognized, it is treated as still blocking (fail-safe).
 
+**Claim-time branch check** — beside the blocker re-check, a `FreshQueuedIssue` that has no open blockers has its branch read from the provider (a compare against the default branch) immediately before it is claimed. Foundry chooses between Fresh and Continuation from its own records, which can be lost while the issue's branch and pull request survive on the provider (a database reset, or a repository removed and re-added); a Fresh run over such a branch would re-implement the issue and diverge from it at publish.
+- The branch has at least one commit the default branch lacks: `FreshQueuedIssue.AdoptBranch()` requeues it as a `ContinuationQueuedIssue` on that branch with no failure reason, raising `IssueContinuationQueued`. It leaves the Fresh queue like a blocked candidate, the next candidate in dispatch order is tried, and a later dispatch pass claims it as a Continuation.
+- The branch does not exist (the provider answers NotFound) or has no commits ahead: the issue is claimed Fresh.
+- Any other read failure skips the candidate for that dispatch without changing its state; it never falls back to Fresh, and the next dispatch tick retries it.
+- `TriageQueuedIssue` candidates are not branch-checked. Retry Fresh deletes the branch before requeueing, so its run stays Fresh.
+
 ## Blocked Issue
 
 A lifecycle state for a triaged issue that has unresolved dependencies (an untriaged one waits as a [TriageBlockedIssue](#triageblockedissue)).

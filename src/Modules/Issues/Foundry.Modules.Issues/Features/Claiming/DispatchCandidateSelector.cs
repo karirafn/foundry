@@ -15,8 +15,9 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// Selects the best <see cref="DispatchCandidate"/> from all claimable issues across eligible
 /// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
 /// memoization. Each <see cref="FreshQueuedIssue"/> and <see cref="TriageQueuedIssue"/> candidate is re-checked by
-/// <see cref="ClaimTimeRecheck"/> before it is selected; a candidate that gained a blocker has left the queue, so the
-/// capacity-aware order is re-walked without it. Repositories on a paused provider host
+/// <see cref="ClaimTimeRecheck"/> before it is selected; a candidate that gained a blocker, or a Fresh candidate whose
+/// branch already had work and was requeued as a Continuation, has left the queue, so the capacity-aware order is
+/// re-walked without it. Repositories on a paused provider host
 /// (<see cref="DispatchPauseState.PausedHosts"/>) are dropped before any candidate is considered.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
@@ -96,7 +97,8 @@ internal sealed class DispatchCandidateSelector(
         HashSet<QueuedIssue> skippedCandidates = [];
         int unresolvable = 0;
         int blocked = 0;
-        int blockerReadFailed = 0;
+        int readFailed = 0;
+        int branchAdopted = 0;
         bool reordered;
 
         do
@@ -129,8 +131,8 @@ internal sealed class DispatchCandidateSelector(
                 // on the provider (GitLab sends no webhook for issue links), so re-read it live for
                 // fresh work and for triage, which waits for open blockers to close (ADR 0102) — this also covers an
                 // issue created with blockers before its first dependency pass. Revisions and continuations run on an
-                // existing branch/PR and are not
-                // re-gated.
+                // existing branch/PR and are not re-gated. A fresh candidate whose branch already has work is requeued
+                // as a continuation on it.
                 if (candidate is FreshQueuedIssue or TriageQueuedIssue)
                 {
                     ClaimTimeRecheckOutcome check = await claimTimeRecheck.CheckAsync(candidate, cancellationToken);
@@ -140,16 +142,24 @@ internal sealed class DispatchCandidateSelector(
                         // No state change on a failed read: the candidate stays queued and the
                         // next dispatch tick retries it.
                         skippedCandidates.Add(candidate);
-                        blockerReadFailed++;
+                        readFailed++;
                         continue;
                     }
 
-                    if (check == ClaimTimeRecheckOutcome.Blocked)
+                    if (check is ClaimTimeRecheckOutcome.Blocked or ClaimTimeRecheckOutcome.BranchHasWork)
                     {
-                        // The issue is now blocked and no longer holds a dispatch slot, so
-                        // re-walk the capacity-aware order without it: the next same-repository
+                        // The issue has left the queue it was selected from (blocked, or requeued as a Continuation that a
+                        // later pass picks up), so re-walk the capacity-aware order without it: the next same-repository
                         // issue may only now fit within the repository's headroom.
-                        blocked++;
+                        if (check == ClaimTimeRecheckOutcome.Blocked)
+                        {
+                            blocked++;
+                        }
+                        else
+                        {
+                            branchAdopted++;
+                        }
+
                         keyedCandidates.RemoveAll(k => ReferenceEquals(k.Issue, candidate));
                         ordered = CapacityAwareDispatchOrder.Order(keyedCandidates, headroom);
                         reordered = true;
@@ -162,12 +172,12 @@ internal sealed class DispatchCandidateSelector(
         }
         while (reordered);
 
-        if (blocked == 0 && blockerReadFailed == 0)
+        if (blocked == 0 && readFailed == 0 && branchAdopted == 0)
         {
             return new SelectionOutcome.AllCandidatesUnresolvable(unresolvable);
         }
 
-        return new SelectionOutcome.AllCandidatesSkipped(unresolvable, blocked, blockerReadFailed);
+        return new SelectionOutcome.AllCandidatesSkipped(unresolvable, blocked, readFailed, branchAdopted);
     }
 
     private static bool IsOnPausedHost(EligibleRepository repo, IReadOnlyList<PausedHost> pausedHosts) =>

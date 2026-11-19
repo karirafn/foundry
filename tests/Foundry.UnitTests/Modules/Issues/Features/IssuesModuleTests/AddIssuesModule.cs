@@ -50,6 +50,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryDispatchQueries, NullRepositoryDispatchQueries>();
         services.AddScoped<IIssueBlockerQueries, StubIssueBlockerQueries>();
+        services.AddScoped<IPostExitProviderQueries, StubBranchWorkQueries>();
         services.AddScoped<IRepositorySlugQueries, NullRepositorySlugQueries>();
         services.AddScoped<IRepositoryEligibilityQuery, NullRepositoryEligibilityQuery>();
         services.AddScoped<IWorkerRunQueries, NullWorkerRunQueries>();

@@ -31,6 +31,7 @@ public static class IssuesModule
         services.AddScoped<IIssueQueries, IssueQueries>();
         services.AddScoped<ITriageFailedIssueQueries, TriageFailedIssueQueries>();
         services.AddScoped<InFlightWorkerCountQuery>();
+        services.AddScoped<FreshBranchAdopter>();
         services.AddScoped<ClaimTimeRecheck>();
         services.AddScoped<DispatchCandidateSelector>();
         services.AddScoped<IssueClaimer>();

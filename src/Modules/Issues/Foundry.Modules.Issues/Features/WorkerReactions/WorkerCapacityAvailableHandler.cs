@@ -68,11 +68,12 @@ internal sealed class WorkerCapacityAvailableHandler(
                     cancellationToken);
                 break;
 
-            case SelectionOutcome.AllCandidatesSkipped(int unresolvable, int blocked, int blockerReadFailed):
+            case SelectionOutcome.AllCandidatesSkipped(int unresolvable, int blocked, int readFailed, int branchAdopted):
                 logger.LogInformation(
-                    "No candidate claimable: {Blocked} blocked at claim time, {BlockerReadFailed} with unreadable blockers, {Unresolvable} with unresolvable dispatch info; skipping dispatch.",
+                    "No candidate claimable: {Blocked} blocked at claim time, {BranchAdopted} requeued as a Continuation on an existing branch, {ReadFailed} with a failed claim-time read, {Unresolvable} with unresolvable dispatch info; skipping dispatch.",
                     blocked,
-                    blockerReadFailed,
+                    branchAdopted,
+                    readFailed,
                     unresolvable);
                 await integrationEventDispatcher.DispatchAsync(
                     [new ClaimSkipped(@event.WorkerRunId)],

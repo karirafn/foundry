@@ -33,11 +33,14 @@ public sealed class ClaimHappyPath : IAsyncDisposable
     public ClaimHappyPath()
     {
         // The claim-time blocker re-check (#731) reads blockers live from the provider; the seeded
-        // token is fake, so substitute a stub that reports blockers per issue.
+        // token is fake, so substitute a stub that reports blockers per issue. The claim-time branch check reads the
+        // issue branch the same way; its stub reports every branch absent, so Fresh claims stay Fresh.
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IIssueBlockerQueries>();
             services.AddSingleton<IIssueBlockerQueries>(_blockerQueries);
+            services.RemoveAll<IPostExitProviderQueries>();
+            services.AddSingleton<IPostExitProviderQueries>(new StubBranchWorkQueries());
         });
         _ = _factory.CreateClient();
     }
