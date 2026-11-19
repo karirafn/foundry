@@ -41,6 +41,34 @@ public sealed class Serialization
     }
 
     [Fact]
+    public void WhenDeniedWithProbedAtSerialized_RoundTripsProbedAt()
+    {
+        // Arrange
+        DateTimeOffset probedAt = new(2026, 11, 19, 10, 0, 0, TimeSpan.Zero);
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied(probedAt);
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBe(probedAt);
+    }
+
+    [Fact]
+    public void WhenDeniedLegacyJsonWithoutProbedAtField_DeserializesWithNullProbedAt()
+    {
+        // Arrange — rows persisted before ProbedAt was added carry only the discriminator.
+        const string legacyJson = """{"$type":"denied"}""";
+
+        // Act
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(legacyJson, Options);
+
+        // Assert
+        deserialized.ShouldBeOfType<WriteProbeVerdict.Denied>().ProbedAt.ShouldBeNull();
+    }
+
+    [Fact]
     public void WhenUnknownSerialized_RoundTripsToUnknown()
     {
         // Arrange

@@ -11,7 +11,14 @@ internal abstract record WriteProbeVerdict
 
     internal sealed record Granted : WriteProbeVerdict;
 
-    internal sealed record Denied : WriteProbeVerdict;
+    /// <summary>
+    /// The token lacks a permission Foundry needs. <see cref="ProbedAt"/> stamps when the probe ran so
+    /// the poller can re-probe after <see cref="Entities.MonitoredRepository.DeniedWriteProbeCooldown"/>:
+    /// a permission gained in place on the provider leaves the token string unchanged, so no
+    /// credential event would otherwise re-probe it. Legacy rows persisted without the field
+    /// deserialize to <see langword="null"/>, which counts as due.
+    /// </summary>
+    internal sealed record Denied(DateTimeOffset? ProbedAt = null) : WriteProbeVerdict;
 
     /// <summary>
     /// The probe result is indeterminate — either a transient transport failure or a rate-limit

@@ -251,17 +251,18 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Branch on whether a fresh write probe is due (verdict is Unknown and either never attempted
-        // or the 15-minute cooldown has elapsed). Repositories with no credential early-return
-        // Ineligible(NoCredential) inside both evaluation paths before any probe is issued, so a
-        // credential-less repo whose verdict is Unknown stays permanently due at zero API cost.
-        if (repository.IsDueForWriteProbe(MonitoredRepository.WriteProbeCooldown, now))
+        // Branch on whether a fresh write probe is due: an Unknown verdict never attempted or past its
+        // 15-minute cooldown, or a Denied verdict with no probe time or past its one-hour cooldown (a
+        // permission gained in place on the provider raises no credential event). Repositories with no
+        // credential early-return Ineligible(NoCredential) inside both evaluation paths before any probe
+        // is issued, so a credential-less repo whose verdict is due stays due at zero API cost.
+        if (repository.IsDueForWriteProbe(now))
         {
             await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, now, cancellationToken);
         }
         else
         {
-            // Verdict is Granted, Denied, or Unknown within the cooldown — use the cheap path.
+            // Verdict is Granted, or Unknown or Denied within its cooldown — use the cheap path.
             await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
         }
     }
