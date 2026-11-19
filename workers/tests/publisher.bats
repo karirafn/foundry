@@ -120,6 +120,10 @@ make_git_wrapper() {
     cat > "$FAKE_BIN_DIR/git" <<EOF
 #!/bin/bash
 printf '%s\n' "\$*" >> "$BATS_TEST_TMPDIR/git_args"
+if [ -x "$BATS_TEST_TMPDIR/before_push" ] && [[ " \$* " == *" push "* ]]; then
+    "$BATS_TEST_TMPDIR/before_push"
+    rm "$BATS_TEST_TMPDIR/before_push"
+fi
 printf 'GIT_CONFIG_NOSYSTEM=%s GIT_CONFIG_GLOBAL=%s\n' "\${GIT_CONFIG_NOSYSTEM-unset}" "\${GIT_CONFIG_GLOBAL-unset}" >> "$BATS_TEST_TMPDIR/git_env"
 if [ -n "\${GIT_ASKPASS:-}" ]; then
     "\$GIT_ASKPASS" "Password for '$AUTH_URL': " > "$BATS_TEST_TMPDIR/askpass_answer"
@@ -1183,6 +1187,104 @@ HOOK
     local side="$RUN_BRANCH_NAME-run-run-42"
     [ "$(result_line)" = "FOUNDRY_PUBLISH result=diverged branch=$RUN_BRANCH_NAME side_branch=$side head=$(remote_sha "$side") reason=force-push-protected" ]
     [ "$(remote_sha "$RUN_BRANCH")" = "$BASE_BRANCH_SHA" ]
+}
+
+# refuse_pushes <message lines>... — the remote's pre-receive hook writes each line to stderr and refuses every push.
+refuse_pushes() {
+    {
+        echo '#!/bin/sh'
+        local line
+        for line in "$@"; do
+            printf 'printf "%%s\\n" "%s" >&2\n' "$line"
+        done
+        echo 'exit 1'
+    } > "$REMOTE/hooks/pre-receive"
+    chmod +x "$REMOTE/hooks/pre-receive"
+}
+
+@test "publish: a refused forward push is transient and reports the provider's reason and message" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    refuse_pushes "Push refused, try again later."
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the provider refused the push (pre-receive hook declined): Push refused, try again later." ]
+    [ "$(remote_sha main)" = "$BASE_DEFAULT_SHA" ]
+}
+
+@test "publish: a refused forward push with no provider message reports the provider's reason alone" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    refuse_pushes
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the provider refused the push (pre-receive hook declined)" ]
+}
+
+@test "publish: a refused forward push joins the provider's message lines in order and drops blank ones" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    refuse_pushes "first line" "" "second line"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the provider refused the push (pre-receive hook declined): first line second line" ]
+}
+
+@test "publish: a refused push whose provider message holds the token never shows the token" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    refuse_pushes "denied for $GIT_PAT"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the provider refused the push (pre-receive hook declined): denied for ***" ]
+    [[ "$output" != *"$GIT_PAT"* ]]
+    [[ "$stderr" != *"$GIT_PAT"* ]]
+}
+
+@test "publish: a refused merge-commit push is transient and reports the provider's reason and message" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wcommit run.txt run "run work"
+    worker_bundle
+    seed_commit "$RUN_BRANCH_NAME" human.txt human "human work"
+    local human
+    human="$(remote_sha "$RUN_BRANCH")"
+    refuse_pushes "Push refused, try again later."
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the provider refused the push (pre-receive hook declined): Push refused, try again later." ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$human" ]
+}
+
+@test "publish: a forward push rejected because the remote branch moved under it is transient" {
+    add_remote_branch elsewhere
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    cat > "$BATS_TEST_TMPDIR/before_push" <<EOF
+#!/bin/sh
+"$REAL_GIT" -C "$REMOTE" update-ref "refs/heads/$RUN_BRANCH_NAME" "$(remote_sha elsewhere)"
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/before_push"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the remote branch moved during publish: "* ]]
 }
 
 @test "publish: a run tip on an existing branch that descends from neither its base nor the default branch fails as invalid" {
