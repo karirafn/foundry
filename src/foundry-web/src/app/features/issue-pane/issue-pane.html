@@ -20,6 +20,7 @@
       />
       @if (issueService.detailError() === null) {
         <fd-pane-clarifications [detail]="detail()" [providerType]="liveSummary()?.providerType ?? ''" />
+        <fd-pane-review [reviewRunId]="detail()?.stateDetails?.reviewRunId ?? null" [run]="run()" />
         <fd-pane-facts [detail]="detail()" [run]="run()" [summary]="liveSummary()" />
       }
       @if (showsActivity()) {

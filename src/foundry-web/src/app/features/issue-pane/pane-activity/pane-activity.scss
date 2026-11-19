@@ -1,20 +1,17 @@
+@use '../../../../styles/pane' as *;
+
 :host {
   display: block;
   margin-bottom: var(--fd-spacing-xl);
 }
 
-// The pane's section-heading style.
 .pane-activity__heading {
+  @include pane-section-heading;
+
   align-items: baseline;
-  color: var(--fd-text-secondary);
   display: flex;
-  font-size: 0.75rem;
-  font-weight: 600;
   gap: var(--fd-spacing-sm);
   justify-content: space-between;
-  letter-spacing: 0.04em;
-  margin: 0 0 var(--fd-spacing-sm);
-  text-transform: uppercase;
 }
 
 .pane-activity__elapsed {

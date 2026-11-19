@@ -26,6 +26,7 @@ import { WORKING_STATES } from '../../shared/utils/issue-state';
 import { PaneActivityComponent } from './pane-activity/pane-activity';
 import { PaneClarificationsComponent } from './pane-clarifications/pane-clarifications';
 import { PaneFactsComponent } from './pane-facts/pane-facts';
+import { PaneReviewComponent } from './pane-review/pane-review';
 import { PaneHeaderComponent } from './pane-header/pane-header';
 import { PaneStatusComponent } from './pane-status/pane-status';
 
@@ -38,7 +39,7 @@ export const ISSUE_PANE_TITLE_ID = 'issue-pane-title';
  */
 @Component({
   selector: 'fd-issue-pane',
-  imports: [PaneHeaderComponent, PaneStatusComponent, PaneClarificationsComponent, PaneFactsComponent, PaneActivityComponent],
+  imports: [PaneHeaderComponent, PaneStatusComponent, PaneClarificationsComponent, PaneReviewComponent, PaneFactsComponent, PaneActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './issue-pane.html',
   styleUrl: './issue-pane.scss',

@@ -1,6 +1,7 @@
 @use 'sass:map';
 @use '../../../../styles/controls' as *;
 @use '../../../../styles/badge' as *;
+@use '../../../../styles/pane' as *;
 
 // The Triage differs and triage verdict chips take the shared pill shape; no state or outlined
 // modifier is emitted here.
@@ -11,14 +12,8 @@
   margin-bottom: var(--fd-spacing-xl);
 }
 
-// The pane's section-heading style.
 .pane-facts__heading {
-  color: var(--fd-text-secondary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  margin: 0 0 var(--fd-spacing-sm);
-  text-transform: uppercase;
+  @include pane-section-heading;
 }
 
 .pane-facts__list {
