@@ -10,7 +10,7 @@ import {
 } from '../repository.model';
 
 const GITHUB_EXPLANATION = "Your token lacks push permission or SSO isn't authorized.";
-const GITLAB_EXPLANATION = "Your token's role is below Developer.";
+const GITLAB_EXPLANATION = "Your token's role is below Maintainer.";
 
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',

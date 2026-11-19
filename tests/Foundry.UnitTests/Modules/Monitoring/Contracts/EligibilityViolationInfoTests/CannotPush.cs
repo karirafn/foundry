@@ -82,7 +82,7 @@ public sealed class CannotPush
 
         // Assert
         explanation.ShouldBe(
-            "Your token's role is below Developer.");
+            "Your token's role is below Maintainer.");
     }
 
     [Fact]

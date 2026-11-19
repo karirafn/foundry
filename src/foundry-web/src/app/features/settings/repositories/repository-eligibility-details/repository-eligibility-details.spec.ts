@@ -16,6 +16,7 @@ function setup(overrides: {
   recheckError?: string | null;
   panelId?: string;
   providerType?: string;
+  accountName?: string;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryEligibilityDetailsComponent);
   fixture.componentRef.setInput('status', overrides.status ?? 'ineligible');
@@ -25,6 +26,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('recheckError', overrides.recheckError ?? null);
   fixture.componentRef.setInput('panelId', overrides.panelId ?? 'eligibility-detail-test');
   fixture.componentRef.setInput('providerType', overrides.providerType ?? 'github');
+  fixture.componentRef.setInput('accountName', overrides.accountName ?? 'octocat');
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -324,6 +326,44 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(heading?.textContent?.trim()).toBe('Branch protection could not be verified');
     const explanation = el.querySelector('.repository-eligibility-details__explanation');
     expect(explanation?.textContent).toContain('branch-protection settings');
+  });
+
+  describe('account link', () => {
+    it('links a cannot-push violation to Accounts settings', () => {
+      // Arrange
+      const violations: EligibilityViolation[] = [
+        { rule: 'cannot-push:octocat/api', description: 'Token is missing Administration (read and write) for octocat/api.' },
+      ];
+
+      // Act
+      const { el } = setup({ status: 'ineligible', violations, accountName: 'octocat' });
+
+      // Assert
+      const link = el.querySelector<HTMLAnchorElement>('.repository-eligibility-details__account-link')!;
+      expect(link.textContent?.trim()).toBe('View account');
+      expect(link.getAttribute('aria-label')).toBe('View account octocat in Accounts settings');
+      expect(new URL(link.getAttribute('href') ?? '', 'http://localhost').pathname).toBe('/settings/accounts');
+      expect(link.closest('li')?.textContent).toContain('Token is missing Administration (read and write) for octocat/api.');
+    });
+
+    it('keeps the Re-check button alongside the account link', () => {
+      // Arrange
+      const violations: EligibilityViolation[] = [{ rule: 'cannot-push:octocat/api', description: 'Missing.' }];
+
+      // Act
+      const { el } = setup({ status: 'ineligible', violations });
+
+      // Assert
+      expect(el.querySelector('.repository-eligibility-details__recheck-btn')?.textContent?.trim()).toBe('Re-check');
+    });
+
+    it('adds no account link to other violations', () => {
+      // Arrange / Act
+      const { el } = setup({ status: 'ineligible', violations: VIOLATIONS });
+
+      // Assert
+      expect(el.querySelector('.repository-eligibility-details__account-link')).toBeNull();
+    });
   });
 
   describe('package source link', () => {

@@ -981,6 +981,39 @@ describe('RepositoryListComponent', () => {
     });
   });
 
+  describe('account link', () => {
+    const WITH_CANNOT_PUSH: RepositorySummary = {
+      ...MOCK_REPO_INELIGIBLE,
+      eligibility: {
+        status: 'ineligible',
+        violations: [
+          { rule: 'cannot-push:my-org/my-repo', description: 'Token is missing Administration (read and write) for my-org/my-repo.' },
+        ],
+        reason: null,
+      },
+    };
+
+    it('links a cannot-push violation to Accounts settings', () => {
+      // Arrange / Act
+      const { el } = setup({ repositories: [WITH_CANNOT_PUSH] });
+
+      // Assert
+      const links = el.querySelectorAll<HTMLAnchorElement>('.repository-list__problem-link');
+      expect(links.length).toBe(1);
+      expect(links[0].textContent?.trim()).toBe('View account');
+      expect(links[0].getAttribute('aria-label')).toBe(`View account ${WITH_CANNOT_PUSH.accountName} in Accounts settings`);
+      expect(new URL(links[0].getAttribute('href') ?? '', 'http://localhost').pathname).toBe('/settings/accounts');
+    });
+
+    it('adds no account link to a branch-protection violation', () => {
+      // Arrange / Act
+      const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+      // Assert
+      expect(Array.from(el.querySelectorAll('.repository-list__problem-link'), (l) => l.textContent?.trim())).not.toContain('View account');
+    });
+  });
+
   describe('package source link', () => {
     const SOURCE = 'https://gitlab.example.com/api/v4/groups/42/-/packages/nuget/index.json';
     const WITH_SOURCE_VIOLATION: RepositorySummary = {

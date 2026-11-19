@@ -91,7 +91,13 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
     /// available-repositories response and as the picker group explanation on the frontend.
     /// </summary>
     public static string NoPushAccessExplanation(string providerType) =>
-        $"Your {NoPushAccessPreamble(providerType, lowercase: true)}.";
+        providerType switch
+        {
+            // The account token needs the Maintainer role on every monitored repository, so the picker names that
+            // bar even though it lists Developer repositories as writable.
+            "gitlab" => "Your token's role is below Maintainer.",
+            _ => $"Your {NoPushAccessPreamble(providerType, lowercase: true)}.",
+        };
 
     private static string NoPushAccessPreamble(string providerType, bool lowercase = false)
     {

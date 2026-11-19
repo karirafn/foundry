@@ -3,6 +3,7 @@ import { EligibilityReason, EligibilityStatus, EligibilityViolation } from '../r
 import { RouterLink } from '@angular/router';
 import { providerDisplayName } from '../../../../shared/utils/provider.util';
 import { unreachablePackageSourceUrl } from '../../package-sources/package-source.model';
+import { isCannotPushViolation } from '../repository-add-outcome/repository-add-outcome';
 
 @Component({
   selector: 'fd-repository-eligibility-details',
@@ -36,6 +37,13 @@ import { unreachablePackageSourceUrl } from '../../package-sources/package-sourc
                   [attr.aria-label]="'View package source ' + sourceUrl + ' in Package sources settings'"
                 >View package source</a>
               }
+              @if (_isCannotPush(violation)) {
+                <a
+                  class="repository-eligibility-details__account-link"
+                  routerLink="/settings/accounts"
+                  [attr.aria-label]="'View account ' + accountName() + ' in Accounts settings'"
+                >View account</a>
+              }
             </li>
           }
         </ul>
@@ -63,10 +71,12 @@ export class RepositoryEligibilityDetailsComponent {
   readonly recheckError: InputSignal<string | null> = input<string | null>(null);
   readonly panelId: InputSignal<string> = input.required<string>();
   readonly providerType: InputSignal<string> = input<string>('github');
+  readonly accountName: InputSignal<string> = input<string>('');
 
   readonly recheck: OutputEmitterRef<void> = output<void>();
 
   protected readonly _packageSourceUrl = unreachablePackageSourceUrl;
+  protected readonly _isCannotPush = isCannotPushViolation;
 
   _heading(): string {
     if (this.status() !== 'unreachable') {

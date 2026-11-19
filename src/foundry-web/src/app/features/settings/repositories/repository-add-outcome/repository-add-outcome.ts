@@ -23,7 +23,8 @@ export const REQUIRED_BRANCH_RULES: readonly string[] = [
   'Block deletion of the default branch',
 ];
 
-const ACCESS_RULE_PREFIXES: readonly string[] = ['cannot-push:', 'no-credential:'];
+const CANNOT_PUSH_RULE_PREFIX = 'cannot-push:';
+const ACCESS_RULE_PREFIXES: readonly string[] = [CANNOT_PUSH_RULE_PREFIX, 'no-credential:'];
 const CREDENTIAL_UNREADABLE_RULE = 'credential-unreadable';
 const CREDENTIAL_INVALID_RULE = 'credential-invalid';
 
@@ -31,6 +32,11 @@ export function isAccessViolation(violation: EligibilityViolation): boolean {
   return violation.rule === CREDENTIAL_UNREADABLE_RULE
     || violation.rule === CREDENTIAL_INVALID_RULE
     || ACCESS_RULE_PREFIXES.some(prefix => violation.rule.startsWith(prefix));
+}
+
+/** Whether the account token lacks a permission Foundry needs on the repository. */
+export function isCannotPushViolation(violation: EligibilityViolation): boolean {
+  return violation.rule.startsWith(CANNOT_PUSH_RULE_PREFIX);
 }
 
 export function accessViolations(eligibility: RepositoryEligibility | null): EligibilityViolation[] {
@@ -42,7 +48,11 @@ function accessRow(eligibility: RepositoryEligibility | null): AddOutcomeRow {
   if (eligibility === null) {
     return { ...base, tone: 'neutral', status: 'Not checked' };
   }
-  if (accessViolations(eligibility).length > 0) {
+  const violations = accessViolations(eligibility);
+  if (violations.some(isCannotPushViolation)) {
+    return { ...base, tone: 'fail', status: 'Missing permissions' };
+  }
+  if (violations.length > 0) {
     return { ...base, tone: 'fail', status: 'No push access' };
   }
   if (eligibility.status === 'unreachable') {

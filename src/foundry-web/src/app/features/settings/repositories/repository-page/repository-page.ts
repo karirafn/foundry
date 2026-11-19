@@ -113,6 +113,7 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
                 [violations]="_repository()!.eligibility!.violations"
                 [reason]="_repository()!.eligibility!.reason"
                 [providerType]="_repository()!.providerType"
+                [accountName]="_repository()!.accountName"
                 [recheckPending]="_recheckPending()"
                 [recheckError]="_recheckError()"
                 (recheck)="onRecheck()"
