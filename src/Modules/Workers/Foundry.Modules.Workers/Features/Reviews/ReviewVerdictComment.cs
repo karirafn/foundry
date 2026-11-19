@@ -17,9 +17,16 @@ internal static class ReviewVerdictComment
 
     private const int ShortShaLength = 7;
 
-    public static string Compose(RecordedReviewVerdict verdict)
+    public static string Compose(RecordedReviewVerdict verdict) => Compose(verdict, []);
+
+    /// <summary>
+    /// The comment for a review whose <paramref name="postedInline"/> findings were already posted on their lines: the
+    /// headline still counts every finding, and the lists hold only the rest.
+    /// </summary>
+    public static string Compose(RecordedReviewVerdict verdict, IReadOnlyCollection<ReviewFinding> postedInline)
     {
         ArgumentNullException.ThrowIfNull(verdict);
+        ArgumentNullException.ThrowIfNull(postedInline);
 
         // The approval's own comment already holds its findings; a carried one only says why it still applies.
         if (verdict.CarriedFrom is { } carriedFrom)
@@ -27,32 +34,52 @@ internal static class ReviewVerdictComment
             return $"Approval carried to `{ShortSha(verdict.ReviewedCommit)}`: the change is unchanged since the review of `{ShortSha(carriedFrom.ReviewedCommit)}`.";
         }
 
-        ReviewFinding[] blocking = [.. verdict.Findings.Where(finding => finding.Severity == ReviewSeverity.Blocking)];
-        ReviewFinding[] advisory = [.. verdict.Findings.Where(finding => finding.Severity == ReviewSeverity.Advisory)];
+        Counts counts = new(
+            verdict.Findings.Count(finding => finding.Severity == ReviewSeverity.Blocking),
+            verdict.Findings.Count(finding => finding.Severity == ReviewSeverity.Advisory),
+            verdict.Findings.Count(postedInline.Contains));
+        ReviewFinding[] remaining = [.. verdict.Findings.Where(finding => !postedInline.Contains(finding))];
+        ReviewFinding[] blocking = [.. remaining.Where(finding => finding.Severity == ReviewSeverity.Blocking)];
+        ReviewFinding[] advisory = [.. remaining.Where(finding => finding.Severity == ReviewSeverity.Advisory)];
 
         // Shed what a reader needs least first: advisory findings, then the collapsed evidence and tests, then blocking
         // findings from the end of the list. The alert and the criteria-not-met list are always kept.
-        string comment = Render(verdict, blocking, advisory, blocking.Length, advisory.Length, includeDetails: true);
+        string comment = Render(verdict, counts, blocking, advisory, blocking.Length, advisory.Length, includeDetails: true);
         for (int shown = advisory.Length - 1; comment.Length > MaxLength && shown >= 0; shown--)
         {
-            comment = Render(verdict, blocking, advisory, blocking.Length, shown, includeDetails: true);
+            comment = Render(verdict, counts, blocking, advisory, blocking.Length, shown, includeDetails: true);
         }
 
         if (comment.Length > MaxLength)
         {
-            comment = Render(verdict, blocking, advisory, blocking.Length, 0, includeDetails: false);
+            comment = Render(verdict, counts, blocking, advisory, blocking.Length, 0, includeDetails: false);
         }
 
         for (int shown = blocking.Length - 1; comment.Length > MaxLength && shown >= 0; shown--)
         {
-            comment = Render(verdict, blocking, advisory, shown, 0, includeDetails: false);
+            comment = Render(verdict, counts, blocking, advisory, shown, 0, includeDetails: false);
         }
 
         return comment;
     }
 
+    /// <summary>A finding's inline comment: the same text as its line in the summary comment, without the location.</summary>
+    public static string InlineBody(ReviewFinding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        return FindingText(finding);
+    }
+
+    /// <summary>The body of the GitHub review that carries the inline findings; the verdict follows in its own comment.</summary>
+    public static string InlineReviewSummary(RecordedReviewVerdict verdict, int inlineCount)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+        return $"{FindingCount(inlineCount)} from the review of {ModelMarkdown.CodeSpan(ShortSha(verdict.ReviewedCommit))}; the verdict follows in a separate comment.";
+    }
+
     private static string Render(
         RecordedReviewVerdict verdict,
+        Counts counts,
         ReviewFinding[] blocking,
         ReviewFinding[] advisory,
         int blockingShown,
@@ -60,7 +87,13 @@ internal static class ReviewVerdictComment
         bool includeDetails)
     {
         StringBuilder body = new();
-        AppendAlert(body, verdict, blocking.Length, advisory.Length);
+        AppendAlert(body, verdict, counts.Blocking, counts.Advisory);
+
+        if (counts.Inline > 0)
+        {
+            body.Append('\n').Append('_').Append(FindingCount(counts.Inline))
+                .Append(counts.Inline == 1 ? " is" : " are").Append(" posted inline on the changed lines._\n");
+        }
 
         if (blocking.Length > 0)
         {
@@ -167,6 +200,11 @@ internal static class ReviewVerdictComment
     private static string FindingLine(ReviewFinding finding)
     {
         string location = finding.Line is { } line ? $"{finding.Path}:{line}" : finding.Path;
+        return $"{ModelMarkdown.CodeSpan(OneLine(location))}: {FindingText(finding)}";
+    }
+
+    private static string FindingText(ReviewFinding finding)
+    {
         string category = ReviewVerdict.CategoryTokens.First(pair => pair.Value == finding.Category).Key;
         string? rule = finding.Rule switch
         {
@@ -176,8 +214,10 @@ internal static class ReviewVerdictComment
         };
         string suffix = rule is null ? category : $"{category} · {ModelMarkdown.Inline(OneLine(rule))}";
 
-        return $"{ModelMarkdown.CodeSpan(OneLine(location))}: {ModelMarkdown.Inline(OneLine(finding.Body))} ({suffix})";
+        return $"{ModelMarkdown.Inline(OneLine(finding.Body))} ({suffix})";
     }
+
+    private static string FindingCount(int count) => count == 1 ? "1 finding" : $"{count} findings";
 
     private static string StatusText(ReviewCriterionStatus status) => status switch
     {
@@ -198,4 +238,6 @@ internal static class ReviewVerdictComment
     private static string OneLine(string text) => text.Trim().ReplaceLineEndings(" ");
 
     private static string ShortSha(string commit) => commit.Length > ShortShaLength ? commit[..ShortShaLength] : commit;
+
+    private sealed record Counts(int Blocking, int Advisory, int Inline);
 }
