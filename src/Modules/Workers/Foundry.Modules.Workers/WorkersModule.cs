@@ -9,6 +9,7 @@ using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.HostPauses;
+using Foundry.Modules.Workers.Features.PackageProxyPauses;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -62,7 +63,9 @@ public static class WorkersModule
             options.Period = TimeSpan.FromSeconds(HealthCheckPublisherPeriodSeconds));
         services.AddIntegrationEventHandler<DockerAvailabilityChanged, DockerAvailabilityChangedBroadcastHandler>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
-        services.AddSingleton<IPublisher, DockerPublisher>();
+        services.AddSingleton<DockerPublisher>();
+        services.AddSingleton<IPublisher>(sp => sp.GetRequiredService<DockerPublisher>());
+        services.AddSingleton<IPackageProxyProbe>(sp => sp.GetRequiredService<DockerPublisher>());
         services.AddSingleton<IFoundryHostSystem, FoundryHostSystem>();
         services.AddSingleton<IWorkerHostEntryResolver, WorkerHostEntryResolver>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
@@ -101,6 +104,7 @@ public static class WorkersModule
         services.AddScoped<WorkerRunMonitor>();
         services.AddScoped<WorkerRunPublisher>();
         services.AddScoped<HostProber>();
+        services.AddScoped<PackageProxyProber>();
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<RunPublishingService>();
         services.AddHostedService<AgentActivityFollowerService>();
@@ -111,6 +115,7 @@ public static class WorkersModule
         services.AddHostedService<StaleReservationService>();
         services.AddHostedService<RunTranscriptRetentionService>();
         services.AddHostedService<HostProbeService>();
+        services.AddHostedService<PackageProxyProbeService>();
 
         return services;
     }

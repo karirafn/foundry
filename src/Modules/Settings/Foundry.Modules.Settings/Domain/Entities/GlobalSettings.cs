@@ -85,6 +85,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     /// </summary>
     public IReadOnlyList<HostPause> HostPauses { get; private set; } = [];
 
+    /// <summary>
+    /// Dispatch held for every repository that declares Package Sources because a worker could not reach the Package
+    /// Source Proxy; <see langword="null"/> when the proxy is not paused.
+    /// </summary>
+    public PackageProxyPause? PackageProxyPause { get; private set; }
+
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
@@ -123,13 +129,14 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     /// <summary>
     /// Clears every dispatch-pause reason — the operator's manual pause, the usage-limit
-    /// pause and every host pause — for the manual "Resume All" action.
+    /// pause, every host pause and the package-proxy pause — for the manual "Resume All" action.
     /// </summary>
     public void ResumeAllDispatch()
     {
         IsDispatchPaused = false;
         UsageLimitResetsAt = null;
         HostPauses = [];
+        PackageProxyPause = null;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -176,6 +183,51 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         HostPauses = [.. HostPauses.Where(p => !ReferenceEquals(p, pause))];
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    /// Holds dispatch for repositories with Package Sources from <paramref name="now"/>. A pause already present is
+    /// left as it is, so concurrent failures never reset its probe backoff. Returns <c>true</c> when a pause was added.
+    /// </summary>
+    public bool PausePackageProxy(DateTimeOffset now)
+    {
+        if (PackageProxyPause is not null)
+        {
+            return false;
+        }
+
+        PackageProxyPause = PackageProxyPause.Start(now);
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    /// Records that a probe at <paramref name="now"/> found the proxy still unreachable, pushing the next probe out on
+    /// the backoff. Returns <c>false</c> when the proxy is not paused (Resume All cleared it).
+    /// </summary>
+    public bool RecordPackageProxyProbeUnreachable(DateTimeOffset now)
+    {
+        if (PackageProxyPause is not { } pause)
+        {
+            return false;
+        }
+
+        PackageProxyPause = pause.AfterUnreachableProbe(now);
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>Lifts the package-proxy pause. Returns <c>false</c> when the proxy was not paused.</summary>
+    public bool ClearPackageProxyPause()
+    {
+        if (PackageProxyPause is null)
+        {
+            return false;
+        }
+
+        PackageProxyPause = null;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
@@ -34,6 +35,7 @@ internal sealed class WorkerOutcomeApplier(
     IIntegrationEventDispatcher integrationEventDispatcher,
     IIntegrationEventProcessor integrationEventProcessor,
     IDomainEventDispatcher domainEventDispatcher,
+    ISystemNotificationBroadcaster broadcaster,
     TimeProvider timeProvider,
     ILogger<WorkerOutcomeApplier> logger)
 {
@@ -286,12 +288,14 @@ internal sealed class WorkerOutcomeApplier(
                     continuable.ContainerOutput,
                     continuable.Summary,
                     verdict);
+                bool continuableProxyPaused = await StagePackageProxyPauseAsync(continuable.FailureReason, cancellationToken);
                 await dbContext.TransitionAsync(
                     activeRun,
                     continuableFailed,
                     alongside,
                     domainEventDispatcher,
                     cancellationToken);
+                await AnnouncePackageProxyPauseAsync(continuableProxyPaused, cancellationToken);
                 await ApplyFailureSideEffectsAsync(activeRun, continuable.FailureReason, cancellationToken);
                 logger.LogWarning(
                     "Worker run {WorkerRunId} failed with commits (reason: {Reason}, branch: {BranchName}).",
@@ -309,7 +313,9 @@ internal sealed class WorkerOutcomeApplier(
                     failure.ContainerOutput,
                     failure.Summary,
                     failure.Verdict ?? verdict);
+                bool proxyPaused = await StagePackageProxyPauseAsync(failure.FailureReason, cancellationToken);
                 await dbContext.TransitionAsync(activeRun, failedRun, alongside, domainEventDispatcher, cancellationToken);
+                await AnnouncePackageProxyPauseAsync(proxyPaused, cancellationToken);
                 await ApplyFailureSideEffectsAsync(activeRun, failure.FailureReason, cancellationToken);
                 logger.LogWarning(
                     "Worker run {WorkerRunId} failed (reason: {Reason}).",
@@ -354,6 +360,41 @@ internal sealed class WorkerOutcomeApplier(
         TriageIssueKind.Documentation => TriageKind.Documentation,
         _ => throw new UnreachableException($"Unhandled triage kind: {kind}"),
     };
+
+    /// <summary>
+    /// When <paramref name="failureReason"/> is <see cref="FailureReason.PackageSourceUnreachable"/>, pauses the package
+    /// proxy on the tracked settings, unsaved, so the pause commits in the run's failure save. Returns <c>true</c> when
+    /// this added the pause; a pause already present keeps its backoff.
+    /// </summary>
+    private async Task<bool> StagePackageProxyPauseAsync(FailureReason failureReason, CancellationToken cancellationToken)
+    {
+        if (failureReason is not FailureReason.PackageSourceUnreachable)
+        {
+            return false;
+        }
+
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            logger.LogWarning("The package proxy is unreachable, but no GlobalSettings row exists to pause it on.");
+            return false;
+        }
+
+        return settings.PausePackageProxy(timeProvider.GetUtcNow());
+    }
+
+    private async Task AnnouncePackageProxyPauseAsync(bool paused, CancellationToken cancellationToken)
+    {
+        if (!paused)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "Dispatch is paused for repositories with package sources: the package proxy is unreachable. A probe re-checks it and resumes dispatch.");
+        await HostPauseBroadcast.SendAsync(broadcaster, hostPaused: true, logger, cancellationToken);
+    }
 
     private async Task ApplyFailureSideEffectsAsync(
         ITerminableRun activeRun,

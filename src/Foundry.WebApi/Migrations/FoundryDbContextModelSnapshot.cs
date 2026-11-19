@@ -791,6 +791,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("nested_docker_enabled");
 
+                    b.Property<string>("PackageProxyPause")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("package_proxy_pause");
+
                     b.Property<int>("PollIntervalSeconds")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")

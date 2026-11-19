@@ -41,6 +41,27 @@ public sealed class ToSummary
     }
 
     [Fact]
+    public void WhenThePackageProxyIsPaused_SummaryCarriesThePause()
+    {
+        // Arrange
+        DateTimeOffset pausedAt = new(2026, 11, 19, 7, 39, 0, TimeSpan.Zero);
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.PausePackageProxy(pausedAt);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, StubWebhookIngressProbe.DefaultPort);
+
+        // Assert
+        result.PackageProxyPause.ShouldBe(new PausedPackageProxy(pausedAt, 0, pausedAt.AddMinutes(1)));
+    }
+
+    [Fact]
+    public void WhenThePackageProxyIsNotPaused_SummaryHasNoPackageProxyPause()
+    {
+        GlobalSettingsMapper.ToSummary(CreateDefaultSettings(), StubWebhookIngressProbe.DefaultPort).PackageProxyPause.ShouldBeNull();
+    }
+
+    [Fact]
     public void WhenDefaultSettings_NestedDockerIsOff()
     {
         // Arrange

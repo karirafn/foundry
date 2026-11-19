@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServiceTests;
 using Foundry.WebApi.Persistence;
 
@@ -293,14 +294,17 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
     private static WorkerOutcomeApplier BuildApplier(
         FoundryDbContext db,
         IWorkerOrchestrator orchestrator,
-        IIntegrationEventDispatcher? integrationEventDispatcher = null)
+        IIntegrationEventDispatcher? integrationEventDispatcher = null,
+        ISystemNotificationBroadcaster? broadcaster = null,
+        TimeProvider? timeProvider = null)
         => new(
             db,
             orchestrator,
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             new NullIntegrationEventProcessor(),
             new NullDomainEventDispatcher(),
-            TimeProvider.System,
+            broadcaster ?? new CapturingSystemNotificationBroadcaster(),
+            timeProvider ?? TimeProvider.System,
             NullLogger<WorkerOutcomeApplier>.Instance);
 
     private static WorkerOutcome BuildOutcome(string name, string? containerOutput = null)
