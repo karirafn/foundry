@@ -5,7 +5,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RepositoryService, RepositoryWebhookUpdate } from './repository.service';
 import { RepositoryWebhookChange, SystemSignalRService } from '../../../core/services/system-signalr.service';
-import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, RepositoryWebhookInfo, UpdateRepositoryRequest } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, RepositoryWebhookInfo, UnclaimedRepository, UpdateRepositoryRequest } from './repository.model';
 
 const ACCOUNT_ID = '00000000-0000-0000-0000-000000000001';
 const REPO_ID = '00000000-0000-0000-0000-000000000010';
@@ -1093,5 +1093,135 @@ describe('RepositoryService live webhook updates', () => {
 
     expect(service.repositories().map((r) => r.id)).toEqual([REPO_ID_2, REPO_ID]);
     expect(statusOf(REPO_ID)).toBe('pending');
+  });
+});
+
+describe('RepositoryService unclaimed repositories', () => {
+  const UNCLAIMED_URL = '/api/repositories/unclaimed';
+  const UNCLAIMED: UnclaimedRepository = {
+    id: REPO_ID,
+    host: 'gitlab.example.com',
+    slug: 'orphan/project',
+    violation: 'no-credential:orphan',
+    violationDescription: 'No account covers the "orphan" namespace.',
+  };
+  const UNCLAIMED_2: UnclaimedRepository = { ...UNCLAIMED, id: REPO_ID_2, slug: 'orphan/other' };
+
+  let service: RepositoryService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    const setup = setupService();
+    service = setup.service;
+    httpMock = setup.httpMock;
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('loads the unclaimed repositories into the signal and resolves loaded', async () => {
+    // Act
+    const outcome = service.loadUnclaimedRepositories();
+    httpMock.expectOne(UNCLAIMED_URL).flush([UNCLAIMED]);
+
+    // Assert
+    expect(await outcome).toBe('loaded');
+    expect(service.unclaimedRepositories()).toEqual([UNCLAIMED]);
+    expect(service.unclaimedLoading()).toBe(false);
+    expect(service.unclaimedLoadError()).toBeNull();
+  });
+
+  it('keeps the previous list while reloading', () => {
+    // Arrange
+    service.loadUnclaimedRepositories();
+    httpMock.expectOne(UNCLAIMED_URL).flush([UNCLAIMED]);
+
+    // Act
+    service.loadUnclaimedRepositories();
+
+    // Assert
+    expect(service.unclaimedLoading()).toBe(true);
+    expect(service.unclaimedRepositories()).toEqual([UNCLAIMED]);
+    httpMock.expectOne(UNCLAIMED_URL).flush([]);
+  });
+
+  it('sets the load error from the ProblemDetails body and resolves failed', async () => {
+    // Act
+    const outcome = service.loadUnclaimedRepositories();
+    httpMock.expectOne(UNCLAIMED_URL).flush(
+      { title: 'Server Error', status: 500, detail: 'Database unavailable.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+
+    // Assert
+    expect(await outcome).toBe('failed');
+    expect(service.unclaimedLoadError()).toBe('Database unavailable.');
+    expect(service.unclaimedLoading()).toBe(false);
+  });
+
+  it('clears the load error when a reload starts', () => {
+    // Arrange
+    service.loadUnclaimedRepositories();
+    httpMock.expectOne(UNCLAIMED_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+
+    // Act
+    service.loadUnclaimedRepositories();
+
+    // Assert
+    expect(service.unclaimedLoadError()).toBeNull();
+    httpMock.expectOne(UNCLAIMED_URL).flush([]);
+  });
+
+  it('deletes through DELETE /api/repositories/{id} and filters the row out', () => {
+    // Arrange
+    service.loadUnclaimedRepositories();
+    httpMock.expectOne(UNCLAIMED_URL).flush([UNCLAIMED, UNCLAIMED_2]);
+
+    // Act
+    service.deleteUnclaimedRepository(REPO_ID).subscribe();
+    const req = httpMock.expectOne(`/api/repositories/${REPO_ID}`);
+    req.flush(null, { status: 204, statusText: 'No Content' });
+
+    // Assert
+    expect(req.request.method).toBe('DELETE');
+    expect(service.unclaimedRepositories()).toEqual([UNCLAIMED_2]);
+  });
+
+  it('sets a refused unclaimedDeleteFailure when the removal is refused', () => {
+    // Arrange
+    service.deleteUnclaimedRepository(REPO_ID).subscribe({ error: () => {} });
+
+    // Act
+    httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(
+      {
+        title: 'Conflict',
+        status: 409,
+        detail: 'The repository cannot be removed while a worker is still active on: orphan/project#4 (in_progress).',
+        blockingIssues: [{ repositorySlug: 'orphan/project', issueNumber: 4, state: 'in_progress' }],
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    // Assert
+    expect(service.unclaimedDeleteFailure()).toEqual({
+      kind: 'refused',
+      blockingIssues: [{ repositorySlug: 'orphan/project', issueNumber: 4, state: 'in_progress' }],
+    });
+    expect(service.deleteFailure()).toBeNull();
+  });
+
+  it('clears unclaimedDeleteFailure when a delete starts', () => {
+    // Arrange
+    service.deleteUnclaimedRepository(REPO_ID).subscribe({ error: () => {} });
+    httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(
+      { status: 404, detail: 'Not found.' },
+      { status: 404, statusText: 'Not Found' },
+    );
+
+    // Act
+    service.deleteUnclaimedRepository(REPO_ID).subscribe();
+
+    // Assert
+    expect(service.unclaimedDeleteFailure()).toBeNull();
+    httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(null, { status: 204, statusText: 'No Content' });
   });
 });

@@ -7,9 +7,11 @@ import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { LoadOutcome } from '../../../core/models/load-outcome';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { DeleteFailure, deleteFailureFrom } from '../delete-failure/delete-failure.model';
-import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UnclaimedRepository, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
 
 export const LIVE_UPDATE_DEBOUNCE_MS = 300;
+
+const UNCLAIMED_REPOSITORIES_URL = '/api/repositories/unclaimed';
 
 /** A live webhook update: one repository's re-fetched info, or every repository may have changed. */
 export type RepositoryWebhookUpdate =
@@ -53,6 +55,18 @@ export class RepositoryService {
 
   private readonly _deleteFailureSignal: WritableSignal<DeleteFailure | null> = signal(null);
   readonly deleteFailure: Signal<DeleteFailure | null> = this._deleteFailureSignal.asReadonly();
+
+  private readonly _unclaimedRepositoriesSignal: WritableSignal<UnclaimedRepository[]> = signal([]);
+  readonly unclaimedRepositories: Signal<UnclaimedRepository[]> = this._unclaimedRepositoriesSignal.asReadonly();
+
+  private readonly _unclaimedLoadingSignal: WritableSignal<boolean> = signal(false);
+  readonly unclaimedLoading: Signal<boolean> = this._unclaimedLoadingSignal.asReadonly();
+
+  private readonly _unclaimedLoadErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly unclaimedLoadError: Signal<string | null> = this._unclaimedLoadErrorSignal.asReadonly();
+
+  private readonly _unclaimedDeleteFailureSignal: WritableSignal<DeleteFailure | null> = signal(null);
+  readonly unclaimedDeleteFailure: Signal<DeleteFailure | null> = this._unclaimedDeleteFailureSignal.asReadonly();
 
   private readonly _availableRepositoriesSignal: WritableSignal<AvailableRepository[]> = signal([]);
   readonly availableRepositories: Signal<AvailableRepository[]> = this._availableRepositoriesSignal.asReadonly();
@@ -311,6 +325,43 @@ export class RepositoryService {
         console.error(err);
         this._deleteFailureSignal.set(deleteFailureFrom(err));
         this._deletingSignal.set(false);
+        throw err;
+      }),
+    );
+  }
+
+  /** Keeps the previous list while reloading, so rows stay in place until the response arrives. */
+  loadUnclaimedRepositories(): Promise<LoadOutcome> {
+    this._unclaimedLoadErrorSignal.set(null);
+    this._unclaimedLoadingSignal.set(true);
+
+    return new Promise<LoadOutcome>((resolve) => {
+      this._http.get<UnclaimedRepository[]>(UNCLAIMED_REPOSITORIES_URL).subscribe({
+        next: (repositories) => {
+          this._unclaimedRepositoriesSignal.set(repositories);
+          this._unclaimedLoadingSignal.set(false);
+          resolve('loaded');
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._unclaimedLoadErrorSignal.set(extractErrorMessage(err) ?? err.message);
+          this._unclaimedLoadingSignal.set(false);
+          resolve('failed');
+        },
+      });
+    });
+  }
+
+  deleteUnclaimedRepository(id: string): Observable<void> {
+    this._unclaimedDeleteFailureSignal.set(null);
+
+    return this._http.delete<void>(`/api/repositories/${id}`).pipe(
+      tap(() => {
+        this._unclaimedRepositoriesSignal.update(repositories => repositories.filter(r => r.id !== id));
+      }),
+      catchError((err: HttpErrorResponse) => {
+        console.error(err);
+        this._unclaimedDeleteFailureSignal.set(deleteFailureFrom(err));
         throw err;
       }),
     );

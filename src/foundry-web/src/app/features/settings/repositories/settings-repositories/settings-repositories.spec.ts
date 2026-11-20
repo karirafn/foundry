@@ -6,7 +6,7 @@ import { SettingsRepositoriesComponent } from './settings-repositories';
 import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { AccountSummary } from '../../accounts/account.model';
-import { CreateRepositoryResponse, RepositorySummary } from '../repository.model';
+import { CreateRepositoryResponse, RepositorySummary, UnclaimedRepository } from '../repository.model';
 import { provideFakeHubs } from '../../../../core/testing/fake-hub-transport';
 
 const ACCOUNT_1: AccountSummary = {
@@ -78,6 +78,16 @@ const REPO_2: RepositorySummary = {
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
 
+const UNCLAIMED_URL = '/api/repositories/unclaimed';
+
+const UNCLAIMED_1: UnclaimedRepository = {
+  id: '00000000-0000-0000-0000-000000000020',
+  host: 'gitlab.example.com',
+  slug: 'orphan/project',
+  violation: 'no-credential:orphan',
+  violationDescription: 'No account covers the "orphan" namespace.',
+};
+
 function setup() {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -108,7 +118,9 @@ function flushRepositories(httpMock: HttpTestingController, accountId: string, r
 
 describe('SettingsRepositoriesComponent', () => {
   afterEach(() => {
-    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
+    const httpMock = TestBed.inject(HttpTestingController);
+    httpMock.match(UNCLAIMED_URL).forEach(req => req.flush([]));
+    httpMock.verify({ ignoreCancelled: true });
   });
 
   it('should call loadAccounts on initialization', () => {
@@ -547,6 +559,170 @@ describe('SettingsRepositoriesComponent', () => {
       // Assert
       expect(headerButtons(el)).not.toContain('Done');
       expect(el.querySelector('.repository-list__rank--button')).toBeNull();
+    });
+  });
+
+  describe('unclaimed repositories', () => {
+    function unclaimedSection(el: HTMLElement): HTMLElement | null {
+      return el.querySelector('section[aria-labelledby="unclaimed-repositories-heading"]');
+    }
+
+    function render(unclaimed: UnclaimedRepository[], accounts: AccountSummary[] = [ACCOUNT_1]) {
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+      httpMock.expectOne(UNCLAIMED_URL).flush(unclaimed);
+      flushAccounts(httpMock, accounts);
+      fixture.detectChanges();
+      for (const account of accounts) {
+        flushRepositories(httpMock, account.id, []);
+      }
+      fixture.detectChanges();
+      return { fixture, httpMock, el: fixture.nativeElement as HTMLElement };
+    }
+
+    it('hides the section when no repository is unclaimed', () => {
+      // Act
+      const { el } = render([]);
+
+      // Assert
+      expect(unclaimedSection(el)).toBeNull();
+    });
+
+    it('shows the section above the Repositories card with its heading, description and rows', () => {
+      // Act
+      const { el } = render([UNCLAIMED_1]);
+
+      // Assert
+      const section = unclaimedSection(el);
+      expect(section).not.toBeNull();
+      const sections = Array.from(el.querySelectorAll('.repositories-settings__section'));
+      expect(sections.indexOf(section!)).toBe(0);
+      expect(section!.querySelector('#unclaimed-repositories-heading')?.textContent?.trim()).toBe('Unclaimed repositories');
+      expect(section!.querySelector('.repositories-settings__section-description')?.textContent?.trim()).toBe(
+        "No account's namespace claim covers these repositories, so Foundry can't poll, dispatch or publish them. Add the namespace to an account in Accounts, or delete the repository."
+      );
+      expect(section!.querySelector('a')?.getAttribute('href')).toBe('/settings/accounts');
+      expect(section!.querySelector('.unclaimed-repository-list__slug')?.textContent?.trim()).toBe('orphan/project');
+    });
+
+    it('stays shown in the add view', () => {
+      // Arrange
+      const { fixture, el } = render([UNCLAIMED_1]);
+
+      // Act
+      fixture.componentInstance.onAdd();
+      fixture.detectChanges();
+
+      // Assert
+      expect(unclaimedSection(el)).not.toBeNull();
+    });
+
+    it('shows the load error with Retry even when the list is empty', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+      httpMock.expectOne(UNCLAIMED_URL).flush({ detail: 'Database unavailable.' }, { status: 500, statusText: 'Server Error' });
+      flushAccounts(httpMock);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Act
+      el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__retry-btn')?.click();
+
+      // Assert
+      expect(unclaimedSection(el)?.querySelector('.unclaimed-repository-list__error-message')?.textContent?.trim())
+        .toBe('Database unavailable.');
+      httpMock.expectOne(UNCLAIMED_URL).flush([]);
+    });
+
+    it('confirms with the repository dialog and deletes through /api/repositories/{id}, then reloads both lists', () => {
+      // Arrange
+      const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+
+      // Act
+      el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__delete-btn')?.click();
+      fixture.detectChanges();
+      const dialog = el.querySelector('fd-confirm-dialog dialog') as HTMLDialogElement;
+
+      // Assert — the one dialog asks with the repository message
+      expect(dialog.open).toBe(true);
+      expect(dialog.querySelector('.confirm-dialog__message')?.textContent?.trim()).toBe(
+        `Foundry will stop monitoring "${UNCLAIMED_1.slug}", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.`
+      );
+
+      // Act — confirm
+      (dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      // Assert
+      const req = httpMock.expectOne(`/api/repositories/${UNCLAIMED_1.id}`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(null, { status: 204, statusText: 'No Content' });
+      flushRepositories(httpMock, ACCOUNT_1.id, []);
+      httpMock.expectOne(UNCLAIMED_URL).flush([]);
+      fixture.detectChanges();
+      expect(unclaimedSection(el)).toBeNull();
+    });
+
+    it('disables the row being removed', () => {
+      // Arrange
+      const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+      fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
+
+      // Act
+      fixture.componentInstance.confirmDeleteRepository();
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__delete-btn')?.disabled).toBe(true);
+      httpMock.expectOne(`/api/repositories/${UNCLAIMED_1.id}`).flush(null, { status: 204, statusText: 'No Content' });
+      flushRepositories(httpMock, ACCOUNT_1.id, []);
+    });
+
+    it('lists the blocking issues in the section alert when the removal is refused', () => {
+      // Arrange
+      const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+      fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
+
+      // Act
+      fixture.componentInstance.confirmDeleteRepository();
+      httpMock.expectOne(`/api/repositories/${UNCLAIMED_1.id}`).flush(
+        {
+          title: 'Conflict',
+          status: 409,
+          detail: 'refused',
+          blockingIssues: [{ repositorySlug: 'orphan/project', issueNumber: 4, state: 'in_progress' }],
+        },
+        { status: 409, statusText: 'Conflict' },
+      );
+      httpMock.expectOne(UNCLAIMED_URL).flush([UNCLAIMED_1]);
+      fixture.detectChanges();
+
+      // Assert
+      const alert = unclaimedSection(el)?.querySelector('.repositories-settings__delete-error');
+      expect(alert?.getAttribute('role')).toBe('alert');
+      expect(alert?.querySelector('.delete-failure__lead')?.textContent?.trim())
+        .toBe('Repository not deleted — a worker is still active on:');
+      expect(alert?.querySelector('.delete-failure__issues li')?.textContent?.trim()).toBe('orphan/project#4 — in progress');
+      expect(el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__delete-btn')?.disabled).toBe(false);
+    });
+
+    it('focuses the Repositories heading after removing the last unclaimed repository', async () => {
+      // Arrange
+      const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+      fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
+
+      // Act
+      fixture.componentInstance.confirmDeleteRepository();
+      httpMock.expectOne(`/api/repositories/${UNCLAIMED_1.id}`).flush(null, { status: 204, statusText: 'No Content' });
+      flushRepositories(httpMock, ACCOUNT_1.id, []);
+      httpMock.expectOne(UNCLAIMED_URL).flush([]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      expect(document.activeElement?.textContent?.trim()).toBe('Repositories');
     });
   });
 });

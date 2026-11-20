@@ -1,0 +1,74 @@
+@use '../../../../../styles/settings-list' as *;
+
+:host {
+  @include settings-list-host(unclaimed-repository-list);
+}
+
+.unclaimed-repository-list {
+  &__error {
+    align-items: center;
+    background: var(--fd-bg-error-subtle);
+    border: 1px solid var(--fd-state-failed);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-state-failed);
+    display: flex;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-md);
+    margin-block-end: var(--fd-spacing-md);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__error-message {
+    flex: 1;
+  }
+
+  &__retry-btn {
+    @include settings-list-button;
+  }
+
+  &__list {
+    @include settings-list-container;
+  }
+
+  &__row {
+    @include settings-list-row(minmax(0, 1fr) auto);
+  }
+
+  &__main {
+    @include settings-list-main(1);
+  }
+
+  &__side {
+    @include settings-list-side(2);
+  }
+
+  &__meta {
+    @include settings-list-line;
+    @include settings-list-meta;
+  }
+
+  &__slug {
+    @include settings-list-title;
+  }
+
+  &__icon-btn {
+    @include settings-list-icon-button;
+  }
+
+  &__delete-btn {
+    @include settings-list-icon-button-tone(var(--fd-text-error), var(--fd-bg-error-subtle));
+  }
+
+  &__problem {
+    @include settings-list-problem(1, var(--fd-border-warning));
+  }
+
+  &__problem-text {
+    @include settings-list-problem-text;
+  }
+}
+
+// Only the row padding of settings-list-narrow-rows: these rows have no status tag to move.
+@include settings-list-when-narrow(unclaimed-repository-list) {
+  .unclaimed-repository-list__row { padding: var(--fd-spacing-sm); }
+}

@@ -17,12 +17,15 @@ import {
 } from '@angular/core';
 import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
+import { RouterLink } from '@angular/router';
 import { RepositoryListComponent } from '../repository-list/repository-list';
+import { UnclaimedRepositoryListComponent } from '../unclaimed-repository-list/unclaimed-repository-list';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import { DeleteFailureComponent } from '../../delete-failure/delete-failure';
 import {
   RepositorySummary,
+  UnclaimedRepository,
   CreateRepositoryRequest,
   CreateRepositoryResponse,
   UpdateRepositoryRequest,
@@ -31,12 +34,40 @@ import {
 
 type RepositoryView = { kind: 'list' } | { kind: 'add' };
 
+type PendingDelete =
+  | { readonly kind: 'monitored'; readonly repository: RepositorySummary }
+  | { readonly kind: 'unclaimed'; readonly repository: UnclaimedRepository };
+
 @Component({
   selector: 'fd-settings-repositories',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RepositoryListComponent, RepositoryFormComponent, ConfirmDialogComponent, DeleteFailureComponent],
+  imports: [RouterLink, RepositoryListComponent, RepositoryFormComponent, UnclaimedRepositoryListComponent, ConfirmDialogComponent, DeleteFailureComponent],
   template: `
     <div class="repositories-settings">
+      @if (_showUnclaimed()) {
+        <section class="repositories-settings__section" aria-labelledby="unclaimed-repositories-heading">
+          <header class="repositories-settings__header">
+            <div class="repositories-settings__heading-group">
+              <h2 id="unclaimed-repositories-heading" class="repositories-settings__section-title" #unclaimedHeading tabindex="-1">Unclaimed repositories</h2>
+              <p class="repositories-settings__section-description">No account's namespace claim covers these repositories, so Foundry can't poll, dispatch or publish them. Add the namespace to an account in <a class="repositories-settings__link" routerLink="/settings/accounts">Accounts</a>, or delete the repository.</p>
+            </div>
+          </header>
+          <fd-unclaimed-repository-list
+            [repositories]="repositoryService.unclaimedRepositories()"
+            [loadError]="repositoryService.unclaimedLoadError()"
+            [reloading]="repositoryService.unclaimedLoading()"
+            [removingId]="_removingUnclaimedId()"
+            (delete)="onDeleteUnclaimed($event)"
+            (retry)="repositoryService.loadUnclaimedRepositories()"
+          />
+          <div class="repositories-settings__delete-error" role="alert">
+            @if (repositoryService.unclaimedDeleteFailure(); as failure) {
+              <fd-delete-failure [failure]="failure" lead="Repository not deleted — a worker is still active on:" />
+            }
+          </div>
+        </section>
+      }
+
       <section class="repositories-settings__section">
         <header class="repositories-settings__header">
           <div class="repositories-settings__heading-group">
@@ -87,16 +118,6 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
                 <fd-delete-failure [failure]="failure" lead="Repository not deleted — a worker is still active on:" />
               }
             </div>
-            <fd-confirm-dialog
-              [open]="_pendingDeleteRepository() !== null"
-              title="Delete repository?"
-              [message]="_deleteRepositoryMessage()"
-              confirmLabel="Delete repository"
-              cancelLabel="Keep repository"
-              [destructive]="true"
-              (confirmed)="confirmDeleteRepository()"
-              (dismissed)="cancelDeleteRepository()"
-            />
           }
           @case ('add') {
             <fd-repository-form
@@ -116,6 +137,16 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
             />
           }
         }
+        <fd-confirm-dialog
+          [open]="_pendingDeleteRepository() !== null"
+          title="Delete repository?"
+          [message]="_deleteRepositoryMessage()"
+          confirmLabel="Delete repository"
+          cancelLabel="Keep repository"
+          [destructive]="true"
+          (confirmed)="confirmDeleteRepository()"
+          (dismissed)="cancelDeleteRepository()"
+        />
       </section>
     </div>
   `,
@@ -127,14 +158,20 @@ export class SettingsRepositoriesComponent implements OnInit {
   private readonly _injector = inject(Injector);
 
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
+  private readonly _unclaimedHeading = viewChild<ElementRef<HTMLElement>>('unclaimedHeading');
 
   protected readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
   protected readonly _addOutcome: WritableSignal<CreateRepositoryResponse | null> = signal(null);
-  protected readonly _pendingDeleteRepository: WritableSignal<RepositorySummary | null> = signal(null);
+  protected readonly _pendingDeleteRepository: WritableSignal<PendingDelete | null> = signal(null);
   protected readonly _deleteRepositoryMessage: Signal<string> = computed(() => {
-    const repository = this._pendingDeleteRepository();
-    return repository ? repositoryDeletionMessage(repository.slug) : '';
+    const pending = this._pendingDeleteRepository();
+    return pending ? repositoryDeletionMessage(pending.repository.slug) : '';
   });
+  protected readonly _removingUnclaimedId: WritableSignal<string | null> = signal(null);
+  // Hidden on the initial load and when empty: the common case has no unclaimed repositories.
+  protected readonly _showUnclaimed: Signal<boolean> = computed(() =>
+    this.repositoryService.unclaimedLoadError() !== null
+    || this.repositoryService.unclaimedRepositories().length > 0);
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
   private readonly _accountIdsKey: Signal<string> = computed(() =>
     this.accountService.accounts().map(a => a.id).sort().join(',')
@@ -165,6 +202,7 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   ngOnInit(): void {
     this.accountService.loadAccounts();
+    this.repositoryService.loadUnclaimedRepositories();
   }
 
   reloadRepositories(): void {
@@ -205,18 +243,27 @@ export class SettingsRepositoriesComponent implements OnInit {
   }
 
   onDelete(repository: RepositorySummary): void {
-    this._pendingDeleteRepository.set(repository);
+    this._pendingDeleteRepository.set({ kind: 'monitored', repository });
+  }
+
+  onDeleteUnclaimed(repository: UnclaimedRepository): void {
+    this._pendingDeleteRepository.set({ kind: 'unclaimed', repository });
   }
 
   confirmDeleteRepository(): void {
-    const repository = this._pendingDeleteRepository();
+    const pending = this._pendingDeleteRepository();
     this._pendingDeleteRepository.set(null);
-    if (!repository) {
+    if (!pending) {
       return;
     }
+    if (pending.kind === 'unclaimed') {
+      this._deleteUnclaimed(pending.repository);
+      return;
+    }
+    const repository = pending.repository;
     this.repositoryService.deleteRepository(repository.accountId, repository.id)
       .subscribe({
-        next: () => this._reloadAll(),
+        next: () => { void this._reloadAll(); },
         error: () => { /* handled via deleteFailure signal */ },
       });
   }
@@ -233,7 +280,7 @@ export class SettingsRepositoriesComponent implements OnInit {
   private _afterSave(response: CreateRepositoryResponse): void {
     // Stay on the add view and present the outcome checklist; Done returns to the list.
     this._addOutcome.set(response);
-    this._reloadAll();
+    void this._reloadAll();
   }
 
   private _returnToList(): void {
@@ -251,9 +298,36 @@ export class SettingsRepositoriesComponent implements OnInit {
     });
   }
 
-  private _reloadAll(): void {
+  private _deleteUnclaimed(repository: UnclaimedRepository): void {
+    this._removingUnclaimedId.set(repository.id);
+    this.repositoryService.deleteUnclaimedRepository(repository.id)
+      .subscribe({
+        next: () => {
+          this._removingUnclaimedId.set(null);
+          void this._reloadAll().then(() => this._focusAfterUnclaimedRemoval(repository.id));
+        },
+        error: () => {
+          this._removingUnclaimedId.set(null);
+          this.repositoryService.loadUnclaimedRepositories();
+        },
+      });
+  }
+
+  private _focusAfterUnclaimedRemoval(removedId: string): void {
+    if (this.repositoryService.unclaimedRepositories().some(r => r.id === removedId)) {
+      return;
+    }
+    this._focusAfterRender(() => this._showUnclaimed()
+      ? this._unclaimedHeading()?.nativeElement
+      : this._sectionHeading?.nativeElement);
+  }
+
+  private async _reloadAll(): Promise<void> {
     const accountIds = this.accountService.accounts().map(a => a.id);
     this._lastLoadedAccountIdsKey.set(this._accountIdsKey());
-    this.repositoryService.loadAllRepositories(accountIds);
+    await Promise.all([
+      this.repositoryService.loadAllRepositories(accountIds),
+      this.repositoryService.loadUnclaimedRepositories(),
+    ]);
   }
 }

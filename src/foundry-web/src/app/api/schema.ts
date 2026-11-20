@@ -569,6 +569,40 @@ export interface paths {
         patch: operations["MoveRepository"];
         trace?: never;
     };
+    "/api/repositories/unclaimed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gets the monitored repositories no account's namespace claim covers */
+        get: operations["GetUnclaimedRepositories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/repositories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes a monitored repository */
+        delete: operations["DeleteMonitoredRepository"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/package-sources": {
         parameters: {
             query?: never;
@@ -1755,6 +1789,14 @@ export interface components {
             questions: string[];
             /** Format: date-time */
             decidedAt: string;
+        };
+        UnclaimedRepositorySummary: {
+            /** Format: uuid */
+            id: string;
+            host: string;
+            slug: string;
+            violation: string;
+            violationDescription: string;
         };
         /** @enum {unknown} */
         UpdateAccountConflictReason: "ClaimedElsewhere" | "DuplicateNamespace" | "DuplicateAccount";
@@ -3178,7 +3220,6 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                accountId: string;
                 id: string;
             };
             cookie?: never;
@@ -3446,6 +3487,64 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetUnclaimedRepositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedRepositorySummary"][];
+                };
+            };
+        };
+    };
+    DeleteMonitoredRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
