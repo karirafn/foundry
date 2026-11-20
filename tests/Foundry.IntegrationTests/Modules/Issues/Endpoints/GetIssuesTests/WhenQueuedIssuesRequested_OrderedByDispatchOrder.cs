@@ -297,7 +297,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
     [Fact]
     public async Task WhenQueuedIssuesSameTierInSameRepo_LowerIssueNumberComesFirstRegardlessOfDetection()
     {
-        // Arrange — #12 is detected after #50 in the same eligible repository (ADR 0092).
+        // Arrange — #12 is detected after #50 in the same eligible repository (ADR 0025).
         MonitoredRepositoryId repo = await SeedEligibleRepositoryAsync("owner/repo", position: 1);
         await SeedQueuedIssueAsync(repo, issueNumber: 50, detectedAt: Now.AddHours(-2));
         await SeedQueuedIssueAsync(repo, issueNumber: 12, detectedAt: Now.AddHours(-1));

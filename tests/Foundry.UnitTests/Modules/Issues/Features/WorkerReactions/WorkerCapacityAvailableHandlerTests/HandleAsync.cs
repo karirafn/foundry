@@ -834,7 +834,7 @@ public sealed class HandleAsync : IAsyncDisposable
         lowPriorityIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
-    // IssueNumber tiebreaker within the same repository and tier (ADR 0092)
+    // IssueNumber tiebreaker within the same repository and tier (ADR 0025)
     [Fact]
     public async Task WhenTwoFreshQueuedIssuesInSameRepo_ClaimsLowerIssueNumberEvenIfDetectedLater()
     {
@@ -867,7 +867,7 @@ public sealed class HandleAsync : IAsyncDisposable
         issue50.ShouldBeOfType<FreshQueuedIssue>();
     }
 
-    // Tier still outranks IssueNumber within the same repository (ADR 0092, 0025)
+    // Tier still outranks IssueNumber within the same repository (ADR 0025)
     [Fact]
     public async Task WhenRevisionQueuedHasHigherIssueNumberInSameRepo_RevisionTierStillWins()
     {

@@ -392,6 +392,8 @@ internal static partial class CreateAccount
             return null;
         }
 
+        // No repository is nominated yet when an account is created, so one representative repository gives an early
+        // rejection; the per-repository eligibility probe stays the authoritative gate, since access can differ per repository.
         private static RepositorySlug? FindProbeTarget(
             IReadOnlyCollection<Namespace> derivedNamespaces,
             IReadOnlyList<ProviderRepository> writableRepositories)

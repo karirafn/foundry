@@ -42,6 +42,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         return true;
     }
 
+    // PrefixesOf is longest-first, so the last prefix is the top-level namespace an account would need to claim.
     private static EligibilityViolation NoCredentialViolation(RepositorySlug slug) =>
         EligibilityViolation.NoCredential(Namespace.PrefixesOf(slug)[^1].Value);
 

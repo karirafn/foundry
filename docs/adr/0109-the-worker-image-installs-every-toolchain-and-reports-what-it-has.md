@@ -4,19 +4,19 @@
 
 ## Context
 
-[ADR 0019](0019-worker-image-flags-in-settings.md) made the optional toolchains (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) operator flags on `GlobalSettings`.
+The optional toolchains (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) were operator flags on `GlobalSettings`.
 In practice every flag stays on, and the flags do two more jobs than shaping the image.
 The C# LSP prompt section reads `GetWorkerImageInstallsDotnetAsync`.
 The rootless Docker allowances of [ADR 0021](0021-rootless-docker-in-docker-for-worker-tests.md) and [ADR 0079](0079-relaxed-allowances-for-nested-rootless-docker.md) read `GetWorkerImageInstallsDockerAsync`.
 A flag can disagree with the image a run actually gets: building can be disabled, or the image can come from an earlier build.
 The Docker flag also grants `SYS_ADMIN`, `DAC_OVERRIDE` and unconfined seccomp and AppArmor to `Restricted` runs ([ADR 0098](0098-judgment-roles-run-restricted-with-code-supplied-issue-content.md)), and the entrypoint starts `dockerd` for them, although a restricted run has no tool that can use a daemon.
 
-This replaces 0019's toolchain-flag clauses, 0021's clause that the allowances follow the `InstallDocker` flag, and 0079's settings-toggle sentence.
+This replaces those toolchain flags, 0021's clause that the allowances follow the `InstallDocker` flag, and 0079's settings-toggle sentence.
 
 ## Decision
 
 The worker image installs every toolchain unconditionally, and the four flags are removed from `WorkerImageConfiguration`.
-The image tag, the build toggle, the rebuild operation, the build state and the dispatch gate of 0019 stay.
+The image tag, the build toggle, the rebuild operation, the build state and the dispatch gate stay.
 
 What an image contains is read from the image, not from settings.
 One script in the image prints its toolchain list (name and version).

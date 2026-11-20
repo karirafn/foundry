@@ -49,6 +49,8 @@ IngressKestrelBinding.AddIngressEndpoints(
     new IngressPortSetting(PackageSourceProxyOptions.ProxyPortKey, PackageSourceProxyOptions.DefaultProxyPort));
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
+    // Registered once for every HTTP response, so no contracts enum reaches the dashboard as a number for want of a
+    // per-enum attribute. The outbox, EF and worker-settings serializers keep their own options.
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
     options.SerializerOptions.Converters.Add(new WorkerRunIdJsonConverter());
 });

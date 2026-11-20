@@ -6,7 +6,7 @@ namespace Foundry.Modules.Issues.Domain.ValueObjects;
 /// <summary>
 /// Ordering key for queued issues in dispatch priority order.
 /// Lower key = dispatched first. Compare by TierRank, then Position, then IssueNumber, then Id.
-/// Within the same repository and tier the lowest issue number is dispatched first (ADR 0092);
+/// Within the same repository and tier the lowest issue number is dispatched first (ADR 0025);
 /// Id only breaks ties between repositories that share a position.
 /// </summary>
 public readonly record struct DispatchOrderKey(
