@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
@@ -11,10 +12,12 @@ namespace Foundry.Modules.Monitoring.Features.Repositories;
 /// <summary>
 /// The single path that removes monitored repositories (ADR 0117): each is marked removed, its repository-owned
 /// rows are deleted, the survivors are renumbered and its removal event is dispatched, all in one transaction.
+/// Removal is refused while any issue of the repositories has work in flight.
 /// </summary>
 internal sealed class RepositoryRemoval(
     DbContext dbContext,
     RepositoryWebhookDeleter webhookDeleter,
+    IRepositoryRemovalBlockers removalBlockers,
     IDomainEventDispatcher domainEventDispatcher)
 {
     public async Task<Result<bool>> RemoveAsync(
@@ -27,6 +30,12 @@ internal sealed class RepositoryRemoval(
             return Result<bool>.Fail(MonitoredRepositoryErrors.AlreadyRemoved());
         }
 
+        // Checked ahead of the hook deletion too, so a refused removal never deletes hooks.
+        if (await FindBlockersAsync(repositories, cancellationToken) is { } refusedEarly)
+        {
+            return Result<bool>.Fail(refusedEarly);
+        }
+
         // Outside the transaction, so a slow provider never holds the database, and while the covering account
         // still exists; failures never block removal.
         foreach (MonitoredRepository repository in repositories)
@@ -35,6 +44,13 @@ internal sealed class RepositoryRemoval(
         }
 
         await using IDbContextTransaction tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // Authoritative: a claim checks the repository is not removed inside its own write transaction, and SQLite
+        // serializes the two, so either the claim committed first and is seen here, or it sees this removal.
+        if (await FindBlockersAsync(repositories, cancellationToken) is { } refused)
+        {
+            return Result<bool>.Fail(refused);
+        }
 
         foreach (MonitoredRepository repository in repositories)
         {
@@ -65,6 +81,26 @@ internal sealed class RepositoryRemoval(
         await tx.CommitAsync(cancellationToken);
 
         return Result<bool>.Ok(true);
+    }
+
+    private async Task<RemovalBlockedError?> FindBlockersAsync(
+        IReadOnlyCollection<MonitoredRepository> repositories,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<RemovalBlockingIssue> blocking = await removalBlockers.GetBlockingIssuesAsync(
+            [.. repositories.Select(r => r.Id)],
+            cancellationToken);
+
+        if (blocking.Count == 0)
+        {
+            return null;
+        }
+
+        Dictionary<MonitoredRepositoryId, string> slugs = repositories.ToDictionary(r => r.Id, r => r.Slug.FullPath);
+        return RepositoryErrors.RemovalBlocked(
+        [
+            .. blocking.Select(b => new RemovalBlocker(slugs[b.RepositoryId], b.IssueNumber, b.State)),
+        ]);
     }
 
     // The rows a hard delete removed through the cascading foreign keys to the repository.

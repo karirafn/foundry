@@ -10,6 +10,7 @@ using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 using Shouldly;
 
@@ -58,6 +59,72 @@ public sealed class TransitionAsync : IAsyncDisposable
             detectedAt: DateTimeOffset.UtcNow,
             kindClassification: KindClassification.Unclassified);
 
+
+    [Fact]
+    public async Task WhenCalledInsideATransaction_LeavesItOpenForTheCaller()
+    {
+        // Arrange
+        DetectedIssue detected = CreateDetectedIssue(MonitoredRepositoryId.New());
+        _dbContext.Add(detected);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await using IDbContextTransaction transaction =
+            await _dbContext.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        await _dbContext.TransitionAsync(
+            detected,
+            detected.QueueTriage(DateTimeOffset.UtcNow),
+            new NullDomainEventDispatcher(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.Database.CurrentTransaction.ShouldBeSameAs(transaction);
+    }
+
+    [Fact]
+    public async Task WhenTheCallersTransactionRollsBack_TheTransitionIsDiscarded()
+    {
+        // Arrange
+        DetectedIssue detected = CreateDetectedIssue(MonitoredRepositoryId.New());
+        _dbContext.Add(detected);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        await using (IDbContextTransaction transaction =
+            await _dbContext.Database.BeginTransactionAsync(TestContext.Current.CancellationToken))
+        {
+            await _dbContext.TransitionAsync(
+                detected,
+                detected.QueueTriage(DateTimeOffset.UtcNow),
+                new NullDomainEventDispatcher(),
+                TestContext.Current.CancellationToken);
+            await transaction.RollbackAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue stored = await _dbContext.Issues.SingleAsync(TestContext.Current.CancellationToken);
+        stored.ShouldBeOfType<DetectedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenCalledOutsideATransaction_CommitsItsOwn()
+    {
+        // Arrange
+        DetectedIssue detected = CreateDetectedIssue(MonitoredRepositoryId.New());
+        _dbContext.Add(detected);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        await _dbContext.TransitionAsync(
+            detected,
+            detected.QueueTriage(DateTimeOffset.UtcNow),
+            new NullDomainEventDispatcher(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.Database.CurrentTransaction.ShouldBeNull();
+    }
     [Fact]
     public async Task WhenTransitioned_NewVariantRowExistsInDatabase()
     {

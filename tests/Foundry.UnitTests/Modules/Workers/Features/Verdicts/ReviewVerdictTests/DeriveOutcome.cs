@@ -83,4 +83,68 @@ public sealed class DeriveOutcome
                 Facts())
             .Outcome.ShouldBe(ReviewVerdictOutcome.Approved);
     }
+
+    [Fact]
+    public void WhenChecksPassedAndEveryCriterionIsMetOrCoveredByChecks_Approves()
+    {
+        // Act
+        ReviewVerdict.Valid valid = Accept(
+            Verdict(criteria: [Criterion("AC1", "met"), Criterion("AC2", "covered_by_checks")]),
+            Facts(criteriaCount: 2, checksPassed: true));
+
+        // Assert
+        valid.ShouldSatisfyAllConditions(
+            () => valid.Outcome.ShouldBe(ReviewVerdictOutcome.Approved),
+            () => valid.ToRecorded().Criteria.Select(answer => answer.Status)
+                .ShouldBe([ReviewCriterionStatus.Met, ReviewCriterionStatus.CoveredByChecks]));
+    }
+
+    [Fact]
+    public void WhenChecksPassedAndACriterionIsCoveredByChecksBesideABlockingFinding_RequestsChanges()
+    {
+        // Act / Assert
+        Accept(
+                Verdict(
+                    findings: [Finding("correctness")],
+                    dimensionStatuses: new() { ["correctness"] = "findings" },
+                    criteria: [Criterion("AC1", "covered_by_checks")]),
+                Facts(checksPassed: true))
+            .Outcome.ShouldBe(ReviewVerdictOutcome.ChangesRequested);
+    }
+
+    [Fact]
+    public void WhenChecksDidNotPassAndACriterionIsCoveredByChecks_RecordsItNotVerifiableWithWhy()
+    {
+        // Act
+        ReviewVerdict.Valid valid = Accept(
+            Verdict(criteria: [Criterion("AC1", "met"), Criterion("AC2", "covered_by_checks")]),
+            Facts(criteriaCount: 2, checksPassed: false));
+
+        // Assert
+        valid.ToRecorded().Criteria.ShouldBe([
+            new ReviewCriterionAnswer("AC1", ReviewCriterionStatus.Met, "See tests."),
+            new ReviewCriterionAnswer("AC2", ReviewCriterionStatus.NotVerifiable, ReviewVerdict.CoveredByChecksUnavailableEvidence),
+        ]);
+    }
+
+    [Fact]
+    public void WhenChecksDidNotPassAndACriterionIsCoveredByChecksAndNothingElseBlocks_ApprovesForAPerson()
+    {
+        // Act / Assert
+        Accept(Verdict(criteria: [Criterion("AC1", "covered_by_checks")]), Facts(checksPassed: false))
+            .Outcome.ShouldBe(ReviewVerdictOutcome.ApprovedForPerson);
+    }
+
+    [Fact]
+    public void WhenChecksDidNotPassAndACriterionIsCoveredByChecksBesideABlockingFinding_RequestsChanges()
+    {
+        // Act / Assert
+        Accept(
+                Verdict(
+                    findings: [Finding("security")],
+                    dimensionStatuses: new() { ["security"] = "findings" },
+                    criteria: [Criterion("AC1", "covered_by_checks")]),
+                Facts(checksPassed: false))
+            .Outcome.ShouldBe(ReviewVerdictOutcome.ChangesRequested);
+    }
 }

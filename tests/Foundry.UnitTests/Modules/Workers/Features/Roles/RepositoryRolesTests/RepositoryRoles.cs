@@ -479,7 +479,7 @@ public sealed class RepositoryRoles
             () => criteria["maxItems"]!.GetValue<int>().ShouldBe(50),
             () => StringsOf(criteria["items"]!["required"]).ShouldBe(["id", "status", "evidence"], ignoreOrder: true),
             () => criterion["id"]!["pattern"]!.GetValue<string>().ShouldBe("^AC[0-9]+$"),
-            () => StringsOf(criterion["status"]!["enum"]).ShouldBe(["met", "unmet", "not_verifiable"]),
+            () => StringsOf(criterion["status"]!["enum"]).ShouldBe(["met", "unmet", "not_verifiable", "covered_by_checks"]),
             () => criterion["evidence"]!["maxLength"]!.GetValue<int>().ShouldBe(200),
             () => criterion["evidence"]!["pattern"]!.GetValue<string>().ShouldBe(SingleLinePattern),
             () => StringsOf(tests["required"]).ShouldBe(["assessment", "reason", "coveringTests"], ignoreOrder: true),

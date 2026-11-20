@@ -50,12 +50,17 @@ internal static class DeleteRepository
 
                     return result.Match<Results<NoContent, ProblemHttpResult>>(
                         _ => TypedResults.NoContent(),
-                        error => error.ToProblem(StatusCodes.Status404NotFound));
+                        error => error switch
+                        {
+                            RemovalBlockedError blocked => blocked.ToConflictProblem(),
+                            _ => error.ToProblem(StatusCodes.Status404NotFound),
+                        });
                 })
                 .WithName("DeleteRepository")
                 .WithSummary("Deletes a monitored repository")
                 .Produces(StatusCodes.Status204NoContent)
-                .ProducesProblem(StatusCodes.Status404NotFound);
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status409Conflict);
         }
     }
 }

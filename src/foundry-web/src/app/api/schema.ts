@@ -1627,7 +1627,7 @@ export interface components {
             evidence: string;
         };
         /** @enum {unknown} */
-        ReviewCriterionStatus: "Met" | "Unmet" | "NotVerifiable";
+        ReviewCriterionStatus: "Met" | "Unmet" | "NotVerifiable" | "CoveredByChecks";
         ReviewDimension: {
             category: components["schemas"]["ReviewCategory"];
             status: components["schemas"]["ReviewDimensionStatus"];
@@ -3185,6 +3185,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

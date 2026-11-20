@@ -73,7 +73,8 @@ internal static class ReviewVerdictSamples
     public static SuppliedReviewFacts Facts(
         int criteriaCount = 1,
         bool productionWithoutTests = false,
-        IReadOnlyList<AddedLineRange>? addedLines = null)
+        IReadOnlyList<AddedLineRange>? addedLines = null,
+        bool checksPassed = false)
     {
         List<ChangedPath> paths = [new ChangedPath(ChangeStatus.Modified, "src/a.cs")];
 
@@ -89,6 +90,7 @@ internal static class ReviewVerdictSamples
             PullRequestUrl.From("https://github.com/acme/app/pull/7"),
             CommitSha.From("0123456789abcdef0123456789abcdef01234567"),
             new ReviewPacketFacts(paths, PatchId.From("89abcdef0123456789abcdef0123456789abcdef"), addedLines),
-            criteriaCount == 0 ? null : body);
+            criteriaCount == 0 ? null : body,
+            checksPassed);
     }
 }

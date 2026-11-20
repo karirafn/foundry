@@ -3,6 +3,9 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -57,6 +60,7 @@ public sealed class ClaimAsync : IAsyncDisposable
     {
         return new IssueClaimer(
             _dbContext,
+            new RepositoryRemovalQueries(_dbContext),
             integrationEventDispatcher ?? _integrationEventDispatcher,
             _domainEventDispatcher,
             TimeProvider.System);
@@ -108,6 +112,56 @@ public sealed class ClaimAsync : IAsyncDisposable
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
         return continuationQueued;
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryIsMonitored_ReturnsTrue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = await SeedRepositoryAsync(removed: false);
+        DispatchCandidate candidate = new(SeedQueuedIssue(repositoryId), DefaultDispatchInfo);
+
+        // Act
+        bool claimed = await BuildClaimer().ClaimAsync(candidate, WorkerRunId.New(), CancellationToken.None);
+
+        // Assert
+        claimed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryIsRemoved_ReturnsFalseWithoutWriting()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = await SeedRepositoryAsync(removed: true);
+        DispatchCandidate candidate = new(SeedQueuedIssue(repositoryId), DefaultDispatchInfo);
+
+        // Act
+        bool claimed = await BuildClaimer().ClaimAsync(candidate, WorkerRunId.New(), CancellationToken.None);
+
+        // Assert
+        claimed.ShouldBeFalse();
+        _integrationEventDispatcher.DispatchedEvents.ShouldBeEmpty();
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<Issue>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    private async Task<MonitoredRepositoryId> SeedRepositoryAsync(bool removed)
+    {
+        MonitoredRepository repository = MonitoredRepository.Create(
+            RepositorySlug.Create("owner/repo").ValueOrThrow(),
+            "github.com",
+            null,
+            0).ValueOrThrow();
+        if (removed)
+        {
+            repository.Remove(DateTimeOffset.UtcNow);
+        }
+
+        _dbContext.Set<MonitoredRepository>().Add(repository);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        return repository.Id;
     }
 
     // Cycle 1: FreshQueuedIssue — issue transitions to InProgressIssue

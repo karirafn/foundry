@@ -36,7 +36,18 @@ internal sealed class WorkerCapacityAvailableHandler(
         switch (outcome)
         {
             case SelectionOutcome.Selected(DispatchCandidate candidate):
-                await claimer.ClaimAsync(candidate, @event.WorkerRunId, cancellationToken);
+                if (!await claimer.ClaimAsync(candidate, @event.WorkerRunId, cancellationToken))
+                {
+                    logger.LogInformation(
+                        "Repository {RepositorySlug} was removed before issue #{IssueNumber} could be claimed; skipping dispatch.",
+                        candidate.DispatchInfo.RepositorySlug,
+                        candidate.Issue.IssueNumber);
+                    await integrationEventDispatcher.DispatchAsync(
+                        [new ClaimSkipped(@event.WorkerRunId)],
+                        cancellationToken);
+                    break;
+                }
+
                 logger.LogInformation(
                     "Claimed issue #{IssueNumber} (tier {TierRank}) from {RepositorySlug} for worker run {WorkerRunId}.",
                     candidate.Issue.IssueNumber,

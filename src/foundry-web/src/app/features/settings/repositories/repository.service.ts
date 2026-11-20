@@ -6,6 +6,7 @@ import { catchError, debounceTime, filter, groupBy, map, mergeMap, switchMap, ta
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { LoadOutcome } from '../../../core/models/load-outcome';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { DeleteFailure, deleteFailureFrom } from '../delete-failure/delete-failure.model';
 import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
 
 export const LIVE_UPDATE_DEBOUNCE_MS = 300;
@@ -50,8 +51,8 @@ export class RepositoryService {
   private readonly _deletingSignal: WritableSignal<boolean> = signal(false);
   readonly deleting: Signal<boolean> = this._deletingSignal.asReadonly();
 
-  private readonly _deleteErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly deleteError: Signal<string | null> = this._deleteErrorSignal.asReadonly();
+  private readonly _deleteFailureSignal: WritableSignal<DeleteFailure | null> = signal(null);
+  readonly deleteFailure: Signal<DeleteFailure | null> = this._deleteFailureSignal.asReadonly();
 
   private readonly _availableRepositoriesSignal: WritableSignal<AvailableRepository[]> = signal([]);
   readonly availableRepositories: Signal<AvailableRepository[]> = this._availableRepositoriesSignal.asReadonly();
@@ -297,7 +298,7 @@ export class RepositoryService {
   }
 
   deleteRepository(accountId: string, id: string): Observable<void> {
-    this._deleteErrorSignal.set(null);
+    this._deleteFailureSignal.set(null);
     this._deletingSignal.set(true);
 
     return this._http.delete<void>(`${this._repositoriesUrl(accountId)}/${id}`).pipe(
@@ -308,7 +309,7 @@ export class RepositoryService {
       }),
       catchError((err: HttpErrorResponse) => {
         console.error(err);
-        this._deleteErrorSignal.set(extractErrorMessage(err) ?? err.message);
+        this._deleteFailureSignal.set(deleteFailureFrom(err));
         this._deletingSignal.set(false);
         throw err;
       }),

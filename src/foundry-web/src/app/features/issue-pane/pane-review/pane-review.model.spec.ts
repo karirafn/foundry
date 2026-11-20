@@ -138,6 +138,44 @@ describe('buildReview', () => {
     ]);
   });
 
+  it('maps a criterion covered by checks to its own chip in the success tone', () => {
+    // Arrange
+    const run = reviewRun({
+      reviewVerdict: verdict({ criteria: [{ id: 'AC1', status: 'CoveredByChecks', evidence: 'CI passed.' }] }),
+      reviewCriteria: [{ id: 'AC1', text: 'CI passes.' }],
+    });
+
+    // Act
+    const criteria = buildReview(run)!.criteria;
+
+    // Assert
+    expect(criteria.items).toEqual([
+      { id: 'AC1', status: { label: 'Covered by checks', tone: 'success' }, text: 'CI passes.', evidence: 'CI passed.' },
+    ]);
+  });
+
+  it.each([
+    [{ Met: 3 }, 'Acceptance criteria — 3 of 3 met'],
+    [{ Met: 5, CoveredByChecks: 1 }, 'Acceptance criteria — 6 of 6 satisfied, 1 by checks'],
+    [
+      { Met: 3, CoveredByChecks: 1, Unmet: 1, NotVerifiable: 1 },
+      'Acceptance criteria — 4 of 6 satisfied, 1 by checks',
+    ],
+    [{ CoveredByChecks: 2 }, 'Acceptance criteria — 2 of 2 satisfied, 2 by checks'],
+  ] as const)('titles the criteria %j as "%s"', (counts, title) => {
+    // Arrange
+    const statuses = Object.entries(counts).flatMap(([status, count]) =>
+      Array.from({ length: count }, () => status as 'Met' | 'Unmet' | 'NotVerifiable' | 'CoveredByChecks'),
+    );
+    const criteria = statuses.map((status, i) => ({ id: `AC${i + 1}`, status, evidence: 'Checked.' }));
+
+    // Act
+    const review = buildReview(reviewRun({ reviewVerdict: verdict({ criteria }) }))!;
+
+    // Assert
+    expect(review.criteria.title).toBe(title);
+  });
+
   it('shows a criterion without its supplied text when the run has none', () => {
     // Act
     const criteria = buildReview(reviewRun({ reviewCriteria: null }))!.criteria;

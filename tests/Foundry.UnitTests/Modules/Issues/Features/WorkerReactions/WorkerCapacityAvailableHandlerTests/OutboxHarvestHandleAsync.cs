@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -108,7 +109,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new NullDomainEventDispatcher()),
             new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
+        IssueClaimer claimer = new(dbContext, new RepositoryRemovalQueries(dbContext), integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -165,7 +166,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new NullDomainEventDispatcher()),
             new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
+        IssueClaimer claimer = new(dbContext, new RepositoryRemovalQueries(dbContext), integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -222,7 +223,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new NullDomainEventDispatcher()),
             new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
+        IssueClaimer claimer = new(dbContext, new RepositoryRemovalQueries(dbContext), integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,
@@ -275,7 +276,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new NullDomainEventDispatcher()),
             new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
+        IssueClaimer claimer = new(dbContext, new RepositoryRemovalQueries(dbContext), integrationEventDispatcher, new CapturingDomainEventDispatcher(), TimeProvider.System);
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
             selector,

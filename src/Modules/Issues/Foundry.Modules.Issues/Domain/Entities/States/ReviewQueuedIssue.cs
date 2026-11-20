@@ -46,7 +46,12 @@ public sealed class ReviewQueuedIssue : QueuedIssue, IReviewStepState
     /// change is unchanged since that approval (ADR 0113).
     /// </summary>
     public override DispatchContext Context =>
-        new DispatchContext.Review(BranchName, PullRequestUrl, ReviewedCommit, LatestReview?.CarriablePatchId);
+        new DispatchContext.Review(
+            BranchName,
+            PullRequestUrl,
+            ReviewedCommit,
+            LatestReview?.CarriablePatchId,
+            ChecksPassed: ChecksOutcome is ChecksOutcome.Passed);
 
     public WorkerRunId WorkerRunId { get; private set; }
 

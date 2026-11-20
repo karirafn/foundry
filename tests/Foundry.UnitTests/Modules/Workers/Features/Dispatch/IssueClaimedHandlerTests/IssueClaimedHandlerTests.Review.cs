@@ -124,6 +124,25 @@ public sealed partial class HandleAsync
                 [("AC1", "Retries three times"), ("AC2", "Logs each retry")]));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenTheContextIsReview_TheRunRecordsWhetherChecksPassed(bool checksPassed)
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildReviewHandler();
+
+        // Act
+        await sut.HandleAsync(
+            BuildReviewEvent(ReviewContext() with { ChecksPassed = checksPassed }),
+            TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.SuppliedReviewFacts.ShouldNotBeNull().ChecksPassed.ShouldBe(checksPassed);
+    }
+
     [Fact]
     public async Task WhenTheReviewedIssueHasNoAcceptanceCriteriaHeading_TheRunRecordsNoCriteria()
     {
