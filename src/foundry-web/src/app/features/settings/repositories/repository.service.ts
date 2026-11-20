@@ -1,13 +1,13 @@
 import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { EMPTY, Observable, Subject, forkJoin, merge, of } from 'rxjs';
 import { catchError, debounceTime, filter, groupBy, map, mergeMap, switchMap, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { LoadOutcome } from '../../../core/models/load-outcome';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { DeleteFailure, deleteFailureFrom } from '../delete-failure/delete-failure.model';
-import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UnclaimedRepository, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RecheckClaimsResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UnclaimedRepository, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
 
 export const LIVE_UPDATE_DEBOUNCE_MS = 300;
 
@@ -364,6 +364,17 @@ export class RepositoryService {
         this._unclaimedDeleteFailureSignal.set(deleteFailureFrom(err));
         throw err;
       }),
+    );
+  }
+
+  /** Re-derives the claims of every account on the host; the caller reloads the lists. */
+  recheckClaims(host: string): Observable<RecheckClaimsResponse> {
+    this._unclaimedDeleteFailureSignal.set(null);
+
+    return this._http.post<RecheckClaimsResponse>(
+      `${UNCLAIMED_REPOSITORIES_URL}/recheck`,
+      {},
+      { params: new HttpParams().set('host', host) },
     );
   }
 

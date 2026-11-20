@@ -1,5 +1,6 @@
 import { Component, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { RepositoryService } from '../repository.service';
 import { UnclaimedRepository } from '../repository.model';
 import { UnclaimedRepositoryListComponent } from './unclaimed-repository-list';
 
@@ -31,6 +32,10 @@ class HostComponent {
   readonly repositories = REPOSITORIES;
 }
 
+function configure(): void {
+  TestBed.configureTestingModule({ providers: [{ provide: RepositoryService, useValue: {} }] });
+}
+
 async function render(width: number, loadError: string | null = null): Promise<HTMLElement> {
   const fixture = TestBed.createComponent(HostComponent);
   fixture.componentRef.setInput('width', width);
@@ -41,6 +46,8 @@ async function render(width: number, loadError: string | null = null): Promise<H
 
 // Runs in a real browser (test-layout target); jsdom would measure every box as 0.
 describe('unclaimed repository list layout', () => {
+  beforeEach(configure);
+
   // 332px is the list width inside a 390px viewport after the settings and section padding.
   it.each([332, 390, 1200])('has no horizontal overflow at %ipx', async (width) => {
     // Arrange
@@ -77,6 +84,7 @@ describe('unclaimed repository list layout', () => {
     const narrow = await render(332);
     const narrowPadding = getComputedStyle(narrow.querySelector('.unclaimed-repository-list__row')!).paddingTop;
     TestBed.resetTestingModule();
+    configure();
     const wide = await render(1200);
 
     // Act
@@ -84,5 +92,21 @@ describe('unclaimed repository list layout', () => {
 
     // Assert
     expect(parseFloat(narrowPadding)).toBeLessThan(parseFloat(widePadding));
+  });
+
+  it('keeps the re-check button inside the problem block at the narrowest width', async () => {
+    // Arrange
+    const host = await render(332);
+    const row = host.querySelector('.unclaimed-repository-list__row') as HTMLElement;
+
+    // Act
+    const problem = row.querySelector('.unclaimed-repository-list__problem')!.getBoundingClientRect();
+    const text = row.querySelector('.unclaimed-repository-list__problem-text')!.getBoundingClientRect();
+    const button = row.querySelector('.unclaimed-repository-list__recheck-btn')!.getBoundingClientRect();
+
+    // Assert
+    expect(button.top).toBeGreaterThanOrEqual(text.bottom);
+    expect(button.left).toBeGreaterThanOrEqual(problem.left);
+    expect(button.right).toBeLessThanOrEqual(problem.right + 0.5);
   });
 });

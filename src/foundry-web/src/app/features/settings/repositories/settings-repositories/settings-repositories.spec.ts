@@ -599,7 +599,7 @@ describe('SettingsRepositoriesComponent', () => {
       expect(sections.indexOf(section!)).toBe(0);
       expect(section!.querySelector('#unclaimed-repositories-heading')?.textContent?.trim()).toBe('Unclaimed repositories');
       expect(section!.querySelector('.repositories-settings__section-description')?.textContent?.trim()).toBe(
-        "No account's namespace claim covers these repositories, so Foundry can't poll, dispatch or publish them. Add the namespace to an account in Accounts, or delete the repository."
+        "No account's namespace claim covers these repositories, so Foundry can't poll, dispatch or publish them. Add the namespace to an account in Accounts, or delete the repository. Foundry re-checks claims every hour while any repository is unclaimed."
       );
       expect(section!.querySelector('a')?.getAttribute('href')).toBe('/settings/accounts');
       expect(section!.querySelector('.unclaimed-repository-list__slug')?.textContent?.trim()).toBe('orphan/project');
@@ -723,6 +723,155 @@ describe('SettingsRepositoriesComponent', () => {
 
       // Assert
       expect(document.activeElement?.textContent?.trim()).toBe('Repositories');
+    });
+
+    describe('re-check claims', () => {
+      const RECHECK_URL = '/api/repositories/unclaimed/recheck';
+      const UNCLAIMED_2: UnclaimedRepository = { ...UNCLAIMED_1, id: '00000000-0000-0000-0000-000000000021', slug: 'orphan/other' };
+
+      function liveRegion(el: HTMLElement): HTMLElement | null {
+        return el.querySelector('.repositories-settings > [role="status"]');
+      }
+
+      function recheck(
+        fixture: ReturnType<typeof render>['fixture'],
+        httpMock: HttpTestingController,
+        el: HTMLElement,
+        reclaimedRepositoryCount: number,
+        unclaimedAfter: UnclaimedRepository[],
+      ): void {
+        el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__recheck-btn')?.click();
+        const req = httpMock.expectOne(r => r.url === RECHECK_URL);
+        expect(req.request.method).toBe('POST');
+        expect(req.request.params.get('host')).toBe('gitlab.example.com');
+        req.flush({ reclaimedRepositoryCount });
+        flushRepositories(httpMock, ACCOUNT_1.id, []);
+        httpMock.expectOne(UNCLAIMED_URL).flush(unclaimedAfter);
+        fixture.detectChanges();
+      }
+
+      it('keeps a persistent polite live region at the page root', () => {
+        // Act
+        const { el } = render([]);
+
+        // Assert
+        const region = liveRegion(el);
+        expect(region?.classList.contains('sr-only')).toBe(true);
+        expect(region?.getAttribute('aria-live')).toBe('polite');
+        expect(region?.getAttribute('aria-atomic')).toBe('true');
+        expect(region?.textContent?.trim()).toBe('');
+      });
+
+      it('announces the reclaimed count and repeats it under the description while the section shows', () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1, UNCLAIMED_2]);
+
+        // Act
+        recheck(fixture, httpMock, el, 1, [UNCLAIMED_2]);
+
+        // Assert
+        expect(liveRegion(el)?.textContent?.trim()).toBe('1 repository claimed again.');
+        const result = unclaimedSection(el)?.querySelector('.repositories-settings__claims-result');
+        expect(result?.textContent?.trim()).toBe('1 repository claimed again.');
+        expect(result?.hasAttribute('role')).toBe(false);
+        expect(result?.hasAttribute('aria-live')).toBe(false);
+      });
+
+      it('uses the plural for more than one reclaimed repository and still announces after the section hides', () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1, UNCLAIMED_2]);
+
+        // Act
+        recheck(fixture, httpMock, el, 2, []);
+
+        // Assert
+        expect(unclaimedSection(el)).toBeNull();
+        expect(liveRegion(el)?.textContent?.trim()).toBe('2 repositories claimed again.');
+      });
+
+      it('names the host when no account claims the repositories yet', () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+
+        // Act
+        recheck(fixture, httpMock, el, 0, [UNCLAIMED_1]);
+
+        // Assert
+        expect(liveRegion(el)?.textContent?.trim()).toBe('No account claims these gitlab.example.com repositories yet.');
+        expect(unclaimedSection(el)?.querySelector('.repositories-settings__claims-result')?.textContent?.trim())
+          .toBe('No account claims these gitlab.example.com repositories yet.');
+      });
+
+      it('clears the result when the next re-check starts', () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+        recheck(fixture, httpMock, el, 0, [UNCLAIMED_1]);
+
+        // Act
+        el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__recheck-btn')?.click();
+        fixture.detectChanges();
+
+        // Assert
+        expect(liveRegion(el)?.textContent?.trim()).toBe('');
+        expect(unclaimedSection(el)?.querySelector('.repositories-settings__claims-result')).toBeNull();
+        httpMock.expectOne(r => r.url === RECHECK_URL).flush({ reclaimedRepositoryCount: 0 });
+        flushRepositories(httpMock, ACCOUNT_1.id, []);
+      });
+
+      it('clears the result when a remove starts', () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+        recheck(fixture, httpMock, el, 0, [UNCLAIMED_1]);
+        fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
+
+        // Act
+        fixture.componentInstance.confirmDeleteRepository();
+        fixture.detectChanges();
+
+        // Assert
+        expect(liveRegion(el)?.textContent?.trim()).toBe('');
+        httpMock.expectOne(`/api/repositories/${UNCLAIMED_1.id}`).flush(null, { status: 204, statusText: 'No Content' });
+        flushRepositories(httpMock, ACCOUNT_1.id, []);
+      });
+
+      it('clears the unclaimed delete failure when a re-check starts', () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+        fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
+        fixture.componentInstance.confirmDeleteRepository();
+        httpMock.expectOne(`/api/repositories/${UNCLAIMED_1.id}`).flush(
+          { title: 'Conflict', status: 409, detail: 'refused', blockingIssues: [{ repositorySlug: 'orphan/project', issueNumber: 4, state: 'in_progress' }] },
+          { status: 409, statusText: 'Conflict' },
+        );
+        httpMock.expectOne(UNCLAIMED_URL).flush([UNCLAIMED_1]);
+        fixture.detectChanges();
+
+        // Act
+        el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__recheck-btn')?.click();
+        fixture.detectChanges();
+
+        // Assert
+        expect(unclaimedSection(el)?.querySelector('.delete-failure__lead')).toBeNull();
+        httpMock.expectOne(r => r.url === RECHECK_URL).flush({ reclaimedRepositoryCount: 0 });
+        flushRepositories(httpMock, ACCOUNT_1.id, []);
+      });
+
+      it('focuses the Repositories heading when the re-check reclaims the last unclaimed repository', async () => {
+        // Arrange
+        const { fixture, httpMock, el } = render([UNCLAIMED_1]);
+        el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__recheck-btn')?.click();
+
+        // Act
+        httpMock.expectOne(r => r.url === RECHECK_URL).flush({ reclaimedRepositoryCount: 1 });
+        flushRepositories(httpMock, ACCOUNT_1.id, []);
+        httpMock.expectOne(UNCLAIMED_URL).flush([]);
+        await fixture.whenStable();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        // Assert
+        expect(document.activeElement?.textContent?.trim()).toBe('Repositories');
+      });
     });
   });
 });

@@ -27,6 +27,7 @@ internal static class RepositoryEndpoints
 
         MoveRepository.Endpoint.Map(repositoriesGroup);
         GetUnclaimedRepositories.Endpoint.Map(repositoriesGroup);
+        RecheckUnclaimedClaims.Endpoint.Map(repositoriesGroup);
         DeleteRepository.Endpoint.Map(repositoriesGroup, "DeleteMonitoredRepository");
 
         return routes;

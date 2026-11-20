@@ -1,7 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -9,38 +8,26 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
-/// <summary>
-/// Lists the Unclaimed Repositories: membership is resolved live from the Namespace Claims, never from stored
-/// eligibility, so a repository leaves the list as soon as an account claims its namespace.
-/// </summary>
 internal static class GetUnclaimedRepositories
 {
     internal sealed record Query : IQuery<IReadOnlyList<UnclaimedRepositorySummary>>;
 
-    internal sealed class Handler(DbContext dbContext, ICredentialResolver credentialResolver)
+    internal sealed class Handler(UnclaimedRepositories unclaimedRepositories)
         : IQueryHandler<Query, IReadOnlyList<UnclaimedRepositorySummary>>
     {
         public async Task<Result<IReadOnlyList<UnclaimedRepositorySummary>>> HandleAsync(
             Query query,
             CancellationToken cancellationToken)
         {
-            List<MonitoredRepository> repositories = await dbContext.Set<MonitoredRepository>()
-                .AsNoTracking()
-                .ToListAsync(cancellationToken);
+            IReadOnlyList<MonitoredRepository> repositories = await unclaimedRepositories.FindAsync(cancellationToken);
 
             List<UnclaimedRepositorySummary> unclaimed = [];
 
             foreach (MonitoredRepository repository in repositories)
             {
-                if (await credentialResolver.ResolveAsync(repository.Host, repository.Slug, cancellationToken) is not null)
-                {
-                    continue;
-                }
-
                 string namespaceName = Namespace.PrefixesOf(repository.Slug)[^1].Value;
                 unclaimed.Add(new UnclaimedRepositorySummary(
                     repository.Id.Value,
