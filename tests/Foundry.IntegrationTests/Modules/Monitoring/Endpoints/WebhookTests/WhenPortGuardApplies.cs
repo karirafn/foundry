@@ -1,6 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
 
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http;

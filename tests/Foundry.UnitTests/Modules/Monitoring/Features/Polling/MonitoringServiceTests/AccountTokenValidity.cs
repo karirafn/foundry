@@ -9,7 +9,7 @@ using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Settings.Contracts.Queries;

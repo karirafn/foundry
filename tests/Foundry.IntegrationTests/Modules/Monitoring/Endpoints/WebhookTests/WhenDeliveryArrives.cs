@@ -1,5 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 
 using Microsoft.AspNetCore.Http;
 
