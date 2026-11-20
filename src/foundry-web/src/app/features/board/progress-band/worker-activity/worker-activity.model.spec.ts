@@ -244,6 +244,73 @@ describe('activityPanel', () => {
     expect(panel.taskBar?.shape).toEqual({ kind: 'meter', donePercent: 100, currentPercent: 0 });
   });
 
+  it('lights the first segment for a task started before an earlier pending one', () => {
+    // Arrange
+    const current = task('2', 'in_progress');
+    const activity = buildActivity({
+      tasks: [task('1', 'pending'), current],
+      currentTask: current,
+      completedTaskCount: 0,
+    });
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'segments', segments: ['current', 'empty'] },
+      progress: 'task 1 of 2',
+    });
+  });
+
+  it('fills segments from the start for a task completed before an earlier pending one', () => {
+    // Arrange
+    const activity = buildActivity({
+      tasks: [task('1', 'pending'), task('2', 'completed')],
+      currentTask: null,
+      completedTaskCount: 1,
+    });
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'segments', segments: ['done', 'empty'] },
+      progress: 'task 2 of 2',
+    });
+  });
+
+  it('lights exactly one segment while two tasks are in progress', () => {
+    // Arrange
+    const current = task('3', 'in_progress');
+    const activity = buildActivity({
+      tasks: [task('1', 'completed'), task('2', 'in_progress'), current, task('4', 'pending')],
+      currentTask: current,
+      completedTaskCount: 1,
+    });
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.taskBar).toEqual({
+      shape: { kind: 'segments', segments: ['done', 'current', 'empty', 'empty'] },
+      progress: 'task 2 of 4',
+    });
+  });
+
+  it('fills the meter from the completed count rather than recounting task statuses', () => {
+    // Arrange
+    const activity = activityWithTasks(25, 0, false);
+
+    // Act
+    const panel = activityPanel({ ...activity, completedTaskCount: 5 });
+
+    // Assert
+    expect(panel.taskBar?.shape).toEqual({ kind: 'meter', donePercent: 20, currentPercent: 0 });
+  });
+
   it('has no task bar with an empty task list', () => {
     // Act
     const panel = activityPanel(buildActivity());
