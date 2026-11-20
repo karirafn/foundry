@@ -5,6 +5,9 @@ using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -74,6 +77,7 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
 
         IssueClaimer claimer = new(
             _dbContext,
+            new RepositoryRemovalQueries(_dbContext),
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             _domainEventDispatcher,
             TimeProvider.System);
@@ -95,6 +99,36 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
         _dbContext.Set<Issue>().Add(queued);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
         _dbContext.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task WhenTheCandidatesRepositoryWasRemoved_PublishesClaimSkippedAndLeavesTheIssueQueued()
+    {
+        // Arrange
+        MonitoredRepository repository = MonitoredRepository.Create(
+            RepositorySlug.Create("owner/repo").ValueOrThrow(),
+            "github.com",
+            null,
+            0).ValueOrThrow();
+        repository.Remove(DateTimeOffset.UtcNow);
+        _dbContext.Set<MonitoredRepository>().Add(repository);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        await SeedQueuedIssueAsync(repository.Id);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery(),
+            integrationEventDispatcher: capturingDispatcher);
+        WorkerRunId workerRunId = WorkerRunId.New();
+
+        // Act
+        await sut.HandleAsync(new WorkerCapacityAvailable(workerRunId), TestContext.Current.CancellationToken);
+
+        // Assert
+        capturingDispatcher.DispatchedEvents.ShouldBe([new ClaimSkipped(workerRunId)]);
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<Issue>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // NoEligibleRepositories → ClaimSkipped published

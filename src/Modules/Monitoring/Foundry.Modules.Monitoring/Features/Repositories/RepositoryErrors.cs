@@ -14,6 +14,7 @@ internal static class RepositoryErrors
     internal const string AccountTokenInvalidCode = "Repository.AccountTokenInvalid";
     internal const string NoTokenCode = "Repository.NoToken";
     internal const string ConflictOnCreateCode = "Repository.ConflictOnCreate";
+    internal const string RemovalBlockedCode = "Repository.RemovalBlocked";
 
     internal const string InvalidMaxConcurrentWorkersCode =
         MonitoredRepositoryErrors.InvalidMaxConcurrentWorkersCode;
@@ -49,4 +50,7 @@ internal static class RepositoryErrors
 
     internal static Error ConflictOnCreate() =>
         new(ConflictOnCreateCode, "The repository could not be created due to a conflict. Please try again.");
+
+    internal static RemovalBlockedError RemovalBlocked(IReadOnlyList<RemovalBlocker> blockingIssues) =>
+        new(blockingIssues);
 }

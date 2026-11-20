@@ -134,6 +134,9 @@ public sealed class OutboxHarvest : IAsyncDisposable
                 new CredentialResolver(dbContext, NullLogger<CredentialResolver>.Instance),
                 new RecordingBranchRulesProviderFactory(),
                 NullLogger<RepositoryWebhookDeleter>.Instance),
+            new Foundry.Modules.Issues.Features.RepositoryReactions.RepositoryRemovalBlockers(
+                dbContext,
+                new Foundry.Modules.Workers.Features.Runs.WorkerRunQueries(dbContext)),
             scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>());
 
         await sut.RemoveAsync([repository], Now, TestContext.Current.CancellationToken);

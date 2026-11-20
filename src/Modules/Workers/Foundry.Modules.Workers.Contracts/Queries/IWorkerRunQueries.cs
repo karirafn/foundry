@@ -49,6 +49,14 @@ public interface IWorkerRunQueries
     Task<IReadOnlySet<Guid>> GetIssueIdsWithUnpublishedRunAsync(
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The subset of <paramref name="issueIds"/> whose run failed to publish and waits for a retry or has exhausted its
+    /// retries (ADR 0100). Such a run holds no live process: no container and no Publisher is running for it.
+    /// </summary>
+    Task<IReadOnlySet<Guid>> GetIssueIdsWaitingForPublishRetryAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

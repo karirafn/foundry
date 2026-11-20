@@ -116,6 +116,7 @@ public static class MonitoringModule
         services.AddScoped<IRepositoryDispatchQueries, RepositoryDispatchQueries>();
         services.AddScoped<IHostRepositoryQueries, HostRepositoryQueries>();
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
+        services.AddScoped<IRepositoryRemovalQueries, RepositoryRemovalQueries>();
         services.AddScoped<IRepositoryEligibilityQuery, RepositoryEligibilityQuery>();
         services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();
         services.AddScoped<BranchRuleEnforcer>();

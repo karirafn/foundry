@@ -883,6 +883,11 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             IReadOnlyCollection<Guid> issueIds,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<Guid>>(issueIds.Where(_publishPhases.ContainsKey).ToHashSet());
+
+        public Task<IReadOnlySet<Guid>> GetIssueIdsWaitingForPublishRetryAsync(
+            IReadOnlyCollection<Guid> issueIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
     }
 
     [Fact]

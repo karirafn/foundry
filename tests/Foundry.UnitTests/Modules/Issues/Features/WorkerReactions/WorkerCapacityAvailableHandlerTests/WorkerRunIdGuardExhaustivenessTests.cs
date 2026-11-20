@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -434,6 +435,7 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
 
         IssueClaimer claimer = new(
             _dbContext,
+            new RepositoryRemovalQueries(_dbContext),
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             _domainEventDispatcher,
             TimeProvider.System);

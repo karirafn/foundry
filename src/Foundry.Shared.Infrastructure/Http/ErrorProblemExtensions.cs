@@ -12,4 +12,14 @@ public static class ErrorProblemExtensions
             detail: error.Message,
             statusCode: statusCode,
             type: $"{TypePrefix}{error.Code}");
+
+    public static ProblemHttpResult ToProblem(
+        this Error error,
+        int statusCode,
+        IDictionary<string, object?> extensions) =>
+        TypedResults.Problem(
+            detail: error.Message,
+            statusCode: statusCode,
+            type: $"{TypePrefix}{error.Code}",
+            extensions: extensions);
 }
