@@ -60,15 +60,10 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDispatchPauseSettingsPersisted_CanBeReloadedWithAllProperties()
+    public async Task WhenAutoResumeOnUsageResetPersisted_CanBeReloaded()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        DateTimeOffset resetsAt = new DateTimeOffset(
-            DateTimeOffset.UtcNow.AddDays(3).Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond,
-            TimeSpan.Zero);
-        settings.SetUsageLimitResetsAt(resetsAt);
-        settings.PauseDispatch();
         settings.UpdateDispatchSettings(autoResume: false);
 
         _dbContext.Set<GlobalSettings>().Add(settings);
@@ -82,9 +77,6 @@ public sealed class PersistGlobalSettings : IAsyncDisposable
 
         // Assert
         GlobalSettings reloaded = result.ShouldNotBeNull();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.UsageLimitResetsAt.ShouldBe(resetsAt),
-            () => reloaded.IsDispatchPaused.ShouldBeTrue(),
-            () => reloaded.AutoResumeOnUsageReset.ShouldBeFalse());
+        reloaded.AutoResumeOnUsageReset.ShouldBeFalse();
     }
 }

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
@@ -35,13 +36,14 @@ public sealed class WhenGlobalSettingsExist : IAsyncDisposable
 
     private async Task SeedPausedSettingsAsync()
     {
-        // SettingsSeeder is a hosted service stripped in tests — seed directly via DbContext.
+        // SettingsSeeder and DispatchPauseSeeder are hosted services stripped in tests — seed directly via DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        GlobalSettings settings = GlobalSettings.Create();
-        settings.PauseDispatch();
-        dbContext.Set<GlobalSettings>().Add(settings);
+        dbContext.Set<GlobalSettings>().Add(GlobalSettings.Create());
+        DispatchPause pause = DispatchPause.Create();
+        pause.PauseDispatch();
+        dbContext.Set<DispatchPause>().Add(pause);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 

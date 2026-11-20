@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -20,7 +21,11 @@ internal static class UpdateNestedDocker
 {
     internal sealed record Command(bool Enabled) : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe) : ICommandHandler<Command, GlobalSettingsSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IWebhookIngressProbe ingressProbe,
+        IDispatchPauseQueries dispatchPauseQueries)
+        : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Command command,
@@ -38,7 +43,7 @@ internal static class UpdateNestedDocker
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
+            return await GlobalSettingsMapper.ToSummaryAsync(settings, dispatchPauseQueries, ingressProbe.Port, cancellationToken);
         }
     }
 

@@ -12,6 +12,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
@@ -106,6 +107,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         services.AddScoped<IssueClaimer>();
         services.AddScoped<IRepositoryEligibilityQuery, AllEligibleRepositoryEligibilityQuery>();
         services.AddScoped<IRepositoryDispatchQueries, StubRepositoryDispatchQueries>();
+        services.AddScoped<IDispatchPauseQueries, NullDispatchPauseQueries>();
         services.AddIntegrationEventHandler<WorkerCapacityAvailable, WorkerCapacityAvailableHandler>();
 
         // ─── Workers module — dispatch service ───────────────────────────────────
@@ -292,8 +294,8 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             => Task.FromResult(TimeSpan.FromDays(3));
 
 
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true, []));
+        public Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(true);
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

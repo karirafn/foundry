@@ -1,7 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Features.DispatchPauses;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Shared;
 
@@ -127,10 +127,10 @@ internal sealed class HostProber(
 
     private async Task ClearAsync(string host, string repositorySlug, CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
         // Resume All may have cleared the pause while the probe ran.
-        if (settings is null || !settings.ClearHostPause(host))
+        if (pause is null || !pause.ClearHostPause(host))
         {
             return;
         }
@@ -146,9 +146,9 @@ internal sealed class HostProber(
 
     private async Task RecordUnreachableAsync(string host, CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
-        if (settings is null || !settings.RecordProbeUnreachable(host, timeProvider.GetUtcNow()))
+        if (pause is null || !pause.RecordProbeUnreachable(host, timeProvider.GetUtcNow()))
         {
             return;
         }

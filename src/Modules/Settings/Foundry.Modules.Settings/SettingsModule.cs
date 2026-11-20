@@ -10,6 +10,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,8 +27,6 @@ public static class SettingsModule
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
         services.AddCommandHandler<UpdateWorkerLimits.Command, GlobalSettingsSummary, UpdateWorkerLimits.Handler, UpdateWorkerLimits.Validator>();
         services.AddCommandHandler<UpdateDispatchSettings.Command, GlobalSettingsSummary, UpdateDispatchSettings.Handler, UpdateDispatchSettings.Validator>();
-        services.AddCommandHandler<PauseDispatch.Command, GlobalSettingsSummary, PauseDispatch.Handler>();
-        services.AddCommandHandler<ResumeDispatch.Command, GlobalSettingsSummary, ResumeDispatch.Handler>();
         services.AddCommandHandler<UpdateWorkerImageConfiguration.Command, GlobalSettingsSummary, UpdateWorkerImageConfiguration.Handler>();
         services.AddCommandHandler<UpdateNestedDocker.Command, GlobalSettingsSummary, UpdateNestedDocker.Handler>();
         services.AddCommandHandler<UpdateAwaitingInputSettings.Command, GlobalSettingsSummary, UpdateAwaitingInputSettings.Handler>();
@@ -44,9 +43,16 @@ public static class SettingsModule
         return services;
     }
 
-    public static IEndpointRouteBuilder MapSettingsEndpoints(this IEndpointRouteBuilder app)
+    /// <summary>
+    /// Maps the <c>/api/settings</c> routes. The dispatch pause and resume routes belong to the Workers module, which
+    /// owns the pause state; <paramref name="mapDispatchPauseEndpoints"/> maps them into this group, at their place among
+    /// the settings routes, so the routes, their tag and the OpenAPI document stay as they were.
+    /// </summary>
+    public static IEndpointRouteBuilder MapSettingsEndpoints(
+        this IEndpointRouteBuilder app,
+        Action<RouteGroupBuilder> mapDispatchPauseEndpoints)
     {
-        app.MapSettingEndpoints();
+        app.MapSettingEndpoints(mapDispatchPauseEndpoints);
         return app;
     }
 }

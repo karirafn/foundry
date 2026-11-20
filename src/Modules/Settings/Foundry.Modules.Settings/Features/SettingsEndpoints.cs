@@ -12,7 +12,9 @@ namespace Foundry.Modules.Settings.Features;
 
 internal static class SettingsEndpoints
 {
-    internal static IEndpointRouteBuilder MapSettingEndpoints(this IEndpointRouteBuilder routes)
+    internal static IEndpointRouteBuilder MapSettingEndpoints(
+        this IEndpointRouteBuilder routes,
+        Action<RouteGroupBuilder> mapDispatchPauseEndpoints)
     {
         RouteGroupBuilder group = routes.MapGroup("/api/settings")
             .WithTags("Settings");
@@ -20,8 +22,7 @@ internal static class SettingsEndpoints
         GetSettings.Endpoint.Map(group);
         UpdateWorkerLimits.Endpoint.Map(group);
         UpdateDispatchSettings.Endpoint.Map(group);
-        PauseDispatch.Endpoint.Map(group);
-        ResumeDispatch.Endpoint.Map(group);
+        mapDispatchPauseEndpoints(group);
         UpdateWorkerImageConfiguration.Endpoint.Map(group);
         UpdateNestedDocker.Endpoint.Map(group);
         UpdateWorkerEnvironment.Endpoint.Map(group);

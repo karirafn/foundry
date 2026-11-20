@@ -1,5 +1,5 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.CredentialsReactions;
 using Foundry.Shared;
@@ -53,7 +53,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await DeliverAsync(resetsAt);
 
         // Assert
-        GlobalSettings settings = await ReloadSettingsAsync();
+        DispatchPause settings = await ReloadSettingsAsync();
         settings.UsageLimitResetsAt.ShouldBe(resetsAt);
     }
 
@@ -113,7 +113,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await DeliverAsync(resetsAt);
 
         // Assert
-        GlobalSettings settings = await ReloadSettingsAsync();
+        DispatchPause settings = await ReloadSettingsAsync();
         settings.UsageLimitResetsAt.ShouldBe(resetsAt);
     }
 
@@ -149,7 +149,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await sut.HandleAsync(new UsageLimitReached(resetsAt), TestContext.Current.CancellationToken);
 
         // Assert
-        GlobalSettings settings = await ReloadSettingsAsync();
+        DispatchPause settings = await ReloadSettingsAsync();
         settings.UsageLimitResetsAt.ShouldBe(resetsAt);
     }
 
@@ -161,15 +161,15 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private async Task SeedSettingsAsync()
     {
-        _dbContext.Set<GlobalSettings>().Add(GlobalSettings.Create());
+        _dbContext.Set<DispatchPause>().Add(DispatchPause.Create());
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
     }
 
-    private async Task<GlobalSettings> ReloadSettingsAsync()
+    private async Task<DispatchPause> ReloadSettingsAsync()
     {
         _dbContext.ChangeTracker.Clear();
-        return await _dbContext.Set<GlobalSettings>()
+        return await _dbContext.Set<DispatchPause>()
             .SingleAsync(TestContext.Current.CancellationToken);
     }
 

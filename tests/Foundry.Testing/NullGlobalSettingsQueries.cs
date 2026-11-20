@@ -31,8 +31,8 @@ public sealed class NullGlobalSettingsQueries : IGlobalSettingsQueries
         => Task.FromResult(TimeSpan.FromDays(3));
 
 
-    public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-        => Task.FromResult(new DispatchPauseState(null, false, false, []));
+    public Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
+        => Task.FromResult(true);
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
         => Task.FromResult(ImageBuildStatus.Idle);

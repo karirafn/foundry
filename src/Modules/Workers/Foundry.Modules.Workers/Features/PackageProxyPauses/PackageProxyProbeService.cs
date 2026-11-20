@@ -1,4 +1,4 @@
-using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -53,8 +53,8 @@ internal sealed class PackageProxyProbeService(
     private async Task<bool> IsProbeDueAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
-        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+        IDispatchPauseQueries dispatchPauseQueries = scope.ServiceProvider.GetRequiredService<IDispatchPauseQueries>();
+        DispatchPauseState pauseState = await dispatchPauseQueries.GetDispatchPauseStateAsync(cancellationToken);
 
         return pauseState.PackageProxyPause is { } pause && pause.NextProbeAt <= timeProvider.GetUtcNow();
     }

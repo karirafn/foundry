@@ -2,9 +2,8 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -24,39 +23,26 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class PauseGate : WorkerDispatchServiceTestBase
 {
-    private void SeedGlobalSettings(
-        bool isDispatchPaused = false,
-        DateTimeOffset? usageLimitResetsAt = null,
-        bool autoResumeOnUsageReset = true)
+    private void SeedDispatchPause(bool isDispatchPaused = false)
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause pause = DispatchPause.Create();
 
         if (isDispatchPaused)
         {
-            settings.PauseDispatch();
+            pause.PauseDispatch();
         }
 
-        if (usageLimitResetsAt.HasValue)
-        {
-            settings.SetUsageLimitResetsAt(usageLimitResetsAt.Value);
-        }
-
-        if (!autoResumeOnUsageReset)
-        {
-            settings.UpdateDispatchSettings(autoResume: false);
-        }
-
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(pause);
         db.SaveChanges();
     }
 
     private static async Task SetUsageLimitResetsAtInPastAsync(FoundryDbContext db, CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await db.Set<GlobalSettings>()
+        DispatchPause? pause = await db.Set<DispatchPause>()
             .FirstOrDefaultAsync(cancellationToken);
-        settings.ShouldNotBeNull();
-        db.Entry(settings).Property("UsageLimitResetsAt").CurrentValue = DateTimeOffset.UtcNow.AddHours(-1);
+        pause.ShouldNotBeNull();
+        db.Entry(pause).Property("UsageLimitResetsAt").CurrentValue = DateTimeOffset.UtcNow.AddHours(-1);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -65,11 +51,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        DispatchPauseState pauseState = new(UsageLimitResetsAt: null, IsDispatchPaused: true, AutoResumeOnUsageReset: true, PausedHosts: []);
+        DispatchPauseState pauseState = new(UsageLimitResetsAt: null, IsDispatchPaused: true, PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -84,11 +72,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         DateTimeOffset futureReset = DateTimeOffset.UtcNow.AddHours(1);
-        DispatchPauseState pauseState = new(UsageLimitResetsAt: futureReset, IsDispatchPaused: false, AutoResumeOnUsageReset: true, PausedHosts: []);
+        DispatchPauseState pauseState = new(UsageLimitResetsAt: futureReset, IsDispatchPaused: false, PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -101,7 +91,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitResetsAtHasPassedAndAutoResumeEnabled_DispatchesDispatchResumed()
     {
         // Arrange
-        SeedGlobalSettings(autoResumeOnUsageReset: true);
+        SeedDispatchPause();
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -113,12 +103,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -131,7 +122,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitResetsAtHasPassedAndAutoResumeEnabled_DispatchesWorkerCapacityAvailable()
     {
         // Arrange
-        SeedGlobalSettings(autoResumeOnUsageReset: true);
+        SeedDispatchPause();
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -143,12 +134,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -161,7 +153,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitResetsAtHasPassedAndAutoResumeEnabled_ClearsUsageLimitResetsAt()
     {
         // Arrange
-        SeedGlobalSettings(autoResumeOnUsageReset: true);
+        SeedDispatchPause();
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -173,19 +165,20 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: true,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? updated = await assertDb.Set<GlobalSettings>()
+        DispatchPause? updated = await assertDb.Set<DispatchPause>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         updated.ShouldNotBeNull();
         updated.UsageLimitResetsAt.ShouldBeNull();
@@ -195,7 +188,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitResetsAtHasPassedAndAutoResumeDisabled_DoesNotDispatchWorkerCapacityAvailable()
     {
         // Arrange
-        SeedGlobalSettings(autoResumeOnUsageReset: false);
+        SeedDispatchPause();
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -207,12 +200,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: false,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: false);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -225,7 +219,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenManualPauseSetAndUsageLimitExpired_ClearsUsageLimitResetsAt()
     {
         // Arrange
-        SeedGlobalSettings(isDispatchPaused: true, autoResumeOnUsageReset: true);
+        SeedDispatchPause(isDispatchPaused: true);
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -237,19 +231,20 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: true,
-            AutoResumeOnUsageReset: true,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? updated = await assertDb.Set<GlobalSettings>()
+        DispatchPause? updated = await assertDb.Set<DispatchPause>()
             .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         updated.ShouldNotBeNull();
         updated.ShouldSatisfyAllConditions(
@@ -261,7 +256,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenManualPauseSetAndUsageLimitExpired_DoesNotDispatchWorkerCapacityAvailable()
     {
         // Arrange
-        SeedGlobalSettings(isDispatchPaused: true, autoResumeOnUsageReset: true);
+        SeedDispatchPause(isDispatchPaused: true);
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -273,12 +268,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: true,
-            AutoResumeOnUsageReset: true,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -291,7 +287,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenManualPauseSetAndUsageLimitExpired_DoesNotDispatchDispatchResumed()
     {
         // Arrange
-        SeedGlobalSettings(isDispatchPaused: true, autoResumeOnUsageReset: true);
+        SeedDispatchPause(isDispatchPaused: true);
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -303,12 +299,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: true,
-            AutoResumeOnUsageReset: true,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: true);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -321,7 +318,7 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitResetsAtHasPassedAndAutoResumeDisabled_DoesNotDispatchDispatchResumed()
     {
         // Arrange
-        SeedGlobalSettings(autoResumeOnUsageReset: false);
+        SeedDispatchPause();
 
         await using (FoundryDbContext db = CreateDbContext())
         {
@@ -333,12 +330,13 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         DispatchPauseState pauseState = new(
             UsageLimitResetsAt: pastReset,
             IsDispatchPaused: false,
-            AutoResumeOnUsageReset: false,
             PausedHosts: []);
+        ConfigurablePauseStateQueries queries = new(pauseState, autoResumeOnUsageReset: false);
         DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
-            settingsQueries: new ConfigurablePauseStateQueries(pauseState));
+            settingsQueries: queries,
+            dispatchPauseQueries: queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -347,7 +345,8 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
         dispatcher.Captured.ShouldNotContain(e => e is DispatchResumed);
     }
 
-    private sealed class ConfigurablePauseStateQueries(DispatchPauseState pauseState) : IGlobalSettingsQueries
+    private sealed class ConfigurablePauseStateQueries(DispatchPauseState pauseState, bool autoResumeOnUsageReset)
+        : IGlobalSettingsQueries, IDispatchPauseQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -369,6 +368,9 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
 
             => Task.FromResult(TimeSpan.FromDays(3));
 
+
+        public Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(autoResumeOnUsageReset);
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(pauseState);

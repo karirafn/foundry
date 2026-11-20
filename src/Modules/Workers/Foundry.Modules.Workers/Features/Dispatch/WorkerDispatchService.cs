@@ -1,11 +1,12 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.DispatchPauses;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -74,11 +75,14 @@ internal sealed class WorkerDispatchService(
 
         await runMonitor.MonitorActiveRunsAsync(activeRuns, timeoutMinutes, cancellationToken);
 
-        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+        IDispatchPauseQueries dispatchPauseQueries =
+            scope.ServiceProvider.GetRequiredService<IDispatchPauseQueries>();
+        DispatchPauseState pauseState = await dispatchPauseQueries.GetDispatchPauseStateAsync(cancellationToken);
 
         bool autoResumed = await TryAutoResumeAsync(
             dbContext,
             integrationEventDispatcher,
+            settingsQueries,
             pauseState,
             cancellationToken);
 
@@ -173,7 +177,7 @@ internal sealed class WorkerDispatchService(
 
     /// <summary>
     /// When the usage-limit reset time has passed and auto-resume is enabled, calls
-    /// <see cref="GlobalSettings.ClearUsageLimitPause"/>, persists, and publishes
+    /// <see cref="DispatchPause.ClearUsageLimitPause"/>, persists, and publishes
     /// <see cref="DispatchResumedEvent"/> only when no manual pause remains.
     /// Returns <c>true</c> when dispatch is now fully unpaused (safe for the caller to
     /// bypass the stale pause-state gate), <c>false</c> when a manual pause still holds.
@@ -181,30 +185,30 @@ internal sealed class WorkerDispatchService(
     private async Task<bool> TryAutoResumeAsync(
         DbContext dbContext,
         IIntegrationEventDispatcher integrationEventDispatcher,
+        IGlobalSettingsQueries settingsQueries,
         DispatchPauseState pauseState,
         CancellationToken cancellationToken)
     {
         if (!pauseState.UsageLimitResetsAt.HasValue ||
             pauseState.UsageLimitResetsAt.Value > DateTimeOffset.UtcNow ||
-            !pauseState.AutoResumeOnUsageReset)
+            !await settingsQueries.GetAutoResumeOnUsageResetAsync(cancellationToken))
         {
             return false;
         }
 
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
-        if (settings is null)
+        if (pause is null)
         {
             return false;
         }
 
-        bool fullyUnpaused = settings.ClearUsageLimitPause();
+        bool fullyUnpaused = pause.ClearUsageLimitPause();
 
         if (fullyUnpaused)
         {
             // Enqueue before save so the outbox interceptor harvests DispatchResumed atomically
-            // with the settings change. DispatchResumed has a durable consumer (DispatchResumedHandler
+            // with the pause change. DispatchResumed has a durable consumer (DispatchResumedHandler
             // in Issues re-queues failed issues), so it must go through the outbox.
             await integrationEventDispatcher.DispatchAsync([new DispatchResumedEvent()], cancellationToken);
         }

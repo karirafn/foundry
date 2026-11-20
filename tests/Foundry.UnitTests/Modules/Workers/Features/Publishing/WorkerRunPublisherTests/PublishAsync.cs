@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -372,7 +371,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     public async Task AnUnreachableProvider_PausesTheRunsHostAndWaitsToRetry()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
         FakePublisher publisher = new FakePublisher().WithPublishResults(
             new PublishResult.Failed("could not reach the repository: Could not resolve host", PublishFailureKind.Unreachable));
@@ -384,7 +383,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         await using FoundryDbContext db = CreateDbContext();
         (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
             .ShouldBeOfType<PublishFailedRun>().IsExhausted.ShouldBeFalse();
-        GlobalSettings settings = await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await db.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.HostPauses.ShouldHaveSingleItem().Host.ShouldBe("github.com");
         _broadcaster.SentNotifications.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             notification => notification.Category.ShouldBe("dispatch"),
@@ -396,7 +395,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         DateTimeOffset pausedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
-        SeedGlobalSettings(settings =>
+        SeedDispatchPause(settings =>
         {
             settings.PauseHost("github.com", pausedAt);
             settings.RecordProbeUnreachable("github.com", pausedAt.AddMinutes(1));
@@ -410,7 +409,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await db.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.HostPauses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             pause => pause.PausedAt.ShouldBe(pausedAt),
             pause => pause.ProbeAttempts.ShouldBe(1));
@@ -423,7 +422,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     public async Task AFailureThatReachedTheProvider_DoesNotPauseTheHost(PublishFailureKind kind)
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
         FakePublisher publisher = new FakePublisher().WithPublishResults(
             new PublishResult.Failed("the remote branch moved during publish", kind));
@@ -433,16 +432,16 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext db = CreateDbContext();
-        (await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken)).HostPauses.ShouldBeEmpty();
+        (await db.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken)).HostPauses.ShouldBeEmpty();
         _broadcaster.SentNotifications.ShouldBeEmpty();
     }
 
-    private void SeedGlobalSettings(Action<GlobalSettings>? configure = null)
+    private void SeedDispatchPause(Action<DispatchPause>? configure = null)
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         configure?.Invoke(settings);
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 

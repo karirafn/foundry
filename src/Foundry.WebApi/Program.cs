@@ -206,7 +206,7 @@ app.MapCredentialsEndpoints();
 app.MapIssuesEndpoints();
 app.MapMonitoringEndpoints();
 app.MapWorkersEndpoints();
-app.MapSettingsEndpoints();
+app.MapSettingsEndpoints(settingsGroup => settingsGroup.MapDispatchPauseEndpoints());
 app.MapHub<IssueHub>("/hubs/issues");
 app.MapHub<SystemNotificationHub>("/hubs/system");
 app.MapHub<WorkerHub>("/hubs/workers");

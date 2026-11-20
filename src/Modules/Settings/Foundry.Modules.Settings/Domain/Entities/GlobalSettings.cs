@@ -12,7 +12,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxTimeoutMinutes = 1440;
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
-    internal const int MaxUsageLimitResetDays = 7;
     internal const int MinProbeIntervalMinutes = 5;
     internal const int MaxProbeIntervalMinutes = 10080;
     internal const int DefaultProbeIntervalMinutes = 60;
@@ -75,22 +74,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     /// </summary>
     public WebhookPublicBaseUrl? WebhookPublicBaseUrl { get; private set; }
 
-    public DateTimeOffset? UsageLimitResetsAt { get; private set; }
-
-    public bool IsDispatchPaused { get; private set; }
-
-    /// <summary>
-    /// The provider hosts dispatch is held for because a Publisher found them unreachable, one pause per host. A pause
-    /// reason beside <see cref="IsDispatchPaused"/> and <see cref="UsageLimitResetsAt"/>, but it holds only its host.
-    /// </summary>
-    public IReadOnlyList<HostPause> HostPauses { get; private set; } = [];
-
-    /// <summary>
-    /// Dispatch held for every repository that declares Package Sources because a worker could not reach the Package
-    /// Source Proxy; <see langword="null"/> when the proxy is not paused.
-    /// </summary>
-    public PackageProxyPause? PackageProxyPause { get; private set; }
-
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
@@ -119,147 +102,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         return new GlobalSettings(GlobalSettingsId.Default, now);
-    }
-
-    public void PauseDispatch()
-    {
-        IsDispatchPaused = true;
-        UpdatedAt = DateTimeOffset.UtcNow;
-    }
-
-    /// <summary>
-    /// Clears every dispatch-pause reason — the operator's manual pause, the usage-limit
-    /// pause, every host pause and the package-proxy pause — for the manual "Resume All" action.
-    /// </summary>
-    public void ResumeAllDispatch()
-    {
-        IsDispatchPaused = false;
-        UsageLimitResetsAt = null;
-        HostPauses = [];
-        PackageProxyPause = null;
-        UpdatedAt = DateTimeOffset.UtcNow;
-    }
-
-    /// <summary>
-    /// Holds dispatch to <paramref name="host"/> from <paramref name="now"/>. A host already paused keeps its pause
-    /// as it is, so concurrent failures on one host never reset its probe backoff. Returns <c>true</c> when a pause
-    /// was added.
-    /// </summary>
-    public bool PauseHost(string host, DateTimeOffset now)
-    {
-        if (FindHostPause(host) is not null)
-        {
-            return false;
-        }
-
-        HostPauses = [.. HostPauses, HostPause.Start(host, now)];
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    /// <summary>
-    /// Records that a probe at <paramref name="now"/> found <paramref name="host"/> still unreachable, pushing its
-    /// next probe out on the backoff. Returns <c>false</c> when the host is not paused (Resume All cleared it).
-    /// </summary>
-    public bool RecordProbeUnreachable(string host, DateTimeOffset now)
-    {
-        if (FindHostPause(host) is not { } pause)
-        {
-            return false;
-        }
-
-        HostPause advanced = pause.AfterUnreachableProbe(now);
-        HostPauses = [.. HostPauses.Select(p => ReferenceEquals(p, pause) ? advanced : p)];
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    /// <summary>Lifts the pause on <paramref name="host"/>. Returns <c>false</c> when the host was not paused.</summary>
-    public bool ClearHostPause(string host)
-    {
-        if (FindHostPause(host) is not { } pause)
-        {
-            return false;
-        }
-
-        HostPauses = [.. HostPauses.Where(p => !ReferenceEquals(p, pause))];
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    /// <summary>
-    /// Holds dispatch for repositories with Package Sources from <paramref name="now"/>. A pause already present is
-    /// left as it is, so concurrent failures never reset its probe backoff. Returns <c>true</c> when a pause was added.
-    /// </summary>
-    public bool PausePackageProxy(DateTimeOffset now)
-    {
-        if (PackageProxyPause is not null)
-        {
-            return false;
-        }
-
-        PackageProxyPause = PackageProxyPause.Start(now);
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    /// <summary>
-    /// Records that a probe at <paramref name="now"/> found the proxy still unreachable, pushing the next probe out on
-    /// the backoff. Returns <c>false</c> when the proxy is not paused (Resume All cleared it).
-    /// </summary>
-    public bool RecordPackageProxyProbeUnreachable(DateTimeOffset now)
-    {
-        if (PackageProxyPause is not { } pause)
-        {
-            return false;
-        }
-
-        PackageProxyPause = pause.AfterUnreachableProbe(now);
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    /// <summary>Lifts the package-proxy pause. Returns <c>false</c> when the proxy was not paused.</summary>
-    public bool ClearPackageProxyPause()
-    {
-        if (PackageProxyPause is null)
-        {
-            return false;
-        }
-
-        PackageProxyPause = null;
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    /// <summary>
-    /// Clears the usage-limit pause reason only. The operator's manual dispatch pause
-    /// (<see cref="IsDispatchPaused"/>) is left untouched, so a manual pause survives a
-    /// usage-limit auto-resume. Returns <c>true</c> when dispatch is now fully unpaused
-    /// (no manual pause remains), <c>false</c> when a manual pause still holds dispatch.
-    /// </summary>
-    public bool ClearUsageLimitPause()
-    {
-        UsageLimitResetsAt = null;
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return !IsDispatchPaused;
-    }
-
-    public void SetUsageLimitResetsAt(DateTimeOffset resetsAt)
-    {
-        if (resetsAt <= DateTimeOffset.UtcNow)
-        {
-            return;
-        }
-
-        DateTimeOffset maxResetTime = DateTimeOffset.UtcNow.AddDays(MaxUsageLimitResetDays);
-        DateTimeOffset clampedResetsAt = resetsAt > maxResetTime ? maxResetTime : resetsAt;
-
-        UsageLimitResetsAt = UsageLimitResetsAt.HasValue && UsageLimitResetsAt.Value > clampedResetsAt
-            ? UsageLimitResetsAt
-            : clampedResetsAt;
-
-        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public void UpdateDispatchSettings(bool autoResume)
@@ -484,6 +326,4 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
     }
-
-    private HostPause? FindHostPause(string host) => HostPauses.FirstOrDefault(p => p.IsFor(host));
 }

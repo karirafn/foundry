@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Features.DispatchPauses;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -21,31 +22,30 @@ internal sealed class UsageLimitReachedHandler(
 {
     public async Task HandleAsync(UsageLimitReached @event, CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
-        if (settings is null)
+        if (pause is null)
         {
             logger.LogWarning(
-                "Usage limit reached but could not persist reset time — no GlobalSettings row exists.");
+                "Usage limit reached but could not persist reset time — no dispatch pause row exists.");
             return;
         }
 
-        DateTimeOffset? resetsAtBefore = settings.UsageLimitResetsAt;
-        settings.SetUsageLimitResetsAt(@event.ResetsAt);
+        DateTimeOffset? resetsAtBefore = pause.UsageLimitResetsAt;
+        pause.SetUsageLimitResetsAt(@event.ResetsAt);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (settings.UsageLimitResetsAt == resetsAtBefore)
+        if (pause.UsageLimitResetsAt == resetsAtBefore)
         {
             return;
         }
 
         // DispatchPaused has only a SignalR broadcast handler, so it is delivered directly rather than through the outbox.
-        await TryDeliverDirectAsync(new DispatchPaused(settings.UsageLimitResetsAt!.Value), cancellationToken);
+        await TryDeliverDirectAsync(new DispatchPaused(pause.UsageLimitResetsAt!.Value), cancellationToken);
 
         logger.LogWarning(
             "Usage limit reached; dispatch paused until {ResetsAt}.",
-            settings.UsageLimitResetsAt);
+            pause.UsageLimitResetsAt);
     }
 
     private async Task TryDeliverDirectAsync(DispatchPaused paused, CancellationToken cancellationToken)

@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -52,7 +53,7 @@ public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         IReadOnlyList<string> result =
@@ -67,7 +68,7 @@ public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         IReadOnlyList<string> result =
@@ -89,7 +90,7 @@ public sealed class GetAllowedProviderHostsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         IReadOnlyList<string> result =

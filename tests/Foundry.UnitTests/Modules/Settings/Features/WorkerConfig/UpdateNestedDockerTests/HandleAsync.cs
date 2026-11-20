@@ -5,6 +5,7 @@ using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -74,7 +75,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         await using AsyncServiceScope scope = _serviceProvider.CreateAsyncScope();
         FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-        UpdateNestedDocker.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateNestedDocker.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         return await sut.HandleAsync(new UpdateNestedDocker.Command(enabled), TestContext.Current.CancellationToken);
     }

@@ -5,6 +5,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -79,7 +80,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), integrationEventDispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:v2",
@@ -123,7 +124,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         IIntegrationEventDispatcher integrationEventDispatcher =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
 
-        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), integrationEventDispatcher);
+        UpdateWorkerImageConfiguration.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries(), integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
             ImageTag: "foundry-worker:local",

@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -38,17 +37,17 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         {"type":"result","terminal_reason":"blocking_limit","result":"resets at 2000-01-01T00:00:00Z"}
         """;
 
-    private void SeedGlobalSettings(DateTimeOffset? usageLimitResetsAt = null)
+    private void SeedDispatchPause(DateTimeOffset? usageLimitResetsAt = null)
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
 
         if (usageLimitResetsAt.HasValue)
         {
             settings.SetUsageLimitResetsAt(usageLimitResetsAt.Value);
         }
 
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -70,7 +69,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitIsNewlyPersisted_DeliversDispatchPausedWithCorrectResetsAt()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-dispatch-paused-new");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventProcessor processor = new();
@@ -93,7 +92,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
     public async Task WhenUsageLimitResetsAtIsInPastAndNoOpOccurs_DoesNotDeliverDispatchPaused()
     {
         // Arrange — past reset time triggers the no-op path in SetUsageLimitResetsAt
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-dispatch-paused-past");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventProcessor processor = new();
@@ -114,12 +113,12 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
     {
         // Arrange — existing reset is longer than the new one; extend-only semantics no-op
         DateTimeOffset longerExistingReset = DateTimeOffset.UtcNow.AddDays(6);
-        SeedGlobalSettings(usageLimitResetsAt: longerExistingReset);
+        SeedDispatchPause(usageLimitResetsAt: longerExistingReset);
 
         // Force the existing value to persist in DB (SetUsageLimitResetsAt uses UtcNow internally)
         await using (FoundryDbContext db = CreateDbContext())
         {
-            GlobalSettings? settings = await db.Set<GlobalSettings>()
+            DispatchPause? settings = await db.Set<DispatchPause>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
             settings.ShouldNotBeNull();
             // Use EF shadow property to set the value directly, bypassing domain logic
@@ -152,7 +151,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenNoGlobalSettingsRow_DoesNotDeliverDispatchPaused()
     {
-        // Arrange — deliberately NO SeedGlobalSettings() call
+        // Arrange — deliberately NO SeedDispatchPause() call
         SeedActiveRun("container-dispatch-paused-no-settings");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventProcessor processor = new();

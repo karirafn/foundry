@@ -1,4 +1,3 @@
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -50,11 +49,11 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
             containerOutputParser: outputParser);
     }
 
-    private void SeedGlobalSettings()
+    private void SeedDispatchPause()
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-        db.Set<GlobalSettings>().Add(settings);
+        DispatchPause settings = DispatchPause.Create();
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -62,7 +61,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithUsageLimitedOutputAndFutureResetTime_TransitionsToFailedRunWithUsageLimitedReason()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-usage-limited-future");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
@@ -81,7 +80,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithUsageLimitedOutputAndFutureResetTime_SetsUsageLimitResetsAtOnGlobalSettings()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-usage-limited-pause");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
@@ -91,7 +90,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+        DispatchPause? settings = await assertDb.Set<DispatchPause>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.UsageLimitResetsAt.ShouldNotBeNull();
@@ -103,7 +102,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithUsageLimitedOutputAndFutureResetTime_DispatchesFailedEventWithNullBranchName()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-usage-limited-no-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -127,7 +126,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     {
         // Arrange — 429-only output (no parseable reset time) yields CreditsExhausted from the parser,
         // which is now mapped to FailureReason.CreditsExhausted by the resolver.
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-usage-limited-429-only");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
@@ -147,7 +146,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     {
         // Arrange — 429-only output now yields CreditsExhausted; UsageLimitResetsAt must not be set
         // (CreditsExhausted is a distinct pause — step 5 will introduce its own handler).
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-usage-limited-429-sets-resets-at");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
@@ -157,7 +156,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
 
         // Assert — CreditsExhausted does not set UsageLimitResetsAt (that is a time-based pause field)
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+        DispatchPause? settings = await assertDb.Set<DispatchPause>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.UsageLimitResetsAt.ShouldBeNull();
@@ -166,7 +165,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenContainerExitsWithUsageLimitedOutputAndNoGlobalSettingsRow_StillReturnsUsageLimitedReason()
     {
-        // Arrange — deliberately NO SeedGlobalSettings() call
+        // Arrange — deliberately NO SeedDispatchPause() call
         SeedActiveRun("container-no-settings-row");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
@@ -174,12 +173,12 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — the run must still be marked failed with UsageLimited; no GlobalSettings row must exist
+        // Assert — the run must still be marked failed with UsageLimited; no DispatchPause row must exist
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         failedRun.Reason.ShouldBeOfType<FailureReason.UsageLimited>();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+        DispatchPause? settings = await assertDb.Set<DispatchPause>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldBeNull();
     }
@@ -188,7 +187,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithUsageLimitedOutput_DispatchesFailedEventWithUsageLimitedCategory()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-usage-limited-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -211,7 +210,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     public async Task WhenSecondContainerExitsWithLaterResetTime_ExtendsThePause()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-extends-pause");
 
         DateTimeOffset earlierReset = DateTimeOffset.UtcNow.AddDays(2);
@@ -234,7 +233,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
 
         // Assert — UsageLimitResetsAt extended to the later of the two reset times
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings? settings = await assertDb.Set<GlobalSettings>()
+        DispatchPause? settings = await assertDb.Set<DispatchPause>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         settings.ShouldNotBeNull();
         settings.UsageLimitResetsAt.ShouldNotBeNull();

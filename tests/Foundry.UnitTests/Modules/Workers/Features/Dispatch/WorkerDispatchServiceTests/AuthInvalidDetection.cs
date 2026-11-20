@@ -1,7 +1,6 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -57,11 +56,11 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
             containerOutputParser: outputParser);
     }
 
-    private void SeedGlobalSettings()
+    private void SeedDispatchPause()
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
-        db.Set<GlobalSettings>().Add(settings);
+        DispatchPause settings = DispatchPause.Create();
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -69,7 +68,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithAuthInvalidOutput_TransitionsToFailedRunWithAuthInvalidReason()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-auth-invalid-reason");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
@@ -89,7 +88,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithAuthInvalidOutput_DispatchesFailedEventWithAuthInvalidCategory()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         SeedActiveRun("container-auth-invalid-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -112,7 +111,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsWithAuthInvalidOutput_PublishesWorkerAuthenticationFailed()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         ActiveRun activeRun = SeedActiveRun("container-auth-invalid-event");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -136,7 +135,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsZeroWithAuthInvalidIsErrorResultLine_PublishesWorkerAuthenticationFailed()
     {
         // Arrange — the CLI exits 0 yet its result line reports an auth error
-        SeedGlobalSettings();
+        SeedDispatchPause();
         ActiveRun activeRun = SeedActiveRun("container-auth-invalid-exit-zero");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -165,7 +164,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     public async Task WhenContainerExitsNonZeroWithFailedToAuthenticateResult_FailsAsAuthInvalidAndPublishesWorkerAuthenticationFailed()
     {
         // Arrange
-        SeedGlobalSettings();
+        SeedDispatchPause();
         ActiveRun activeRun = SeedActiveRun("container-failed-to-authenticate");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -197,7 +196,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     [Fact]
     public async Task WhenContainerExitsWithAuthInvalidOutputAndNoGlobalSettingsRow_StillReturnsAuthInvalidReason()
     {
-        // Arrange — deliberately NO SeedGlobalSettings() call
+        // Arrange — deliberately NO SeedDispatchPause() call
         SeedActiveRun("container-auth-invalid-no-settings");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         DispatchAndPublishTicker sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);

@@ -3,18 +3,24 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts.Queries;
 
 using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Settings.Features;
 
-internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngressProbe ingressProbe) : IGlobalSettingsQueries
+internal sealed class GlobalSettingsQueries(
+    DbContext dbContext,
+    IWebhookIngressProbe ingressProbe,
+    IDispatchPauseQueries dispatchPauseQueries) : IGlobalSettingsQueries
 {
     public async Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
     {
         GlobalSettings? settings = await dbContext.FindGlobalSettingsNoTrackingAsync(cancellationToken);
 
-        return settings is null ? null : GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
+        return settings is null
+            ? null
+            : await GlobalSettingsMapper.ToSummaryAsync(settings, dispatchPauseQueries, ingressProbe.Port, cancellationToken);
     }
 
     public async Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
@@ -62,30 +68,13 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext, IWebhookIngress
         return TimeSpan.FromHours(hours ?? GlobalSettings.DefaultAwaitingInputReminderDelayHours);
     }
 
-    public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
+    public async Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
     {
-        var row = await dbContext.QueryGlobalSettingsNoTracking()
-            .Select(s => new
-            {
-                s.UsageLimitResetsAt,
-                s.IsDispatchPaused,
-                s.AutoResumeOnUsageReset,
-                s.HostPauses,
-                s.PackageProxyPause,
-            })
+        bool? value = await dbContext.QueryGlobalSettingsNoTracking()
+            .Select(s => (bool?)s.AutoResumeOnUsageReset)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (row is null)
-        {
-            return new DispatchPauseState(null, false, true, []);
-        }
-
-        return new DispatchPauseState(
-            row.UsageLimitResetsAt,
-            row.IsDispatchPaused,
-            row.AutoResumeOnUsageReset,
-            [.. row.HostPauses.Select(HostPauseMapper.ToPausedHost)],
-            PackageProxyPauseMapper.ToPausedPackageProxy(row.PackageProxyPause));
+        return value ?? true;
     }
 
     public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
