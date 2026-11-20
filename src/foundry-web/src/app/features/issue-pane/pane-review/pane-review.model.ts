@@ -80,6 +80,7 @@ const CRITERION_STATUSES: Readonly<Record<RecordedReviewVerdict['criteria'][numb
   Met: { label: 'Met', tone: 'success' },
   Unmet: { label: 'Unmet', tone: 'warning' },
   NotVerifiable: { label: "Can't verify", tone: 'neutral' },
+  CoveredByChecks: { label: 'Covered by checks', tone: 'success' },
 };
 
 const TESTS_ASSESSMENTS: Readonly<Record<RecordedReviewVerdict['tests']['assessment'], string>> = {
@@ -152,8 +153,13 @@ function findingsOf(verdict: RecordedReviewVerdict): PaneReview['findings'] {
 function criteriaOf(verdict: RecordedReviewVerdict, run: WorkerRunDetail): PaneReview['criteria'] {
   const texts = new Map((run.reviewCriteria ?? []).map((c) => [c.id, c.text]));
   const met = verdict.criteria.filter((c) => c.status === 'Met').length;
+  const byChecks = verdict.criteria.filter((c) => c.status === 'CoveredByChecks').length;
+  const total = verdict.criteria.length;
   return {
-    title: `Acceptance criteria — ${met} of ${verdict.criteria.length} met`,
+    title:
+      byChecks === 0
+        ? `Acceptance criteria — ${met} of ${total} met`
+        : `Acceptance criteria — ${met + byChecks} of ${total} satisfied, ${byChecks} by checks`,
     items: verdict.criteria.map((c) => ({
       id: c.id,
       status: CRITERION_STATUSES[c.status],

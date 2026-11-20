@@ -23,7 +23,10 @@ const RUN = reviewRun({
         body: 'Rename.',
       },
     ],
-    criteria: [{ id: 'AC1', status: 'NotVerifiable', evidence: `Only the UI shows it. ${LONG_WORD}` }],
+    criteria: [
+      { id: 'AC1', status: 'NotVerifiable', evidence: `Only the UI shows it. ${LONG_WORD}` },
+      { id: 'AC2', status: 'CoveredByChecks', evidence: 'CI passed. ' + LONG_WORD },
+    ],
     tests: { assessment: 'Missing', reason: `No test. ${LONG_WORD}`, coveringTests: [LONG_PATH] },
     dimensions: [
       { category: 'Correctness', status: 'Findings', note: LONG_WORD },
@@ -31,7 +34,10 @@ const RUN = reviewRun({
     ],
   }),
   productionChangedWithoutTests: true,
-  reviewCriteria: [{ id: 'AC1', text: `The pane shows it. ${LONG_WORD}` }],
+  reviewCriteria: [
+    { id: 'AC1', text: `The pane shows it. ${LONG_WORD}` },
+    { id: 'AC2', text: `CI passes. ${LONG_WORD}` },
+  ],
 });
 
 @Component({

@@ -58,7 +58,7 @@ public sealed class PolymorphicMembers
 
         // Assert
         context.ShouldSatisfyAllConditions(
-            () => context.ShouldBe(new DispatchContext.Review("feat/7-retry", "https://github.com/owner/repo/pull/7", Head)),
+            () => context.ShouldBe(new DispatchContext.Review("feat/7-retry", "https://github.com/owner/repo/pull/7", Head, ChecksPassed: true)),
             () => context.Role.ShouldBe(DispatchRole.Review),
             () => queued.DispatchBranchName.ShouldBeNull());
     }

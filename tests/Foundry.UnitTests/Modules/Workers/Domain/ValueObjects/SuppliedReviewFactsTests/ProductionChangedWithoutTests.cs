@@ -17,7 +17,8 @@ public sealed class ProductionChangedWithoutTests
             Url,
             Commit,
             new ReviewPacketFacts([.. paths.Select(path => new ChangedPath(path.Status, path.Path))], patchId: null),
-            issueBody: null);
+            issueBody: null,
+            checksPassed: false);
 
     [Theory]
     [InlineData(ChangeStatus.Added)]
@@ -67,7 +68,8 @@ public sealed class ProductionChangedWithoutTests
             Url,
             Commit,
             new ReviewPacketFacts([new ChangedPath(ChangeStatus.Added, "src/a.cs"), new ChangedPath(ChangeStatus.Added, "a.test.ts")], patchId: null),
-            "## Acceptance Criteria\n\n- One.\n");
+            "## Acceptance Criteria\n\n- One.\n",
+            checksPassed: false);
 
         // Assert
         facts.ShouldSatisfyAllConditions(

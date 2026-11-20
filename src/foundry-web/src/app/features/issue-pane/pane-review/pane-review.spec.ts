@@ -261,6 +261,47 @@ describe('PaneReviewComponent', () => {
     expect(text(item)).toBe('AC1 Met Retry review queues the review again. RetryReviewTests covers it.');
   });
 
+  it('lists a criterion covered by checks with its own status word in the success chip', () => {
+    // Arrange
+    const run = reviewRun({
+      reviewVerdict: verdict({ criteria: [{ id: 'AC1', status: 'CoveredByChecks', evidence: 'The checks gate passed.' }] }),
+      reviewCriteria: [{ id: 'AC1', text: 'CI passes.' }],
+    });
+
+    // Act
+    const { el } = setup('review-run-1', run);
+
+    // Assert
+    const criteria = details(el, 'Acceptance criteria')!;
+    expect(text(criteria.querySelector('summary'))).toBe('Acceptance criteria — 1 of 1 satisfied, 1 by checks');
+    const item = criteria.querySelector('li')!;
+    expect(text(item)).toBe('AC1 Covered by checks CI passes. The checks gate passed.');
+    expect(item.querySelector('.badge')!.classList).toContain('pane-review__chip--success');
+  });
+
+  it('tells a met criterion from one covered by checks by its status word', () => {
+    // Arrange
+    const run = reviewRun({
+      reviewVerdict: verdict({
+        criteria: [
+          { id: 'AC1', status: 'Met', evidence: 'Tested.' },
+          { id: 'AC2', status: 'CoveredByChecks', evidence: 'CI passed.' },
+        ],
+      }),
+      reviewCriteria: [
+        { id: 'AC1', text: 'One.' },
+        { id: 'AC2', text: 'Two.' },
+      ],
+    });
+
+    // Act
+    const { el } = setup('review-run-1', run);
+
+    // Assert
+    const chips = [...details(el, 'Acceptance criteria')!.querySelectorAll('li .badge')].map((chip) => text(chip));
+    expect(chips).toEqual(['Met', 'Covered by checks']);
+  });
+
   it('says a person reviews when the issue had no acceptance criteria', () => {
     // Act
     const { el } = setup('review-run-1', reviewRun({ reviewVerdict: verdict({ criteria: [] }), reviewCriteria: [] }));

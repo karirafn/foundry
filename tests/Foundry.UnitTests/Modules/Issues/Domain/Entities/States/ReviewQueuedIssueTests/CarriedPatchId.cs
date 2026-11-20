@@ -49,7 +49,8 @@ public sealed class CarriedPatchId
                 queued.BranchName,
                 queued.PullRequestUrl,
                 RebasedHead,
-                CarriedPatchId: PatchId)));
+                CarriedPatchId: PatchId,
+                ChecksPassed: true)));
     }
 
     [Fact]

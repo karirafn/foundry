@@ -101,7 +101,11 @@ internal static class ReviewVerdictComment
             AppendFindings(body, blocking, blockingShown);
         }
 
-        ReviewCriterionAnswer[] notMet = [.. verdict.Criteria.Where(answer => answer.Status != ReviewCriterionStatus.Met)];
+        ReviewCriterionAnswer[] notMet =
+        [
+            .. verdict.Criteria.Where(answer =>
+                answer.Status is not (ReviewCriterionStatus.Met or ReviewCriterionStatus.CoveredByChecks)),
+        ];
         if (notMet.Length > 0)
         {
             body.Append('\n').Append("**Criteria not met**\n");
@@ -224,6 +228,7 @@ internal static class ReviewVerdictComment
         ReviewCriterionStatus.Met => "met",
         ReviewCriterionStatus.Unmet => "unmet",
         ReviewCriterionStatus.NotVerifiable => "not verifiable",
+        ReviewCriterionStatus.CoveredByChecks => "covered by checks",
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown criterion status."),
     };
 

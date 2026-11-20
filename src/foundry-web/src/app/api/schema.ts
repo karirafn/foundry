@@ -1627,7 +1627,7 @@ export interface components {
             evidence: string;
         };
         /** @enum {unknown} */
-        ReviewCriterionStatus: "Met" | "Unmet" | "NotVerifiable";
+        ReviewCriterionStatus: "Met" | "Unmet" | "NotVerifiable" | "CoveredByChecks";
         ReviewDimension: {
             category: components["schemas"]["ReviewCategory"];
             status: components["schemas"]["ReviewDimensionStatus"];

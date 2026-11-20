@@ -7,9 +7,9 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 
 /// <summary>
 /// What a claimed review (ADR 0114) asks of its dispatch: the reviewed commit Prepare bundles and diffs, and the pull
-/// request whose facts the run records. Read from <see cref="DispatchContext.Review"/>, never from the role's name.
+/// request whose facts the run records, and whether the checks gate passed on that commit. Read from <see cref="DispatchContext.Review"/>, never from the role's name.
 /// </summary>
-internal sealed record ReviewDispatch(ReviewTarget Target, PullRequestUrl PullRequestUrl)
+internal sealed record ReviewDispatch(ReviewTarget Target, PullRequestUrl PullRequestUrl, bool ChecksPassed)
 {
     /// <summary>The variable that tells the entrypoint which commit to check out read-only.</summary>
     public const string ReviewCommitVariable = "REVIEW_COMMIT";
@@ -36,7 +36,8 @@ internal sealed record ReviewDispatch(ReviewTarget Target, PullRequestUrl PullRe
 
         return new ReviewDispatch(
             new ReviewTarget(BranchName.From(review.BranchName), reviewedCommit),
-            PullRequestUrl.From(review.PullRequestUrl));
+            PullRequestUrl.From(review.PullRequestUrl),
+            review.ChecksPassed);
     }
 
     /// <summary>
@@ -48,7 +49,7 @@ internal sealed record ReviewDispatch(ReviewTarget Target, PullRequestUrl PullRe
         ArgumentNullException.ThrowIfNull(prepared);
 
         return prepared.ReviewPacket is { } packet
-            ? SuppliedReviewFacts.Compute(PullRequestUrl, Target.Commit, packet, issueBody)
+            ? SuppliedReviewFacts.Compute(PullRequestUrl, Target.Commit, packet, issueBody, ChecksPassed)
             : Result<SuppliedReviewFacts>.Fail(new Error(
                 "Worker.MissingReviewPacket",
                 "The Publisher prepared the review's base without its review packet."));

@@ -48,6 +48,10 @@ internal sealed partial record ReviewVerdict(
 
     internal const string CriterionIdPattern = "^AC[0-9]+$";
 
+    /// <summary>The evidence a <c>covered_by_checks</c> answer is recorded with when the checks gate did not pass.</summary>
+    internal const string CoveredByChecksUnavailableEvidence =
+        "covered_by_checks was unavailable because checks did not pass on the reviewed commit.";
+
     internal static readonly string[] TopLevelProperties =
         [SummaryProperty, FindingsProperty, DimensionsProperty, CriteriaProperty, TestsProperty];
 
@@ -98,6 +102,7 @@ internal sealed partial record ReviewVerdict(
             ["met"] = ReviewCriterionStatus.Met,
             ["unmet"] = ReviewCriterionStatus.Unmet,
             ["not_verifiable"] = ReviewCriterionStatus.NotVerifiable,
+            ["covered_by_checks"] = ReviewCriterionStatus.CoveredByChecks,
         };
 
     /// <summary>The schema's tests <c>assessment</c> tokens.</summary>
@@ -233,11 +238,32 @@ internal sealed partial record ReviewVerdict(
                 return new ReviewVerdictCheck.Rejected(tests);
             }
 
-            return new ReviewVerdictCheck.Accepted(new Valid(verdict, facts, DeriveOutcome(verdict, facts)));
+            ReviewVerdict supported = WithUnsupportedDelegationsDowngraded(verdict, facts);
+
+            return new ReviewVerdictCheck.Accepted(new Valid(supported, facts, DeriveOutcome(supported, facts)));
+        }
+
+        // A delegation to checks that did not pass is downgraded rather than rejected (ADR 0119): a rejected verdict
+        // fails open and loses its findings, while the downgrade only makes the outcome less permissive.
+        private static ReviewVerdict WithUnsupportedDelegationsDowngraded(ReviewVerdict verdict, SuppliedReviewFacts facts)
+        {
+            if (facts.ChecksPassed
+                || !verdict.Criteria.Any(answer => answer.Status == ReviewCriterionStatus.CoveredByChecks))
+            {
+                return verdict;
+            }
+
+            return verdict with
+            {
+                Criteria = [.. verdict.Criteria.Select(answer => answer.Status == ReviewCriterionStatus.CoveredByChecks
+                    ? answer with { Status = ReviewCriterionStatus.NotVerifiable, Evidence = CoveredByChecksUnavailableEvidence }
+                    : answer)],
+            };
         }
 
         // Code, never the model, decides the outcome (ADR 0113): anything that blocks requests changes, and a criterion
-        // nobody could verify, or an issue with none, leaves the approval to a person.
+        // nobody could verify, or an issue with none, leaves the approval to a person. A criterion covered by checks
+        // counts as met: it reaches here only when the checks gate passed.
         private static ReviewVerdictOutcome DeriveOutcome(ReviewVerdict verdict, SuppliedReviewFacts facts)
         {
             if (verdict.Findings.Any(finding => finding.Severity == ReviewSeverity.Blocking)

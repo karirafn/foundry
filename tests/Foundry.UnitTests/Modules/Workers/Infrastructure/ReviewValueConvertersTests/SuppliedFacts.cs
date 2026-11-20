@@ -24,7 +24,8 @@ public sealed class SuppliedFacts
                 [new ChangedPath(ChangeStatus.Modified, "src/a.cs")],
                 patchId: null,
                 [new AddedLineRange("src/a.cs", 3, 5)]),
-            issueBody: null);
+            issueBody: null,
+            checksPassed: false);
 
         // Act
         SuppliedReviewFacts read = ReviewValueConverters.DeserializeFacts(ReviewValueConverters.SerializeFacts(facts));
@@ -48,5 +49,42 @@ public sealed class SuppliedFacts
         read.ShouldSatisfyAllConditions(
             () => read.ClassifiedPaths.Count.ShouldBe(1),
             () => read.AddedLines.ShouldBeEmpty());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WhenStoredAndRead_KeepsWhetherChecksPassed(bool checksPassed)
+    {
+        // Arrange
+        SuppliedReviewFacts facts = SuppliedReviewFacts.Compute(
+            Url,
+            Commit,
+            new ReviewPacketFacts([new ChangedPath(ChangeStatus.Modified, "src/a.cs")], patchId: null),
+            issueBody: null,
+            checksPassed);
+
+        // Act
+        SuppliedReviewFacts read = ReviewValueConverters.DeserializeFacts(ReviewValueConverters.SerializeFacts(facts));
+
+        // Assert
+        read.ShouldSatisfyAllConditions(
+            () => read.ChecksPassed.ShouldBe(checksPassed),
+            () => read.ShouldBe(facts));
+    }
+
+    [Fact]
+    public void WhenStoredBeforeTheChecksResultWasSupplied_ReadsChecksAsNotPassed()
+    {
+        // Arrange
+        const string stored = """
+            {"pullRequestUrl":"https://github.com/acme/app/pull/7","reviewedCommit":"0123456789abcdef0123456789abcdef01234567","patchId":null,"paths":[{"status":"modified","path":"src/a.cs","class":"production"}],"criteria":[],"addedLines":[]}
+            """;
+
+        // Act
+        SuppliedReviewFacts read = ReviewValueConverters.DeserializeFacts(stored);
+
+        // Assert
+        read.ChecksPassed.ShouldBeFalse();
     }
 }

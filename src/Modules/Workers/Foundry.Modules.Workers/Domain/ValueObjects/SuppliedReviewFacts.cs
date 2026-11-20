@@ -4,8 +4,9 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
 /// The facts code computed for a review run at dispatch (ADR 0114): the pull request and commit under review, the
-/// diff's patch-id, every changed path with its class, the lines each hunk adds, and the issue's acceptance criteria. The run records them, its
-/// prompt shows them, and its verdict is checked against them after the run.
+/// diff's patch-id, every changed path with its class, the lines each hunk adds, the issue's acceptance criteria, and
+/// whether the checks gate passed. The run records them, its prompt shows them, and its verdict is checked against them
+/// after the run.
 /// </summary>
 public sealed record SuppliedReviewFacts
 {
@@ -15,7 +16,8 @@ public sealed record SuppliedReviewFacts
         PatchId? patchId,
         IReadOnlyList<ClassifiedPath> classifiedPaths,
         IReadOnlyList<AcceptanceCriterion> criteria,
-        IReadOnlyList<AddedLineRange>? addedLines = null)
+        IReadOnlyList<AddedLineRange>? addedLines = null,
+        bool checksPassed = false)
     {
         ArgumentNullException.ThrowIfNull(classifiedPaths);
         ArgumentNullException.ThrowIfNull(criteria);
@@ -41,17 +43,20 @@ public sealed record SuppliedReviewFacts
         ClassifiedPaths = [.. classifiedPaths];
         Criteria = [.. criteria];
         AddedLines = [.. addedLines ?? []];
+        ChecksPassed = checksPassed;
     }
 
     /// <summary>
     /// Computes the facts of a review of <paramref name="reviewedCommit"/> from the Publisher's
-    /// <paramref name="packet"/> and the issue's <paramref name="issueBody"/>.
+    /// <paramref name="packet"/>, the issue's <paramref name="issueBody"/>, and whether the checks gate recorded
+    /// <c>Passed</c> on that commit (<paramref name="checksPassed"/>).
     /// </summary>
     public static SuppliedReviewFacts Compute(
         PullRequestUrl pullRequestUrl,
         CommitSha reviewedCommit,
         ReviewPacketFacts packet,
-        string? issueBody)
+        string? issueBody,
+        bool checksPassed)
     {
         ArgumentNullException.ThrowIfNull(packet);
 
@@ -61,7 +66,8 @@ public sealed record SuppliedReviewFacts
             packet.PatchId,
             [.. packet.ChangedPaths.Select(ClassifiedPath.Of)],
             AcceptanceCriteria.Extract(issueBody),
-            packet.AddedLines);
+            packet.AddedLines,
+            checksPassed);
     }
 
     public PullRequestUrl PullRequestUrl { get; }
@@ -77,6 +83,12 @@ public sealed record SuppliedReviewFacts
 
     /// <summary>The lines the reviewed diff adds; empty for facts recorded before the Publisher reported them.</summary>
     public IReadOnlyList<AddedLineRange> AddedLines { get; }
+
+    /// <summary>
+    /// Whether the checks gate recorded <c>Passed</c> on the reviewed commit (ADR 0119), so a criterion may be answered
+    /// <c>covered_by_checks</c>. <see langword="false"/> for facts recorded before the checks result was supplied.
+    /// </summary>
+    public bool ChecksPassed { get; }
 
     /// <summary>Whether the reviewed diff adds <paramref name="line"/> of <paramref name="path"/>, so a comment can sit on it.</summary>
     public bool IsAddedLine(string path, int line) => AddedLines.Any(range => range.Contains(path, line));
@@ -96,8 +108,9 @@ public sealed record SuppliedReviewFacts
         && PatchId == other.PatchId
         && ClassifiedPaths.SequenceEqual(other.ClassifiedPaths)
         && Criteria.SequenceEqual(other.Criteria)
-        && AddedLines.SequenceEqual(other.AddedLines);
+        && AddedLines.SequenceEqual(other.AddedLines)
+        && ChecksPassed == other.ChecksPassed;
 
     public override int GetHashCode() =>
-        HashCode.Combine(PullRequestUrl, ReviewedCommit, PatchId, ClassifiedPaths.Count, Criteria.Count);
+        HashCode.Combine(PullRequestUrl, ReviewedCommit, PatchId, ClassifiedPaths.Count, Criteria.Count, ChecksPassed);
 }

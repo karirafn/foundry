@@ -113,7 +113,7 @@ rejects is recorded as `invalid`.
 `correctness`, `criteria`, `tests`, `security`, `quality`, `design`, `conventions`, and `rule` a principle id or a
 convention `file` with a verbatim `quote`), `dimensions` (every category, each `{status, note}` with `status`
 `clear`, `findings` or `not_applicable`), `criteria` (0 to 50 `{id, status, evidence}` objects answering the
-supplied `AC<n>` ids with `met`, `unmet` or `not_verifiable`) and `tests` (`{assessment, reason, coveringTests}`,
+supplied `AC<n>` ids with `met`, `unmet`, `not_verifiable` or, when the checks gate passed, `covered_by_checks`) and `tests` (`{assessment, reason, coveringTests}`,
 `assessment` `adequate`, `missing` or `not_needed`). It has no `outcome`: Foundry derives the outcome from the
 verdict in code (ADR 0113). Until the review verdict parser lands, a review run that exits cleanly fails as
 `verdict_invalid`, so a review can never approve anything; nothing dispatches a review yet.
