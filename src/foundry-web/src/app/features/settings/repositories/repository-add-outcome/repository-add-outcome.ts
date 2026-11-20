@@ -1,16 +1,21 @@
 import { ChangeDetectionStrategy, Component, InputSignal, Signal, computed, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import {
   BranchRulesOutcome,
   CreateRepositoryResponse,
   EligibilityViolation,
   RepositoryEligibility,
+  WebhookProvider,
+  WebhookRegistrationOutcome,
   eligibilityStatusLabel,
+  isWebhookRegistered,
+  webhookProviderWording,
 } from '../repository.model';
 
 export type AddOutcomeTone = 'pass' | 'fail' | 'neutral';
 
 export interface AddOutcomeRow {
-  key: 'access' | 'branch-rules' | 'eligibility';
+  key: 'access' | 'branch-rules' | 'eligibility' | 'webhook';
   label: string;
   tone: AddOutcomeTone;
   status: string;
@@ -88,6 +93,41 @@ function eligibilityRow(eligibility: RepositoryEligibility | null): AddOutcomeRo
     ? 'pass'
     : eligibility.status === 'ineligible' ? 'fail' : 'neutral';
   return { ...base, tone, status: eligibilityStatusLabel(eligibility.status) };
+}
+
+function webhookRow(outcome: WebhookRegistrationOutcome): AddOutcomeRow {
+  const base = { key: 'webhook' as const, label: 'Webhook' };
+  if (isWebhookRegistered(outcome)) {
+    return { ...base, tone: 'pass', status: 'Registered' };
+  }
+  // Skipped is neutral: no provider call was made.
+  return { ...base, tone: outcome.kind === 'failed' ? 'fail' : 'neutral', status: 'Not registered' };
+}
+
+/** Plain-language explanation for a webhook registration that left no hook registered. */
+function webhookExplanation(outcome: WebhookRegistrationOutcome, provider: WebhookProvider): string | null {
+  const { name, permission } = webhookProviderWording(provider);
+  switch (outcome.kind) {
+    case 'created':
+    case 'updated':
+      return null;
+    case 'skipped':
+      switch (outcome.reason) {
+        case 'not-configured':
+          return 'Skipped: Foundry has no webhook URL yet. Set it in Dispatch settings; until then this repository polls at its normal interval.';
+        case 'token-unreadable':
+          return "Skipped: the account token can't be read. Re-enter it on the account, or add the webhook by hand.";
+        default:
+          return 'Skipped: Foundry did not register the webhook.';
+      }
+    case 'failed':
+      if (outcome.reason === 'insufficient-permission') {
+        return `Failed: the account token isn't allowed to manage webhooks on this repository. It needs ${permission}.`;
+      }
+      return `Failed: ${name} rejected the registration.`;
+    default:
+      return null;
+  }
 }
 
 /** Plain-language explanation for a branch-rules outcome that was not `applied`. */
@@ -171,27 +211,46 @@ export function branchRulesExplanation(outcome: BranchRulesOutcome): string | nu
                 }
               </div>
             }
+
+            @if (row.key === 'webhook' && _webhookExplanation(); as explanation) {
+              <div class="repository-add-outcome__details">
+                <p class="repository-add-outcome__reason">{{ explanation }}</p>
+                @if (_webhookDetail(); as detail) {
+                  <p class="repository-add-outcome__detail">{{ detail }}</p>
+                }
+                @if (repositoryLink()) {
+                  <a
+                    class="repository-add-outcome__repository-link"
+                    [routerLink]="['/settings/repositories', response().repository.id]"
+                  >View webhook details</a>
+                }
+              </div>
+            }
           </li>
         }
       </ol>
     </div>
   `,
+  imports: [RouterLink],
   styleUrl: './repository-add-outcome.scss',
 })
 export class RepositoryAddOutcomeComponent {
   readonly response: InputSignal<CreateRepositoryResponse> = input.required<CreateRepositoryResponse>();
   /** Accessible name of the checklist. */
   readonly label: InputSignal<string> = input<string>('Add result');
+  /** Whether a skipped or failed webhook row links to the repository page. */
+  readonly repositoryLink: InputSignal<boolean> = input<boolean>(true);
 
   protected readonly requiredRules = REQUIRED_BRANCH_RULES;
 
   protected readonly _rows: Signal<AddOutcomeRow[]> = computed(() => {
-    const { repository, branchRules } = this.response();
-    return [
+    const { repository, branchRules, webhook } = this.response();
+    const rows = [
       accessRow(repository.eligibility),
       branchRulesRow(branchRules),
       eligibilityRow(repository.eligibility),
     ];
+    return webhook ? [...rows, webhookRow(webhook)] : rows;
   });
 
   protected readonly _accessViolations: Signal<EligibilityViolation[]> = computed(() =>
@@ -210,6 +269,20 @@ export class RepositoryAddOutcomeComponent {
   protected readonly _settingsUrl: Signal<string | null> = computed(() => {
     const outcome = this.response().branchRules;
     return outcome.kind === 'applied' ? null : outcome.settingsUrl ?? null;
+  });
+
+  protected readonly _webhookExplanation: Signal<string | null> = computed(() => {
+    const { repository, webhook } = this.response();
+    if (!webhook) {
+      return null;
+    }
+    const provider: WebhookProvider = repository.providerType.toLowerCase() === 'gitlab' ? 'gitlab' : 'github';
+    return webhookExplanation(webhook, provider);
+  });
+
+  protected readonly _webhookDetail: Signal<string | null> = computed(() => {
+    const webhook = this.response().webhook;
+    return webhook?.kind === 'failed' ? webhook.detail || null : null;
   });
 
   protected _icon(tone: AddOutcomeTone): string {
