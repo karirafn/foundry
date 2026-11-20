@@ -1,4 +1,4 @@
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

@@ -10,7 +10,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;

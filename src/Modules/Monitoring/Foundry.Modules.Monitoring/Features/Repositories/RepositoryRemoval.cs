@@ -1,6 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;

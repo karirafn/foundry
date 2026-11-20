@@ -5,7 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Repositories;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Shared;
 using Foundry.Testing;

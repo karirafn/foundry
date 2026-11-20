@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
 
 namespace Foundry.Modules.Monitoring.Features.Providers;
 
