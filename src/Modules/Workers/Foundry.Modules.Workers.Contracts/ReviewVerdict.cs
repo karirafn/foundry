@@ -6,7 +6,7 @@ namespace Foundry.Modules.Workers.Contracts;
 /// </summary>
 public enum ReviewVerdictOutcome
 {
-    /// <summary>No blocking finding, tests not missing, and every supplied criterion met.</summary>
+    /// <summary>No blocking finding, tests not missing, and every supplied criterion met or covered by passing checks.</summary>
     Approved,
 
     /// <summary>Nothing blocks, but a criterion could not be verified or none were supplied: a person should check.</summary>
@@ -49,6 +49,12 @@ public enum ReviewCriterionStatus
     Met,
     Unmet,
     NotVerifiable,
+
+    /// <summary>
+    /// The criterion's whole claim is that a build, test or CI run passes, and the checks gate recorded <c>Passed</c>
+    /// (ADR 0119). Code records it only when the run's facts say checks passed.
+    /// </summary>
+    CoveredByChecks,
 }
 
 /// <summary>A reviewer's judgment of the change's tests.</summary>

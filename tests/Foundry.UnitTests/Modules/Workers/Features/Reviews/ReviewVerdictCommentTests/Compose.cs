@@ -162,6 +162,23 @@ public sealed class Compose
     }
 
     [Fact]
+    public void ACriterionCoveredByChecks_IsNotListedAsNotMetAndShowsAsCoveredByChecksInTheEvidence()
+    {
+        // Act
+        string comment = ReviewVerdictComment.Compose(Verdict(
+            criteria:
+            [
+                new ReviewCriterionAnswer("AC1", ReviewCriterionStatus.Met, "RetryTests.cs covers it."),
+                new ReviewCriterionAnswer("AC2", ReviewCriterionStatus.CoveredByChecks, "The checks gate passed."),
+            ]));
+
+        // Assert
+        comment.ShouldSatisfyAllConditions(
+            () => comment.ShouldNotContain("**Criteria not met**"),
+            () => comment.ShouldContain("- AC2 (covered by checks): The checks gate passed.\n"));
+    }
+
+    [Fact]
     public void TheTestsAssessment_IsCollapsedWithItsReason()
     {
         // Act

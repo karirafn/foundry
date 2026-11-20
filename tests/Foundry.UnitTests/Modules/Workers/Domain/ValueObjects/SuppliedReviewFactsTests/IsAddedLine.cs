@@ -16,7 +16,8 @@ public sealed class IsAddedLine
             [new ChangedPath(ChangeStatus.Modified, "src/a.cs"), new ChangedPath(ChangeStatus.Deleted, "src/gone.cs")],
             patchId: null,
             [new AddedLineRange("src/a.cs", 10, 12), new AddedLineRange("src/a.cs", 40, 40)]),
-        issueBody: null);
+        issueBody: null,
+        checksPassed: false);
 
     [Theory]
     [InlineData("src/a.cs", 10)]

@@ -47,6 +47,16 @@ public sealed class TryParse
     }
 
     [Fact]
+    public void WhenACriterionIsCoveredByChecks_ReadsItsStatus()
+    {
+        // Act
+        ReviewVerdict verdict = ReviewVerdict.TryParse(Verdict(criteria: [Criterion("AC1", "covered_by_checks")])).ShouldNotBeNull();
+
+        // Assert
+        verdict.Criteria.ShouldHaveSingleItem().Status.ShouldBe(ReviewCriterionStatus.CoveredByChecks);
+    }
+
+    [Fact]
     public void WhenAFindingHasNoLineOrRule_ReadsThemAsAbsent()
     {
         // Arrange

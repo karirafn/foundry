@@ -52,13 +52,15 @@ public abstract record DispatchContext
     /// <paramref name="BranchName"/> and returns a verdict. It pushes nothing, so the run itself gets no branch.
     /// <paramref name="CarriedPatchId"/> is the patch-id of the issue's latest approval, or <see langword="null"/> when
     /// it has none to carry: when the change prepared for this review has the same patch-id, the approval carries to
-    /// the new head without a run.
+    /// the new head without a run. <paramref name="ChecksPassed"/> is whether the checks gate recorded <c>Passed</c> on
+    /// the reviewed commit (ADR 0119); a context serialized without it reads <see langword="false"/>.
     /// </summary>
     public sealed record Review(
         string BranchName,
         string PullRequestUrl,
         string ReviewedCommit,
-        string? CarriedPatchId = null) : DispatchContext
+        string? CarriedPatchId = null,
+        bool ChecksPassed = false) : DispatchContext
     {
         public override DispatchRole Role => DispatchRole.Review;
     }

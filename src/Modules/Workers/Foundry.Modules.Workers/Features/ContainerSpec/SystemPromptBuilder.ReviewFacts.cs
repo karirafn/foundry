@@ -12,11 +12,17 @@ internal static partial class SystemPromptBuilder
 
     internal const string NoAcceptanceCriteriaText = "No acceptance criteria were found in the issue. Send an empty `criteria` list.";
 
+    internal const string CoveredByChecksAvailableText =
+        "You may answer a criterion `covered_by_checks` when its whole claim is that a build, test or CI run passes.";
+
+    internal const string CoveredByChecksUnavailableText =
+        "`covered_by_checks` is not available: answer every criterion from the diff.";
+
     /// <summary>
     /// Renders the facts code computed for a review run (ADR 0114): each acceptance criterion as <c>AC&lt;n&gt;: text</c>,
-    /// the production-without-tests flag, and a table of the classified changed paths capped at
-    /// <see cref="MaxReviewPathRows"/> rows behind an omission note. Criterion text and paths come from the issue and the
-    /// repository, so they are XML-encoded like the issue content.
+    /// the checks gate's result, the production-without-tests flag, and a table of the classified changed paths capped
+    /// at <see cref="MaxReviewPathRows"/> rows behind an omission note. Criterion text and paths come from the issue and
+    /// the repository, so they are XML-encoded like the issue content.
     /// </summary>
     internal static string RenderReviewFacts(SuppliedReviewFacts facts)
     {
@@ -45,6 +51,11 @@ internal static partial class SystemPromptBuilder
 
             sb.Append("</acceptance-criteria>\n\n");
         }
+
+        sb.Append("### Checks gate\n\n");
+        sb.Append(facts.ChecksPassed
+            ? "Passed: every check on the reviewed commit passed. " + CoveredByChecksAvailableText + "\n\n"
+            : "No checks ran on this pull request. " + CoveredByChecksUnavailableText + "\n\n");
 
         sb.Append("### Tests\n\n");
         sb.Append(facts.ProductionChangedWithoutTests

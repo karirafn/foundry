@@ -98,9 +98,9 @@
             "pattern": "^AC[0-9]+$"
           },
           "status": {
-            "description": "met when the change satisfies the criterion; unmet when it does not; not_verifiable when the diff and checkout cannot show either.",
+            "description": "met when the change satisfies the criterion; unmet when it does not; not_verifiable when the diff and checkout cannot show either; covered_by_checks only when the checks gate passed and the criterion's whole claim is that a build, test or CI run passes.",
             "type": "string",
-            "enum": ["met", "unmet", "not_verifiable"]
+            "enum": ["met", "unmet", "not_verifiable", "covered_by_checks"]
           },
           "evidence": {
             "description": "Where the change meets or misses the criterion (a file or test), or why it cannot be verified, in one short plain line.",

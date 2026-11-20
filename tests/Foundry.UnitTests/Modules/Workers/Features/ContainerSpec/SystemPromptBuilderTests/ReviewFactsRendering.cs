@@ -16,8 +16,8 @@ public sealed class ReviewFactsRendering
     private static readonly PullRequestUrl Url = PullRequestUrl.From("https://github.com/acme/app/pull/7");
     private static readonly CommitSha Commit = CommitSha.From("0123456789abcdef0123456789abcdef01234567");
 
-    private static SuppliedReviewFacts Facts(IReadOnlyList<ChangedPath> paths, string? issueBody) =>
-        SuppliedReviewFacts.Compute(Url, Commit, new ReviewPacketFacts(paths, patchId: null), issueBody);
+    private static SuppliedReviewFacts Facts(IReadOnlyList<ChangedPath> paths, string? issueBody, bool checksPassed = false) =>
+        SuppliedReviewFacts.Compute(Url, Commit, new ReviewPacketFacts(paths, patchId: null), issueBody, checksPassed);
 
     private static string BuildPrompt(SuppliedReviewFacts? facts) =>
         SystemPromptBuilder.BuildRestricted(
@@ -49,6 +49,32 @@ public sealed class ReviewFactsRendering
             () => prompt.ShouldContain("| M | production | src/a.cs |\n| D | test | tests/a_test.go |"),
             () => prompt.IndexOf("## Review facts", StringComparison.Ordinal)
                 .ShouldBeGreaterThan(prompt.IndexOf("Judge it.", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void WhenChecksPassed_TheChecksGateSectionSaysSoAndOffersCoveredByChecks()
+    {
+        // Act
+        string prompt = BuildPrompt(Facts([new ChangedPath(ChangeStatus.Modified, "src/a.cs")], issueBody: null, checksPassed: true));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("### Checks gate\n\nPassed: every check on the reviewed commit passed."),
+            () => prompt.ShouldContain(SystemPromptBuilder.CoveredByChecksAvailableText),
+            () => prompt.ShouldNotContain(SystemPromptBuilder.CoveredByChecksUnavailableText));
+    }
+
+    [Fact]
+    public void WhenChecksDidNotPass_TheChecksGateSectionSaysNoChecksRanAndCoveredByChecksIsUnavailable()
+    {
+        // Act
+        string prompt = BuildPrompt(Facts([new ChangedPath(ChangeStatus.Modified, "src/a.cs")], issueBody: null, checksPassed: false));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("### Checks gate\n\nNo checks ran on this pull request."),
+            () => prompt.ShouldContain(SystemPromptBuilder.CoveredByChecksUnavailableText),
+            () => prompt.ShouldNotContain(SystemPromptBuilder.CoveredByChecksAvailableText));
     }
 
     [Fact]

@@ -50,7 +50,8 @@ internal static class ReviewValueConverters
                 facts.PatchId?.Value,
                 [.. facts.ClassifiedPaths.Select(path => new StoredPath(path.Path.Status, path.Path.Path, path.Class))],
                 [.. facts.Criteria.Select(criterion => new StoredCriterion(criterion.Number, criterion.Text))],
-                [.. facts.AddedLines.Select(range => new StoredLineRange(range.Path, range.Start, range.End))]),
+                [.. facts.AddedLines.Select(range => new StoredLineRange(range.Path, range.Start, range.End))],
+                facts.ChecksPassed),
             JsonOptions);
 
     internal static SuppliedReviewFacts DeserializeFacts(string json)
@@ -64,21 +65,24 @@ internal static class ReviewValueConverters
             stored.PatchId is null ? null : PatchId.From(stored.PatchId),
             [.. stored.Paths.Select(path => new ClassifiedPath(new ChangedPath(path.Status, path.Path), path.Class))],
             [.. stored.Criteria.Select(criterion => new AcceptanceCriterion(criterion.Number, criterion.Text))],
-            [.. (stored.AddedLines ?? []).Select(range => new AddedLineRange(range.Path, range.Start, range.End))]);
+            [.. (stored.AddedLines ?? []).Select(range => new AddedLineRange(range.Path, range.Start, range.End))],
+            stored.ChecksPassed ?? false);
     }
 
     private static RecordedReviewVerdict DeserializeVerdict(string json) =>
         JsonSerializer.Deserialize<RecordedReviewVerdict>(json, JsonOptions)
             ?? throw new InvalidOperationException("Failed to deserialize the review verdict.");
 
-    // AddedLines is null in facts recorded before the Publisher reported added lines.
+    // AddedLines is null in facts recorded before the Publisher reported added lines, and ChecksPassed in facts recorded
+    // before the checks result reached the review; neither had passing checks to delegate to.
     private sealed record StoredFacts(
         string PullRequestUrl,
         string ReviewedCommit,
         string? PatchId,
         IReadOnlyList<StoredPath> Paths,
         IReadOnlyList<StoredCriterion> Criteria,
-        IReadOnlyList<StoredLineRange>? AddedLines);
+        IReadOnlyList<StoredLineRange>? AddedLines,
+        bool? ChecksPassed);
 
     private sealed record StoredPath(ChangeStatus Status, string Path, ChangedFileClass Class);
 
