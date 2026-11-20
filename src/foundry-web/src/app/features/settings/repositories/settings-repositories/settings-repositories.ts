@@ -20,6 +20,7 @@ import { RepositoryService } from '../repository.service';
 import { RepositoryListComponent } from '../repository-list/repository-list';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog';
+import { DeleteFailureComponent } from '../../delete-failure/delete-failure';
 import {
   RepositorySummary,
   CreateRepositoryRequest,
@@ -33,7 +34,7 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
 @Component({
   selector: 'fd-settings-repositories',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RepositoryListComponent, RepositoryFormComponent, ConfirmDialogComponent],
+  imports: [RepositoryListComponent, RepositoryFormComponent, ConfirmDialogComponent, DeleteFailureComponent],
   template: `
     <div class="repositories-settings">
       <section class="repositories-settings__section">
@@ -82,8 +83,8 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
               (retry)="reloadRepositories()"
             />
             <div class="repositories-settings__delete-error" role="alert">
-              @if (repositoryService.deleteError(); as deleteError) {
-                {{ deleteError }}
+              @if (repositoryService.deleteFailure(); as failure) {
+                <fd-delete-failure [failure]="failure" lead="Repository not deleted — a worker is still active on:" />
               }
             </div>
             <fd-confirm-dialog
@@ -216,7 +217,7 @@ export class SettingsRepositoriesComponent implements OnInit {
     this.repositoryService.deleteRepository(repository.accountId, repository.id)
       .subscribe({
         next: () => this._reloadAll(),
-        error: () => { /* handled via deleteError signal */ },
+        error: () => { /* handled via deleteFailure signal */ },
       });
   }
 

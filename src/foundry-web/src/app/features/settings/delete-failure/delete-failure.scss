@@ -1,0 +1,15 @@
+:host {
+  display: block;
+}
+
+.delete-failure__lead,
+.delete-failure__hint {
+  margin: 0;
+}
+
+.delete-failure__issues {
+  margin: var(--fd-spacing-xs) 0;
+  padding-inline-start: var(--fd-spacing-lg);
+  color: var(--fd-text-primary);
+  overflow-wrap: anywhere;
+}

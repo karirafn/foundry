@@ -124,7 +124,7 @@ describe('RepositoryService', () => {
     expect(service.saveSuccess()).toBe(false);
     expect(service.saveError()).toBeNull();
     expect(service.deleting()).toBe(false);
-    expect(service.deleteError()).toBeNull();
+    expect(service.deleteFailure()).toBeNull();
     expect(service.availableRepositories()).toEqual([]);
     expect(service.availableHasClaims()).toBe(false);
     expect(service.loadingAvailable()).toBe(false);
@@ -617,7 +617,7 @@ describe('RepositoryService', () => {
     expect(repos[0].id).toBe(REPO_ID_2);
   });
 
-  it('should set deleteError when deleteRepository fails with a ProblemDetails body', () => {
+  it('should set a failed deleteFailure when deleteRepository fails with a ProblemDetails body', () => {
     // Arrange
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
 
@@ -628,10 +628,33 @@ describe('RepositoryService', () => {
     );
 
     // Assert
-    expect(service.deleteError()).toBe('Repository is in use.');
+    expect(service.deleteFailure()).toEqual({ kind: 'failed', message: 'Repository is in use.' });
   });
 
-  it('should clear deleteError at start of deleteRepository', () => {
+  it('should set a refused deleteFailure when deleteRepository is refused with blocking issues', () => {
+    // Arrange
+    service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush(
+      {
+        type: 'tag:foundry,2026:problems/Repository.RemovalBlocked',
+        title: 'Conflict',
+        status: 409,
+        detail: 'The repository cannot be removed while a worker is still active on: acme/api#42 (in_progress).',
+        blockingIssues: [{ repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' }],
+      },
+      { status: 409, statusText: 'Conflict' }
+    );
+
+    // Assert
+    expect(service.deleteFailure()).toEqual({
+      kind: 'refused',
+      blockingIssues: [{ repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' }],
+    });
+  });
+
+  it('should clear deleteFailure at start of deleteRepository', () => {
     // Arrange — first call that fails
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Conflict', {
@@ -643,7 +666,7 @@ describe('RepositoryService', () => {
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe();
 
     // Assert — error is cleared before response
-    expect(service.deleteError()).toBeNull();
+    expect(service.deleteFailure()).toBeNull();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
       .flush(null, { status: 204, statusText: 'No Content' });

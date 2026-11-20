@@ -2,6 +2,11 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features.RepositoryReactions;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
+using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -35,7 +40,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new MonitoredRepositoryRemovedHandler(_dbContext, NullLogger<MonitoredRepositoryRemovedHandler>.Instance);
+        _sut = new MonitoredRepositoryRemovedHandler(
+            _dbContext,
+            new RepositoryRemovalBlockers(_dbContext, new Foundry.Modules.Workers.Features.Runs.WorkerRunQueries(_dbContext)),
+            NullLogger<MonitoredRepositoryRemovedHandler>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -80,6 +88,29 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task DeletesAnInFlightIssueWhoseRunWaitsForAPublishRetry()
+    {
+        // Arrange
+        InProgressIssue retrying = Builder(1).InProgress();
+        await SeedAsync(retrying);
+        await SeedRunAsync(StartingRun.Begin(retrying.Id, WorkerRunId.New())
+            .Activate(ContainerId.From("container-1"), BranchName.From("feat/1-run"), _removedRepositoryId)
+            .BeginPublishing(
+                new RunExit(0, OomKilled: false, RunStopReason.Exited, Now),
+                containerOutput: null,
+                verdict: null,
+                pullRequestText: null)
+            .FailPublish("provider down", transient: true, Now));
+        await SeedAsync(Builder(2).InProgress());
+
+        // Act
+        await DeliverAsync();
+
+        // Assert
+        (await IssueNumbersAsync()).ShouldBe([2]);
+    }
+
+    [Fact]
     public async Task LeavesTheIssuesOfOtherRepositories()
     {
         // Arrange
@@ -121,6 +152,13 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task SeedAsync(Issue issue)
     {
         _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    private async Task SeedRunAsync(WorkerRun run)
+    {
+        _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
     }

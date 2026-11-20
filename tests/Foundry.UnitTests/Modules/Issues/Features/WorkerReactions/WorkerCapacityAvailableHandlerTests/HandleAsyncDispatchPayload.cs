@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
+using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -65,7 +66,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
                 new NullDomainEventDispatcher()),
             new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
-        IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher(), TimeProvider.System);
+        IssueClaimer claimer = new(_dbContext, new RepositoryRemovalQueries(_dbContext), _dispatcher, new NullDomainEventDispatcher(), TimeProvider.System);
         _sut = new WorkerCapacityAvailableHandler(
             _dbContext,
             selector,

@@ -84,23 +84,26 @@ export function activityPanel(activity: AgentActivity | null): ActivityPanel {
   };
 }
 
+/**
+ * A gauge of the completed count and the task in progress, filled from the start, so it agrees with
+ * the "task N of M" label even when tasks are worked out of list order.
+ */
 function taskBar(activity: AgentActivity): TaskBar {
-  const tasks = activity.tasks;
-  const current = activity.currentTask;
-  if (tasks.length <= TASK_SEGMENT_LIMIT) {
+  const total = activity.tasks.length;
+  const done = Math.min(activity.completedTaskCount, total);
+  const working = activity.currentTask !== null && done < total ? 1 : 0;
+  if (total <= TASK_SEGMENT_LIMIT) {
     return {
       kind: 'segments',
-      segments: tasks.map((t) =>
-        t.status === 'completed' ? 'done' : t.id === current?.id ? 'current' : 'empty',
+      segments: Array.from({ length: total }, (_, i): TaskSegment =>
+        i < done ? 'done' : i < done + working ? 'current' : 'empty',
       ),
     };
   }
-  const donePercent = (tasks.filter((t) => t.status === 'completed').length / tasks.length) * 100;
-  const working = current !== null && current.status !== 'completed';
   return {
     kind: 'meter',
-    donePercent,
-    currentPercent: working ? Math.min(100 / tasks.length, 100 - donePercent) : 0,
+    donePercent: (done / total) * 100,
+    currentPercent: (working / total) * 100,
   };
 }
 

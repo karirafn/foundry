@@ -402,6 +402,38 @@ describe('SettingsRepositoriesComponent', () => {
     const deleteError = el.querySelector('.repositories-settings__delete-error');
     expect(deleteError?.textContent).toContain('Repository is in use.');
   });
+
+  it('should list the blocking issues when deleteRepository is refused', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock, [ACCOUNT_1]);
+    fixture.detectChanges();
+    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
+    fixture.detectChanges();
+
+    // Act
+    const repositoryService = TestBed.inject(RepositoryService);
+    repositoryService.deleteRepository(ACCOUNT_1.id, REPO_1.id).subscribe({ error: () => {} });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`).flush(
+      {
+        type: 'tag:foundry,2026:problems/Repository.RemovalBlocked',
+        title: 'Conflict',
+        status: 409,
+        detail: 'refused',
+        blockingIssues: [{ repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' }],
+      },
+      { status: 409, statusText: 'Conflict' }
+    );
+    fixture.detectChanges();
+
+    // Assert
+    const alert = (fixture.nativeElement as HTMLElement).querySelector('.repositories-settings__delete-error');
+    expect(alert?.querySelector('.delete-failure__lead')?.textContent?.trim())
+      .toBe('Repository not deleted — a worker is still active on:');
+    expect(alert?.querySelector('.delete-failure__issues li')?.textContent?.trim()).toBe('acme/api#42 — in progress');
+    expect(alert?.querySelector('.delete-failure__hint')?.textContent?.trim()).toBe('Try again once these finish.');
+  });
   describe('header and reorder mode', () => {
     function loadedWith(repos: RepositorySummary[]) {
       const ctx = setup();

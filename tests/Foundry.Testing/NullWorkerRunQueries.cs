@@ -46,4 +46,9 @@ public sealed class NullWorkerRunQueries(int consecutiveTransientRuns = 0) : IWo
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
+
+    public Task<IReadOnlySet<Guid>> GetIssueIdsWaitingForPublishRetryAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
 }
