@@ -4,6 +4,7 @@ import { AccountListComponent } from '../account-list/account-list';
 import { AccountFormComponent } from '../account-form/account-form';
 import { AffectedRepositoriesComponent } from '../affected-repositories/affected-repositories';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog';
+import { DeleteFailureComponent } from '../../delete-failure/delete-failure';
 import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from '../account.model';
 
 type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
@@ -11,7 +12,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
 @Component({
   selector: 'fd-settings-accounts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AccountListComponent, AccountFormComponent, AffectedRepositoriesComponent, ConfirmDialogComponent],
+  imports: [AccountListComponent, AccountFormComponent, AffectedRepositoriesComponent, ConfirmDialogComponent, DeleteFailureComponent],
   template: `
     <div class="accounts-settings">
       <section class="accounts-settings__section">
@@ -51,8 +52,8 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
               (retry)="accountService.loadAccounts()"
             />
             <div class="accounts-settings__delete-error" role="alert">
-              @if (accountService.deleteError(); as deleteError) {
-                {{ deleteError }}
+              @if (accountService.deleteFailure(); as failure) {
+                <fd-delete-failure [failure]="failure" lead="Account not deleted — a worker is still active on:" />
               }
             </div>
             <fd-confirm-dialog
@@ -110,7 +111,12 @@ export class SettingsAccountsComponent implements OnInit {
   protected readonly _pendingDeleteAccount: WritableSignal<AccountSummary | null> = signal(null);
   protected readonly _deleteAccountMessage: Signal<string> = computed(() => {
     const account = this._pendingDeleteAccount();
-    return account ? `Delete account "${account.name}"? This cannot be undone.` : '';
+    return account
+      ? `Deleting "${account.name}" removes every repository this account covers: Foundry stops monitoring them, ` +
+          'deletes their webhooks, removes their open issues and discards any unpublished runs. ' +
+          'Completed issues stay in History. Adding a repository again restores its history, ' +
+          'and its open issues return on the next poll.'
+      : '';
   });
   protected readonly _accountError: Signal<string | null> = computed(() => this.accountService.loadError());
 

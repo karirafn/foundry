@@ -64,7 +64,7 @@ function createMockAccountService() {
     saveSuccess: signal(false).asReadonly(),
     validationResult: signal(null).asReadonly(),
     saveError: signal(null).asReadonly(),
-    deleteError: signal(null).asReadonly(),
+    deleteFailure: signal(null).asReadonly(),
     loadError: signal(null).asReadonly(),
     validationError: signal(null).asReadonly(),
     srAnnouncement: srAnnouncementSignal.asReadonly(),
