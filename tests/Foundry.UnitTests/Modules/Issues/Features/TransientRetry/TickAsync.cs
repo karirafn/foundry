@@ -451,6 +451,34 @@ public sealed class TickAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenFetchFailedOneMinuteAgo_ItWaitsForItsTwoMinuteBackoff()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.FetchFailed, now.AddMinutes(-1.5)), streak: 1, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FailedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenFetchFailedBackoffHasElapsed_TransitionsToQueued()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Act
+        Issue? persisted = await TickAndReloadAsync(
+            FailedWith(FailureCategory.FetchFailed, now.AddMinutes(-2.5)), streak: 1, now);
+
+        // Assert
+        persisted.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
     public async Task WhenProviderUnreachableStreakIsFour_ItWaitsSixteenMinutes()
     {
         // Arrange

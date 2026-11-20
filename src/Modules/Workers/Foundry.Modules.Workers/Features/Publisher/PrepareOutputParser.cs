@@ -59,15 +59,22 @@ internal static partial class PrepareOutputParser
     }
 
     /// <summary>
-    /// The Publisher retried an unreachable provider itself before printing <c>stage=unreachable</c>, so that sentinel
-    /// is its own reason; every other sentinel is a bootstrap failure.
+    /// The Publisher retried its provider phase itself before printing <c>stage=unreachable</c> or <c>stage=fetch</c>, so
+    /// each of those sentinels is its own reason; every other sentinel is a bootstrap failure.
     /// </summary>
     private static FailureReason BootstrapFailure(string sentinel)
     {
         Match unreachable = UnreachableSentinelPattern().Match(sentinel);
 
-        return unreachable.Success
-            ? new FailureReason.ProviderUnreachable(unreachable.Groups["detail"].Value)
+        if (unreachable.Success)
+        {
+            return new FailureReason.ProviderUnreachable(unreachable.Groups["detail"].Value);
+        }
+
+        Match fetch = FetchSentinelPattern().Match(sentinel);
+
+        return fetch.Success
+            ? new FailureReason.FetchFailed(fetch.Groups["detail"].Value)
             : new FailureReason.WorkerBootstrapFailed(sentinel);
     }
 
@@ -230,4 +237,11 @@ internal static partial class PrepareOutputParser
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex UnreachableSentinelPattern();
+
+    // The fetch step's prefix repeats the reason's summary, so it is dropped; the ls-remote step's is kept to name it.
+    [GeneratedRegex(
+        @"^FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=(?:fetching the repository failed: )?(?<detail>.*)$",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex FetchSentinelPattern();
 }

@@ -2302,6 +2302,29 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPrepareFailsFetchFailed_NoHostIsPausedAndNothingIsBroadcast()
+    {
+        // Arrange
+        await SeedDispatchPauseAsync();
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        FailureReason reason = new FailureReason.FetchFailed("fatal: fetch-pack: invalid index-pack output");
+        IssueClaimedHandler sut = BuildHandler(
+            publisher: new FakePublisher(new PrepareOutcome.Failed(reason)),
+            broadcaster: broadcaster);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<FailedRun>().Reason.ShouldBe(reason);
+        settings.HostPauses.ShouldBeEmpty();
+        broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenPrepareSucceeds_TheRunRecordsTheRepositoryItWasPreparedFrom()
     {
         // Arrange

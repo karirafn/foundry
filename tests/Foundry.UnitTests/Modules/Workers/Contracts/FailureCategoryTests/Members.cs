@@ -105,6 +105,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void FetchFailed_ValueIsFetchFailed()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.FetchFailed;
+
+        // Assert
+        category.Value.ShouldBe("fetch_failed");
+    }
+
+    [Fact]
     public void PackageSourceUnreachable_ValueIsPackageSourceUnreachable()
     {
         // Arrange

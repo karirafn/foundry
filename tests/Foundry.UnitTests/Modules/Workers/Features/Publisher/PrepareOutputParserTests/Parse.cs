@@ -128,6 +128,69 @@ public sealed class Parse
     }
 
     [Fact]
+    public void WhenNonZeroWithTheFetchSentinel_FailsAsFetchFailedWithGitsError()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "Prepare's provider step failed, transient (attempt 1 of 4); retrying in 5s\n"
+            + "2026-11-20T10:00:00Z FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=fetching the repository failed: "
+            + "fatal: fetch-pack: invalid index-pack output\n",
+            expectsRunBranch: false);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Failed(new FailureReason.FetchFailed(
+            "fatal: fetch-pack: invalid index-pack output")));
+    }
+
+    [Fact]
+    public void WhenTheFetchSentinelNamesTheLsRemoteStep_FailsAsFetchFailedKeepingTheStep()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=could not reach the repository: remote: API rate limit exceeded\n",
+            expectsRunBranch: false);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Failed(new FailureReason.FetchFailed(
+            "could not reach the repository: remote: API rate limit exceeded")));
+    }
+
+    [Fact]
+    public void WhenTheFetchSentinelCarriesASecret_ItIsRedacted()
+    {
+        // Arrange
+        string token = "ghp" + "_abcdefghijklmnopqrstuvwxyz0123456789";
+
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=fetching the repository failed: "
+            + $"fatal: unable to access 'https://{token}@github.com/o/r.git': early EOF\n",
+            expectsRunBranch: false);
+
+        // Assert
+        FailureReason reason = outcome.ShouldBeOfType<PrepareOutcome.Failed>().Reason;
+        reason.ShouldBeOfType<FailureReason.FetchFailed>().Detail
+            .ShouldNotContain(token);
+    }
+
+    [Fact]
+    public void WhenTheCloneSentinelNamesAFetchFailure_StillFailsTheBootstrap()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=fetching the repository failed: fatal: Authentication failed\n",
+            expectsRunBranch: false);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Failed(new FailureReason.WorkerBootstrapFailed(
+            "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=fetching the repository failed: fatal: Authentication failed")));
+    }
+
+    [Fact]
     public void WhenTheCloneSentinelNamesAnUnreachableHost_StillFailsTheBootstrap()
     {
         // Act
