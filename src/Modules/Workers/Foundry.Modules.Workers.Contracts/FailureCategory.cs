@@ -16,6 +16,7 @@ public sealed record FailureCategory
     public const string AuthInvalidToken = "auth_invalid";
     public const string ProviderErrorToken = "provider_error";
     public const string ProviderUnreachableToken = "provider_unreachable";
+    public const string FetchFailedToken = "fetch_failed";
     public const string PackageSourceUnreachableToken = "package_source_unreachable";
     public const string PackageRestoreFailedToken = "package_restore_failed";
     public const string TransientApiErrorToken = "transient_api_error";
@@ -45,6 +46,22 @@ public sealed record FailureCategory
     /// <remarks>Its schedule stretches over about an hour, long enough to outlast a typical provider outage.</remarks>
     public static readonly FailureCategory ProviderUnreachable = new(
         ProviderUnreachableToken,
+        AutomaticRetrySchedule.Create(
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32)));
+
+    /// <summary>
+    /// The Publisher reached the git provider, but its ls-remote or fetch kept failing for a reason it reads as transient
+    /// (a truncated pack, the remote hanging up) through every retry.
+    /// </summary>
+    /// <remarks>
+    /// It shares the provider outage's schedule, but pauses no host: ls-remote has just reached it.
+    /// </remarks>
+    public static readonly FailureCategory FetchFailed = new(
+        FetchFailedToken,
         AutomaticRetrySchedule.Create(
             TimeSpan.FromMinutes(2),
             TimeSpan.FromMinutes(4),
@@ -121,6 +138,7 @@ public sealed record FailureCategory
             { AuthInvalidToken, AuthInvalid },
             { ProviderErrorToken, ProviderError },
             { ProviderUnreachableToken, ProviderUnreachable },
+            { FetchFailedToken, FetchFailed },
             { PackageSourceUnreachableToken, PackageSourceUnreachable },
             { PackageRestoreFailedToken, PackageRestoreFailed },
             { TransientApiErrorToken, TransientApiError },

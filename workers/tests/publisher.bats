@@ -57,6 +57,20 @@ provider_errors() {
     printf '%s\n' "$@" >> "$BATS_TEST_TMPDIR/provider_errors"
 }
 
+# provider_errors_on <subcommand> <stderr>... — the next git <subcommand> transfers with the provider (ls-remote or
+# fetch) each fail with one <stderr> line, in order, while other subcommands still reach the remote.
+provider_errors_on() {
+    local subcommand="$1"
+    shift
+    printf '%s\n' "$@" >> "$BATS_TEST_TMPDIR/provider_errors.$subcommand"
+}
+
+# before_fetch <command> — runs <command> once, just before the next fetch from the provider.
+before_fetch() {
+    printf '#!/bin/bash\n%s\n' "$1" > "$BATS_TEST_TMPDIR/before_fetch"
+    chmod +x "$BATS_TEST_TMPDIR/before_fetch"
+}
+
 # A sleep that records its argument and returns at once, so retries cost the suite no time.
 make_sleep_stub() {
     cat > "$FAKE_BIN_DIR/sleep" <<EOF
@@ -72,6 +86,10 @@ sleeps() {
 
 ls_remote_count() {
     grep -c ' ls-remote ' "$BATS_TEST_TMPDIR/git_args" || true
+}
+
+fetch_count() {
+    grep -c " fetch .*$AUTH_URL" "$BATS_TEST_TMPDIR/git_args" || true
 }
 
 # prepare_gives_up_unreachable <stderr> — Prepare meets <stderr> on every attempt, retries it on the 5s, 15s, 40s
@@ -128,9 +146,24 @@ printf 'GIT_CONFIG_NOSYSTEM=%s GIT_CONFIG_GLOBAL=%s\n' "\${GIT_CONFIG_NOSYSTEM-u
 if [ -n "\${GIT_ASKPASS:-}" ]; then
     "\$GIT_ASKPASS" "Password for '$AUTH_URL': " > "$BATS_TEST_TMPDIR/askpass_answer"
 fi
+subcommand=""
+for arg in "\$@"; do
+    case "\$arg" in
+        ls-remote|fetch|push) subcommand="\$arg"; break ;;
+    esac
+done
 args=()
 for arg in "\$@"; do
     if [ "\$arg" = "$AUTH_URL" ]; then
+        if [ "\$subcommand" = fetch ] && [ -x "$BATS_TEST_TMPDIR/before_fetch" ]; then
+            "$BATS_TEST_TMPDIR/before_fetch"
+            rm "$BATS_TEST_TMPDIR/before_fetch"
+        fi
+        if [ -n "\$subcommand" ] && [ -s "$BATS_TEST_TMPDIR/provider_errors.\$subcommand" ]; then
+            head -n 1 "$BATS_TEST_TMPDIR/provider_errors.\$subcommand" >&2
+            sed -i 1d "$BATS_TEST_TMPDIR/provider_errors.\$subcommand"
+            exit 128
+        fi
         if [ -s "$BATS_TEST_TMPDIR/provider_errors" ]; then
             head -n 1 "$BATS_TEST_TMPDIR/provider_errors" >&2
             sed -i 1d "$BATS_TEST_TMPDIR/provider_errors"
@@ -290,8 +323,16 @@ bundle_heads() {
     prepare_fails_without_retry "$GIT_NO_CREDENTIALS"
 }
 
-@test "a rate limit without git's transport prefix is not retried and fails at stage=clone" {
-    prepare_fails_without_retry "remote: API rate limit exceeded"
+@test "a rate limit without git's transport prefix is retried, then fails at stage=fetch" {
+    local error="remote: API rate limit exceeded"
+    provider_errors "$error" "$error" "$error" "$error"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=could not reach the repository: $error"* ]]
+    [ "$(ls_remote_count)" -eq 4 ]
+    [ "$(sleeps)" = "$(printf '5\n15\n40')" ]
 }
 
 @test "an authentication failure is not retried and fails at stage=clone" {
@@ -341,6 +382,100 @@ bundle_heads() {
     [[ "$output" != *"stage=unreachable"* ]]
     [ "$(ls_remote_count)" -eq 2 ]
     [ "$(sleeps)" = "5" ]
+}
+
+# git's stderr for a fetch whose pack arrived truncated, from a Prepare log of a GitLab fetch on 2026-11-20.
+GIT_TRUNCATED_PACK="fatal: fetch-pack: invalid index-pack output"
+
+@test "a fetch that fails transiently once is retried after 5s and the run is prepared" {
+    provider_errors_on fetch "$GIT_TRUNCATED_PACK"
+
+    run --separate-stderr sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "FOUNDRY_BASE default_branch=main default_sha=$(remote_sha main)" ]
+    [[ "$stderr" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    bundle_heads | grep -qx "$(remote_sha main) refs/heads/main"
+    [ "$(sleeps)" = "5" ]
+    [ "$(fetch_count)" -eq 2 ]
+}
+
+@test "a fetch retry prints one stderr line naming the classification, attempt and sleep" {
+    provider_errors_on fetch "$GIT_TRUNCATED_PACK"
+
+    run --separate-stderr sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c 'retrying' <<< "$stderr")" -eq 1 ]
+    grep -q 'transient.*attempt 1 of 4.*retrying in 5s' <<< "$stderr"
+}
+
+@test "a fetch retry lists the remote's refs again before fetching" {
+    provider_errors_on fetch "$GIT_TRUNCATED_PACK"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(ls_remote_count)" -eq 2 ]
+}
+
+@test "a fetch failing transiently on every attempt fails at stage=fetch after 5s, 15s and 40s" {
+    provider_errors_on fetch "$GIT_TRUNCATED_PACK" "$GIT_TRUNCATED_PACK" "$GIT_TRUNCATED_PACK" "$GIT_TRUNCATED_PACK"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=fetching the repository failed: $GIT_TRUNCATED_PACK"* ]]
+    [ "$(fetch_count)" -eq 4 ]
+    [ "$(sleeps)" = "$(printf '5\n15\n40')" ]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
+}
+
+@test "three unreachable attempts then a transient fetch fail at stage=fetch" {
+    provider_errors_on ls-remote "$GIT_DNS_FAILURE" "$GIT_DNS_FAILURE" "$GIT_DNS_FAILURE"
+    provider_errors_on fetch "$GIT_TRUNCATED_PACK"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=fetching the repository failed: $GIT_TRUNCATED_PACK"* ]]
+    [[ "$output" != *"stage=unreachable"* ]]
+    [ "$(sleeps)" = "$(printf '5\n15\n40')" ]
+}
+
+@test "three transient fetches then an unreachable one fail at stage=unreachable" {
+    provider_errors_on fetch "$GIT_TRUNCATED_PACK" "$GIT_TRUNCATED_PACK" "$GIT_TRUNCATED_PACK" "$GIT_HTTP_503"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: $GIT_HTTP_503"* ]]
+    [[ "$output" != *"stage=fetch"* ]]
+    [ "$(sleeps)" = "$(printf '5\n15\n40')" ]
+}
+
+@test "a run branch deleted between attempts fails at stage=clone as missing on the remote" {
+    add_remote_branch feat/7-work
+    export RUN_BRANCH="feat/7-work"
+    before_fetch "'$REAL_GIT' -C '$REMOTE' update-ref -d refs/heads/feat/7-work"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=the run's branch feat/7-work does not exist on the remote"* ]]
+    [ "$(sleeps)" = "5" ]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
+}
+
+@test "a permanent fetch failure is not retried and fails at stage=clone" {
+    provider_errors_on fetch "$GIT_HTTP_403"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=fetching the repository failed: $GIT_HTTP_403"* ]]
+    [ "$(fetch_count)" -eq 1 ]
+    [ -z "$(sleeps)" ]
 }
 
 @test "the token reaches git only through GIT_ASKPASS, never an argument or the output" {
