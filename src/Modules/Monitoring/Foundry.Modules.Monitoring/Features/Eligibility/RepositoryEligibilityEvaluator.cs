@@ -24,6 +24,27 @@ internal sealed class RepositoryEligibilityEvaluator(
 {
     private readonly EligibilityComposer _composer = new(providerFactory);
 
+    /// <summary>
+    /// Stores the no-credential ineligibility a repository no account's Namespace Claim covers carries, without any
+    /// provider call. Returns whether the stored eligibility changed, so a caller saves only on a change.
+    /// </summary>
+    internal static bool StoreNoCredential(MonitoredRepository repo)
+    {
+        EligibilityViolation violation = NoCredentialViolation(repo.Slug);
+
+        if (repo.Eligibility is RepositoryEligibility.Ineligible { Violations: [EligibilityViolation stored] }
+            && stored == violation)
+        {
+            return false;
+        }
+
+        repo.SetEligibility(new RepositoryEligibility.Ineligible([violation]));
+        return true;
+    }
+
+    private static EligibilityViolation NoCredentialViolation(RepositorySlug slug) =>
+        EligibilityViolation.NoCredential(Namespace.PrefixesOf(slug)[^1].Value);
+
     /// <inheritdoc/>
     public async Task EvaluateFullyAndStoreAsync(
         MonitoredRepository repo,
@@ -37,9 +58,7 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         if (credential is null)
         {
-            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
-            repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.NoCredential(topLevelNamespace)]));
+            StoreNoCredential(repo);
             return;
         }
 
@@ -114,9 +133,7 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         if (credential is null)
         {
-            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
-            repo.SetEligibility(new RepositoryEligibility.Ineligible(
-                [EligibilityViolation.NoCredential(topLevelNamespace)]));
+            StoreNoCredential(repo);
             return;
         }
 

@@ -17,7 +17,7 @@ internal static class RepositoryEndpoints
         GetAvailableRepositories.Endpoint.Map(accountScopedGroup);
         CreateRepository.Endpoint.Map(accountScopedGroup);
         UpdateRepository.Endpoint.Map(accountScopedGroup);
-        DeleteRepository.Endpoint.Map(accountScopedGroup);
+        DeleteRepository.Endpoint.Map(accountScopedGroup, "DeleteRepository");
         RecheckRepositoryEligibility.Endpoint.Map(accountScopedGroup);
         ApplyBranchRules.Endpoint.Map(accountScopedGroup);
         RepositoryWebhookEndpoints.Map(accountScopedGroup);
@@ -26,6 +26,8 @@ internal static class RepositoryEndpoints
             .WithTags("Repositories");
 
         MoveRepository.Endpoint.Map(repositoriesGroup);
+        GetUnclaimedRepositories.Endpoint.Map(repositoriesGroup);
+        DeleteRepository.Endpoint.Map(repositoriesGroup, "DeleteMonitoredRepository");
 
         return routes;
     }

@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.AccountTokenChecks;
 using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
@@ -711,8 +712,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
         if (credential is null)
         {
+            if (RepositoryEligibilityEvaluator.StoreNoCredential(repo))
+            {
+                await services.GetRequiredService<DbContext>().SaveChangesAsync(cancellationToken);
+            }
+
             _logger.LogDebug(
-                "No credential covers repository '{Slug}'; skipping poll.",
+                "No credential covers repository '{Slug}'; recorded it as ineligible and skipping poll.",
                 repo.Slug);
             return null;
         }
