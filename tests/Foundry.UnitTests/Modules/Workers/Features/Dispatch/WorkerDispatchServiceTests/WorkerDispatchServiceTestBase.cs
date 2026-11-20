@@ -9,6 +9,7 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -91,6 +92,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IIntegrationEventProcessor? integrationEventProcessor = null,
         IGlobalSettingsQueries? settingsQueries = null,
+        IDispatchPauseQueries? dispatchPauseQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null,
         IContainerOutputParser? containerOutputParser = null,
         ICredentialGate? credentialGate = null,
@@ -135,6 +137,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IWorkerOrchestrator>(_ => orchestrator);
         services.AddScoped<IGlobalSettingsQueries>(
             _ => settingsQueries ?? new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 120));
+        services.AddScoped<IDispatchPauseQueries>(_ => dispatchPauseQueries ?? new NullDispatchPauseQueries());
         services.AddScoped<IPostExitProviderQueries>(
             _ => postExitProviderQueries ?? new StubPostExitProviderQueries(hasCommits: false));
         services.AddSingleton<IContainerOutputParser>(
@@ -344,8 +347,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             => Task.FromResult(TimeSpan.FromDays(3));
 
 
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true, []));
+        public Task<bool> GetAutoResumeOnUsageResetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(true);
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -16,7 +17,11 @@ internal static class GetSettings
 {
     internal sealed record Query : IQuery<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe) : IQueryHandler<Query, GlobalSettingsSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IWebhookIngressProbe ingressProbe,
+        IDispatchPauseQueries dispatchPauseQueries)
+        : IQueryHandler<Query, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Query query,
@@ -29,7 +34,7 @@ internal static class GetSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
+            return await GlobalSettingsMapper.ToSummaryAsync(settings, dispatchPauseQueries, ingressProbe.Port, cancellationToken);
         }
     }
 

@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -17,7 +18,10 @@ internal static class UpdateClaudeCodeSettings
 {
     internal sealed record Command(IReadOnlyList<string> AdditionalDenyRules) : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext, IWebhookIngressProbe ingressProbe)
+    internal sealed class Handler(
+        DbContext dbContext,
+        IWebhookIngressProbe ingressProbe,
+        IDispatchPauseQueries dispatchPauseQueries)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
@@ -47,7 +51,7 @@ internal static class UpdateClaudeCodeSettings
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
+            return await GlobalSettingsMapper.ToSummaryAsync(settings, dispatchPauseQueries, ingressProbe.Port, cancellationToken);
         }
     }
 

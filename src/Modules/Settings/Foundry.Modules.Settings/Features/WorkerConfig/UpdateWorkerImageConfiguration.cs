@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -22,6 +23,7 @@ internal static class UpdateWorkerImageConfiguration
     internal sealed class Handler(
         DbContext dbContext,
         IWebhookIngressProbe ingressProbe,
+        IDispatchPauseQueries dispatchPauseQueries,
         IIntegrationEventDispatcher integrationEventDispatcher)
         : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -57,7 +59,7 @@ internal static class UpdateWorkerImageConfiguration
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return GlobalSettingsMapper.ToSummary(settings, ingressProbe.Port);
+            return await GlobalSettingsMapper.ToSummaryAsync(settings, dispatchPauseQueries, ingressProbe.Port, cancellationToken);
         }
     }
 

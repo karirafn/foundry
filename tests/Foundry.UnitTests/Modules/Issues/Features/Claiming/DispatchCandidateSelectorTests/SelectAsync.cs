@@ -5,8 +5,8 @@ using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -57,7 +57,7 @@ public sealed class SelectAsync : IAsyncDisposable
         IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
         IIssueBlockerQueries? issueBlockerQueries = null,
-        IGlobalSettingsQueries? settingsQueries = null,
+        IDispatchPauseQueries? dispatchPauseQueries = null,
         IPostExitProviderQueries? branchWorkQueries = null)
     {
         return new DispatchCandidateSelector(
@@ -70,7 +70,7 @@ public sealed class SelectAsync : IAsyncDisposable
                 issueBlockerQueries ?? new StubIssueBlockerQueries(),
                 _domainEventDispatcher,
                 branchWorkQueries),
-            settingsQueries ?? new NullGlobalSettingsQueries(),
+            dispatchPauseQueries ?? new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
     }
 
@@ -532,7 +532,7 @@ public sealed class SelectAsync : IAsyncDisposable
             .ShouldBeOfType<FreshQueuedIssue>();
     }
 
-    private static PausedHostsGlobalSettingsQueries PackageProxyPaused() =>
+    private static PausedHostsDispatchPauseQueries PackageProxyPaused() =>
         new() { PackageProxyPause = new PausedPackageProxy(DateTimeOffset.UtcNow, ProbeAttempts: 0, DateTimeOffset.UtcNow.AddMinutes(1)) };
 
     [Fact]
@@ -550,7 +550,7 @@ public sealed class SelectAsync : IAsyncDisposable
                 new EligibleRepository(sourcesRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: true),
                 new EligibleRepository(plainRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: false),
             ]),
-            settingsQueries: PackageProxyPaused());
+            dispatchPauseQueries: PackageProxyPaused());
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -569,7 +569,7 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: true)]),
-            settingsQueries: PackageProxyPaused());
+            dispatchPauseQueries: PackageProxyPaused());
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -588,7 +588,7 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com", DeclaresPackageSources: true)]),
-            settingsQueries: new PausedHostsGlobalSettingsQueries());
+            dispatchPauseQueries: new PausedHostsDispatchPauseQueries());
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -610,7 +610,7 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com")]),
-            settingsQueries: new PausedHostsGlobalSettingsQueries(PausedHostFor("gitlab.com")));
+            dispatchPauseQueries: new PausedHostsDispatchPauseQueries(PausedHostFor("gitlab.com")));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -634,7 +634,7 @@ public sealed class SelectAsync : IAsyncDisposable
                 new EligibleRepository(pausedRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com"),
                 new EligibleRepository(otherRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
             ]),
-            settingsQueries: new PausedHostsGlobalSettingsQueries(PausedHostFor("gitlab.com")));
+            dispatchPauseQueries: new PausedHostsDispatchPauseQueries(PausedHostFor("gitlab.com")));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -659,7 +659,7 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com")]),
-            settingsQueries: new PausedHostsGlobalSettingsQueries(PausedHostFor("GitLab.com")));
+            dispatchPauseQueries: new PausedHostsDispatchPauseQueries(PausedHostFor("GitLab.com")));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);

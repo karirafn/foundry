@@ -69,7 +69,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 _dbContext,
                 issueBlockerQueries ?? new StubIssueBlockerQueries(),
                 _domainEventDispatcher),
-            new NullGlobalSettingsQueries(),
+            new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
         IssueClaimer claimer = new(

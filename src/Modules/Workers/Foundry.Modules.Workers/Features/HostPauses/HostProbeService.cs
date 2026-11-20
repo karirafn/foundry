@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 
-using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -56,8 +56,8 @@ internal sealed class HostProbeService(
     private async Task<IReadOnlyList<PausedHost>> ReadDueHostsAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
-        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+        IDispatchPauseQueries dispatchPauseQueries = scope.ServiceProvider.GetRequiredService<IDispatchPauseQueries>();
+        DispatchPauseState pauseState = await dispatchPauseQueries.GetDispatchPauseStateAsync(cancellationToken);
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         return [.. pauseState.PausedHosts.Where(paused => paused.NextProbeAt <= now)];

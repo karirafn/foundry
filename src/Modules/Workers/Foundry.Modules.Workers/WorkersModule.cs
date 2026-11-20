@@ -10,6 +10,7 @@ using Foundry.Modules.Workers.Features.CredentialsReactions;
 using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.DispatchPauses;
 using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.PackageProxyPauses;
 using Foundry.Modules.Workers.Features.DockerAvailability;
@@ -28,6 +29,7 @@ using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
 
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -45,6 +47,10 @@ public static class WorkersModule
     {
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IRunSourceTokenQueries, RunSourceTokenQueries>();
+        services.AddScoped<IDispatchPauseQueries, DispatchPauseQueries>();
+        services.AddHostedService<DispatchPauseSeeder>();
+        services.AddCommandHandler<PauseDispatch.Command, GlobalSettingsSummary, PauseDispatch.Handler>();
+        services.AddCommandHandler<ResumeDispatch.Command, GlobalSettingsSummary, ResumeDispatch.Handler>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
         services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddCommandHandler<RequestPublishRetry.Command, RequestPublishRetry.Response, RequestPublishRetry.Handler>();
@@ -132,5 +138,13 @@ public static class WorkersModule
         app.MapSystemEndpoints();
         app.MapWorkerRoleEndpoints();
         return app;
+    }
+
+    /// <summary>Maps the dispatch pause and resume routes into the <c>/api/settings</c> group they answer on.</summary>
+    public static RouteGroupBuilder MapDispatchPauseEndpoints(this RouteGroupBuilder settingsGroup)
+    {
+        PauseDispatch.Endpoint.Map(settingsGroup);
+        ResumeDispatch.Endpoint.Map(settingsGroup);
+        return settingsGroup;
     }
 }

@@ -4,6 +4,7 @@ using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -69,7 +70,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
         UpdateWorkerEnvironment.Command command = CreateCommand();
 
         // Act
@@ -90,7 +91,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await SeedSettingsAsync();
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+            UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
             UpdateWorkerEnvironment.Command command = CreateCommand(memoryLimitMb: 2048);
 
             // Act
@@ -110,7 +111,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -135,7 +136,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe());
+        UpdateWorkerEnvironment.Handler sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(

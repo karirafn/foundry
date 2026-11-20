@@ -1,12 +1,23 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts.Queries;
 
 namespace Foundry.Modules.Settings.Features;
 
 internal static class GlobalSettingsMapper
 {
-    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings, int webhookPort)
+    internal static async Task<GlobalSettingsSummary> ToSummaryAsync(
+        GlobalSettings settings,
+        IDispatchPauseQueries dispatchPauseQueries,
+        int webhookPort,
+        CancellationToken cancellationToken)
+    {
+        DispatchPauseState pauseState = await dispatchPauseQueries.GetDispatchPauseStateAsync(cancellationToken);
+        return ToSummary(settings, pauseState, webhookPort);
+    }
+
+    internal static GlobalSettingsSummary ToSummary(GlobalSettings settings, DispatchPauseState pauseState, int webhookPort)
     {
         // Capture the failed state once; derive both status and failure fields from a single pattern.
         ImageBuildState.Failed? failedState = settings.ImageBuildState as ImageBuildState.Failed;
@@ -22,8 +33,8 @@ internal static class GlobalSettingsMapper
             settings.TimeoutMinutes,
             settings.ProbeIntervalMinutes,
             settings.PollIntervalSeconds,
-            settings.UsageLimitResetsAt,
-            settings.IsDispatchPaused,
+            pauseState.UsageLimitResetsAt,
+            pauseState.IsDispatchPaused,
             settings.AutoResumeOnUsageReset,
             settings.WorkerImageConfiguration.ImageTag,
             settings.WorkerImageConfiguration.BuildEnabled,
@@ -38,11 +49,11 @@ internal static class GlobalSettingsMapper
             settings.WorkerResourceLimits.CpuLimit,
             settings.WorkerResourceLimits.PidsLimit,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
-            [.. settings.HostPauses.Select(HostPauseMapper.ToPausedHost)],
+            pauseState.PausedHosts,
             webhookPort,
             settings.WebhookPublicBaseUrl?.Value,
             settings.BackstopIntervalMinutes,
             settings.AwaitingInputReminderDelayHours,
-            PackageProxyPauseMapper.ToPausedPackageProxy(settings.PackageProxyPause));
+            pauseState.PackageProxyPause);
     }
 }

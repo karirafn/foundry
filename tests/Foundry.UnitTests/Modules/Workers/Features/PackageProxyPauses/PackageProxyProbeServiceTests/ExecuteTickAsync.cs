@@ -1,7 +1,9 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Contracts.Queries;
+using Foundry.Modules.Workers.Features.DispatchPauses;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.PackageProxyPauses;
@@ -28,6 +30,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.PackageProxyPauses.PackageP
 public sealed class ExecuteTickAsync : IAsyncDisposable
 {
     private static readonly DateTimeOffset PausedAt = new(2026, 11, 19, 7, 39, 0, TimeSpan.Zero);
+    private static readonly TimeSpan FirstProbeTimeout = TimeSpan.FromSeconds(5);
 
     private readonly SqliteConnection _connection;
     private readonly BlockingProbe _probe = new();
@@ -112,7 +115,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         await using ServiceProvider services = BuildServices(now: PausedAt.AddMinutes(1));
         PackageProxyProbeService sut = BuildService(services);
         Task first = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await _probe.FirstProbeStarted.WaitAsync(TestContext.Current.CancellationToken);
+        await _probe.FirstProbeStarted.WaitAsync(FirstProbeTimeout, TestContext.Current.CancellationToken);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -126,7 +129,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     private void SeedSettings(bool paused, bool globallyPaused = false)
     {
         using FoundryDbContext db = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         if (paused)
         {
             settings.PausePackageProxy(PausedAt);
@@ -137,7 +140,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             settings.PauseDispatch();
         }
 
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -146,6 +149,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         ServiceCollection services = new();
         services.AddDbContext<FoundryDbContext>(options => options.UseSqlite(_connection));
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
+        services.AddScoped<IDispatchPauseQueries, DispatchPauseQueries>();
         services.AddScoped<IGlobalSettingsQueries, GlobalSettingsQueries>();
         services.AddSingleton<IWebhookIngressProbe>(new StubWebhookIngressProbe());
         services.AddSingleton<IPackageSourceProxyAddress>(new StubProxyAddress());

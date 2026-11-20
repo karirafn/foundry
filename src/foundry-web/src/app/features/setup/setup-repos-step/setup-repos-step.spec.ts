@@ -1056,6 +1056,29 @@ describe('SetupReposStepComponent', () => {
       expect(el.querySelector('.setup-repos-step__save-error')?.textContent?.trim()).toBe('');
     });
 
+    it('should show a skipped webhook registration with its reason but no link out of the wizard', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+
+      // Act
+      clickFinish(el);
+      fixture.detectChanges();
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      const slug1 = req1.request.body.slug as string;
+      req1.flush({ ...createdResponse(slug1), webhook: { kind: 'skipped', reason: 'not-configured' } });
+      fixture.detectChanges();
+
+      // Assert
+      const webhookRow = el.querySelector(`[data-slug="${slug1}"] [data-row="webhook"]`) as HTMLElement;
+      expect(webhookRow.querySelector('.repository-add-outcome__status')?.textContent?.trim()).toBe('Not registered');
+      expect(webhookRow.querySelector('.repository-add-outcome__reason')?.textContent).toContain('Dispatch settings');
+      expect(webhookRow.querySelector('a')).toBeFalsy();
+
+      // Cleanup
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req2.flush(createdResponse(req2.request.body.slug));
+    });
+
     it('should continue the batch after a create request fails and show the error on that row only', () => {
       // Arrange
       const { fixture, el, httpMock } = selectAlphaAndBeta();

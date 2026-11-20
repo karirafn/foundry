@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Features.ContainerSpec;
+using Foundry.Modules.Workers.Features.DispatchPauses;
 using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Shared;
@@ -56,10 +57,10 @@ internal sealed class PackageProxyProber(
 
     private async Task ClearAsync(Uri proxyUrl, CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
         // Resume All may have cleared the pause while the probe ran.
-        if (settings is null || !settings.ClearPackageProxyPause())
+        if (pause is null || !pause.ClearPackageProxyPause())
         {
             return;
         }
@@ -74,9 +75,9 @@ internal sealed class PackageProxyProber(
 
     private async Task RecordUnreachableAsync(CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+        DispatchPause? pause = await dbContext.FindDispatchPauseAsync(cancellationToken);
 
-        if (settings is null || !settings.RecordPackageProxyProbeUnreachable(timeProvider.GetUtcNow()))
+        if (pause is null || !pause.RecordPackageProxyProbeUnreachable(timeProvider.GetUtcNow()))
         {
             return;
         }

@@ -63,7 +63,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
                 _dbContext,
                 new StubIssueBlockerQueries(),
                 new NullDomainEventDispatcher()),
-            new NullGlobalSettingsQueries(),
+            new NullDispatchPauseQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher(), TimeProvider.System);
         _sut = new WorkerCapacityAvailableHandler(

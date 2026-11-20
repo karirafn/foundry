@@ -1,5 +1,4 @@
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
@@ -36,7 +35,7 @@ public sealed partial class ApplyAsync
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings settings = await assertDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await assertDb.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.PackageProxyPause.ShouldBe(PackageProxyPause.Start(ProxyFailedAt));
         broadcaster.SentNotifications.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             n => n.Category.ShouldBe("dispatch"),
@@ -63,7 +62,7 @@ public sealed partial class ApplyAsync
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings settings = await assertDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await assertDb.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.PackageProxyPause.ShouldBe(
             PackageProxyPause.Start(ProxyFailedAt.AddMinutes(-5)).AfterUnreachableProbe(ProxyFailedAt.AddMinutes(-4)));
         broadcaster.SentNotifications.ShouldBeEmpty();
@@ -88,7 +87,7 @@ public sealed partial class ApplyAsync
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings settings = await assertDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await assertDb.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.PackageProxyPause.ShouldBeNull();
         broadcaster.SentNotifications.ShouldBeEmpty();
     }
@@ -112,7 +111,7 @@ public sealed partial class ApplyAsync
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings settings = await assertDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await assertDb.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.PackageProxyPause.ShouldBeNull();
         broadcaster.SentNotifications.ShouldBeEmpty();
     }
@@ -120,12 +119,12 @@ public sealed partial class ApplyAsync
     private static WorkerOutcome.Failure PackageSourceUnreachableFailure() =>
         new(new FailureReason.PackageSourceUnreachable("could not reach host.docker.internal:5287"), null, null);
 
-    private async Task SeedSettingsAsync(Action<GlobalSettings> configure)
+    private async Task SeedSettingsAsync(Action<DispatchPause> configure)
     {
         await using FoundryDbContext seedDb = CreateDbContext();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         configure(settings);
-        seedDb.Set<GlobalSettings>().Add(settings);
+        seedDb.Set<DispatchPause>().Add(settings);
         await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 }

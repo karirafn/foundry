@@ -59,7 +59,7 @@ public sealed class GetClaudeCodeSettingsAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         ClaudeCodeSettingsSnapshot result = await sut.GetClaudeCodeSettingsAsync(TestContext.Current.CancellationToken);
@@ -73,7 +73,7 @@ public sealed class GetClaudeCodeSettingsAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         ClaudeCodeSettingsSnapshot result = await sut.GetClaudeCodeSettingsAsync(TestContext.Current.CancellationToken);

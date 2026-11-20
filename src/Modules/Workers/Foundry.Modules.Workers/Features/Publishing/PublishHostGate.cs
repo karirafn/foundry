@@ -1,6 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Settings.Contracts;
-using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 
 namespace Foundry.Modules.Workers.Features.Publishing;
 
@@ -22,11 +22,11 @@ internal sealed class PublishHostGate
     }
 
     public static async Task<PublishHostGate> ReadAsync(
-        IGlobalSettingsQueries settingsQueries,
+        IDispatchPauseQueries dispatchPauseQueries,
         IRepositoryDispatchQueries repositoryDispatchQueries,
         CancellationToken cancellationToken)
     {
-        DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
+        DispatchPauseState pauseState = await dispatchPauseQueries.GetDispatchPauseStateAsync(cancellationToken);
         return new PublishHostGate(pauseState.PausedHosts, repositoryDispatchQueries);
     }
 

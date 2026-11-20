@@ -1,8 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
-using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -46,9 +44,9 @@ public sealed class ProbeAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options);
         _dbContext.Database.EnsureCreated();
 
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         settings.PauseHost(Host, PausedAt);
-        _dbContext.Set<GlobalSettings>().Add(settings);
+        _dbContext.Set<DispatchPause>().Add(settings);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
     }
@@ -212,7 +210,7 @@ public sealed class ProbeAsync : IAsyncDisposable
         // Arrange
         AddRepository("owner/a");
         _publisher.WithProbeOutcomes(new HostProbeOutcome.Unreachable("dns"));
-        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.ResumeAllDispatch();
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -264,7 +262,7 @@ public sealed class ProbeAsync : IAsyncDisposable
     private async Task<IReadOnlyList<HostPause>> ReadHostPausesAsync()
     {
         _dbContext.ChangeTracker.Clear();
-        GlobalSettings settings = await _dbContext.Set<GlobalSettings>().AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
         return settings.HostPauses;
     }
 

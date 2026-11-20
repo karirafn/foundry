@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Contracts;
+
 namespace Foundry.Modules.Settings.Contracts;
 
 public sealed record GlobalSettingsSummary(

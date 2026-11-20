@@ -1,7 +1,9 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Workers.Contracts.Queries;
+using Foundry.Modules.Workers.Features.DispatchPauses;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.HostPauses;
@@ -27,6 +29,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.HostPauses.HostProbeService
 public sealed class ExecuteTickAsync : IAsyncDisposable
 {
     private static readonly DateTimeOffset PausedAt = new(2026, 11, 13, 7, 39, 0, TimeSpan.Zero);
+    private static readonly TimeSpan FirstProbeTimeout = TimeSpan.FromSeconds(5);
 
     private readonly SqliteConnection _connection;
     private readonly BlockingPublisher _publisher = new();
@@ -40,6 +43,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         ServiceCollection services = new();
         services.AddDbContext<FoundryDbContext>(options => options.UseSqlite(_connection));
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
+        services.AddScoped<IDispatchPauseQueries, DispatchPauseQueries>();
         services.AddScoped<IGlobalSettingsQueries, GlobalSettingsQueries>();
         services.AddSingleton<IWebhookIngressProbe>(new StubWebhookIngressProbe());
         OneRepositoryPerHost repositories = new();
@@ -55,10 +59,10 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         using IServiceScope scope = _services.CreateScope();
         FoundryDbContext db = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
         db.Database.EnsureCreated();
-        GlobalSettings settings = GlobalSettings.Create();
+        DispatchPause settings = DispatchPause.Create();
         settings.PauseHost("due.example.test", PausedAt);
         settings.PauseHost("later.example.test", PausedAt.AddMinutes(5));
-        db.Set<GlobalSettings>().Add(settings);
+        db.Set<DispatchPause>().Add(settings);
         db.SaveChanges();
     }
 
@@ -89,7 +93,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         // Arrange
         HostProbeService sut = BuildService();
         Task first = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await _publisher.FirstProbeStarted.WaitAsync(TestContext.Current.CancellationToken);
+        await _publisher.FirstProbeStarted.WaitAsync(FirstProbeTimeout, TestContext.Current.CancellationToken);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

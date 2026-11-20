@@ -2,6 +2,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Features;
 using Foundry.WebApi.Persistence;
+using Foundry.Testing;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -45,7 +46,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         ImageBuildStatus result = await sut.GetImageBuildStatusAsync(TestContext.Current.CancellationToken);
@@ -67,7 +68,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         ImageBuildStatus result = await sut.GetImageBuildStatusAsync(TestContext.Current.CancellationToken);
@@ -90,7 +91,7 @@ public sealed class GetImageBuildStatusAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe());
+        GlobalSettingsQueries sut = new(dbContext, new StubWebhookIngressProbe(), new NullDispatchPauseQueries());
 
         // Act
         ImageBuildStatus result = await sut.GetImageBuildStatusAsync(TestContext.Current.CancellationToken);
