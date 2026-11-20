@@ -10,6 +10,7 @@ import {
   repositoryDeletionMessage,
   repositoryUpdatesLine,
   splitRepositorySlug,
+  webhookProviderWording,
 } from './repository.model';
 
 describe('canApplyBranchRules', () => {
@@ -227,5 +228,23 @@ describe('repositoryDeletionMessage', () => {
     expect(message).toBe(
       'Foundry will stop monitoring "acme/api", delete its webhooks, remove its open issues and discard any unpublished runs. Completed issues stay in History. Adding the repository again restores its history, and its open issues return on the next poll.'
     );
+  });
+});
+
+describe('webhookProviderWording', () => {
+  it('should name GitHub and its Webhooks permission for github', () => {
+    // Act
+    const wording = webhookProviderWording('github');
+
+    // Assert
+    expect(wording).toEqual({ name: 'GitHub', permission: 'the Webhooks (read and write) permission' });
+  });
+
+  it('should name GitLab and the Maintainer role for gitlab', () => {
+    // Act
+    const wording = webhookProviderWording('gitlab');
+
+    // Assert
+    expect(wording).toEqual({ name: 'GitLab', permission: 'the Maintainer role' });
   });
 });

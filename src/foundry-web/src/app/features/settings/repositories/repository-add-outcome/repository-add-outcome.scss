@@ -33,7 +33,7 @@ $reveal-step: 180ms;
     font-size: 0.875rem;
     grid-template-columns: var(--fd-gutter) auto 1fr;
 
-    @for $i from 1 through 3 {
+    @for $i from 1 through 4 {
       &:nth-child(#{$i}) {
         animation-delay: ($i - 1) * $reveal-step;
       }
@@ -106,7 +106,8 @@ $reveal-step: 180ms;
     padding-left: var(--fd-spacing-lg);
   }
 
-  &__settings-link {
+  &__settings-link,
+  &__repository-link {
     align-self: flex-start;
     color: var(--fd-text-link);
 
