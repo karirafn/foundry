@@ -21,7 +21,7 @@ namespace Foundry.Modules.Credentials.Features.Usage;
 /// are resolved per-invocation via <see cref="IServiceScopeFactory"/>.
 /// </para>
 /// <para>
-/// <b>JOIN semantics (ADR 0052):</b> unlike the credit-probe single-flight (fail-fast), a second
+/// <b>JOIN semantics:</b> unlike the credit-probe single-flight (fail-fast), a second
 /// concurrent caller joins the in-flight poll — it awaits the same task and receives the same
 /// result without starting a second container. This ensures that an event-triggered poll arriving
 /// while a periodic tick is in-flight always observes a fresh result rather than being silently

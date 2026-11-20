@@ -1010,6 +1010,9 @@ internal sealed partial class GitHubHttpClient(
 
         TokenExpiry tokenExpiry = ReadTokenExpiry(response, apiBaseUrl);
 
+        // GitHub never sends X-OAuth-Scopes for a fine-grained PAT, so its absence is normal for that
+        // token kind. Any other token without the header, including a prefix GitHub adds later, stays
+        // ScopesUnverifiable.
         if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
         {
             return GitHubTokenKind.IsFineGrainedPat(token)
@@ -1039,6 +1042,7 @@ internal sealed partial class GitHubHttpClient(
         string relativePath = $"repos/{owner}/{repo}/git/refs";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
+        // The all-zeros SHA never resolves, so a token with write access gets 422 and no ref is created.
         string body = JsonSerializer.Serialize(
             new { @ref = $"refs/heads/{probeName}", sha = AllZerosSha },
             JsonOptions);
@@ -1659,7 +1663,9 @@ internal sealed partial class GitHubHttpClient(
     {
         return response.StatusCode switch
         {
+            // 422 means the token passed the permission check and only the deliberately invalid payload was refused.
             HttpStatusCode.UnprocessableEntity => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            // 404 cannot confirm a denial, so the probe does not block; later operations surface the real error.
             HttpStatusCode.NotFound => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
             // A 403 carrying rate-limit headers is a transient exhaustion, not a permission denial.
             // Returning Fail here prevents the caller from recording a spurious Denied verdict.

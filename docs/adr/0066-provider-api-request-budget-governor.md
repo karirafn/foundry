@@ -4,7 +4,7 @@
 
 Nothing in Foundry owned the provider API request budget, so every new poll pass could
 silently multiply it with no test to catch the regression.
-Documentation alone had already failed here: [ADR 0041](0041-probe-target-selection.md) stated
+Documentation alone had already failed here: an ADR stated
 that eligibility write probes run "on add or recheck", yet the code ran them every cycle because
 [ADR 0013](0013-repository-level-eligibility.md) established an unconditional per-cycle step and
 nothing reconciled the two ADRs — the contradiction was left standing until
@@ -98,12 +98,12 @@ test.
 The store is in-memory (no cross-restart persistence), so the window only matters within a single
 process lifetime.
 
-## Finding: ADR 0013 vs ADR 0041 contradiction already resolved
+## Finding: the eligibility-cadence contradiction is already resolved
 
 The contradiction that issue #454 asked to resolve is already settled in the repository:
 
 - [ADR 0054](0054-split-eligibility-cadence.md) is the resolution: branch-rules GET stays
-  per-cycle (ADR 0013's auto-heal guarantee), write probes become event-triggered (ADR 0041's "on
+  per-cycle (ADR 0013's auto-heal guarantee), write probes become event-triggered (the "on
   add or recheck" cadence), with `Unknown` self-healing on a 15-minute cooldown. ADR 0054
   explicitly states it "supersedes the 'runs every cycle' clause of ADR 0013 for the write-probe
   half only".
@@ -114,7 +114,7 @@ The contradiction that issue #454 asked to resolve is already settled in the rep
   throttle"). This ADR is the back-reference that closes that loop.
 
 This ADR therefore does **not** re-edit ADR 0013 or re-state the cadence resolution.
-AC7's requirement ("the ADR 0013 vs ADR 0041 contradiction … is resolved rather than left
+AC7's requirement ("the ADR 0013 vs write-probe cadence contradiction … is resolved rather than left
 standing") is satisfied by construction — by ADR 0054, not by this ADR.
 
 ## Considered Options

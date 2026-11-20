@@ -155,6 +155,8 @@ export class RepositoryPageComponent implements OnInit {
   );
   private readonly _lastLoadedAccountIdsKey: WritableSignal<string> = signal('');
 
+  // The API has no single-repository GET, so the page reads the list the service already holds;
+  // keeping no copy lets a delete made anywhere flip an open page to not-found.
   protected readonly _repository: Signal<RepositorySummary | undefined> = computed(() => {
     const id = this._repositoryId();
     if (!id) {

@@ -42,6 +42,8 @@ public sealed record BaseUrl
         return new BaseUrl(uri);
     }
 
+    // Routes through Create rather than bypassing validation, so a stored row that breaks the invariant
+    // fails loudly on load instead of reaching dispatch as a clone URL.
     public static BaseUrl FromPersistedString(string value)
     {
         Result<BaseUrl> result = Create(value);
