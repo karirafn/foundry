@@ -117,6 +117,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void PackageRestoreFailed_ValueIsPackageRestoreFailed()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.PackageRestoreFailed;
+
+        // Assert
+        category.Value.ShouldBe("package_restore_failed");
+    }
+
+    [Fact]
     public void TransientApiError_ValueMatchesToken()
     {
         // Arrange

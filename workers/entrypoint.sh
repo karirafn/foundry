@@ -28,7 +28,13 @@ fail_bootstrap() {
 # csharp-ls snapshots the workspace when it starts and never picks up a later
 # restore, so loading it against an unrestored repo yields silently partial
 # results.  This therefore restores first and fails closed to "no LSP" (the
-# agent falls back to grep) on any problem; it never fails the bootstrap.
+# agent falls back to grep) on any problem, with one exception.  A full-capability
+# run whose repository declares Package Sources (PACKAGE_SOURCES_DECLARED, set by
+# write_package_source_config) restores through Foundry, so a restore that fails
+# other than by running out of time emits the bootstrap-failure sentinel
+# (stage=package-restore) and returns non-zero: a run that cannot restore writes
+# code it can never build.  A repository without Package Sources can fail restore
+# for its own reasons (a Windows-only project), so it keeps "no LSP".
 #
 # Restore targets mirror csharp-ls's own discovery: every *.sln / *.slnx found
 # recursively (excluding node_modules), else every *.csproj / *.fsproj.  The
@@ -61,28 +67,53 @@ prepare_csharp_lsp() {
         return 0
     fi
 
+    # The restore writes to a file rather than a pipe: MSBuild node processes can
+    # outlive dotnet and would hold a pipe open past the timeout.
+    local restore_log
+    restore_log="$(mktemp 2> /dev/null)" || restore_log=/dev/null
+
     local deadline=$(( SECONDS + CSHARP_LSP_RESTORE_TIMEOUT_SECONDS ))
-    local target remaining rc
+    local target relative remaining rc error_line
     for target in "${targets[@]}"; do
         remaining=$(( deadline - SECONDS ))
         if (( remaining <= 0 )); then
             echo "C# LSP: disabled (restore exceeded ${CSHARP_LSP_RESTORE_TIMEOUT_SECONDS}s)" >&2
+            remove_restore_log "$restore_log"
             return 0
         fi
-        echo "C# LSP: restoring ${target#"$root"/}" >&2
+        relative="${target#"$root"/}"
+        echo "C# LSP: restoring $relative" >&2
         rc=0
-        timeout --kill-after=10 "$remaining" dotnet restore "$target" >&2 || rc=$?
+        timeout --kill-after=10 "$remaining" dotnet restore "$target" > "$restore_log" 2>&1 || rc=$?
+        cat "$restore_log" >&2
         if (( rc == 124 || rc == 137 )); then
             echo "C# LSP: disabled (restore exceeded ${CSHARP_LSP_RESTORE_TIMEOUT_SECONDS}s)" >&2
+            remove_restore_log "$restore_log"
             return 0
         elif (( rc != 0 )); then
-            echo "C# LSP: disabled (dotnet restore failed for ${target#"$root"/} with exit code ${rc})" >&2
+            if [[ "${WORKER_CAPABILITY:-}" == "full" && -n "${PACKAGE_SOURCES_DECLARED:-}" ]]; then
+                error_line="$(grep -m 1 -F 'error' "$restore_log")" || error_line=""
+                error_line="${error_line#"${error_line%%[![:space:]]*}"}"
+                error_line="${error_line%"${error_line##*[![:space:]]}"}"
+                remove_restore_log "$restore_log"
+                fail_bootstrap "package-restore" "$relative: ${error_line:-dotnet restore exited $rc}"
+                return 1
+            fi
+            echo "C# LSP: disabled (dotnet restore failed for $relative with exit code ${rc})" >&2
+            remove_restore_log "$restore_log"
             return 0
         fi
     done
+    remove_restore_log "$restore_log"
 
     CSHARP_LSP_PLUGIN_ARGS=(--plugin-dir "$CSHARP_LSP_PLUGIN_DIR")
     echo "C# LSP: enabled" >&2
+}
+
+remove_restore_log() {
+    if [[ "$1" != /dev/null ]]; then
+        rm -f "$1"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -159,8 +190,14 @@ check_package_proxy() {
 }
 
 write_package_source_config() {
+    PACKAGE_SOURCES_DECLARED=""
     if [[ -z "${FOUNDRY_NUGET_CONFIG+set}" ]]; then
         return 0
+    fi
+    # Foundry owns this run's restore path even when the config does not decode,
+    # so prepare_csharp_lsp fails a full run whose restore then fails.
+    if [[ -n "$FOUNDRY_NUGET_CONFIG" ]]; then
+        PACKAGE_SOURCES_DECLARED=1
     fi
 
     # The config carries the run's Run Source Token, so the variable never
@@ -814,7 +851,7 @@ is_transient_api_error() {
 # sees exactly the environment the agent sees.
 readonly CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
 readonly CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp
-prepare_csharp_lsp "$WORKSPACE_DIR"
+prepare_csharp_lsp "$WORKSPACE_DIR" || exit 1
 
 # ---------------------------------------------------------------------------
 # Run bundle (ADR 0100, ADR 0101)

@@ -1181,6 +1181,44 @@ public sealed partial class ResolveAsync
         failure.FailureReason.ShouldBeOfType<FailureReason.PackageSourceUnreachable>().Detail.ShouldNotContain(secret);
     }
 
+    [Fact]
+    public async Task WhenThePackageRestoreFailed_ReturnsPackageRestoreFailedWithTheDetail()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(1),
+            containerOutput: "FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=App.sln: error NU1301: Unable to load the service index",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(
+            new FailureReason.PackageRestoreFailed("App.sln: error NU1301: Unable to load the service index"));
+    }
+
+    [Fact]
+    public async Task WhenThePackageRestoreDetailCarriesASecret_TheSecretIsRedacted()
+    {
+        // Arrange
+        string secret = "glpat-" + "S3cr3tT0k3nValue12345";
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(1),
+            containerOutput: $"FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=App.sln: error NU1301: {secret}",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.PackageRestoreFailed>().Detail.ShouldNotContain(secret);
+    }
+
     private const string AgentStartedOutputQuotingBootstrapSentinel = """
         2026-11-01T10:00:01.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
         2026-11-01T10:16:00.000000001Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"tool_use_result":{"stdout":"not ok 3 managed settings\nFOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail=managed settings file is missing\n","stderr":""}}

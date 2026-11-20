@@ -610,8 +610,15 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
         Match packageSources = PackageSourcesSentinelPattern().Match(sentinel);
 
-        return packageSources.Success
-            ? new ContainerOutputParseResult.PackageSourceUnreachable(packageSources.Groups["detail"].Value)
+        if (packageSources.Success)
+        {
+            return new ContainerOutputParseResult.PackageSourceUnreachable(packageSources.Groups["detail"].Value);
+        }
+
+        Match packageRestore = PackageRestoreSentinelPattern().Match(sentinel);
+
+        return packageRestore.Success
+            ? new ContainerOutputParseResult.PackageRestoreFailed(packageRestore.Groups["detail"].Value)
             : new ContainerOutputParseResult.WorkerBootstrapFailed(sentinel);
     }
 
@@ -652,7 +659,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     // Anchored to the start of a line (after the optional Docker timestamp), so text that merely quotes
     // the marker, such as a shell command echoing it, is not the entrypoint emitting it.
     [GeneratedRegex(
-        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|unreachable|auth|branch|managed-settings|role|package-sources)[^\n]*)",
+        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|unreachable|auth|branch|managed-settings|role|package-sources|package-restore)[^\n]*)",
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
@@ -662,4 +669,10 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex PackageSourcesSentinelPattern();
+
+    [GeneratedRegex(
+        @"^FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=(?<detail>.*)$",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PackageRestoreSentinelPattern();
 }

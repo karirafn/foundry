@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { RepositoryAddOutcomeComponent, isAccessViolation } from './repository-add-outcome';
 import {
   BranchRulesOutcome,
   CreateRepositoryResponse,
   RepositoryEligibility,
   RepositorySummary,
+  WebhookRegistrationOutcome,
 } from '../repository.model';
 
 const SETTINGS_URL = 'https://github.com/my-org/my-repo/settings/rules';
@@ -16,13 +18,13 @@ const INELIGIBLE_RULES: RepositoryEligibility = {
   reason: null,
 };
 
-function repository(eligibility: RepositoryEligibility | null): RepositorySummary {
+function repository(eligibility: RepositoryEligibility | null, providerType: string): RepositorySummary {
   return {
     id: 'r1',
     slug: 'my-org/my-repo',
     accountId: 'a1',
     accountName: 'acc',
-    providerType: 'github',
+    providerType,
     position: 0,
     pollIntervalSeconds: null,
     effectivePollIntervalSeconds: 300,
@@ -37,11 +39,27 @@ function repository(eligibility: RepositoryEligibility | null): RepositorySummar
   };
 }
 
-function setup(branchRules: BranchRulesOutcome, eligibility: RepositoryEligibility | null = INELIGIBLE_RULES) {
-  TestBed.configureTestingModule({ imports: [RepositoryAddOutcomeComponent] });
+interface WebhookSetup {
+  webhook?: WebhookRegistrationOutcome | null;
+  providerType?: string;
+  repositoryLink?: boolean;
+}
+
+function setup(
+  branchRules: BranchRulesOutcome,
+  eligibility: RepositoryEligibility | null = INELIGIBLE_RULES,
+  { webhook, providerType = 'github', repositoryLink }: WebhookSetup = {},
+) {
+  TestBed.configureTestingModule({ imports: [RepositoryAddOutcomeComponent], providers: [provideRouter([])] });
   const fixture = TestBed.createComponent(RepositoryAddOutcomeComponent);
-  const response: CreateRepositoryResponse = { repository: repository(eligibility), branchRules };
+  const response: CreateRepositoryResponse = { repository: repository(eligibility, providerType), branchRules };
+  if (webhook !== undefined) {
+    response.webhook = webhook;
+  }
   fixture.componentRef.setInput('response', response);
+  if (repositoryLink !== undefined) {
+    fixture.componentRef.setInput('repositoryLink', repositoryLink);
+  }
   fixture.detectChanges();
   const el = fixture.nativeElement as HTMLElement;
   const row = (key: string) => el.querySelector(`[data-row="${key}"]`) as HTMLElement | null;
@@ -239,6 +257,158 @@ describe('RepositoryAddOutcomeComponent', () => {
       // Assert
       expect(row('eligibility')?.classList).toContain('repository-add-outcome__row--neutral');
       expect(row('eligibility')?.textContent).toContain('Not checked');
+    });
+  });
+
+  describe('webhook row', () => {
+    const webhookRow = (el: HTMLElement) => el.querySelector('[data-row="webhook"]') as HTMLElement | null;
+
+    it('should render the webhook row after the eligibility row', () => {
+      // Arrange / Act
+      const { el } = setup({ kind: 'applied' }, ELIGIBLE, { webhook: { kind: 'created' } });
+
+      // Assert
+      const keys = Array.from(el.querySelectorAll('.repository-add-outcome__row')).map(r => r.getAttribute('data-row'));
+      expect(keys).toEqual(['access', 'branch-rules', 'eligibility', 'webhook']);
+    });
+
+    it.each([null, undefined])('should render no webhook row when webhook is %s', (webhook) => {
+      // Arrange / Act
+      const { el } = setup({ kind: 'applied' }, ELIGIBLE, { webhook });
+
+      // Assert
+      expect(webhookRow(el)).toBeFalsy();
+    });
+
+    it.each(['created', 'updated'] as const)('should show %s as a passing "Registered" row with no reason or link', (kind) => {
+      // Arrange / Act
+      const { el } = setup({ kind: 'applied' }, ELIGIBLE, { webhook: { kind } });
+
+      // Assert
+      const row = webhookRow(el)!;
+      expect(row.classList).toContain('repository-add-outcome__row--pass');
+      expect(row.querySelector('.repository-add-outcome__label')?.textContent?.trim()).toBe('Webhook');
+      expect(row.querySelector('.repository-add-outcome__status')?.textContent?.trim()).toBe('Registered');
+      expect(row.querySelector('.repository-add-outcome__reason')).toBeFalsy();
+      expect(row.querySelector('.repository-add-outcome__repository-link')).toBeFalsy();
+    });
+
+    const notRegistered: { name: string; outcome: WebhookRegistrationOutcome; providerType: string; tone: string; reason: string }[] = [
+      {
+        name: 'skipped / not-configured',
+        outcome: { kind: 'skipped', reason: 'not-configured' },
+        providerType: 'github',
+        tone: 'neutral',
+        reason: 'Skipped: Foundry has no webhook URL yet. Set it in Dispatch settings; until then this repository polls at its normal interval.',
+      },
+      {
+        name: 'skipped / token-unreadable',
+        outcome: { kind: 'skipped', reason: 'token-unreadable' },
+        providerType: 'github',
+        tone: 'neutral',
+        reason: "Skipped: the account token can't be read. Re-enter it on the account, or add the webhook by hand.",
+      },
+      {
+        name: 'skipped / unknown reason',
+        outcome: { kind: 'skipped', reason: 'something-new' as WebhookRegistrationOutcome['reason'] },
+        providerType: 'github',
+        tone: 'neutral',
+        reason: 'Skipped: Foundry did not register the webhook.',
+      },
+      {
+        name: 'failed / insufficient-permission on GitHub',
+        outcome: { kind: 'failed', reason: 'insufficient-permission' },
+        providerType: 'github',
+        tone: 'fail',
+        reason: "Failed: the account token isn't allowed to manage webhooks on this repository. It needs the Webhooks (read and write) permission.",
+      },
+      {
+        name: 'failed / insufficient-permission on GitLab',
+        outcome: { kind: 'failed', reason: 'insufficient-permission' },
+        providerType: 'GitLab',
+        tone: 'fail',
+        reason: "Failed: the account token isn't allowed to manage webhooks on this repository. It needs the Maintainer role.",
+      },
+      {
+        name: 'failed / provider-error on GitHub',
+        outcome: { kind: 'failed', reason: 'provider-error' },
+        providerType: 'github',
+        tone: 'fail',
+        reason: 'Failed: GitHub rejected the registration.',
+      },
+      {
+        name: 'failed / no reason on GitLab',
+        outcome: { kind: 'failed', reason: null },
+        providerType: 'gitlab',
+        tone: 'fail',
+        reason: 'Failed: GitLab rejected the registration.',
+      },
+    ];
+
+    for (const c of notRegistered) {
+      it(`should show ${c.name} as "Not registered" with its reason`, () => {
+        // Arrange / Act
+        const { el } = setup({ kind: 'applied' }, ELIGIBLE, { webhook: c.outcome, providerType: c.providerType });
+
+        // Assert
+        const row = webhookRow(el)!;
+        expect(row.classList).toContain(`repository-add-outcome__row--${c.tone}`);
+        expect(row.querySelector('.repository-add-outcome__status')?.textContent?.trim()).toBe('Not registered');
+        expect(row.querySelector('.repository-add-outcome__reason')?.textContent?.trim()).toBe(c.reason);
+      });
+    }
+
+    it('should show the provider detail of a failed registration', () => {
+      // Arrange / Act
+      const { el } = setup({ kind: 'applied' }, ELIGIBLE, {
+        webhook: { kind: 'failed', reason: 'provider-error', detail: 'Validation Failed: hook already exists' },
+      });
+
+      // Assert
+      expect(webhookRow(el)!.querySelector('.repository-add-outcome__detail')?.textContent?.trim())
+        .toBe('Validation Failed: hook already exists');
+    });
+
+    it('should not show a detail on a skipped registration', () => {
+      // Arrange / Act
+      const { el } = setup({ kind: 'applied' }, ELIGIBLE, {
+        webhook: { kind: 'skipped', reason: 'not-configured', detail: 'stray' },
+      });
+
+      // Assert
+      expect(webhookRow(el)!.querySelector('.repository-add-outcome__detail')).toBeFalsy();
+    });
+
+    it.each([
+      ['skipped', { kind: 'skipped', reason: 'not-configured' }],
+      ['failed', { kind: 'failed', reason: 'provider-error', detail: 'boom' }],
+    ] as [string, WebhookRegistrationOutcome][])(
+      'should end a %s row with a same-tab link to the repository page',
+      (_, webhook) => {
+        // Arrange / Act
+        const { el } = setup({ kind: 'applied' }, ELIGIBLE, { webhook });
+
+        // Assert
+        const details = webhookRow(el)!.querySelector('.repository-add-outcome__details')!;
+        const link = details.lastElementChild as HTMLAnchorElement;
+        expect(link.classList).toContain('repository-add-outcome__repository-link');
+        expect(link.textContent?.trim()).toBe('View webhook details');
+        expect(link.getAttribute('href')).toBe('/settings/repositories/r1');
+        expect(link.getAttribute('target')).toBeNull();
+      },
+    );
+
+    it('should render no repository link when repositoryLink is false', () => {
+      // Arrange / Act
+      const { el } = setup({ kind: 'applied' }, ELIGIBLE, {
+        webhook: { kind: 'skipped', reason: 'not-configured' },
+        repositoryLink: false,
+      });
+
+      // Assert
+      const row = webhookRow(el)!;
+      expect(row.querySelector('.repository-add-outcome__repository-link')).toBeFalsy();
+      expect(row.querySelector('.repository-add-outcome__reason')?.textContent).toContain('Dispatch settings');
     });
   });
 });

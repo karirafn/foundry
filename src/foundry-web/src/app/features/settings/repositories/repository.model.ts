@@ -113,12 +113,21 @@ export function isWebhookRegistered(outcome: WebhookRegistrationOutcome): boolea
   return outcome.kind === 'created' || outcome.kind === 'updated';
 }
 
+export interface WebhookProviderWording {
+  name: string;
+  /** What the account token needs to manage webhooks, phrased to follow "needs". */
+  permission: string;
+}
+
+export function webhookProviderWording(provider: WebhookProvider): WebhookProviderWording {
+  return provider === 'gitlab'
+    ? { name: 'GitLab', permission: 'the Maintainer role' }
+    : { name: 'GitHub', permission: 'the Webhooks (read and write) permission' };
+}
+
 /** Operator-facing message for a registration outcome. */
 export function webhookRegistrationMessage(outcome: WebhookRegistrationOutcome, provider: WebhookProvider): string {
-  const providerName = provider === 'gitlab' ? 'GitLab' : 'GitHub';
-  const permission = provider === 'gitlab'
-    ? 'the Maintainer role'
-    : 'the Webhooks (read and write) permission';
+  const { name: providerName, permission } = webhookProviderWording(provider);
 
   switch (outcome.kind) {
     case 'created':

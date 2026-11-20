@@ -17,6 +17,7 @@ public sealed record FailureCategory
     public const string ProviderErrorToken = "provider_error";
     public const string ProviderUnreachableToken = "provider_unreachable";
     public const string PackageSourceUnreachableToken = "package_source_unreachable";
+    public const string PackageRestoreFailedToken = "package_restore_failed";
     public const string TransientApiErrorToken = "transient_api_error";
     public const string CreditsExhaustedToken = "credits_exhausted";
     public const string ModelUnavailableToken = "model_unavailable";
@@ -55,6 +56,22 @@ public sealed record FailureCategory
     /// <remarks>It shares the provider outage's schedule: both are infrastructure outages a person need not act on.</remarks>
     public static readonly FailureCategory PackageSourceUnreachable = new(
         PackageSourceUnreachableToken,
+        AutomaticRetrySchedule.Create(
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32)));
+
+    /// <summary>
+    /// The worker's pre-restore failed on a run whose repository declares Package Sources, before its agent started.
+    /// </summary>
+    /// <remarks>
+    /// It shares the package proxy outage's schedule: Foundry owns that restore path, so the cause is a proxy or a
+    /// credential a person need not act on for the run itself.
+    /// </remarks>
+    public static readonly FailureCategory PackageRestoreFailed = new(
+        PackageRestoreFailedToken,
         AutomaticRetrySchedule.Create(
             TimeSpan.FromMinutes(2),
             TimeSpan.FromMinutes(4),
@@ -105,6 +122,7 @@ public sealed record FailureCategory
             { ProviderErrorToken, ProviderError },
             { ProviderUnreachableToken, ProviderUnreachable },
             { PackageSourceUnreachableToken, PackageSourceUnreachable },
+            { PackageRestoreFailedToken, PackageRestoreFailed },
             { TransientApiErrorToken, TransientApiError },
             { CreditsExhaustedToken, CreditsExhausted },
             { ModelUnavailableToken, ModelUnavailable },

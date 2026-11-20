@@ -63,7 +63,7 @@ interface AddRow {
               }
               @if (row.response; as response) {
                 <div class="setup-repos-step__result-outcome" aria-live="polite">
-                  <fd-repository-add-outcome [response]="response" />
+                  <fd-repository-add-outcome [response]="response" [repositoryLink]="false" />
                 </div>
               }
             </li>

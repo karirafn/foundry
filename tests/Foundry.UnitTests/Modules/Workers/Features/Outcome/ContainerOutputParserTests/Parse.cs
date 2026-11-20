@@ -367,6 +367,39 @@ public sealed class Parse
     }
 
     [Fact]
+    public void WhenPackageRestoreSentinelPresent_ReturnsPackageRestoreFailedWithTheDetailLine()
+    {
+        // Arrange
+        string log = """
+            C# LSP: restoring src/App.sln
+            2026-11-19T10:00:00.000000001Z FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=src/App.sln: error NU1301: Unable to load the service index
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.PackageRestoreFailed>()
+            .Detail.ShouldBe("src/App.sln: error NU1301: Unable to load the service index");
+    }
+
+    [Fact]
+    public void WhenToolResultQuotesPackageRestoreSentinel_ReturnsAgentStartedNoResultLine()
+    {
+        // Arrange
+        string log = """
+            2026-11-01T10:00:00.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            2026-11-01T10:16:00.000000001Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"tool_use_result":{"stdout":"FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=x\n","stderr":""}}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AgentStartedNoResultLine>();
+    }
+
+    [Fact]
     public void WhenToolResultQuotesPackageSourcesSentinel_ReturnsAgentStartedNoResultLine()
     {
         // Arrange
