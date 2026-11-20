@@ -25,6 +25,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -83,7 +84,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
         ITrackerContextQueries? trackerContextQueries = null,
         IPublisher? publisher = null,
         ISystemNotificationBroadcaster? broadcaster = null,
-        IWorkerHostEntryResolver? hostEntryResolver = null)
+        IWorkerHostEntryResolver? hostEntryResolver = null,
+        ILogger<IssueClaimedHandler>? logger = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -101,7 +103,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             trackerContextQueries ?? new StubTrackerContextQueries(),
             broadcaster ?? new CapturingSystemNotificationBroadcaster(),
             hostEntryResolver ?? new StubWorkerHostEntryResolver(),
-            NullLogger<IssueClaimedHandler>.Instance);
+            logger ?? NullLogger<IssueClaimedHandler>.Instance);
     }
 
     private static IssueClaimed BuildEvent(

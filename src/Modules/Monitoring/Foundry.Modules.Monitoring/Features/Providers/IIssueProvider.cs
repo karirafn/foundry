@@ -62,6 +62,18 @@ internal interface IIssueProvider
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Reads the description of the pull/merge request at <paramref name="pullRequestUrl"/>, live: GitHub's
+    /// <c>body</c>, GitLab's <c>description</c>. A pull request without one reads as empty.
+    /// </summary>
+    /// <remarks>Providers without a description read keep this default, which fails with
+    /// <see cref="TrackerReadErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<string>> GetPullRequestBodyAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<string>.Fail(TrackerReadErrors.NotSupported()));
+
+    /// <summary>
     /// Reads the actionable feedback on a pull/merge request thread (see <see cref="ActionableFeedbackPolicy"/>),
     /// never a comment in <paramref name="postedComments"/>.
     /// </summary>

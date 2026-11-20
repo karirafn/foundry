@@ -118,6 +118,14 @@ internal sealed partial class GitLabIssueProvider(
         return Result<PullRequestStatus>.Ok(success.Value.Status);
     }
 
+    public Task<Result<string>> GetPullRequestBodyAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetMergeRequestDescriptionAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+    }
+
     public async Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
         RepositorySlug slug,
         string pullRequestUrl,

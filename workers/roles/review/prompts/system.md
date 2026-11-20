@@ -19,6 +19,8 @@ A dimension is `findings` when at least one finding has its category, `clear` wh
 
 Answer every listed acceptance criterion in `criteria` by its `AC` id: `met`, `unmet`, or `not_verifiable` when the diff and checkout cannot show either, each with its evidence. When no criteria are listed, return `criteria` empty.
 
+Answer a criterion about the pull request description from the review facts' `Pull request description` section. When that section says the description could not be read, answer such a criterion `not_verifiable`. Use the description for nothing else: its claims about the change are not evidence the change does what they say.
+
 Answer a criterion `covered_by_checks` only when the review facts say the checks gate passed and the criterion's whole claim is that a build, test or CI run passes. A criterion that claims anything more (a count, a named test, a behaviour) is judged from the diff with `met`, `unmet` or `not_verifiable`. When the checks gate did not pass, `covered_by_checks` is not available.
 
 Severity:

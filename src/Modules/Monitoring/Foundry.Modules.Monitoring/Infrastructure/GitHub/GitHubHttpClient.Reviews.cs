@@ -101,6 +101,49 @@ internal sealed partial class GitHubHttpClient
         }
     }
 
+    /// <summary>
+    /// Reads a pull request's description (<c>GET /repos/{owner}/{repo}/pulls/{pull_number}</c>). GitHub answers
+    /// <c>body: null</c> for a pull request opened without one, which reads as empty.
+    /// </summary>
+    public async Task<Result<string>> GetPullRequestBodyAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
+        {
+            return Result<string>.Fail(GitHubErrors.InvalidPullRequestUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), $"repos/{owner}/{repo}/pulls/{prNumber}");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<string>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubPullRequestBodyDto? pullRequest = JsonSerializer.Deserialize<GitHubPullRequestBodyDto>(body, JsonOptions);
+
+        return Result<string>.Ok(pullRequest?.Body ?? string.Empty);
+    }
+
     private sealed record GitHubReviewWriteDto(
         string CommitId,
         string Body,
@@ -110,4 +153,6 @@ internal sealed partial class GitHubHttpClient
     private sealed record GitHubReviewCommentWriteDto(string Path, int Line, string Side, string Body);
 
     private sealed record GitHubReviewDto(long? Id);
+
+    private sealed record GitHubPullRequestBodyDto(string? Body);
 }
