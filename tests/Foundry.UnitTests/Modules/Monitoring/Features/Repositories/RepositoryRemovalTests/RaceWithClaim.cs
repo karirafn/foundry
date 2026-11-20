@@ -8,7 +8,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Repositories;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Shared;
