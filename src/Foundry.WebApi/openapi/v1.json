@@ -1065,7 +1065,7 @@
         "tags": [
           "Accounts"
         ],
-        "summary": "Deletes an account",
+        "summary": "Deletes an account and removes every repository it covers",
         "operationId": "DeleteAccount",
         "parameters": [
           {
@@ -1084,6 +1084,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
