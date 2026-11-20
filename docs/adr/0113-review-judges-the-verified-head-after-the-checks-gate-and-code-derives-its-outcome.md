@@ -1,5 +1,7 @@
 # Review Judges the Verified Head After the Checks Gate, and Code Derives Its Outcome
 
+> **2026-11-20 — Amended:** the outcome-derivation clause in Decision is replaced by [ADR 0119](0119-review-criteria-can-be-covered-by-the-checks-gate-and-the-reviewer-reads-the-pull-request-description.md), which adds a `covered_by_checks` criterion status that counts as `met` when the checks gate passed.
+
 ## Context
 
 The `review` Worker Role, planned since [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) and [ADR 0095](0095-worker-roles-ship-in-the-worker-image.md), judges whether an implementation pull request is correct and meets its issue.
