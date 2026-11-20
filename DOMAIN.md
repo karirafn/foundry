@@ -218,6 +218,7 @@ A credential for accessing a specific provider's API — one Account per PAT ("A
 Modeled as polymorphic variants (`GitHubCredential`, `GitLabCredential`) — each provider may carry provider-specific configuration (e.g., API base URL for self-hosted instances).
 The PAT is stored encrypted in the database using Data Protection API + EF Core Value Converters.
 Multiple accounts can exist per provider and per host — including multiple PATs authenticating as the same provider user. Accounts do not reference repositories; repositories resolve to an account through Namespace Claims.
+Deleting an account first removes every repository its Namespace Claims cover (same host, owner resolved by `Credential.ResolveCoveringNamespace`) through `RepositoryRemoval` (see [Removed Repository](#monitored-repository)), all in one call while the account and its token still exist, so each repository's webhooks are deleted with that token; then the account is deleted. The deletion is refused with `409 Conflict` naming the blocking issues, and nothing is removed, while any of those repositories has work in flight.
 
 ### PAT Owner
 
@@ -285,7 +286,7 @@ An [Invalid Token](#invalid-token), unreadable or absent token shows no expiry: 
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.
 Claims are derived from the token's writable-repository listing (every distinct owner of a repo the token can push to) at account creation, token rotation, and repository recheck.
-A Monitored Repository carries no account reference; on each eligibility evaluation the covering account is resolved by matching the repository's owner against claims (`ICredentialResolver`). A repository whose owner no account claims evaluates as Ineligible (`no-credential:<namespace>`). Token rotation and repository recheck re-evaluate the repositories whose claims they drop; deleting an account does not, and the poll skips a repository no account covers before evaluating it, so a deleted account's repositories keep their last stored eligibility. A repository no account covers is absent from every account-scoped repository listing.
+A Monitored Repository carries no account reference; on each eligibility evaluation the covering account is resolved by matching the repository's owner against claims (`ICredentialResolver`). A repository whose owner no account claims evaluates as Ineligible (`no-credential:<namespace>`). Token rotation and repository recheck re-evaluate the repositories whose claims they drop; the poll skips a repository no account covers before evaluating it. A repository no account covers is absent from every account-scoped repository listing.
 
 ## Global Settings
 
@@ -830,7 +831,7 @@ Claiming proceeds in three steps:
 
 Claiming is the only path from a queued state to an in-progress one; nothing else in the system claims an issue. Claims are never concurrent — the outbox relay is a single host-level service that delivers sequentially.
 
-**Terminal outcomes** are logged once at the handler: `Debug` when no eligible repositories exist or no candidates remain after eligibility filtering, `Warning` when every candidate was skipped because its repository's dispatch info could not be resolved (`AllCandidatesUnresolvable`). Ineligibility filters out repositories with no account in step 1 only when their stored eligibility was re-evaluated after the claim was lost. A deleted account's repositories keep their last stored eligibility (see [Namespace Claim](#namespace-claim)), and `RepositoryEligibilityQuery` keeps returning them as eligible: their queued issues reach this path whenever they are selected as candidates, not only in the window between a credential's deletion or token clearing and the next poll cycle.
+**Terminal outcomes** are logged once at the handler: `Debug` when no eligible repositories exist or no candidates remain after eligibility filtering, `Warning` when every candidate was skipped because its repository's dispatch info could not be resolved (`AllCandidatesUnresolvable`). Ineligibility filters out repositories with no account in step 1 only when their stored eligibility was re-evaluated after the claim was lost. Deleting an account removes the repositories it covers, so this path is reached only in the narrow race between a claim being lost (or a token being cleared) and the next re-evaluation of the repository's eligibility.
 
 ## Dispatch Reservation
 
