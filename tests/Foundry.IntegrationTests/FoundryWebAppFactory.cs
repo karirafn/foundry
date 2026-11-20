@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -133,6 +134,10 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
                 }
 
                 options.AddInterceptors(sp.GetRequiredService<OutboxSaveChangesInterceptor>());
+
+                // Production only warns on First without OrderBy or a filter; failing here makes a query that does not
+                // state which row it reads fail the test that reaches it instead of hiding in the log.
+                options.ConfigureWarnings(warnings => warnings.Throw(CoreEventId.FirstWithoutOrderByAndFilterWarning));
             });
 
             if (!KeepsHostedServices)
