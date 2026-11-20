@@ -111,7 +111,7 @@ public sealed partial class ApplyAsync
 
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
-        GlobalSettings settings = await assertDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await assertDb.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
         settings.PackageProxyPause.ShouldBeNull();
         broadcaster.SentNotifications.ShouldBeEmpty();
     }
