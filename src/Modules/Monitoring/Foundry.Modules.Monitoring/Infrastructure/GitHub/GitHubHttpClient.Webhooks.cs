@@ -4,7 +4,8 @@ using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
+using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;

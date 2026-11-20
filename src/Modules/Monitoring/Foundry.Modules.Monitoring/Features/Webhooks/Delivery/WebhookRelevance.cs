@@ -1,0 +1,284 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
+
+namespace Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
+
+/// <summary>
+/// What Foundry currently tracks for one repository — the input to the relevance filter.
+/// <see cref="BlockerIssueNumbers"/> holds the same-repository issues that currently block a tracked
+/// issue; it is loaded only for issue events (GitHub <c>issues</c>, GitLab <c>issue</c> / <c>work_item</c>),
+/// whose close of a blocker must nudge the dependency pass.
+/// <see cref="AwaitingInputIssues"/> holds the issues waiting for an answer, whose question thread's comments
+/// nudge the awaiting-input pass.
+/// </summary>
+internal sealed record WebhookTrackingContext(
+    IReadOnlySet<int> KnownIssueNumbers,
+    IReadOnlyList<ReviewIssueInfo> ReviewIssues,
+    IReadOnlyList<ChecksPendingIssueInfo> ChecksPendingIssues,
+    IReadOnlySet<int>? BlockerIssueNumbers = null,
+    IReadOnlyList<AwaitingInputThread>? AwaitingInputIssues = null)
+{
+    internal static readonly WebhookTrackingContext Empty = new(new HashSet<int>(), [], []);
+
+    internal IReadOnlySet<int> Blockers => BlockerIssueNumbers ?? EmptySet;
+
+    internal IReadOnlyList<AwaitingInputThread> AwaitingInput => AwaitingInputIssues ?? [];
+
+    private static readonly IReadOnlySet<int> EmptySet = new HashSet<int>();
+}
+
+/// <summary>
+/// An awaiting-input issue and the thread its question lives on (ADR 0096): the pull request's thread when
+/// <paramref name="PullRequestUrl"/> is set, otherwise the issue's own thread. <paramref name="BranchName"/> is its
+/// resume target's branch, whose pushes count as input, or <see langword="null"/> when it has none.
+/// </summary>
+internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestUrl, string? BranchName);
+
+/// <summary>
+/// Provider-neutral relevance rules shared by the webhook event mappers (ADR 0085): a pull/merge
+/// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
+/// issue is checks-pending; a finished checks delivery nudges the checks pass of its checks-pending
+/// owner, or else the review pass of its review owner whose checks verdict is not passed; a comment on an
+/// awaiting-input issue's question thread, an edit of an issue whose question lives on its own thread, or a push to an
+/// awaiting-input issue's resume branch nudges its awaiting-input pass; an issue close of a blocker
+/// nudges the listing plus the dependency pass; anything else maps to <see langword="null"/>.
+/// </summary>
+internal static partial class WebhookRelevance
+{
+    /// <summary>
+    /// The label that marks an issue for Foundry — both provider listings filter on it
+    /// (<c>GitHubHttpClient</c> <c>IssueListQuery</c>, <c>GitLabHttpClient</c> <c>labels=foundry</c>).
+    /// </summary>
+    internal const string TriggerLabel = "foundry";
+
+    private const string BranchRefPrefix = "refs/heads/";
+
+    // Worker branches are "<prefix>/<issue-number>-<slug>" (or "<prefix>/<issue-number>").
+    [GeneratedRegex(@"^[a-z][a-z0-9-]*/(?<number>\d{1,9})(?:-|$)", RegexOptions.CultureInvariant)]
+    private static partial Regex WorkerBranchPattern();
+
+    /// <summary>
+    /// Maps a pull/merge request delivery to the review pass of its owning issue, falling back to the
+    /// checks pass when the owner is checks-pending (the review pass only acts on review issues).
+    /// </summary>
+    internal static NudgeKey? MapOwningIssue(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        IReadOnlyList<int> pullNumbers,
+        IReadOnlyList<string> branches,
+        Regex pullRequestUrlPattern)
+    {
+        HashSet<int> candidates = CandidateIssueNumbers(branches);
+
+        return FindReviewOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern, includeChecksPassed: true)
+            ?? FindChecksPendingOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern);
+    }
+
+    /// <summary>
+    /// Maps a checks delivery (a finished pipeline, check suite or status) to the checks pass of the
+    /// checks-pending issue that owns it, falling back to the review pass of the owning review issue whose
+    /// checks verdict is not passed, so its same-head checks re-read runs at once (ADR 0108). A passed
+    /// verdict is never re-read, so nudging its review pass would only spend reads.
+    /// </summary>
+    internal static NudgeKey? MapChecksDelivery(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        IReadOnlyList<int> pullNumbers,
+        IReadOnlyList<string> branches,
+        Regex pullRequestUrlPattern)
+    {
+        HashSet<int> candidates = CandidateIssueNumbers(branches);
+
+        return FindChecksPendingOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern)
+            ?? FindReviewOwner(repositoryId, tracked, candidates, pullNumbers, pullRequestUrlPattern, includeChecksPassed: false);
+    }
+
+    private static NudgeKey? FindReviewOwner(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        HashSet<int> candidates,
+        IReadOnlyList<int> pullNumbers,
+        Regex pullRequestUrlPattern,
+        bool includeChecksPassed)
+    {
+        foreach (ReviewIssueInfo review in tracked.ReviewIssues)
+        {
+            if ((includeChecksPassed || !review.ChecksPassed)
+                && (candidates.Contains(review.IssueNumber) || MatchesPull(review.PullRequestUrl, pullNumbers, pullRequestUrlPattern)))
+            {
+                return new NudgeKey(repositoryId, NudgePass.Review, review.IssueNumber);
+            }
+        }
+
+        return null;
+    }
+
+    private static NudgeKey? FindChecksPendingOwner(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        HashSet<int> candidates,
+        IReadOnlyList<int> pullNumbers,
+        Regex pullRequestUrlPattern)
+    {
+        foreach (ChecksPendingIssueInfo checksPending in tracked.ChecksPendingIssues)
+        {
+            if (candidates.Contains(checksPending.IssueNumber)
+                || MatchesPull(checksPending.PullRequestUrl, pullNumbers, pullRequestUrlPattern))
+            {
+                return new NudgeKey(repositoryId, NudgePass.Checks, checksPending.IssueNumber);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a comment or review on a pull/merge request: the owning issue's review or checks pass, falling
+    /// back to the awaiting-input pass of the issue whose question lives on that pull request's thread.
+    /// </summary>
+    internal static NudgeKey? MapPullRequestComment(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        IReadOnlyList<int> pullNumbers,
+        IReadOnlyList<string> branches,
+        Regex pullRequestUrlPattern)
+    {
+        if (MapOwningIssue(repositoryId, tracked, pullNumbers, branches, pullRequestUrlPattern) is { } owning)
+        {
+            return owning;
+        }
+
+        foreach (AwaitingInputThread waiting in tracked.AwaitingInput)
+        {
+            if (waiting.PullRequestUrl is { } pullRequestUrl && MatchesPull(pullRequestUrl, pullNumbers, pullRequestUrlPattern))
+            {
+                return new NudgeKey(repositoryId, NudgePass.AwaitingInput, waiting.IssueNumber);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a comment on an issue's own thread to the awaiting-input pass of that issue, when its question
+    /// lives there (it has no pull request). A comment on any other issue maps to <see langword="null"/>.
+    /// </summary>
+    internal static NudgeKey? MapIssueComment(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber) =>
+        tracked.AwaitingInput.Any(w => w.IssueNumber == issueNumber && w.PullRequestUrl is null)
+            ? new NudgeKey(repositoryId, NudgePass.AwaitingInput, issueNumber)
+            : null;
+
+    /// <summary>
+    /// Maps an edit of an issue whose question lives on its own thread to that issue's awaiting-input pass: the
+    /// edited description may be the answer (ADR 0096). An edit of any other issue maps to <see langword="null"/>,
+    /// and the caller falls back to the listing nudge.
+    /// </summary>
+    internal static NudgeKey? MapIssueEdited(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber,
+        bool isEdit) =>
+        isEdit ? MapIssueComment(repositoryId, tracked, issueNumber) : null;
+
+    /// <summary>
+    /// Maps a push to the awaiting-input pass of the issue whose resume branch it moved: a push while the issue waits
+    /// may be the answer (ADR 0096). GitHub and GitLab share the <c>ref</c> shape; a tag push, or a push to any other
+    /// branch, maps to <see langword="null"/>.
+    /// </summary>
+    internal static NudgeKey? MapPush(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        JsonElement payload)
+    {
+        if (GetString(payload, "ref") is not { } pushedRef
+            || !pushedRef.StartsWith(BranchRefPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string branch = pushedRef[BranchRefPrefix.Length..];
+
+        return tracked.AwaitingInput.FirstOrDefault(w => string.Equals(w.BranchName, branch, StringComparison.Ordinal))
+            is { } waiting
+            ? new NudgeKey(repositoryId, NudgePass.AwaitingInput, waiting.IssueNumber)
+            : null;
+    }
+
+    /// <summary>
+    /// Maps an issue close to the listing plus dependency pass when the closing issue blocks a tracked
+    /// issue — a blocker closing frees the issues it blocks. It applies whether or not the blocker itself
+    /// is tracked or labeled, and wins over the plain listing nudge since it runs the superset pass.
+    /// </summary>
+    internal static NudgeKey? MapBlockerClosed(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber,
+        bool isClose) =>
+        isClose && tracked.Blockers.Contains(issueNumber)
+            ? new NudgeKey(repositoryId, NudgePass.IssueListingAndDependencies)
+            : null;
+
+    private static HashSet<int> CandidateIssueNumbers(IReadOnlyList<string> branches)
+    {
+        HashSet<int> numbers = [];
+        foreach (string branch in branches)
+        {
+            Match match = WorkerBranchPattern().Match(branch);
+            if (match.Success && int.TryParse(match.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
+            {
+                numbers.Add(number);
+            }
+        }
+
+        return numbers;
+    }
+
+    private static bool MatchesPull(string pullRequestUrl, IReadOnlyList<int> pullNumbers, Regex pullRequestUrlPattern)
+    {
+        if (pullNumbers.Count == 0)
+        {
+            return false;
+        }
+
+        Match match = pullRequestUrlPattern.Match(pullRequestUrl);
+        return match.Success
+            && int.TryParse(match.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number)
+            && pullNumbers.Contains(number);
+    }
+
+    internal static bool TryGetObject(JsonElement element, string property, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(property, out value)
+            && value.ValueKind == JsonValueKind.Object)
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    internal static int? GetInt(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out JsonElement value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out int number)
+            ? number
+            : null;
+
+    internal static string? GetString(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out JsonElement value)
+        && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+}

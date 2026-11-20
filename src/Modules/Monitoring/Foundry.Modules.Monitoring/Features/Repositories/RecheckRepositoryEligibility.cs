@@ -7,7 +7,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.PackageSources;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;

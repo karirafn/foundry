@@ -3,7 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;

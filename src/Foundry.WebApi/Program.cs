@@ -10,7 +10,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Features.PackageSourceProxy;
-using Foundry.Modules.Monitoring.Features.Webhooks;
+using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
 using Foundry.Modules.Monitoring.Features.Webhooks.StatusBroadcast;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
