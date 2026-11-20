@@ -242,13 +242,20 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
+        // Read after the carried-approval check, so a carried review makes no provider call for it.
+        ReviewPromptInput? reviewPrompt = reviewFacts is null
+            ? null
+            : new ReviewPromptInput(
+                reviewFacts,
+                await ReadPullRequestDescriptionAsync(startingRun, claimed, reviewFacts.PullRequestUrl, cancellationToken));
+
         Result<WorkerContainerSpec> specResult = await BuildSpecAsync(
             startingRun,
             claimed,
             catalog,
             issueContent,
             trackerContext,
-            reviewFacts,
+            reviewPrompt,
             cancellationToken);
 
         if (specResult is not Result<WorkerContainerSpec>.Success { Value: { } spec })
@@ -436,6 +443,48 @@ internal sealed class IssueClaimedHandler(
         return logs;
     }
 
+    // Most reviews need no description, so a failed read leaves the review running with the description marked
+    // unreadable rather than failing it.
+    private async Task<LivePullRequestBody> ReadPullRequestDescriptionAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        PullRequestUrl pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        Result<string> result;
+        try
+        {
+            result = await issueContentQueries.GetPullRequestDescriptionAsync(
+                claimed.MonitoredRepositoryId,
+                pullRequestUrl.Value,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                ex,
+                "Worker run {WorkerRunId} for issue #{IssueNumber} could not read the pull request description; "
+                + "the review proceeds without it.",
+                startingRun.Id,
+                claimed.IssueNumber);
+            return new LivePullRequestBody.Unreadable();
+        }
+
+        if (result is Result<string>.Success success)
+        {
+            return new LivePullRequestBody.Read(success.Value);
+        }
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} for issue #{IssueNumber} could not read the pull request description; "
+            + "the review proceeds without it: {Error}",
+            startingRun.Id,
+            claimed.IssueNumber,
+            ((Result<string>.Failure)result).Error.Message);
+
+        return new LivePullRequestBody.Unreadable();
+    }
+
     // Resolved at use time rather than carried on the event: outbox payloads are plaintext, the stored token is not.
     private static string? GitPatOf(RepositoryDispatchInfo? dispatchInfo) =>
         dispatchInfo?.AccountToken is { Length: > 0 } gitPat ? gitPat : null;
@@ -461,7 +510,7 @@ internal sealed class IssueClaimedHandler(
         WorkerRoleCatalog? catalog,
         IssueContent issueContent,
         TrackerContext trackerContext,
-        SuppliedReviewFacts? reviewFacts,
+        ReviewPromptInput? reviewPrompt,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -494,7 +543,7 @@ internal sealed class IssueClaimedHandler(
                 toolchain,
                 claimed.Clarifications ?? [],
                 trackerContext: trackerContext,
-                reviewFacts: reviewFacts)
+                review: reviewPrompt)
             : SystemPromptBuilder.Build(
                 principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
@@ -571,9 +620,9 @@ internal sealed class IssueClaimedHandler(
         }
 
         // The entrypoint checks the reviewed commit out read-only; the Publisher already bundled it (ADR 0114).
-        if (reviewFacts is not null)
+        if (reviewPrompt is not null)
         {
-            envVars[ReviewDispatch.ReviewCommitVariable] = reviewFacts.ReviewedCommit.Value;
+            envVars[ReviewDispatch.ReviewCommitVariable] = reviewPrompt.Facts.ReviewedCommit.Value;
         }
 
         // The worker clones the base bundle from the Hand-off volume and leaves its Run bundle there (ADR 0100). It holds

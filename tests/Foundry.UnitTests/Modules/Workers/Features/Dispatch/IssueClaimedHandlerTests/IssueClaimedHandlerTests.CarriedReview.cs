@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,24 @@ public sealed partial class HandleAsync
             () => verdict.Findings.ShouldBe([AdvisoryFinding]),
             () => verdict.PatchId.ShouldBe(ReviewPatchId),
             () => run.SuppliedReviewFacts.ShouldNotBeNull().ReviewedCommit.ShouldBe(CommitSha.From(ReviewedCommitSha)));
+    }
+
+    [Fact]
+    public async Task WhenTheApprovalCarries_ThePullRequestDescriptionIsNotRead()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        await SeedEarlierReviewAsync(issueId, EarlierVerdict());
+        StubIssueContentQueries contentQueries = ReviewContentQueries();
+        IssueClaimedHandler sut = BuildReviewHandler(issueContentQueries: contentQueries);
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(issueId: issueId, context: CarryingContext(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        contentQueries.PullRequestRequests.ShouldBeEmpty();
     }
 
     [Theory]

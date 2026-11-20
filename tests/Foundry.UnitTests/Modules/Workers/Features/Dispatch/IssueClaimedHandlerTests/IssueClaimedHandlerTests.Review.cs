@@ -14,6 +14,7 @@ using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 using Shouldly;
 
@@ -74,15 +75,22 @@ public sealed partial class HandleAsync
     private IssueClaimedHandler BuildReviewHandler(
         StubWorkerOrchestrator? orchestrator = null,
         FakePublisher? publisher = null,
-        string issueBody = ReviewIssueBody)
+        string issueBody = ReviewIssueBody,
+        StubIssueContentQueries? issueContentQueries = null,
+        ILogger<IssueClaimedHandler>? logger = null)
     {
         return BuildHandler(
             orchestrator: orchestrator,
             publisher: publisher ?? new FakePublisher(reviewPacket: ReviewPacket),
             roleCatalog: new StubWorkerRoleCatalogStore(CatalogWithRestricted(WorkerRole.Review)),
-            issueContentQueries: new StubIssueContentQueries(
-                Result<IssueContent>.Ok(new IssueContent("Add retries", issueBody, []))));
+            issueContentQueries: issueContentQueries ?? ReviewContentQueries(issueBody: issueBody),
+            logger: logger);
     }
+
+    private static StubIssueContentQueries ReviewContentQueries(
+        Result<string>? pullRequestDescription = null,
+        string issueBody = ReviewIssueBody) =>
+        new(Result<IssueContent>.Ok(new IssueContent("Add retries", issueBody, [])), pullRequestDescription);
 
     [Fact]
     public async Task WhenTheContextIsReview_PreparesTheReviewedBranchAndCommitAndNoRunBranch()
@@ -195,6 +203,59 @@ public sealed partial class HandleAsync
             () => systemPrompt.ShouldContain($"Reviewed commit: {ReviewedCommitSha}"),
             () => systemPrompt.ShouldContain("AC1: Retries three times"),
             () => systemPrompt.ShouldContain("| M | production | src/Retry.cs |"));
+    }
+
+    [Fact]
+    public async Task WhenTheContextIsReview_ItReadsTheReviewedPullRequestsDescriptionIntoTheSystemPrompt()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubIssueContentQueries contentQueries = ReviewContentQueries(Result<string>.Ok("## Post-merge steps\r\n\n1. Run <migrate>."));
+        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator, issueContentQueries: contentQueries);
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(monitoredRepositoryId: repositoryId, context: ReviewContext(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => contentQueries.PullRequestRequests.ShouldBe([(repositoryId, ReviewedPullRequest)]),
+            () => systemPrompt.ShouldContain(
+                "### Pull request description\n\n" + SystemPromptBuilder.PullRequestDescriptionUseText
+                + "\n\n<pull-request-description>\n## Post-merge steps\n\n1. Run &lt;migrate&gt;.\n</pull-request-description>"));
+    }
+
+    [Fact]
+    public async Task WhenThePullRequestDescriptionCannotBeRead_TheReviewStartsSayingSoAndAWarningNamesTheRunAndIssue()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        CapturingLogger<IssueClaimedHandler> logger = new();
+        IssueClaimedHandler sut = BuildReviewHandler(
+            orchestrator: orchestrator,
+            issueContentQueries: ReviewContentQueries(Result<string>.Fail(new Error("GitHub.Unexpected", "boom"))),
+            logger: logger);
+        WorkerRunId runId = WorkerRunId.New();
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(workerRunId: runId, context: ReviewContext(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().AsNoTracking()
+            .SingleAsync(candidate => candidate.Id == runId, TestContext.Current.CancellationToken);
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        run.ShouldSatisfyAllConditions(
+            () => run.ShouldBeOfType<ActiveRun>(),
+            () => systemPrompt.ShouldContain(
+                "### Pull request description\n\n" + SystemPromptBuilder.UnreadablePullRequestDescriptionText),
+            () => logger.Entries.ShouldContain(entry => entry.Level == LogLevel.Warning
+                && entry.Message.Contains(runId.Value.ToString(), StringComparison.Ordinal)
+                && entry.Message.Contains("#42", StringComparison.Ordinal)));
     }
 
     [Fact]

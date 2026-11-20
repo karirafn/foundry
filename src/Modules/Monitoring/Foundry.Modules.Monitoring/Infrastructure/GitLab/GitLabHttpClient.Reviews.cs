@@ -184,6 +184,49 @@ internal sealed partial class GitLabHttpClient
         return IsRetryableStatus(response) ? CommentPostErrors.Transient(message) : CommentPostErrors.Permanent(message);
     }
 
+    /// <summary>
+    /// Reads a merge request's description (<c>GET projects/:id/merge_requests/:iid</c>). A missing or null
+    /// description reads as empty.
+    /// </summary>
+    public async Task<Result<string>> GetMergeRequestDescriptionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string mergeRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParseMrIid(mergeRequestUrl, out int mrIid))
+        {
+            return Result<string>.Fail(GitLabErrors.InvalidMergeRequestUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), $"projects/{encodedPath}/merge_requests/{mrIid}");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<string>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabMergeRequestDescriptionDto? mergeRequest =
+            JsonSerializer.Deserialize<GitLabMergeRequestDescriptionDto>(body, JsonOptions);
+
+        return Result<string>.Ok(mergeRequest?.Description ?? string.Empty);
+    }
+
     private sealed record GitLabMergeRequestVersionDto(string? HeadCommitSha, string? BaseCommitSha, string? StartCommitSha);
 
     private sealed record GitLabDiscussionWriteDto(string Body, GitLabPositionWriteDto Position);
@@ -195,4 +238,6 @@ internal sealed partial class GitLabHttpClient
         string HeadSha,
         string NewPath,
         int NewLine);
+
+    private sealed record GitLabMergeRequestDescriptionDto(string? Description);
 }

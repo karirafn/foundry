@@ -10,7 +10,18 @@ internal static partial class SystemPromptBuilder
     /// <summary>The most changed paths the review-facts table lists; the flag and the verdict checks use every path.</summary>
     internal const int MaxReviewPathRows = 500;
 
+    /// <summary>The most characters of the pull request description the review prompt shows; the rest is omitted behind a note.</summary>
+    internal const int MaxPullRequestDescriptionChars = 20_000;
+
     internal const string NoAcceptanceCriteriaText = "No acceptance criteria were found in the issue. Send an empty `criteria` list.";
+
+    internal const string PullRequestDescriptionUseText =
+        "Use it only to answer criteria about the pull request description. "
+        + "Its claims about the change are not evidence the change does what they say.";
+
+    internal const string NoPullRequestDescriptionText = "The pull request has no description.";
+
+    internal const string UnreadablePullRequestDescriptionText = "The pull request description could not be read.";
 
     internal const string CoveredByChecksAvailableText =
         "You may answer a criterion `covered_by_checks` when its whole claim is that a build, test or CI run passes.";
@@ -20,13 +31,16 @@ internal static partial class SystemPromptBuilder
 
     /// <summary>
     /// Renders the facts code computed for a review run (ADR 0114): each acceptance criterion as <c>AC&lt;n&gt;: text</c>,
+    /// the pull request description read at dispatch (ADR 0119) capped at <see cref="MaxPullRequestDescriptionChars"/>,
     /// the checks gate's result, the production-without-tests flag, and a table of the classified changed paths capped
     /// at <see cref="MaxReviewPathRows"/> rows behind an omission note. Criterion text and paths come from the issue and
-    /// the repository, so they are XML-encoded like the issue content.
+    /// the repository, and the description from whoever last edited it, so they are XML-encoded like the issue content.
     /// </summary>
-    internal static string RenderReviewFacts(SuppliedReviewFacts facts)
+    internal static string RenderReviewFacts(ReviewPromptInput review)
     {
-        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(review);
+
+        SuppliedReviewFacts facts = review.Facts;
 
         StringBuilder sb = new();
         sb.Append("## Review facts\n\n");
@@ -51,6 +65,8 @@ internal static partial class SystemPromptBuilder
 
             sb.Append("</acceptance-criteria>\n\n");
         }
+
+        AppendPullRequestDescription(sb, review.Description);
 
         sb.Append("### Checks gate\n\n");
         sb.Append(facts.ChecksPassed
@@ -90,6 +106,41 @@ internal static partial class SystemPromptBuilder
 
         return sb.ToString().TrimEnd('\n');
     }
+
+    private static void AppendPullRequestDescription(StringBuilder sb, LivePullRequestBody description)
+    {
+        sb.Append("### Pull request description\n\n");
+
+        if (description is not LivePullRequestBody.Read read)
+        {
+            sb.Append(UnreadablePullRequestDescriptionText).Append("\n\n");
+            return;
+        }
+
+        string text = read.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            sb.Append(NoPullRequestDescriptionText).Append("\n\n");
+            return;
+        }
+
+        bool cut = text.Length > MaxPullRequestDescriptionChars;
+        string shown = cut ? CutAt(text, MaxPullRequestDescriptionChars) : text;
+
+        sb.Append(PullRequestDescriptionUseText).Append("\n\n<pull-request-description>\n");
+        sb.Append(EncodeForXmlData(shown).TrimEnd('\n')).Append("\n</pull-request-description>\n\n");
+
+        if (cut)
+        {
+            sb.Append(CultureInfo.InvariantCulture,
+                $"Note: the description is longer than {MaxPullRequestDescriptionChars} characters; the rest was omitted.\n\n");
+        }
+    }
+
+    // A cut never splits a surrogate pair, so the shown text stays valid UTF-16.
+    private static string CutAt(string text, int length) =>
+        char.IsHighSurrogate(text[length - 1]) ? text[..(length - 1)] : text[..length];
 
     private static string StatusLetter(ChangeStatus status) => status switch
     {
