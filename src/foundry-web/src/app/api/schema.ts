@@ -586,6 +586,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/repositories/unclaimed/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-derives the namespace claims of every account on a host with an unclaimed repository */
+        post: operations["RecheckUnclaimedClaims"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repositories/{id}": {
         parameters: {
             query?: never;
@@ -1558,6 +1575,10 @@ export interface components {
         };
         RateBudgetSnapshot: {
             budgets: components["schemas"]["ProviderBudgetHeadroom"][];
+        };
+        RecheckClaimsResponse: {
+            /** Format: int32 */
+            reclaimedRepositoryCount: number | string;
         };
         RecordedReviewVerdict: {
             summary: string;
@@ -3512,6 +3533,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnclaimedRepositorySummary"][];
+                };
+            };
+        };
+    };
+    RecheckUnclaimedClaims: {
+        parameters: {
+            query?: {
+                host?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecheckClaimsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

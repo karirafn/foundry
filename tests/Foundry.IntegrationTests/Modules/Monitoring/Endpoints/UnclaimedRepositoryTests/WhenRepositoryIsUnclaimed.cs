@@ -131,6 +131,42 @@ public sealed class WhenRepositoryIsUnclaimed : IAsyncDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
     }
 
+    [Fact]
+    public async Task RecheckOnAHostWithNoAccountReturnsZeroReclaimed()
+    {
+        // Arrange
+        await SeedUnclaimedRepositoryAsync("orphan/project");
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsync(
+            new Uri("/api/repositories/unclaimed/recheck?host=gitlab.example.com", UriKind.Relative),
+            content: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        RecheckClaimsResponse body = (await response.Content
+            .ReadFromJsonAsync<RecheckClaimsResponse>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        body.ReclaimedRepositoryCount.ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("/api/repositories/unclaimed/recheck")]
+    [InlineData("/api/repositories/unclaimed/recheck?host=")]
+    public async Task RecheckWithoutAHostReturnsBadRequest(string path)
+    {
+        // Act
+        HttpResponseMessage response = await _client.PostAsync(
+            new Uri(path, UriKind.Relative),
+            content: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+    }
+
     private async Task<Guid> SeedUnclaimedRepositoryAsync(string slug)
     {
         using IServiceScope scope = _factory.Services.CreateScope();

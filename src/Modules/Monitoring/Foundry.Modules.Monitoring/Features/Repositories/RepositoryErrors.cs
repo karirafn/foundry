@@ -15,6 +15,7 @@ internal static class RepositoryErrors
     internal const string NoTokenCode = "Repository.NoToken";
     internal const string ConflictOnCreateCode = "Repository.ConflictOnCreate";
     internal const string RemovalBlockedCode = "Repository.RemovalBlocked";
+    internal const string HostRequiredCode = "Repository.HostRequired";
 
     internal const string InvalidMaxConcurrentWorkersCode =
         MonitoredRepositoryErrors.InvalidMaxConcurrentWorkersCode;
@@ -50,6 +51,9 @@ internal static class RepositoryErrors
 
     internal static Error ConflictOnCreate() =>
         new(ConflictOnCreateCode, "The repository could not be created due to a conflict. Please try again.");
+
+    internal static Error HostRequired() =>
+        new(HostRequiredCode, "A host is required to re-check claims.");
 
     internal static RemovalBlockedError RemovalBlocked(IReadOnlyList<RemovalBlocker> blockingIssues) =>
         new(blockingIssues);

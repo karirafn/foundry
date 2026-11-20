@@ -69,9 +69,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private async Task<IReadOnlyList<UnclaimedRepositorySummary>> ListAsync()
     {
-        GetUnclaimedRepositories.Handler sut = new(
+        GetUnclaimedRepositories.Handler sut = new(new UnclaimedRepositories(
             _dbContext,
-            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance));
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance)));
 
         Result<IReadOnlyList<UnclaimedRepositorySummary>> result = await sut.HandleAsync(
             new GetUnclaimedRepositories.Query(),

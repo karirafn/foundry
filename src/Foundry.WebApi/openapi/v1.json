@@ -1884,6 +1884,46 @@
         }
       }
     },
+    "/api/repositories/unclaimed/recheck": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Re-derives the namespace claims of every account on a host with an unclaimed repository",
+        "operationId": "RecheckUnclaimedClaims",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecheckClaimsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/repositories/{id}": {
       "delete": {
         "tags": [
@@ -5341,6 +5381,22 @@
             "items": {
               "$ref": "#/components/schemas/ProviderBudgetHeadroom"
             }
+          }
+        }
+      },
+      "RecheckClaimsResponse": {
+        "required": [
+          "reclaimedRepositoryCount"
+        ],
+        "type": "object",
+        "properties": {
+          "reclaimedRepositoryCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

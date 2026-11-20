@@ -177,6 +177,9 @@ public static class MonitoringModule
         services.AddScoped<WebhookRegistrar>();
         services.AddScoped<RepositoryWebhookDeleter>();
         services.AddScoped<RepositoryRemoval>();
+        services.AddScoped<UnclaimedRepositories>();
+        services.AddScoped<ClaimRecheck>();
+        services.AddHostedService<UnclaimedRepositoryReclaimService>();
         services.AddScoped<IDomainEventHandler<MonitoredRepositoryRemovedDomainEvent>, MonitoredRepositoryRemovedBridge>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedBroadcastHandler>();

@@ -1,5 +1,13 @@
-import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
-import { UnclaimedRepository } from '../repository.model';
+import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, effect, inject, input, output, signal } from '@angular/core';
+import { RepositoryService } from '../repository.service';
+import { RecheckClaimsResponse, UnclaimedRepository } from '../repository.model';
+
+export interface ClaimsRechecked {
+  /** The row whose button was pressed; the page keys its focus rule on it. */
+  readonly repositoryId: string;
+  readonly host: string;
+  readonly reclaimedRepositoryCount: number;
+}
 
 @Component({
   selector: 'fd-unclaimed-repository-list',
@@ -42,6 +50,17 @@ import { UnclaimedRepository } from '../repository.model';
 
             <div class="unclaimed-repository-list__problem">
               <p class="unclaimed-repository-list__problem-text">{{ repository.violationDescription }}</p>
+              @if (_recheckError()?.id === repository.id) {
+                <p class="unclaimed-repository-list__problem-error" role="alert">{{ _recheckError()!.message }}</p>
+              }
+              <div class="unclaimed-repository-list__problem-actions">
+                <button
+                  type="button"
+                  class="unclaimed-repository-list__recheck-btn"
+                  [disabled]="_recheckingHost() !== null || reloading() || removingId() === repository.id"
+                  (click)="onRecheck(repository)"
+                >{{ _recheckingId() === repository.id ? 'Re-checking…' : 'Re-check claims' }}</button>
+              </div>
             </div>
           </li>
         }
@@ -51,6 +70,8 @@ import { UnclaimedRepository } from '../repository.model';
   styleUrl: './unclaimed-repository-list.scss',
 })
 export class UnclaimedRepositoryListComponent {
+  private readonly _repositoryService = inject(RepositoryService);
+
   readonly repositories: InputSignal<readonly UnclaimedRepository[]> = input.required<readonly UnclaimedRepository[]>();
   readonly loadError: InputSignal<string | null> = input<string | null>(null);
   readonly reloading: InputSignal<boolean> = input(false);
@@ -58,4 +79,42 @@ export class UnclaimedRepositoryListComponent {
 
   readonly delete: OutputEmitterRef<UnclaimedRepository> = output<UnclaimedRepository>();
   readonly retry: OutputEmitterRef<void> = output<void>();
+  readonly recheckStarted: OutputEmitterRef<void> = output<void>();
+  readonly rechecked: OutputEmitterRef<ClaimsRechecked> = output<ClaimsRechecked>();
+
+  // The host is what the re-check acts on; the id marks which row's button was pressed.
+  protected readonly _recheckingHost: WritableSignal<string | null> = signal(null);
+  protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
+  protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);
+
+  constructor() {
+    effect(() => {
+      if (this.removingId() !== null) {
+        this._recheckError.set(null);
+      }
+    });
+  }
+
+  onRecheck(repository: UnclaimedRepository): void {
+    if (this._recheckingHost() !== null) {
+      return;
+    }
+    this._recheckError.set(null);
+    this._recheckingHost.set(repository.host);
+    this._recheckingId.set(repository.id);
+    this.recheckStarted.emit();
+
+    this._repositoryService.recheckClaims(repository.host).subscribe({
+      next: (response: RecheckClaimsResponse) => {
+        this._recheckingHost.set(null);
+        this._recheckingId.set(null);
+        this.rechecked.emit({ repositoryId: repository.id, host: repository.host, reclaimedRepositoryCount: response.reclaimedRepositoryCount });
+      },
+      error: () => {
+        this._recheckingHost.set(null);
+        this._recheckingId.set(null);
+        this._recheckError.set({ id: repository.id, message: 'Re-check failed. Please try again.' });
+      },
+    });
+  }
 }

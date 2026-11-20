@@ -22,7 +22,8 @@
     flex: 1;
   }
 
-  &__retry-btn {
+  &__retry-btn,
+  &__recheck-btn {
     @include settings-list-button;
   }
 
@@ -65,6 +66,16 @@
 
   &__problem-text {
     @include settings-list-problem-text;
+  }
+
+  &__problem-error {
+    color: var(--fd-text-error);
+    font-size: 0.8125rem;
+    margin: 0;
+  }
+
+  &__problem-actions {
+    @include settings-list-actions;
   }
 }
 

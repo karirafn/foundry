@@ -1224,4 +1224,35 @@ describe('RepositoryService unclaimed repositories', () => {
     expect(service.unclaimedDeleteFailure()).toBeNull();
     httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(null, { status: 204, statusText: 'No Content' });
   });
+
+  it('recheckClaims posts the host to the unclaimed recheck endpoint and returns the reclaimed count', () => {
+    // Arrange
+    let reclaimed: number | undefined;
+
+    // Act
+    service.recheckClaims('gitlab.example.com').subscribe(r => { reclaimed = r.reclaimedRepositoryCount; });
+    const req = httpMock.expectOne(r => r.url === '/api/repositories/unclaimed/recheck');
+    req.flush({ reclaimedRepositoryCount: 2 });
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(req.request.params.get('host')).toBe('gitlab.example.com');
+    expect(reclaimed).toBe(2);
+  });
+
+  it('recheckClaims clears unclaimedDeleteFailure when it starts', () => {
+    // Arrange
+    service.deleteUnclaimedRepository(REPO_ID).subscribe({ error: () => {} });
+    httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(
+      { status: 404, detail: 'Not found.' },
+      { status: 404, statusText: 'Not Found' },
+    );
+
+    // Act
+    service.recheckClaims('gitlab.example.com').subscribe();
+
+    // Assert
+    expect(service.unclaimedDeleteFailure()).toBeNull();
+    httpMock.expectOne(r => r.url === '/api/repositories/unclaimed/recheck').flush({ reclaimedRepositoryCount: 0 });
+  });
 });

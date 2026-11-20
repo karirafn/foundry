@@ -344,3 +344,7 @@ export interface UnclaimedRepository {
   readonly violation: string;
   readonly violationDescription: string;
 }
+
+export interface RecheckClaimsResponse {
+  readonly reclaimedRepositoryCount: number;
+}

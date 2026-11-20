@@ -19,7 +19,7 @@ import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { RouterLink } from '@angular/router';
 import { RepositoryListComponent } from '../repository-list/repository-list';
-import { UnclaimedRepositoryListComponent } from '../unclaimed-repository-list/unclaimed-repository-list';
+import { ClaimsRechecked, UnclaimedRepositoryListComponent } from '../unclaimed-repository-list/unclaimed-repository-list';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import { DeleteFailureComponent } from '../../delete-failure/delete-failure';
@@ -44,14 +44,18 @@ type PendingDelete =
   imports: [RouterLink, RepositoryListComponent, RepositoryFormComponent, UnclaimedRepositoryListComponent, ConfirmDialogComponent, DeleteFailureComponent],
   template: `
     <div class="repositories-settings">
+      <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ _claimsResult() }}</span>
       @if (_showUnclaimed()) {
         <section class="repositories-settings__section" aria-labelledby="unclaimed-repositories-heading">
           <header class="repositories-settings__header">
             <div class="repositories-settings__heading-group">
               <h2 id="unclaimed-repositories-heading" class="repositories-settings__section-title" #unclaimedHeading tabindex="-1">Unclaimed repositories</h2>
-              <p class="repositories-settings__section-description">No account's namespace claim covers these repositories, so Foundry can't poll, dispatch or publish them. Add the namespace to an account in <a class="repositories-settings__link" routerLink="/settings/accounts">Accounts</a>, or delete the repository.</p>
+              <p class="repositories-settings__section-description">No account's namespace claim covers these repositories, so Foundry can't poll, dispatch or publish them. Add the namespace to an account in <a class="repositories-settings__link" routerLink="/settings/accounts">Accounts</a>, or delete the repository. Foundry re-checks claims every hour while any repository is unclaimed.</p>
             </div>
           </header>
+          @if (_claimsResult(); as claimsResult) {
+            <p class="repositories-settings__claims-result">{{ claimsResult }}</p>
+          }
           <fd-unclaimed-repository-list
             [repositories]="repositoryService.unclaimedRepositories()"
             [loadError]="repositoryService.unclaimedLoadError()"
@@ -59,6 +63,8 @@ type PendingDelete =
             [removingId]="_removingUnclaimedId()"
             (delete)="onDeleteUnclaimed($event)"
             (retry)="repositoryService.loadUnclaimedRepositories()"
+            (recheckStarted)="onRecheckClaimsStarted()"
+            (rechecked)="onClaimsRechecked($event)"
           />
           <div class="repositories-settings__delete-error" role="alert">
             @if (repositoryService.unclaimedDeleteFailure(); as failure) {
@@ -162,6 +168,7 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   protected readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
   protected readonly _addOutcome: WritableSignal<CreateRepositoryResponse | null> = signal(null);
+  protected readonly _claimsResult: WritableSignal<string | null> = signal(null);
   protected readonly _pendingDeleteRepository: WritableSignal<PendingDelete | null> = signal(null);
   protected readonly _deleteRepositoryMessage: Signal<string> = computed(() => {
     const pending = this._pendingDeleteRepository();
@@ -272,6 +279,15 @@ export class SettingsRepositoriesComponent implements OnInit {
     this._pendingDeleteRepository.set(null);
   }
 
+  onRecheckClaimsStarted(): void {
+    this._claimsResult.set(null);
+  }
+
+  onClaimsRechecked(result: ClaimsRechecked): void {
+    this._claimsResult.set(claimsResultMessage(result));
+    void this._reloadAll().then(() => this._focusIfUnclaimedRowLeft(result.repositoryId));
+  }
+
   onAccountSelected(accountId: string): void {
     this._selectedAccountId.set(accountId);
     this.repositoryService.loadAvailableRepositories(accountId);
@@ -299,12 +315,13 @@ export class SettingsRepositoriesComponent implements OnInit {
   }
 
   private _deleteUnclaimed(repository: UnclaimedRepository): void {
+    this._claimsResult.set(null);
     this._removingUnclaimedId.set(repository.id);
     this.repositoryService.deleteUnclaimedRepository(repository.id)
       .subscribe({
         next: () => {
           this._removingUnclaimedId.set(null);
-          void this._reloadAll().then(() => this._focusAfterUnclaimedRemoval(repository.id));
+          void this._reloadAll().then(() => this._focusIfUnclaimedRowLeft(repository.id));
         },
         error: () => {
           this._removingUnclaimedId.set(null);
@@ -313,8 +330,8 @@ export class SettingsRepositoriesComponent implements OnInit {
       });
   }
 
-  private _focusAfterUnclaimedRemoval(removedId: string): void {
-    if (this.repositoryService.unclaimedRepositories().some(r => r.id === removedId)) {
+  private _focusIfUnclaimedRowLeft(rowId: string): void {
+    if (this.repositoryService.unclaimedRepositories().some(r => r.id === rowId)) {
       return;
     }
     this._focusAfterRender(() => this._showUnclaimed()
@@ -330,4 +347,12 @@ export class SettingsRepositoriesComponent implements OnInit {
       this.repositoryService.loadUnclaimedRepositories(),
     ]);
   }
+}
+
+function claimsResultMessage(result: ClaimsRechecked): string {
+  const count = result.reclaimedRepositoryCount;
+  if (count === 0) {
+    return `No account claims these ${result.host} repositories yet.`;
+  }
+  return count === 1 ? '1 repository claimed again.' : `${count} repositories claimed again.`;
 }
