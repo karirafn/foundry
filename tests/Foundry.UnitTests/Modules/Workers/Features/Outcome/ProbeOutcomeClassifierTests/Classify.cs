@@ -165,6 +165,19 @@ public sealed class Classify
     }
 
     [Fact]
+    public void WhenLogsProducePackageRestoreFailed_ReturnsInfrastructureFailure()
+    {
+        // Arrange
+        string logs = "FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=App.sln: error NU1301: Unable to load the service index";
+
+        // Act
+        ProbeOutcome result = _sut.Classify(logs);
+
+        // Assert
+        result.ShouldBeOfType<ProbeOutcome.InfrastructureFailure>();
+    }
+
+    [Fact]
     public void WhenLogsProduceWorkerBootstrapFailed_ReturnsInfrastructureFailure()
     {
         // Arrange — bootstrap sentinel triggers WorkerBootstrapFailed

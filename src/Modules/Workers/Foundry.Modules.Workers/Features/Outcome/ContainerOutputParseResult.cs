@@ -16,6 +16,8 @@ internal abstract record ContainerOutputParseResult
 
     internal sealed record PackageSourceUnreachable(string Detail) : ContainerOutputParseResult;
 
+    internal sealed record PackageRestoreFailed(string Detail) : ContainerOutputParseResult;
+
     internal sealed record NoResultLine : ContainerOutputParseResult;
 
     // claude emitted at least one stream-json event, so bootstrap passed, but no result line followed.

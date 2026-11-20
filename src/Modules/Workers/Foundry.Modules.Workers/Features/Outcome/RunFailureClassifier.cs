@@ -74,6 +74,8 @@ internal static class RunFailureClassifier
                 new FailureReason.WorkerBootstrapFailed(SecretRedactor.Redact(bootstrapFailed.Detail)),
             ContainerOutputParseResult.PackageSourceUnreachable packageSourceUnreachable =>
                 new FailureReason.PackageSourceUnreachable(SecretRedactor.Redact(packageSourceUnreachable.Detail)),
+            ContainerOutputParseResult.PackageRestoreFailed packageRestoreFailed =>
+                new FailureReason.PackageRestoreFailed(SecretRedactor.Redact(packageRestoreFailed.Detail)),
             ContainerOutputParseResult.UsageLimited usageLimited => new FailureReason.UsageLimited(usageLimited.ResetsAt),
             ContainerOutputParseResult.CreditsExhausted => new FailureReason.CreditsExhausted(),
             ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),

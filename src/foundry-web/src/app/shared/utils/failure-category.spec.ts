@@ -142,6 +142,14 @@ describe('failure-category', () => {
     expect(display).toEqual({ label: 'PACKAGES UNREACHABLE', cssClass: 'badge--failure-provider-unreachable' });
   });
 
+  it('should map package_restore_failed to "PACKAGES UNRESTORED" with the provider-unreachable warning outline', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('package_restore_failed');
+
+    // Assert
+    expect(display).toEqual({ label: 'PACKAGES UNRESTORED', cssClass: 'badge--failure-provider-unreachable' });
+  });
+
   it('should return display for credits_exhausted', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('credits_exhausted');
