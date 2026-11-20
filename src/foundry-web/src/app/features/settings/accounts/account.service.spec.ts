@@ -32,6 +32,17 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
+const REFUSED_BODY = {
+  type: 'tag:foundry,2026:problems/Repository.RemovalBlocked',
+  title: 'Conflict',
+  status: 409,
+  detail: 'The repositories cannot be removed while a worker is still active on: acme/api#42 (in_progress), acme/web#7 (triage_in_progress).',
+  blockingIssues: [
+    { repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' },
+    { repositorySlug: 'acme/web', issueNumber: 7, state: 'triage_in_progress' },
+  ],
+};
+
 function makeUpdateResult(account: AccountSummary, affected: AffectedRepository[] = []): CredentialUpdateResult {
   return { credential: account, affectedRepositories: affected };
 }
@@ -79,7 +90,7 @@ describe('AccountService', () => {
     expect(service.saveSuccess()).toBe(false);
     expect(service.validationResult()).toBeNull();
     expect(service.saveError()).toBeNull();
-    expect(service.deleteError()).toBeNull();
+    expect(service.deleteFailure()).toBeNull();
     expect(service.loadError()).toBeNull();
     expect(service.conflicts()).toEqual([]);
   });
@@ -657,7 +668,7 @@ describe('AccountService', () => {
     expect(service.deletingAccountId()).toBeNull();
   });
 
-  it('should set deleteError when deleteAccount fails with a ProblemDetails body', () => {
+  it('should set a failed deleteFailure when deleteAccount fails with a ProblemDetails body', () => {
     // Arrange
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
@@ -670,10 +681,52 @@ describe('AccountService', () => {
     );
 
     // Assert
-    expect(service.deleteError()).toBe('Account is in use.');
+    expect(service.deleteFailure()).toEqual({ kind: 'failed', message: 'Account is in use.' });
   });
 
-  it('should clear deleteError at start of deleteAccount', () => {
+  it('should set a refused deleteFailure when deleteAccount is refused with blocking issues', () => {
+    // Arrange
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(REFUSED_BODY, { status: 409, statusText: 'Conflict' });
+
+    // Assert
+    expect(service.deleteFailure()).toEqual({
+      kind: 'refused',
+      blockingIssues: [
+        { repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' },
+        { repositorySlug: 'acme/web', issueNumber: 7, state: 'triage_in_progress' },
+      ],
+    });
+  });
+
+  it('should clear the screen-reader announcement when deleteAccount is refused', () => {
+    // Arrange
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(REFUSED_BODY, { status: 409, statusText: 'Conflict' });
+
+    // Assert — the page's alert region is the only announcer of a refusal.
+    expect(service.srAnnouncement()).toBe('');
+  });
+
+  it('should keep the account in the list when deleteAccount is refused', () => {
+    // Arrange
+    service.loadAccounts();
+    httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
+    service.deleteAccount(MOCK_ACCOUNT.id);
+
+    // Act
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(REFUSED_BODY, { status: 409, statusText: 'Conflict' });
+
+    // Assert
+    expect(service.accounts().map(a => a.id)).toEqual([MOCK_ACCOUNT.id]);
+    expect(service.deletingAccountId()).toBeNull();
+  });
+
+  it('should clear deleteFailure at start of deleteAccount', () => {
     // Arrange — first call that fails
     service.deleteAccount(MOCK_ACCOUNT.id);
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
@@ -685,7 +738,7 @@ describe('AccountService', () => {
     service.deleteAccount(MOCK_ACCOUNT.id);
 
     // Assert — error is cleared before response
-    expect(service.deleteError()).toBeNull();
+    expect(service.deleteFailure()).toBeNull();
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(null, {
       status: 204,
       statusText: 'No Content',
@@ -1274,7 +1327,7 @@ describe('AccountService', () => {
       httpMock.match('/api/accounts');
     });
 
-    it('should clear deletingAccountId and set deleteError when deleteAccount request times out after 60s', () => {
+    it('should clear deletingAccountId and set a failed deleteFailure when deleteAccount request times out after 60s', () => {
       // Arrange
       service.deleteAccount(MOCK_ACCOUNT.id);
       expect(service.deletingAccountId()).toBe(MOCK_ACCOUNT.id);
@@ -1284,7 +1337,7 @@ describe('AccountService', () => {
 
       // Assert
       expect(service.deletingAccountId()).toBeNull();
-      expect(service.deleteError()).toBe('The request timed out. Please try again.');
+      expect(service.deleteFailure()).toEqual({ kind: 'failed', message: 'The request timed out. Please try again.' });
 
       // Drain the cancelled request
       httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);

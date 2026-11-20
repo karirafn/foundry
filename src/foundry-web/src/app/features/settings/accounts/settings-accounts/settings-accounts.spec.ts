@@ -251,6 +251,40 @@ describe('SettingsAccountsComponent', () => {
     expect(deleteError?.textContent).toContain('Account is in use.');
   });
 
+  it('should list the blocking issues when deleteAccount is refused', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+    fixture.detectChanges();
+    flushAccounts(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const accountService = TestBed.inject(AccountService);
+    accountService.deleteAccount('acc-1');
+    httpMock.expectOne('/api/accounts/acc-1').flush(
+      {
+        type: 'tag:foundry,2026:problems/Repository.RemovalBlocked',
+        title: 'Conflict',
+        status: 409,
+        detail: 'refused',
+        blockingIssues: [
+          { repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' },
+          { repositorySlug: 'acme/web', issueNumber: 7, state: 'triage_in_progress' },
+        ],
+      },
+      { status: 409, statusText: 'Conflict' }
+    );
+    fixture.detectChanges();
+
+    // Assert
+    const alert = (fixture.nativeElement as HTMLElement).querySelector('.accounts-settings__delete-error');
+    expect(alert?.querySelector('.delete-failure__lead')?.textContent?.trim())
+      .toBe('Account not deleted — a worker is still active on:');
+    expect(Array.from(alert?.querySelectorAll('.delete-failure__issues li') ?? []).map(li => li.textContent?.trim()))
+      .toEqual(['acme/api#42 — in progress', 'acme/web#7 — triaging']);
+    expect(alert?.querySelector('.delete-failure__hint')?.textContent?.trim()).toBe('Try again once these finish.');
+  });
+
   it('should render delete error container even when no delete error is present', () => {
     // Arrange
     const { fixture, httpMock } = setup();
@@ -623,7 +657,12 @@ describe('SettingsAccountsComponent', () => {
 
     // Assert — the shared dialog asks, not the native confirm
     expect(dialog.open).toBe(true);
-    expect(dialog.querySelector('.confirm-dialog__message')?.textContent).toContain('Delete account "My Org"?');
+    expect(dialog.querySelector('.confirm-dialog__message')?.textContent?.trim()).toBe(
+      'Deleting "My Org" removes every repository this account covers: Foundry stops monitoring them, ' +
+        'deletes their webhooks, removes their open issues and discards any unpublished runs. ' +
+        'Completed issues stay in History. Adding a repository again restores its history, ' +
+        'and its open issues return on the next poll.'
+    );
     expect(nativeConfirm).not.toHaveBeenCalled();
     httpMock.expectNone(`/api/accounts/${account.id}`);
     vi.unstubAllGlobals();

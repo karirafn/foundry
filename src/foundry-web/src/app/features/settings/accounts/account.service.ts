@@ -4,6 +4,7 @@ import { TimeoutError, firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { LoadOutcome } from '../../../core/models/load-outcome';
+import { DeleteFailure, deleteFailureFrom } from '../delete-failure/delete-failure.model';
 import { AccountSummary, AffectedRepository, CreateAccountConflictResponse, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountConflictResponse, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
@@ -46,8 +47,8 @@ export class AccountService {
   private readonly _saveErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveError: Signal<string | null> = this._saveErrorSignal.asReadonly();
 
-  private readonly _deleteErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly deleteError: Signal<string | null> = this._deleteErrorSignal.asReadonly();
+  private readonly _deleteFailureSignal: WritableSignal<DeleteFailure | null> = signal(null);
+  readonly deleteFailure: Signal<DeleteFailure | null> = this._deleteFailureSignal.asReadonly();
 
   private readonly _loadErrorSignal: WritableSignal<string | null> = signal(null);
   readonly loadError: Signal<string | null> = this._loadErrorSignal.asReadonly();
@@ -207,7 +208,7 @@ export class AccountService {
   }
 
   deleteAccount(id: string): void {
-    this._deleteErrorSignal.set(null);
+    this._deleteFailureSignal.set(null);
     this._deletingAccountIdSignal.set(id);
     this._srAnnouncementSignal.set('Deleting account. Contacting the provider — this may take a few seconds.');
 
@@ -221,9 +222,12 @@ export class AccountService {
         },
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
-          const message = extractErrorMessage(err) ?? err.message;
-          this._deleteErrorSignal.set(message);
-          this._srAnnouncementSignal.set(`Could not delete account: ${message}`);
+          const failure = deleteFailureFrom(err);
+          this._deleteFailureSignal.set(failure);
+          // A refusal is announced once, by the page's alert region listing the blocking issues.
+          this._srAnnouncementSignal.set(
+            failure.kind === 'refused' ? '' : `Could not delete account: ${failure.message}`
+          );
           this._deletingAccountIdSignal.set(null);
         },
       });
