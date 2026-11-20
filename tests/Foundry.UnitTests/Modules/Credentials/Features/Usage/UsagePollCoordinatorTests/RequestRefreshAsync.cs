@@ -19,6 +19,8 @@ namespace Foundry.UnitTests.Modules.Credentials.Features.Usage.UsagePollCoordina
 
 public sealed class RequestRefreshAsync : IAsyncDisposable
 {
+    private static readonly TimeSpan UsageReportStartTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>Minimal <c>/usage</c> stream-json carrying a usage_report with rate limits — a successful parse.</summary>
     private const string ValidUsageLog = """
         {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.316"}
@@ -150,7 +152,7 @@ public sealed class RequestRefreshAsync : IAsyncDisposable
 
         // Assert — started, not yet broadcast
         outcome.ShouldBe(UsageRefreshOutcome.Started);
-        await orchestrator.UsageReportStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await orchestrator.UsageReportStarted.Task.WaitAsync(UsageReportStartTimeout, TestContext.Current.CancellationToken);
         _broadcaster.FirstSent.Task.IsCompleted.ShouldBeFalse();
 
         // Assert — the result reaches clients via the push once the poll completes
@@ -172,7 +174,7 @@ public sealed class RequestRefreshAsync : IAsyncDisposable
             .WithBlockingUsageReport();
         UsagePollCoordinator sut = BuildCoordinator(orchestrator);
         Task<UsageSnapshot?> tick = sut.PollAsync(TestContext.Current.CancellationToken);
-        await orchestrator.UsageReportStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await orchestrator.UsageReportStarted.Task.WaitAsync(UsageReportStartTimeout, TestContext.Current.CancellationToken);
 
         // Act — repeated clicks while the poll runs
         UsageRefreshOutcome first = await sut.RequestRefreshAsync(TestContext.Current.CancellationToken);
