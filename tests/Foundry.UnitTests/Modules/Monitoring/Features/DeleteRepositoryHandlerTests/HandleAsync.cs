@@ -1,3 +1,7 @@
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Features.RepositoryReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.Events;
@@ -7,6 +11,11 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
+using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
@@ -73,7 +82,9 @@ public sealed class HandleAsync : IAsyncDisposable
         await _dbContext.SaveChangesAsync(CancellationToken.None);
     }
 
-    private DeleteRepository.Handler CreateHandler(RecordingBranchRulesProviderFactory? factory = null) =>
+    private DeleteRepository.Handler CreateHandler(
+        RecordingBranchRulesProviderFactory? factory = null,
+        IRepositoryRemovalBlockers? removalBlockers = null) =>
         new(
             _dbContext,
             new RepositoryRemoval(
@@ -82,6 +93,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
                     factory ?? new RecordingBranchRulesProviderFactory(),
                     NullLogger<RepositoryWebhookDeleter>.Instance),
+                removalBlockers ?? new RepositoryRemovalBlockers(_dbContext, new WorkerRunQueries(_dbContext)),
                 _domainEvents),
             new FixedTimeProvider(Now));
 
@@ -291,6 +303,90 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAnIssueHasWorkInFlight_RefusesWithTheBlockingIssuesAndChangesNothing()
+    {
+        // Arrange
+        await SeedAccountAsync("alice");
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        _dbContext.Set<Issue>().Add(new IssueBuilder()
+            .WithMonitoredRepositoryId(repository.Id)
+            .WithIssueNumber(42)
+            .WithDetectedAt(Now)
+            .InProgress());
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        RecordingBranchRulesProviderFactory factory = new();
+        DeleteRepository.Handler sut = CreateHandler(factory);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        RemovalBlockedError error = result.ShouldBeOfType<Result<bool>.Failure>().Error.ShouldBeOfType<RemovalBlockedError>();
+        error.Code.ShouldBe(RepositoryErrors.RemovalBlockedCode);
+        error.BlockingIssues.ShouldBe([new RemovalBlocker("alice/repo", 42, "in_progress")]);
+        error.Message.ShouldContain("alice/repo#42 (in_progress)");
+        factory.WebhookDeletes.ShouldBeEmpty();
+        _domainEvents.DispatchedEvents.ShouldBeEmpty();
+        (await ExistsAsync(repository)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenWorkStartsAfterTheHooksAreDeleted_TheInTransactionCheckRefusesTheRemoval()
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        SequencedRemovalBlockers blockers = new(
+            [],
+            [new RemovalBlockingIssue(repository.Id, 7, "triage_in_progress")]);
+        DeleteRepository.Handler sut = CreateHandler(removalBlockers: blockers);
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<bool>.Failure>().Error.ShouldBeOfType<RemovalBlockedError>()
+            .BlockingIssues.ShouldBe([new RemovalBlocker("alice/repo", 7, "triage_in_progress")]);
+        _domainEvents.DispatchedEvents.ShouldBeEmpty();
+        (await ExistsAsync(repository)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenTheOnlyInFlightRunWaitsForAPublishRetry_RemovesTheRepository()
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepo("alice", 0);
+        InProgressIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repository.Id)
+            .WithIssueNumber(42)
+            .WithDetectedAt(Now)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(issue);
+        _dbContext.Set<WorkerRun>().Add(StartingRun.Begin(issue.Id, WorkerRunId.New())
+            .Activate(ContainerId.From("container-1"), BranchName.From("feat/42-run"), repository.Id)
+            .BeginPublishing(
+                new RunExit(0, OomKilled: false, RunStopReason.Exited, Now),
+                containerOutput: null,
+                verdict: null,
+                pullRequestText: null)
+            .FailPublish("provider down", transient: true, Now));
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        DeleteRepository.Handler sut = CreateHandler();
+
+        // Act
+        Result<bool> result = await sut.HandleAsync(
+            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        (await ExistsAsync(repository)).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenAlreadyRemoved_ReturnsNotFound()
     {
         // Arrange
@@ -314,5 +410,16 @@ public sealed class HandleAsync : IAsyncDisposable
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
+    }
+
+    private sealed class SequencedRemovalBlockers(params IReadOnlyList<RemovalBlockingIssue>[] answers)
+        : IRepositoryRemovalBlockers
+    {
+        private int _calls;
+
+        public Task<IReadOnlyList<RemovalBlockingIssue>> GetBlockingIssuesAsync(
+            IReadOnlyCollection<MonitoredRepositoryId> repositoryIds,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(answers[Math.Min(_calls++, answers.Length - 1)]);
     }
 }

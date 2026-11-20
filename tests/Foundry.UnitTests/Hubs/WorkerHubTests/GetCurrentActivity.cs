@@ -179,6 +179,11 @@ public sealed class GetCurrentActivity
             IReadOnlyCollection<Guid> issueIds,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
+
+        public Task<IReadOnlySet<Guid>> GetIssueIdsWaitingForPublishRetryAsync(
+            IReadOnlyCollection<Guid> issueIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
     }
 
     private sealed class SpyHubCallerClients : IHubCallerClients
