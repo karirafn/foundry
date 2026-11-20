@@ -49,6 +49,10 @@
     @include settings-list-button-primary;
   }
 
+  &__link {
+    color: var(--fd-text-link);
+  }
+
   &__delete-error {
     color: var(--fd-state-failed);
     font-size: 0.875rem;

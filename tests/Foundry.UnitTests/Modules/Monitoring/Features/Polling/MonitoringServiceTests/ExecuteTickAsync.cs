@@ -183,6 +183,62 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         repo.LastPolledAt.ShouldBe(Now);
     }
 
+    private async Task<MonitoredRepositoryId> SeedUnclaimedEligibleRepoAsync(string slug)
+    {
+        await using FoundryDbContext db = CreateDbContext();
+
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug(slug), "github.com", null).ValueOrThrow();
+        repo.SetEligibility(new RepositoryEligibility.Eligible());
+        db.Set<MonitoredRepository>().Add(repo);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return repo.Id;
+    }
+
+    [Fact]
+    public async Task WhenNoAccountCoversRepo_StoresNoCredentialIneligibilityAndSkipsPoll()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedUnclaimedEligibleRepoAsync("orphan-org/sub/repo");
+
+        using ServiceProvider sp = BuildServiceProvider(new EmptyIssueProviderFactory());
+        MonitoringService sut = BuildService(sp);
+
+        // Act
+        await sut.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        MonitoredRepository? repo = await assertDb.Set<MonitoredRepository>()
+            .FindAsync([repoId], TestContext.Current.CancellationToken);
+        repo.ShouldNotBeNull();
+        repo.EligibilityStatus.ShouldBe("ineligible");
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.Select(v => v.Rule).ShouldBe(["no-credential:orphan-org"]);
+        repo.LastPolledAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenNoAccountCoversRepo_DispatchEligibilityQueryNoLongerReturnsIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedUnclaimedEligibleRepoAsync("orphan-org/repo");
+
+        using ServiceProvider sp = BuildServiceProvider(new EmptyIssueProviderFactory());
+        MonitoringService sut = BuildService(sp);
+
+        // Act
+        await sut.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        RepositoryEligibilityQuery query = new(assertDb);
+        IReadOnlyList<EligibleRepository> eligible = await query.GetEligibleRepositoriesAsync(
+            [repoId.Value],
+            TestContext.Current.CancellationToken);
+        eligible.ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task WhenAccountHasNoToken_RepoLastPolledAtIsNotUpdated()
     {

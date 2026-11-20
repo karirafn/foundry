@@ -335,3 +335,12 @@ export function repositorySettingTags(repo: RepositorySummary): string[] {
   }
   return tags;
 }
+
+/** A monitored repository no account's Namespace Claim covers on its host. */
+export interface UnclaimedRepository {
+  readonly id: string;
+  readonly host: string;
+  readonly slug: string;
+  readonly violation: string;
+  readonly violationDescription: string;
+}

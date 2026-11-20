@@ -116,7 +116,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repoB.Id.Value),
+            new DeleteRepository.Command(repoB.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -145,7 +145,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -165,7 +165,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -185,7 +185,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -206,7 +206,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -227,7 +227,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -243,7 +243,7 @@ public sealed class HandleAsync : IAsyncDisposable
         DeleteRepository.Handler sut = CreateHandler();
 
         // Act
-        await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value), CancellationToken.None);
+        await sut.HandleAsync(new DeleteRepository.Command(repository.Id.Value), CancellationToken.None);
 
         // Assert
         _dbContext.ChangeTracker.Clear();
@@ -261,7 +261,7 @@ public sealed class HandleAsync : IAsyncDisposable
         DeleteRepository.Handler sut = CreateHandler();
 
         // Act
-        await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value), CancellationToken.None);
+        await sut.HandleAsync(new DeleteRepository.Command(repository.Id.Value), CancellationToken.None);
 
         // Assert
         _domainEvents.DispatchedEvents.ShouldBe([new MonitoredRepositoryRemovedDomainEvent(repository.Id, Now)]);
@@ -288,7 +288,7 @@ public sealed class HandleAsync : IAsyncDisposable
         DeleteRepository.Handler sut = CreateHandler();
 
         // Act
-        await sut.HandleAsync(new DeleteRepository.Command(Guid.NewGuid(), removed.Id.Value), CancellationToken.None);
+        await sut.HandleAsync(new DeleteRepository.Command(removed.Id.Value), CancellationToken.None);
 
         // Assert
         _dbContext.ChangeTracker.Clear();
@@ -319,7 +319,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -344,7 +344,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -378,7 +378,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert
@@ -392,14 +392,14 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = CreateRepo("alice", 0);
         await CreateHandler().HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
         _dbContext.ChangeTracker.Clear();
         DeleteRepository.Handler sut = CreateHandler();
 
         // Act
         Result<bool> result = await sut.HandleAsync(
-            new DeleteRepository.Command(Guid.NewGuid(), repository.Id.Value),
+            new DeleteRepository.Command(repository.Id.Value),
             CancellationToken.None);
 
         // Assert

@@ -1453,15 +1453,6 @@
         "operationId": "DeleteRepository",
         "parameters": [
           {
-            "name": "accountId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -1858,6 +1849,75 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/repositories/unclaimed": {
+      "get": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Gets the monitored repositories no account's namespace claim covers",
+        "operationId": "GetUnclaimedRepositories",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UnclaimedRepositorySummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/repositories/{id}": {
+      "delete": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Deletes a monitored repository",
+        "operationId": "DeleteMonitoredRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6235,6 +6295,34 @@
           "decidedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "UnclaimedRepositorySummary": {
+        "required": [
+          "id",
+          "host",
+          "slug",
+          "violation",
+          "violationDescription"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "host": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "violation": {
+            "type": "string"
+          },
+          "violationDescription": {
+            "type": "string"
           }
         }
       },

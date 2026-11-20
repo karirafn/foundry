@@ -13,7 +13,7 @@ namespace Foundry.Modules.Monitoring.Features.Repositories;
 
 internal static class DeleteRepository
 {
-    internal sealed record Command(Guid AccountId, Guid Id) : ICommand<bool>;
+    internal sealed record Command(Guid Id) : ICommand<bool>;
 
     internal sealed class Handler(DbContext dbContext, RepositoryRemoval removal, TimeProvider timeProvider)
         : ICommandHandler<Command, bool>
@@ -37,15 +37,14 @@ internal static class DeleteRepository
 
     internal static class Endpoint
     {
-        public static void Map(RouteGroupBuilder group)
+        public static void Map(RouteGroupBuilder group, string name)
         {
             group.MapDelete("{id:guid}", static async (
-                    Guid accountId,
                     Guid id,
                     ICommandHandler<Command, bool> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, id);
+                    Command command = new(id);
                     Result<bool> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<NoContent, ProblemHttpResult>>(
@@ -56,7 +55,7 @@ internal static class DeleteRepository
                             _ => error.ToProblem(StatusCodes.Status404NotFound),
                         });
                 })
-                .WithName("DeleteRepository")
+                .WithName(name)
                 .WithSummary("Deletes a monitored repository")
                 .Produces(StatusCodes.Status204NoContent)
                 .ProducesProblem(StatusCodes.Status404NotFound)
