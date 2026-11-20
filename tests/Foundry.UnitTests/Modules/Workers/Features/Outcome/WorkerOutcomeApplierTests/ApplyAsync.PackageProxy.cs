@@ -93,6 +93,30 @@ public sealed partial class ApplyAsync
         broadcaster.SentNotifications.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenARunFailsPackageRestoreFailed_DoesNotPauseThePackageProxy()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await SeedSettingsAsync(_ => { });
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator(), broadcaster: broadcaster, timeProvider: new FakeTimeProvider(ProxyFailedAt));
+
+        // Act
+        await sut.ApplyAsync(
+            new WorkerOutcome.Failure(new FailureReason.PackageRestoreFailed("App.sln: error NU1301"), null, null),
+            activeRun,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        GlobalSettings settings = await assertDb.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        settings.PackageProxyPause.ShouldBeNull();
+        broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
     private static WorkerOutcome.Failure PackageSourceUnreachableFailure() =>
         new(new FailureReason.PackageSourceUnreachable("could not reach host.docker.internal:5287"), null, null);
 

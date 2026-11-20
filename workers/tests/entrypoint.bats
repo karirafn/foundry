@@ -1901,7 +1901,7 @@ written_settings() {
 # entrypoint declares at its call site (the timeout is shortened by tests).
 load_prepare_csharp_lsp() {
     local func_body
-    func_body="$(awk '/^prepare_csharp_lsp\(\)/,/^\}/' "$ENTRYPOINT")"
+    func_body="$(awk '/^(prepare_csharp_lsp|remove_restore_log|fail_bootstrap)\(\)/,/^\}/' "$ENTRYPOINT")"
     eval "$func_body"
     CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
     CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp
@@ -1918,8 +1918,9 @@ EOF
 
 # Fake dotnet: appends "<args>" to $BATS_TEST_TMPDIR/dotnet_calls and
 # "dotnet GIT_PAT=<value|unset>" to $BATS_TEST_TMPDIR/order.  Behaviour is
-# read at run time from FAKE_DOTNET_FAIL_MATCH (exit 1 when the last argument
-# contains it) and FAKE_DOTNET_SLEEP (seconds to sleep before exiting).
+# read at run time from FAKE_DOTNET_FAIL_MATCH (exit FAKE_DOTNET_FAIL_EXIT,
+# default 1, printing FAKE_DOTNET_FAIL_OUTPUT, when the last argument contains
+# it) and FAKE_DOTNET_SLEEP (seconds to sleep before exiting).
 make_fake_dotnet() {
     local calls_file="$BATS_TEST_TMPDIR/dotnet_calls"
     local order_file="$BATS_TEST_TMPDIR/order"
@@ -1931,8 +1932,8 @@ if [[ -n "\${FAKE_DOTNET_SLEEP:-}" ]]; then
     sleep "\${FAKE_DOTNET_SLEEP}"
 fi
 if [[ -n "\${FAKE_DOTNET_FAIL_MATCH:-}" && "\${!#}" == *"\${FAKE_DOTNET_FAIL_MATCH}"* ]]; then
-    echo "error NU1301: Unable to load the service index" >&2
-    exit 1
+    printf '%b\n' "\${FAKE_DOTNET_FAIL_OUTPUT-error NU1301: Unable to load the service index}" >&2
+    exit "\${FAKE_DOTNET_FAIL_EXIT:-1}"
 fi
 exit 0
 EOF
@@ -2177,6 +2178,132 @@ EOF
 
     [ "$status" -eq 0 ]
     [ "$(cat "$order_file")" = "$(printf '%s\n' 'dotnet GIT_PAT=unset' claude claude)" ]
+}
+
+# ---------------------------------------------------------------------------
+# Package restore gate: a full-capability run whose repository declares Package
+# Sources fails the bootstrap at stage=package-restore when a pre-restore fails
+# other than by timing out; every other run keeps "no LSP" and continues.
+# ---------------------------------------------------------------------------
+
+@test "package restore: a full run with package sources fails at stage package-restore naming the target and the first error line" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" src/A.sln src/B.sln
+    export WORKER_CAPABILITY=full PACKAGE_SOURCES_DECLARED=1
+    export FAKE_DOTNET_FAIL_MATCH="A.sln"
+    export FAKE_DOTNET_FAIL_OUTPUT='  Determining projects to restore...\n    /repo/A.csproj : error NU1301: Unable to load the service index  \n    /repo/A.csproj : error NU1101: second error'
+
+    run --separate-stderr prepare_csharp_lsp "$repo"
+
+    [ "$status" -ne 0 ]
+    local sentinel
+    sentinel="$(grep '^FOUNDRY_BOOTSTRAP_FAILED ' <<< "$stderr")"
+    [ "$sentinel" = "FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=src/A.sln: /repo/A.csproj : error NU1301: Unable to load the service index" ]
+    [ "$(restored_targets "$repo")" = "src/A.sln" ]
+    [[ "$stderr" != *"C# LSP: enabled"* ]]
+}
+
+@test "package restore: the detail falls back to the exit code when the restore output has no error line" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" A.sln
+    export WORKER_CAPABILITY=full PACKAGE_SOURCES_DECLARED=1
+    export FAKE_DOTNET_FAIL_MATCH="A.sln" FAKE_DOTNET_FAIL_OUTPUT="Restore failed." FAKE_DOTNET_FAIL_EXIT=3
+
+    run --separate-stderr prepare_csharp_lsp "$repo"
+
+    [ "$status" -ne 0 ]
+    [ "$(grep '^FOUNDRY_BOOTSTRAP_FAILED ' <<< "$stderr")" = "FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=A.sln: dotnet restore exited 3" ]
+}
+
+@test "package restore: a full run with package sources whose restore times out disables the LSP and continues" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" A.sln
+    export WORKER_CAPABILITY=full PACKAGE_SOURCES_DECLARED=1
+    export FAKE_DOTNET_FAIL_MATCH="A.sln" FAKE_DOTNET_FAIL_EXIT=124
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -qx "C# LSP: disabled (restore exceeded 300s)" "$BATS_TEST_TMPDIR/log"
+    ! grep -q "FOUNDRY_BOOTSTRAP_FAILED" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "package restore: a restricted run with package sources whose restore fails disables the LSP and continues" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" A.sln
+    export WORKER_CAPABILITY=restricted PACKAGE_SOURCES_DECLARED=1
+    export FAKE_DOTNET_FAIL_MATCH="A.sln"
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -q "^C# LSP: disabled (dotnet restore failed for A.sln with exit code 1)" "$BATS_TEST_TMPDIR/log"
+    ! grep -q "FOUNDRY_BOOTSTRAP_FAILED" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "package restore: a full run without package sources whose restore fails disables the LSP and continues" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" A.sln
+    export WORKER_CAPABILITY=full
+    unset PACKAGE_SOURCES_DECLARED
+    export FAKE_DOTNET_FAIL_MATCH="A.sln"
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -q "^C# LSP: disabled (dotnet restore failed for A.sln with exit code 1)" "$BATS_TEST_TMPDIR/log"
+    ! grep -q "FOUNDRY_BOOTSTRAP_FAILED" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "package restore entrypoint: a full run with FOUNDRY_NUGET_CONFIG whose restore fails never starts claude" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet
+    make_fake_claude_record_args_transient_then_success
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
+    FOUNDRY_NUGET_CONFIG="$(printf '%s' '<configuration />' | base64 -w 0)"
+    export FOUNDRY_NUGET_CONFIG
+    export FAKE_DOTNET_FAIL_MATCH="App.sln"
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -e "$BATS_TEST_TMPDIR/claude_args" ]
+    [ "$(grep '^FOUNDRY_BOOTSTRAP_FAILED ' <<< "$stderr")" = "FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=App.sln: error NU1301: Unable to load the service index" ]
+}
+
+@test "package restore entrypoint: an unreadable FOUNDRY_NUGET_CONFIG still fails a full run whose restore fails" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet
+    make_fake_claude_record_args_transient_then_success
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
+    export FOUNDRY_NUGET_CONFIG='not base64 !!!'
+    export FAKE_DOTNET_FAIL_MATCH="App.sln"
+
+    run --separate-stderr bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$stderr" == *"Package sources: FOUNDRY_NUGET_CONFIG unreadable"* ]]
+    [ ! -e "$BATS_TEST_TMPDIR/claude_args" ]
+    [[ "$(grep '^FOUNDRY_BOOTSTRAP_FAILED ' <<< "$stderr")" == "FOUNDRY_BOOTSTRAP_FAILED stage=package-restore detail=App.sln: "* ]]
 }
 
 # ---------------------------------------------------------------------------
