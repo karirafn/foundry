@@ -5,6 +5,8 @@ namespace Foundry.Modules.Workers.Features.ImageBuild;
 
 internal sealed class WorkerImageRebuildQueue : IWorkerImageRebuildQueue
 {
+    // Capacity 1 with DropWrite collapses rapid settings saves into one rebuild: the pending rebuild
+    // reads the latest persisted settings when it starts.
     private readonly Channel<bool> _channel = Channel.CreateBounded<bool>(
         new BoundedChannelOptions(capacity: 1)
         {

@@ -92,6 +92,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     internal ImageBuildState ImageBuildState { get; private set; } = null!;
 
+    // Set only by a successful build and never cleared, so a later failed build does not hide an image
+    // that is still usable. It records a past build, not that the image still exists in Docker.
     public DateTimeOffset? LastImageBuiltAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }

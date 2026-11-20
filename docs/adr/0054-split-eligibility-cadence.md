@@ -7,14 +7,14 @@
 Repository eligibility combines two checks of very different cost: a cheap branch-rules GET
 and an expensive GitHub write probe (three content-creation POSTs against a 500/hour secondary
 rate limit). [ADR 0013](0013-repository-level-eligibility.md) made the whole evaluation an unconditional per-cycle poll step so a fixed
-repository heals automatically on the next poll. [ADR 0041](0041-probe-target-selection.md) later stated write probes run "on add
+repository heals automatically on the next poll. A later decision stated write probes run "on add
 or recheck". The code followed ADR 0013 and issued write probes every cycle, driving approximately
 756 POSTs/hour at a typical poll interval and breaching the secondary limit. Branch rulesets and
 push permissions change approximately never, so probing every cycle is pure waste.
 
-The "runs every cycle" clause of ADR 0013 and the "on add or recheck" cadence of ADR 0041 were
-therefore in direct contradiction; only one can be correct. Cross-reference [ADR 0039](0039-github-write-probe-not-shared-canpush.md) (rejected
-the shared `permissions.push` alternative in favour of a live write probe).
+The "runs every cycle" clause of ADR 0013 and the later "on add or recheck" cadence were
+therefore in direct contradiction; only one can be correct. The write probe is a live probe rather than the shared
+`permissions.push` flag, so it cannot be made cheap by reading a field instead.
 
 ## Decision
 
@@ -34,7 +34,7 @@ current `RepositoryEligibility`.
 
 This supersedes the "runs every cycle" clause of ADR 0013 for the write-probe half only — the
 branch-rules half remains an unconditional per-cycle step as originally decided.
-It realises the cadence stated in ADR 0041.
+It realises the "on add or recheck" cadence.
 
 ## Consequences
 

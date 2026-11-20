@@ -96,6 +96,8 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
             nextProbeAt);
     }
 
+    // Derived from persisted state, never from the credential volume: a credential file's presence cannot
+    // show expiry (the CLI refreshes it in place), and a worker's real auth failure marks the account Invalid.
     private static string ComputeOAuthStatus(ClaudeAccount account)
     {
         if (account.AuthMode is not AuthMode.OAuth)

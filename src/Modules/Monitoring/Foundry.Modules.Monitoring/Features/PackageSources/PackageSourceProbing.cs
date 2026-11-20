@@ -171,7 +171,7 @@ internal sealed class PackageSourceProbing(
     /// <summary>
     /// The distinct source-and-credential pairs the repositories need, adding a <see cref="PackageSource"/> for each
     /// source not stored yet. A source with a registered credential is read with it alone. Otherwise a repository
-    /// whose account cannot be used is skipped: its eligibility already stops at the account (ADR 0035), so its
+    /// whose account cannot be used is skipped: its eligibility already stops at the account, so its
     /// sources need no verdict.
     /// </summary>
     private async Task<IReadOnlyCollection<ProbeTarget>> CollectTargetsAsync(

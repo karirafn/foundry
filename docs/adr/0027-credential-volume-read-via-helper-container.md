@@ -22,7 +22,7 @@ The Claude Code CLI writes `.credentials.json` to `$CLAUDE_CONFIG_DIR` (on the m
 The helper mounts the volume **read-write**. (Amended by #613: the original read-only mount assumed `auth status` never writes, but the CLI refreshes an expired access token during `auth status` and writes `.credentials.json` back; a read-only mount cannot persist a rotated refresh token, leaving a dead token on the volume.)
 This volume read is also the real confirmation that login persisted a valid credential.
 
-This is the single, cross-platform way Foundry touches the credential volume: through a container, via the Docker socket — never via host filesystem access to the daemon's volume mountpoint (see [ADR 0029](0029-oauth-status-derived-from-persisted-state.md), which removes the host-FS reader for status display).
+This is the single, cross-platform way Foundry touches the credential volume: through a container, via the Docker socket — never via host filesystem access to the daemon's volume mountpoint; status display reads persisted state instead.
 
 ## Considered Options
 
@@ -37,11 +37,11 @@ The credential is already durable on the volume, and success is detected from th
 
 ### Read the volume file from the host filesystem
 
-Rejected: the daemon mountpoint (`/var/lib/docker/volumes/…`) is unreachable from the host on Docker Desktop (it lives inside the Linux VM), so a host-process read cannot see the file. See ADR 0029.
+Rejected: the daemon mountpoint (`/var/lib/docker/volumes/…`) is unreachable from the host on Docker Desktop (it lives inside the Linux VM), so a host-process read cannot see the file.
 
 ## Consequences
 
-- Reading credential state costs a short-lived container start/stop. This is acceptable at login time (infrequent) but is the reason status **display** does not read the volume at all (ADR 0029).
+- Reading credential state costs a short-lived container start/stop. This is acceptable at login time (infrequent) but is the reason status **display** does not read the volume at all.
 - The mechanism is identical on Windows/Mac dev (host process + Docker socket) and Linux prod (containerized + Docker socket) — no per-platform branching.
 - Login success no longer depends on the login container exiting, so the flow is robust whether the CLI exits promptly or lingers after signalling success.
 - The behavior is exercised in the real-Docker `login-integration` CI job; unit tests cover both a login container that has exited and one still running when the success signal appears.

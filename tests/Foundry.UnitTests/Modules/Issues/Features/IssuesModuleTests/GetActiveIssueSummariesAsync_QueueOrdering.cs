@@ -216,7 +216,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     public async Task WhenQueuedIssuesSameTierAndPosition_OrderedByIssueNumberAscending()
     {
         // Arrange: two QueuedIssues in same repo (same position); #12 is detected after #50
-        // but the lower issue number is dispatched first (ADR 0092).
+        // but the lower issue number is dispatched first (ADR 0025).
         MonitoredRepositoryId repo = MonitoredRepositoryId.New();
         DateTimeOffset older = Now.AddHours(-2);
         DateTimeOffset newer = Now.AddHours(-1);

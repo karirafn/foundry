@@ -6,6 +6,8 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Contracts;
 
+// The $type tokens and member names are persisted in the revision_trigger column and carried in
+// outbox events; renaming one needs a data migration of the stored JSON.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(ReviewFeedback), "review_feedback")]
 [JsonDerivedType(typeof(ReviewFindings), "review_findings")]

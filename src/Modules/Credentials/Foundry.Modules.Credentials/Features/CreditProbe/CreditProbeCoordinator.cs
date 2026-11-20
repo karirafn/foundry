@@ -31,6 +31,8 @@ internal sealed class CreditProbeCoordinator(
     ILoginSessionState loginSessionState,
     ILogger<CreditProbeCoordinator> logger) : ICreditProbeCoordinator, IDisposable
 {
+    // In-process single-flight is enough only because Foundry runs as a single instance; a second instance would
+    // need a distributed lock.
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public void Dispose() => _semaphore.Dispose();
