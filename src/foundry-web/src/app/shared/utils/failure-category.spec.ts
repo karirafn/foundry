@@ -134,6 +134,14 @@ describe('failure-category', () => {
     expect(display?.cssClass).toBe('badge--failure-provider-unreachable');
   });
 
+  it('should map fetch_failed to "FETCH FAILED" with the provider-unreachable warning outline', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('fetch_failed');
+
+    // Assert
+    expect(display).toEqual({ label: 'FETCH FAILED', cssClass: 'badge--failure-provider-unreachable' });
+  });
+
   it('should map package_source_unreachable to "PACKAGES UNREACHABLE" with the provider-unreachable warning outline', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('package_source_unreachable');

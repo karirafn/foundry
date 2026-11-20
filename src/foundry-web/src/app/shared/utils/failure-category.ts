@@ -4,6 +4,7 @@ export type FailureCategoryToken =
   | 'container_error'
   | 'provider_error'
   | 'provider_unreachable'
+  | 'fetch_failed'
   | 'package_source_unreachable'
   | 'package_restore_failed'
   | 'usage_limited'
@@ -33,6 +34,7 @@ export const FAILURE_CATEGORY_DISPLAY = {
   container_error: { label: 'CONTAINER ERROR', cssClass: 'badge--failure-container-error' },
   provider_error: { label: 'PROVIDER ERROR', cssClass: 'badge--failure-provider-error' },
   provider_unreachable: { label: 'PROVIDER UNREACHABLE', cssClass: 'badge--failure-provider-unreachable' },
+  fetch_failed: { label: 'FETCH FAILED', cssClass: 'badge--failure-provider-unreachable' },
   package_source_unreachable: { label: 'PACKAGES UNREACHABLE', cssClass: 'badge--failure-provider-unreachable' },
   package_restore_failed: { label: 'PACKAGES UNRESTORED', cssClass: 'badge--failure-provider-unreachable' },
   usage_limited: { label: 'USAGE LIMITED', cssClass: 'badge--usage-limited' },
