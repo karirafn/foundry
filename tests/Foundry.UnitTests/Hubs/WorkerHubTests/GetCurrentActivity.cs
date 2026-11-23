@@ -169,11 +169,11 @@ public sealed class GetCurrentActivity
             CancellationToken cancellationToken)
             => Task.FromResult(0);
 
-        public Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+        public Task<IReadOnlyDictionary<Guid, WorkerRunPhase>> GetRunPhasesForIssuesAsync(
             IReadOnlyCollection<Guid> issueIds,
             CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>>(
-                new Dictionary<Guid, WorkerRunPublishPhase>());
+            => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPhase>>(
+                new Dictionary<Guid, WorkerRunPhase>());
 
         public Task<IReadOnlySet<Guid>> GetIssueIdsWithUnpublishedRunAsync(
             IReadOnlyCollection<Guid> issueIds,

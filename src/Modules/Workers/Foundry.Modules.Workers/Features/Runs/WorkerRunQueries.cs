@@ -289,30 +289,31 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             HasStoredLog: false,
             CancelRequestedAt: null);
 
-    public async Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+    public async Task<IReadOnlyDictionary<Guid, WorkerRunPhase>> GetRunPhasesForIssuesAsync(
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken)
     {
         if (issueIds.Count == 0)
         {
-            return new Dictionary<Guid, WorkerRunPublishPhase>();
+            return new Dictionary<Guid, WorkerRunPhase>();
         }
 
         List<IssueId> ids = issueIds.Select(IssueId.From).ToList();
 
-        List<UnpublishedRun> runs = await db.Set<UnpublishedRun>()
+        List<WorkerRun> runs = await db.Set<WorkerRun>()
             .AsNoTracking()
-            .Where(r => ids.Contains(r.IssueId))
+            .Where(r => ids.Contains(r.IssueId) && (r is StartingRun || r is UnpublishedRun))
             .ToListAsync(cancellationToken);
 
-        // An exhausted publish waits for an operator in Needs attention, so it is no publish phase of work in progress.
-        Dictionary<Guid, WorkerRunPublishPhase> phases = [];
-        foreach (UnpublishedRun run in runs)
+        // An exhausted publish waits for an operator in Needs attention, so it is no phase of work in progress.
+        Dictionary<Guid, WorkerRunPhase> phases = [];
+        foreach (WorkerRun run in runs)
         {
-            WorkerRunPublishPhase? phase = run switch
+            WorkerRunPhase? phase = run switch
             {
-                PublishingRun => WorkerRunPublishPhase.Publishing,
-                PublishFailedRun { IsExhausted: false } => WorkerRunPublishPhase.Retrying,
+                StartingRun => WorkerRunPhase.Starting,
+                PublishingRun => WorkerRunPhase.Publishing,
+                PublishFailedRun { IsExhausted: false } => WorkerRunPhase.Retrying,
                 _ => null,
             };
 
