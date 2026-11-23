@@ -68,6 +68,9 @@
         class="lifecycle-row__activity"
         [panel]="panel()"
         [taskLineId]="idBase() + '-task'"
+        [listId]="idBase() + '-tasks'"
+        [expanded]="tasksExpanded()"
+        (toggled)="tasksToggled.emit()"
       />
       <span class="lifecycle-row__live" [id]="idBase() + '-clock'"
         ><span class="lifecycle-row__clock"

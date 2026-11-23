@@ -23,6 +23,8 @@
           <fd-lifecycle-row
             [item]="item"
             [now]="now()"
+            [tasksExpanded]="board.tasksExpanded(item.issue.id)"
+            (tasksToggled)="board.toggleTasks(item.issue.id)"
             (open)="open.emit({ id: item.issue.id, invoker: $event })"
           />
         </li>

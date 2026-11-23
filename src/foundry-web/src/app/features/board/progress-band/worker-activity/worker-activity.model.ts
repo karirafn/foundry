@@ -3,10 +3,12 @@ import {
   AgentActivity,
 } from '../../../../core/models/agent-activity.model';
 import {
+  TaskListItem,
   backgroundTaskCount,
   backgroundTaskText,
   formatElapsed,
   laneStepText,
+  taskListItems,
   taskOrdinal,
 } from '../../../../shared/utils/agent-activity-format';
 
@@ -32,6 +34,8 @@ export interface ActivityPanel {
   readonly taskLine: string;
   /** The bar with its "task 3 of 7" label; null when the run has no task list. */
   readonly taskBar: { readonly shape: TaskBar; readonly progress: string } | null;
+  /** The agent's checklist; empty when the run has no task list. */
+  readonly tasks: readonly TaskListItem[];
 }
 
 /** The card footer's line on the last event; `kind` picks its tone. */
@@ -62,6 +66,7 @@ const STARTING_PANEL: ActivityPanel = {
   starting: true,
   taskLine: "Waiting for the agent's first event",
   taskBar: null,
+  tasks: [],
 };
 
 const SILENCE_THRESHOLD_MS = AGENT_SILENCE_THRESHOLD_MINUTES * 60_000;
@@ -81,6 +86,7 @@ export function activityPanel(activity: AgentActivity | null): ActivityPanel {
       total > 0
         ? { shape: taskBar(activity), progress: `task ${taskOrdinal(activity)} of ${total}` }
         : null,
+    tasks: taskListItems(activity),
   };
 }
 

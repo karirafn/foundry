@@ -1,3 +1,5 @@
+@use '../../../../../styles/controls' as *;
+
 :host {
   display: block;
   min-width: 0;
@@ -26,16 +28,18 @@
   white-space: nowrap;
 }
 
+// At 320px the count and toggle drop under the bar.
 .worker-activity__steps {
   align-items: center;
   display: flex;
-  gap: var(--fd-spacing-sm);
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-sm);
   min-width: 0;
 }
 
 .worker-activity__bar {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 8rem;
   gap: 3px;
   min-width: 0;
 }
@@ -51,9 +55,22 @@
   overflow: hidden;
   position: relative;
 
-  &--done,
-  &--current {
+  &--done {
     background: var(--fd-accent-working);
+  }
+
+  &--current {
+    background: color-mix(in oklch, var(--fd-accent-working) 55%, var(--fd-progress-track));
+  }
+
+  // A segment whose task just completed fills from the start, once.
+  &--fill::after {
+    animation: fd-task-segment-fill var(--fd-motion-glide) var(--fd-ease-glide) both;
+    background: var(--fd-accent-working);
+    content: '';
+    inset: 0;
+    position: absolute;
+    transform-origin: left;
   }
 }
 
@@ -62,7 +79,7 @@
   background: var(--fd-progress-track);
   border-radius: 2px;
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 8rem;
   height: 6px;
   min-width: 0;
   overflow: hidden;
@@ -70,8 +87,11 @@
 
 .worker-activity__meter-done,
 .worker-activity__meter-current {
-  background: var(--fd-accent-working);
   flex: none;
+}
+
+.worker-activity__meter-done {
+  background: var(--fd-accent-working);
 }
 
 .worker-activity__meter-done {
@@ -80,18 +100,8 @@
 
 // The segment minimum, so the slice stays visible at 100+ tasks.
 .worker-activity__meter-current {
+  background: color-mix(in oklch, var(--fd-accent-working) 55%, var(--fd-progress-track));
   min-width: 3px;
-  overflow: hidden;
-  position: relative;
-}
-
-.worker-activity__segment--current::after,
-.worker-activity__meter-current::after {
-  animation: fd-board-segment-sheen 1.8s linear infinite;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
-  content: '';
-  inset: 0;
-  position: absolute;
 }
 
 .worker-activity__progress {
@@ -101,15 +111,57 @@
   font-variant-numeric: tabular-nums;
 }
 
+// Above the row's stretched title button, so a click toggles the list and never opens the pane.
+.worker-activity__toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  gap: 2px;
+  min-height: 32px;
+  padding: 0 var(--fd-spacing-sm);
+  position: relative;
+  z-index: 1;
+
+  &:hover {
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+.worker-activity__chevron {
+  transition: transform 160ms ease;
+
+  [aria-expanded='true'] > & {
+    transform: rotate(180deg);
+  }
+}
+
 .worker-activity--starting .worker-activity__task {
   color: var(--fd-text-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .worker-activity__segment--current::after,
-  .worker-activity__meter-current::after {
-    animation: none;
-    display: none;
+  .worker-activity__segment--fill::after {
+    animation: none !important;
+  }
+
+  .worker-activity__chevron,
+  .worker-activity__meter-done {
+    transition: none;
   }
 }
 
