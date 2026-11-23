@@ -30,7 +30,6 @@
   font-weight: 600;
   grid-row: 1;
   letter-spacing: 0.06em;
-  overflow: hidden;
   padding-bottom: 4px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -170,6 +169,7 @@
 
 .rail--arriving .rail__node--beacon::before {
   animation: fd-rail-beacon var(--fd-motion-beacon) ease-out 3;
+  animation-delay: var(--fd-rail-delay);
 }
 
 :host-context(.lifecycle-row--running) {
@@ -192,7 +192,6 @@
   color: var(--fd-bg-page);
   font-size: 0.625rem;
   font-weight: 700;
-  line-height: 1.4;
   padding: 0 3px;
   position: absolute;
   right: -10px;

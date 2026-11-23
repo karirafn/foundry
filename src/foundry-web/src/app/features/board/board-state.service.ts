@@ -75,7 +75,8 @@ interface Batch {
 
 const DEBOUNCE_MS = 150;
 const MAX_WAIT_MS = 500;
-const ARRIVAL_MS = 1300;
+// Three needs-you beacon pulses (--fd-motion-beacon in styles/_motion.scss) after a glide lands.
+const ARRIVAL_MS = 3 * 1400 + 300;
 const CONFIRM_MS = 1200;
 // Matches --fd-motion-exit in styles/_motion.scss.
 const COLLAPSE_MS = 180;

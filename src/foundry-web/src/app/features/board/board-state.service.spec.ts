@@ -393,7 +393,7 @@ describe('BoardStateService', () => {
     expect(h.service.bands().needs[0].arrived).toBe(true);
   });
 
-  it('clears the arrival after 1300 ms', async () => {
+  it('keeps the arrival through the three beacon pulses', async () => {
     // Arrange
     const h = setup();
     load(h, [buildIssue({ id: 'a' })]);
@@ -401,7 +401,21 @@ describe('BoardStateService', () => {
     await vi.advanceTimersByTimeAsync(150);
 
     // Act
-    await vi.advanceTimersByTimeAsync(1300);
+    await vi.advanceTimersByTimeAsync(4_400);
+
+    // Assert
+    expect(h.service.bands().needs[0].arrived).toBe(true);
+  });
+
+  it('clears the arrival once the beacon has pulsed three times after the glide', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [buildIssue({ id: 'a' })]);
+    change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Act
+    await vi.advanceTimersByTimeAsync(4_500);
 
     // Assert
     expect(h.service.bands().needs[0].arrived).toBe(false);
