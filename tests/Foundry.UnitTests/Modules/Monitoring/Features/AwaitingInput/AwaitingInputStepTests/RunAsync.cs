@@ -360,7 +360,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false);
 
         // Act
         await RunStepAsync();
@@ -826,7 +826,7 @@ public sealed class RunAsync : IAsyncDisposable
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
         SeedWatch(issueNumber: 1, baselineBody: null, new BranchHead.Present(PostedHead));
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: PushedHead);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: PushedHead, IsDraft: false);
         DateTimeOffset firstSeen = Now;
         await RunStepAtAsync(firstSeen);
         _dispatcher.Events.ShouldBeEmpty();
@@ -846,7 +846,7 @@ public sealed class RunAsync : IAsyncDisposable
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
         SeedWatch(issueNumber: 1, baselineBody: null, baselineHead: null);
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false);
 
         // Act
         await RunStepAtAsync(Now);
@@ -1126,7 +1126,7 @@ public sealed class RunAsync : IAsyncDisposable
 
         public int IssueStatusReads { get; private set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: PostedHead);
+        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: PostedHead, IsDraft: false);
 
         // The branch head a continuation's branch read returns; null makes the read fail.
         public BranchHead? BranchHead { get; set; } = new BranchHead.Present(PostedHead);

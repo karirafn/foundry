@@ -340,7 +340,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
                 [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
-                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: headSha)),
+                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: headSha, IsDraft: false)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -675,7 +675,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             },
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null)),
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -708,7 +708,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             },
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null)),
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -891,7 +891,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
+            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
         }
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
