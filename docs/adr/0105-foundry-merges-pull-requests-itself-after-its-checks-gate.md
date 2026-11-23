@@ -1,8 +1,8 @@
+---
+reaches: external-contract
+---
+
 # Foundry Merges Pull Requests Itself After Its Checks Gate
-
-> **2026-11-13 — Amended:** the head source in the "Pinned head" clause is replaced by [ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md): the commit comes from the PR status read for every outcome, not from the checks read. It can precede the commit the verdict describes, so a race refuses the merge as `head_moved` rather than merging unchecked work.
-
-> **2026-11-14 — Amended:** the Consequences clause that a pull request falling behind the default branch goes to `review` as `Skipped` is replaced by [ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md): a merge refused because the pull request is behind joins a serialized catch-up queue.
 
 ## Context
 
@@ -18,8 +18,8 @@ It never arms the provider's native auto-merge.
 - **Opt-in** — the per-repository `MergeWhenChecksPass` toggle, default `false`, read live by the merge step.
 - **Gate** — only a `Passed` checks outcome routes to the new `merge_pending` state.
   `NoneDetected`, `Unfinished`, `StillFailing`, and `Unreadable` go to `review` as before.
-- **Pinned head** — the checks verdict carries the head SHA it verified, and the merge call passes it as the provider's `sha` guard.
-  A moved head refuses the merge.
+- **Pinned head** — the checks verdict carries the head commit read from the pull request status for every outcome ([ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md)), and the merge call passes it as the provider's `sha` guard.
+  That commit can precede the one the verdict describes, so a race refuses the merge as `head_moved` rather than merging unchecked work; a moved head refuses the merge.
 - **Fail open** — a refusal, an authorization failure, or an exhausted transient-retry budget resolves to `review` with a persisted `MergeOutcome` of `Skipped(reason)`.
   A merged pull request completes the issue directly.
 - **Person in the loop** — once a person's review feedback has driven a revision, that issue no longer merges automatically.
@@ -40,7 +40,10 @@ Rejected.
 ## Consequences
 
 - The setting is named `MergeWhenChecksPass` rather than "auto-merge", because both providers use "auto-merge" for the native feature this ADR rejects.
-- A pull request that falls behind the default branch while in review is still not re-synced ([ADR 0087](0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md) Consequences).
-  A repository that requires up-to-date branches, or a GitLab project using fast-forward merges, refuses such a merge, and the issue falls back to `review` as `Skipped`.
+- A repository that requires up-to-date branches, or a GitLab project using fast-forward merges, refuses the merge of a pull request that fell behind the default branch; that refused merge joins a serialized catch-up queue that rebases one pull request at a time ([ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md)).
 - On GitLab, Foundry's branch rules allow only Maintainers to merge into the default branch, so a PAT owned by a Developer is refused on every merge.
   No check runs when the toggle is enabled, and the refusal reason on the card is the signal.
+
+## Revisions
+- 2026-11-13 — The pinned head comes from the pull request status read for every outcome rather than from the checks read, so a race refuses the merge as `head_moved` ([ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md)).
+- 2026-11-14 — A merge refused because the pull request is behind joins a serialized catch-up queue instead of going to `review` as `Skipped` ([ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md)).

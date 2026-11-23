@@ -1,6 +1,8 @@
-# Judgment Roles Run Restricted, with Issue Content Supplied by Code
+---
+reaches: non-functional
+---
 
-> **2026-11-09 — Amended:** the Decision's clause that a `Restricted` run uses `GIT_PAT` for a shallow clone and then unsets it is replaced by [ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md): every role clones from a base bundle prepared by the Publisher, and no worker container spec contains a provider credential.
+# Judgment Roles Run Restricted, with Issue Content Supplied by Code
 
 ## Context
 
@@ -13,7 +15,7 @@ Each Worker Role declares a capability profile as a closed type on its role defi
 A `Restricted` run:
 
 - starts `claude` with `--restricted --strict-mcp-config` and without `--dangerously-skip-permissions`. In `-p` mode the read-only file tools need no approval, and anything that would need approval is denied;
-- receives no provider token. `GIT_PAT` is used for a shallow clone of the default branch and then unset, and `GH_TOKEN`/`GITLAB_TOKEN` are not set;
+- receives no provider token: like every role, it clones from the base bundle the Publisher prepares, and no worker container spec contains a provider credential ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md));
 - gets no branch created on the provider;
 - gets the issue body and comments from Foundry's code at dispatch, through an `IIssueProvider` read, rendered into the prompt as XML-encoded untrusted data;
 - uses its role's own system-prompt sections, with no push, pull-request or checks instructions.
@@ -32,3 +34,6 @@ The output of a restricted role is only its schema-validated verdict, so a promp
 - Foundry reads issue bodies and comments from the provider, which it has not done since the `DropIssueBody` migration.
 - Whether `--restricted` combined with `--dangerously-skip-permissions` fails at startup or is silently downgraded is unverified. The restricted profile never passes the skip flag, so the design does not depend on the answer.
 - Run listings show the role of each run, because more than one role can now appear in an issue's history.
+
+## Revisions
+- 2026-11-09 — A `Restricted` run clones from the Publisher-prepared base bundle instead of a shallow `GIT_PAT` clone, and no worker container spec contains a provider credential ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md)).

@@ -1,16 +1,8 @@
 ---
-status: accepted
+reaches: structure
 ---
 
 # All Worker Settings in GlobalSettings, Database as the Only Source
-
-> **2026-11-02 — Amended:** the Decision's "`WorkerContainerSpec` (image tag, memory, CPU, PIDs)" shape clause is refined in implementation. The image tag ships on `WorkerImageConfiguration` (slice #625); the worker resource limits ship on a dedicated `WorkerResourceLimits` value object and the mounts on `WorkerMounts` (slice #604). Limit and mount changes are read per dispatch with no rebuild event, so they raise no `WorkerImageSettingsChanged`. The database-only, all-settings-in-`GlobalSettings` decision is unchanged.
-
-> **2026-11-06 — Amended:** the Decision's Hooks clause and the `WorkerMounts` part of its Shape clause are replaced by [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md), which removes host hooks and worker mounts.
-
-> **2026-11-06 — Amended:** the `WorkerPrompts` part of the Decision's Shape clause (system and worker templates, branch naming, edited in the dashboard) is replaced by [ADR 0095](0095-worker-roles-ship-in-the-worker-image.md). Role prompts move into the worker image. The `model` field of `ClaudeCodeSettings` is also replaced by ADR 0095, which gives each role its own model setting.
-
-> **2026-11-09 — Amended:** the `BlockCiCdEdits` toggle in the Decision's Shape clause and the CI/CD deny rules clause are replaced by [ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md), which removes CI/CD edit blocking; workers may change CI/CD files and human review is the gate.
 
 ## Context
 
@@ -21,11 +13,9 @@ Operators run Foundry as a container, so a value only reachable by editing appse
 
 Every operator-facing `Workers` setting moves into `GlobalSettings`, and the database is the only source — `WorkerOptions`, its validator, and the `Workers` configuration section are removed.
 
-- **Seeding** — code defaults seed the row; every field is non-null, so the UI always shows the value in effect. Existing null prompt templates are backfilled with the defaults.
-- **Shape** — one value object per group, each persisted as a JSON column and owning the invariants `WorkerOptionsValidator` held: `WorkerContainerSpec` (image tag, memory, CPU, PIDs), `WorkerMounts` (one table keyed on container path with a per-row read-only/writable flag, so a path in both lists is unrepresentable), `ClaudeCodeSettings` (model, `BlockCiCdEdits` toggle, additional deny rules), `WorkerPrompts` (system and worker templates, branch naming), and the image build toggle.
-- **CI/CD deny rules** — stored as a boolean; the rule list stays a code constant so later additions reach existing installs instead of being frozen in a seeded snapshot.
-- **Hooks** — sourced from the operator's host Claude Code `settings.json`, mounted read-only and merged into the worker settings by the entrypoint on every container start, minus an operator-maintained exclusion list. A configured but missing or invalid file is a bootstrap failure; no configured path means no host hooks.
-- **Image changes** — one `WorkerImageSettingsChanged` event covers flags, tag, and build toggle: with build enabled it requests a rebuild; with build disabled it inspects the tag and a missing image lands in `ImageBuildState.Failed`, reusing the existing dispatch gate, banner, and retry.
+- **Seeding** — code defaults seed the row; every field is non-null, so the UI always shows the value in effect.
+- **Shape** — one value object per group, each persisted as a JSON column and owning the invariants `WorkerOptionsValidator` held: `WorkerImageConfiguration` (image tag, build toggle), `WorkerResourceLimits` (memory, CPU, PIDs), and `ClaudeCodeSettings` (additional deny rules). Host mounts and host hooks are removed ([ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md)); role prompts and branch naming ship in the worker image and each role has its own model setting ([ADR 0095](0095-worker-roles-ship-in-the-worker-image.md)); there is no CI/CD edit blocking, so workers may change CI/CD files and human review is the gate ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md)).
+- **Image changes** — one `WorkerImageSettingsChanged` event covers the tag and the build toggle: with build enabled it requests a rebuild; with build disabled it inspects the tag and a missing image lands in `ImageBuildState.Failed`, reusing the existing dispatch gate, banner, and retry. Resource limits are read per dispatch with no rebuild, so changing them raises no `WorkerImageSettingsChanged`.
 
 Not moved: bootstrap settings (connection string, DataProtection key path, logging, `AllowedHosts`, OTLP endpoint, Aspire dashboard keys), which are needed before the database is readable or are framework-consumed; and pure internal tuning, which becomes code constants — `OutboxOptions`, the image build `ContextPath` (a packaging fact), and the image build backoffs (the manual retry is the escape hatch).
 
@@ -40,7 +30,13 @@ Not moved: bootstrap settings (connection string, DataProtection key path, loggi
 
 ## Consequences
 
-- Overturns the "mounts and resource limits remain infrastructure" note in DOMAIN.md; DOMAIN.md is updated as each slice ships.
-- Host mounts, hooks, and deny rules become writable through an unauthenticated API until #178 lands — a widened exposure recorded on #178.
-- Existing values in user secrets (mounts, hooks, model, worker prompt) are re-entered through the UI once; there is no import.
-- Foundry's generated worker settings still live in the worker's writable `~/.claude/settings.json`; moving the enforced subset to a root-owned `managed-settings.json` is tracked separately.
+- Overturns the "mounts and resource limits remain infrastructure" note in DOMAIN.md.
+- Worker settings, including the deny rules, are writable through an unauthenticated API until #178 lands — a widened exposure recorded on #178.
+- Existing values in user secrets are not imported; they are re-entered through the UI.
+- Foundry's generated worker settings are rendered into a root-owned `managed-settings.json` rather than the worker's writable `~/.claude/settings.json` ([ADR 0086](0086-worker-policy-in-root-rendered-managed-settings.md)).
+
+## Revisions
+- 2026-11-02 — The Shape clause's `WorkerContainerSpec` was refined: the image tag ships on `WorkerImageConfiguration` (#625), the limits on `WorkerResourceLimits` and the mounts on `WorkerMounts` (#604), and limit and mount changes raise no `WorkerImageSettingsChanged`.
+- 2026-11-06 — The Hooks clause and `WorkerMounts` are removed ([ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md)).
+- 2026-11-06 — `WorkerPrompts` and the single `model` field are replaced by role prompts in the worker image and a per-role model setting ([ADR 0095](0095-worker-roles-ship-in-the-worker-image.md)).
+- 2026-11-09 — The `BlockCiCdEdits` toggle and the CI/CD deny rules clause are removed; workers may change CI/CD files and human review is the gate ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md)).

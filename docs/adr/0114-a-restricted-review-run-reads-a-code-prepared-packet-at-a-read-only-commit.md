@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # A Restricted Review Run Reads a Code-Prepared Packet at a Read-Only Commit
 
 ## Context

@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Delegate Claude OAuth Credential Lifecycle to the Claude Code CLI
 
 ## Context
@@ -12,7 +16,7 @@ Delegate the full OAuth credential lifecycle to the genuine Claude Code CLI via 
 
 A one-time `claude /login` seeds the volume; each worker mounts it at `CLAUDE_CONFIG_DIR` (`/home/node/.claude`) and the genuine CLI reads, uses, and auto-refreshes `.credentials.json` in place.
 Foundry stores no token and injects none — the CLI owns access-token refresh (silent, persisted to the shared volume) and signals refresh-token expiry through a non-zero auth-failure exit.
-An auth-failure worker exit triggers an **auth-invalid pause**: dispatch pauses, the affected issue re-queues on resume, and resume requires a manual `claude /login` to re-seed the volume.
+An auth-failure worker exit triggers an **auth-invalid pause**: dispatch pauses, the affected issue re-queues on resume, and resume requires a fresh login to re-seed the volume.
 There is deliberately no auto-resume timer — Foundry cannot detect a successful re-login server-side.
 Settings and the setup wizard report only what local data proves (credential file present / re-login needed).
 
@@ -29,13 +33,12 @@ Settings and the setup wizard report only what local data proves (credential fil
 - The OAuth credential sits in plaintext in the Docker volume, consistent with how the genuine CLI stores it locally.
   This is a downgrade from the DB-encrypted API key, accepted because: the volume is scoped to the Docker socket trust boundary Foundry already operates within, and no alternative exists that lets the genuine CLI manage refresh without reading a plaintext credential.
 - Auth-invalid resume is manual-only — there is no server-side signal Foundry can poll to detect a successful re-login.
-  Operators must run an in-app login session (see Phase 2 below) to re-seed the volume; Foundry then auto-resumes dispatch.
+  Operators must run an in-app login session (see In-App Interactive Login below) to re-seed the volume; Foundry then auto-resumes dispatch.
 - Closure of the genuine-CLI OAuth path (e.g., Anthropic deprecating the shared-volume pattern) is a product escalation, not a code fallback — there is no automated recovery path Foundry can implement within ToS constraints.
 
-## Phase 2 — In-App Interactive Login
+## In-App Interactive Login
 
-Phase 1 left the credential-seeding step as a manual `docker run` command outside Foundry.
-Phase 2 brings the full OAuth login flow inside the Foundry dashboard, removing the manual step entirely.
+The full OAuth login flow runs inside the Foundry dashboard; seeding the credential volume needs no manual command outside Foundry.
 
 ### Mechanism
 
@@ -69,5 +72,5 @@ Before invoking `claude auth login --claudeai`, the entrypoint merges onboarding
 ### Dispatch pause
 
 Dispatch is transiently suppressed via `ILoginSessionState.IsLoginActive` while a session is active.
-This is not persisted — a Foundry restart mid-login drops the in-memory session, and `LoginContainerReaper` reaps any orphaned login containers on startup.
-A successful login auto-resumes any active auth-invalid pause by calling `GlobalSettings.ResumeDispatch()` and publishing `DispatchResumed`.
+This is not persisted — a Foundry restart mid-login drops the in-memory session, and the periodic `TransientContainerReaper` reaps orphaned login containers ([ADR 0031](0031-crash-safe-self-cleaning-transient-containers.md)).
+A successful login marks the credentials valid and publishes `CredentialsValidated`, which lifts the auth-invalid pause and re-queues auth-invalid-failed work ([ADR 0030](0030-extract-claude-credentials-module.md)).

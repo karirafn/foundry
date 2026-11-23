@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Usage Report First, with a Probe-Turn Fallback
 
 ## Context

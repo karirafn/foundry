@@ -1,3 +1,7 @@
+---
+reaches: module-contract
+---
+
 # Dashboard Reconciles Queue Order Rather Than Deriving It
 
 ## Context
@@ -10,7 +14,7 @@ Dispatch order is a function of every queued row plus repository `Position` and 
 
 The client treats server array order as the only source of queue order and **reconciles** it by refetching the ordered list, rather than deriving order locally or having the server push an order.
 
-- Every `IssueUpdated` event schedules a debounced reconcile (`GET /api/issues`) alongside the counts refetch that already runs on that path, with no per-state trigger classification.
+- Every `IssueUpdated` event schedules a debounced reconcile (`GET /api/issues`), with no per-state trigger classification.
 - A low-frequency safety-net timer schedules the same reconcile, covering the order inputs that raise no issue event at all — repository `Position` moves and eligibility changes.
 - The reconcile fetch carries a latest-wins request token, so a late response cannot install a stale order.
 - The displayed Queue Position ordinal is a 1-based index over the rendered dispatchable-queued array, never a value transported from the server.

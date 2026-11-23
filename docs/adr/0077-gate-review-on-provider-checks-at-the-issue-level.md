@@ -1,6 +1,8 @@
-# Gate Review on Provider Checks at the Issue Level
+---
+reaches: structure
+---
 
-> **2026-11-13 — Amended:** the Decision clause that every verdict leads to `ReviewIssue` recording a `ChecksOutcome` is extended by [ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md): the verdict also records the head commit it was read against, and a `review` issue whose pull request head moves returns to `checks_pending`. The omission existed from the start; no outcome here was ever tied to a commit.
+# Gate Review on Provider Checks at the Issue Level
 
 ## Context
 
@@ -8,10 +10,10 @@ A worker exits once it has pushed and opened a PR, and `WorkerOutcomeResolver` m
 
 ## Decision
 
-Foundry verifies the provider's checks itself, as an issue-lifecycle gate after the worker run has ended, and the worker is additionally instructed (in the non-overridable system prompt) to drive checks green within a bounded budget before exiting.
+Foundry verifies the provider's checks itself, as an issue-lifecycle gate after the worker run has ended. The worker does not watch checks: it holds no provider credential and Foundry publishes its branch ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md)).
 
-- An open PR moves the issue to `ChecksPendingIssue` (lifecycle group: Waiting), not straight to `ReviewIssue`. `RepositoryPoller` reads the overall verdict — GitHub `statusCheckRollup.state`, GitLab `head_pipeline.status` — on each poll.
-- Green, no checks after a fixed grace window, checks unfinished after a fixed upper bound, checks unreadable (401/403), and checks still red after a bounded number of fix runs all lead to `ReviewIssue`, which records which one as a `ChecksOutcome` variant.
+- An open PR moves the issue to `ChecksPendingIssue` (lifecycle group: Waiting), after the rebase step of [ADR 0087](0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md), not straight to `ReviewIssue`. `RepositoryPoller` reads the overall verdict — GitHub `statusCheckRollup.state`, GitLab `head_pipeline.status` — on each poll.
+- Green, no checks after a fixed grace window, checks unfinished after a fixed upper bound, checks unreadable (401/403), and checks still red after a bounded number of fix runs all lead to `ReviewIssue`, which records which one as a `ChecksOutcome` variant together with the head commit the verdict was read against. A `review` issue whose pull request head moves returns to `checks_pending` ([ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md)).
 - Red within the fix budget re-queues the issue through the existing revision states, with a `FailedChecks` trigger variant alongside `ReviewFeedback`.
 
 ## Considered Options
@@ -29,3 +31,7 @@ Foundry verifies the provider's checks itself, as an issue-lifecycle gate after 
 - Every path into review from a worker passes the gate, including revision runs.
 - An empty verdict and an unreadable verdict are distinct; a token lacking check-read permission surfaces as `ChecksOutcome.Unreadable` rather than passing as "no CI".
 - `checks_pending` has automatic exits on every branch (grace window, upper bound, fix-attempt cap), so it never absorbs an issue.
+
+## Revisions
+- 2026-11-12 — The worker-side instruction to drive checks green before exiting was removed when workers stopped holding a provider credential ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md))
+- 2026-11-13 — A checks verdict records the head commit it was read against, and a moved head returns a `review` issue to `checks_pending` ([ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md))

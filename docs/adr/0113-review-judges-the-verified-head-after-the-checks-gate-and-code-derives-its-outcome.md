@@ -1,6 +1,8 @@
-# Review Judges the Verified Head After the Checks Gate, and Code Derives Its Outcome
+---
+reaches: structure
+---
 
-> **2026-11-20 — Amended:** the outcome-derivation clause in Decision is replaced by [ADR 0119](0119-review-criteria-can-be-covered-by-the-checks-gate-and-the-reviewer-reads-the-pull-request-description.md), which adds a `covered_by_checks` criterion status that counts as `met` when the checks gate passed.
+# Review Judges the Verified Head After the Checks Gate, and Code Derives Its Outcome
 
 ## Context
 
@@ -22,6 +24,7 @@ The review run happens after the checks gate, on the head the gate verified, and
 - **Code derives the outcome** — `changes_requested` when any finding is blocking, `tests.assessment` is `missing`, or a criterion is `unmet`.
   `approved_for_person` when a criterion is `not_verifiable` or the issue has no acceptance-criteria heading.
   `approved` otherwise.
+  A criterion answered `covered_by_checks` counts as `met`, once code has rewritten it to `not_verifiable` when the checks gate did not pass ([ADR 0119](0119-review-criteria-can-be-covered-by-the-checks-gate-and-the-reviewer-reads-the-pull-request-description.md)).
 - **Code checks the shape of the judgment** — a verdict is `verdict_invalid` when a dimension's status disagrees with its findings, when a blocking `quality`, `design` or `conventions` finding cites no rule (a numbered Principle line code validates against the role catalog, or a `{ file, quote }` repository convention), when `criteria[]` misses, repeats or invents an `AC` id code extracted, or when `coveringTests` names a path the changed-file classifier does not class as a test.
 - **Routing** — `approved` goes to `merge_pending` when `MergeWhenChecksPass` is on, otherwise to `review`.
   `approved_for_person` always goes to `review`.
@@ -56,3 +59,6 @@ The review run happens after the checks gate, on the head the gate verified, and
 - Taste cannot block a pull request: a finding without a rule code can check is advisory.
 - A repository whose test layout the built-in classifier misreads gets a reviewer judgment on the test flag, not a hard failure.
 - Every new review state joins the lists ADR 0097's Consequences name: `InFlightWorkerCountQuery`, `WorkerCapacityAvailableHandler.WorkerRunIdExistsAsync`, `IssueStateRegistry` and the EF discriminators, plus the closed-issue and closed-pull-request handlers.
+
+## Revisions
+- 2026-11-20 — The outcome derivation counts a `covered_by_checks` criterion as `met` when the checks gate passed ([ADR 0119](0119-review-criteria-can-be-covered-by-the-checks-gate-and-the-reviewer-reads-the-pull-request-description.md)).

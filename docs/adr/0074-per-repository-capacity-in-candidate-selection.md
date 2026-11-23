@@ -1,6 +1,8 @@
-# Per-Repository Capacity Is Enforced in Candidate Selection
+---
+reaches: module-contract
+---
 
-> **2026-10-14 — Amended:** the Decision's description of the headroom the capacity-aware walk carries is qualified by [#569](https://github.com/karirafn/foundry/issues/569). The walk remains the single shared artifact, but its two consumers now feed it different headroom inputs under global saturation: the dashboard query consumes `DispatchHeadroom.ForForecast` (assuming one in-flight worker per repository finishes, so `Next up` matches the dispatcher's actual next claim) while the selector consumes `DispatchHeadroom.ForClaim` (headroom as it is now). No `superseded-by` — only this clause is amended.
+# Per-Repository Capacity Is Enforced in Candidate Selection
 
 ## Context
 
@@ -12,7 +14,7 @@ A per-repository cap also separates two things that have so far been one functio
 
 Enforce the per-repository cap in `DispatchCandidateSelector`, not at the Workers-side dispatch gate. The limit travels to the selector on the existing Monitoring-to-Issues contract, `EligibleRepository`, which both the selector and the dashboard query already fetch. The in-flight count is taken from the Issues module's own state — `InProgressIssue` and `RevisionInProgressIssue` per repository — which `IssueClaimer.ClaimAsync` writes in the same transaction as the claim, so there is no window in which a claimed issue is uncounted.
 
-Claim order becomes a capacity-aware walk over `DispatchOrderKey` order, carrying each repository's remaining headroom: an issue whose repository has headroom takes the next place and decrements it; an issue whose repository is saturated defers to the following pass. That ordering is the single shared artifact, replacing the shared comparison key in that role — the dashboard renders it and derives Queue Position by index, and the selector takes its head. The two still cannot disagree.
+Claim order becomes a capacity-aware walk over `DispatchOrderKey` order, carrying each repository's remaining headroom: an issue whose repository has headroom takes the next place and decrements it; an issue whose repository is saturated defers to the following pass. That ordering is the single shared artifact, replacing the shared comparison key in that role — the dashboard renders it and derives Queue Position by index, and the selector takes its head. The two consumers feed the walk different headroom under global saturation: the selector uses `DispatchHeadroom.ForClaim` (headroom as it is now), while the dashboard query uses `DispatchHeadroom.ForForecast`, which assumes one in-flight worker per repository finishes, so `Next up` matches the dispatcher's actual next claim.
 
 ## Considered Options
 
@@ -29,3 +31,6 @@ The cap constrains which issue is claimed but not whether a capacity token is mi
 Lowering a repository's limit below its current in-flight count does not preempt running workers; the repository drains to the new limit as its workers finish.
 
 `Next up` remains truthful with respect to capacity, but not with respect to dispatch-info resolution: `DispatchCandidateSelector` also requires a resolvable `RepositoryDispatchInfo` and the dashboard query does not check that. This predates the decision and is unchanged by it.
+
+## Revisions
+- 2026-10-14 — The selector and the dashboard query feed the capacity-aware walk different headroom under global saturation (`ForClaim` vs `ForForecast`) ([#569](https://github.com/karirafn/foundry/issues/569))

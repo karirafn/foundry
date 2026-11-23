@@ -1,7 +1,8 @@
-# 0071. Bound the assembled worker system prompt under MAX_ARG_STRLEN
+---
+reaches: hidden-invariant
+---
 
-**Date:** 2026-09-14
-**Status:** Accepted
+# 0071. Bound the assembled worker system prompt under MAX_ARG_STRLEN
 
 ## Context
 

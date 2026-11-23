@@ -1,3 +1,7 @@
+---
+reaches: hidden-invariant
+---
+
 # Dispatch Capacity Is Held by a Durable Slot Reservation Rather Than an In-Flight Event
 
 ## Context

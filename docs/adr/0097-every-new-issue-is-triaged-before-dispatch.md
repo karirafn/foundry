@@ -1,10 +1,8 @@
+---
+reaches: structure
+---
+
 # Every New Issue Is Triaged Before Dispatch
-
-> **2026-11-12 — Amended:** the "Triage comes before blockers" clause in Decision, and the dependency-check position in the flow line above it, are replaced by [ADR 0102](0102-triage-runs-once-blockers-clear.md): a new issue with open blockers waits untriaged and is triaged once they close.
-
-> **2026-11-12 — Amended:** the flow line in Decision gains a third route, added by [ADR 0103](0103-triage-defers-on-open-dependencies-by-linking-blockers.md): a `blocked` verdict moves the issue to `TriageBlockedIssue` and links the named blockers in the tracker.
-
-> **2026-11-17 — Amended:** the tier order in the "Triage is a worker like any other" clause is replaced by [ADR 0113](0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md): Revision 0, Review 1, Continuation 2, Triage 3, Fresh 4.
 
 ## Context
 
@@ -12,15 +10,15 @@ Implement runs are expensive, and an issue that is too vague to implement wastes
 
 ## Decision
 
-Every newly detected issue is triaged once before its first implement run, and before the dependency check:
+Every newly detected issue is triaged once before its first implement run, after its blockers clear:
 
-`Detected → TriageQueued → TriageInProgress →` either the dependency applier (`FreshQueued` or `Blocked`) when the verdict is `ready`, or `AwaitingInputIssue` with `ResumeTarget.Retriage` when it is `needs_input`.
+`Detected → TriageQueued → TriageInProgress →` either the dependency applier (`FreshQueued` or `Blocked`) when the verdict is `ready`, `AwaitingInputIssue` with `ResumeTarget.Retriage` when it is `needs_input`, or `TriageBlockedIssue` with the named blockers linked in the tracker when it is `blocked` ([ADR 0103](0103-triage-defers-on-open-dependencies-by-linking-blockers.md)).
 
-- **Triage comes before blockers**, so a blocked issue that is under-specified has its questions answered while the blocker is still open. An unblocked issue goes straight to the queue without being judged a second time.
+- **Triage runs once blockers clear** ([ADR 0102](0102-triage-runs-once-blockers-clear.md)): a new issue with open blockers waits untriaged in `TriageBlockedIssue` and is triaged once they close, so the run judges code that exists. A triaged issue goes to the queue without being judged a second time.
 - **"Not ready" reuses awaiting input.** The verdict's `questions` are posted on the issue thread and answered there through ADR 0096's posting, registry exclusion, quiet period and reminder. When input arrives, the issue goes back to `TriageQueued`, and the triage prompt renders the clarification log. **Continue without answer** on a `Retriage` target goes to the dependency applier.
 - **No automatic re-triage once an issue is ready.** An edit to a queued or blocked issue does not trigger triage again: the implement run reads the issue live, and such edits are usually refinements. The operator's **Re-triage** action, available from `FreshQueued` and `Blocked`, covers the rare edit that makes an issue worse.
-- **A failed triage run has its own state.** `TriageFailedIssue(FailureReason)` retries transient failures through `TransientRetryService` and parks anything else, following [ADR 0014](0014-remove-immediate-requeue-always-pause.md). Its exits are **Retry triage**, **Skip triage** (to the dependency applier), closing the provider issue, and an edit to the issue once issue-body reads exist. `FailedIssue` is not reused, because its `Retry()` returns `FreshQueuedIssue` and would skip triage.
-- **Triage is a worker like any other.** It counts against both the global slots and the Repository Worker Limit, and it is ordered Revision 0, Continuation 1, Triage 2, Fresh 3.
+- **A failed triage run has its own state.** `TriageFailedIssue(FailureReason)` retries transient failures through `TransientRetryService` and parks anything else, following [ADR 0014](0014-remove-immediate-requeue-always-pause.md). Its exits are **Retry triage**, **Skip triage** (to the dependency applier), closing the provider issue, and an edit to the issue. `FailedIssue` is not reused, because its `Retry()` returns `FreshQueuedIssue` and would skip triage.
+- **Triage is a worker like any other.** It counts against both the global slots and the Repository Worker Limit, and it is ordered Revision 0, Review 1, Continuation 2, Triage 3, Fresh 4 ([ADR 0113](0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)).
 
 Revision, continuation and rebase-conflict runs never go through triage.
 
@@ -38,3 +36,8 @@ Revision, continuation and rebase-conflict runs never go through triage.
 - An issue that is never answered stays in `awaiting_input`, which is the intended outcome: no implement run is spent on it.
 - Every new state has to be added to `InFlightWorkerCountQuery`, `WorkerCapacityAvailableHandler.WorkerRunIdExistsAsync`, `IssueStateRegistry` and the EF discriminators.
 - Automatic splitting of issues that are too big is left out. Triage can raise size as a `needs_input` question, and the `outcome` enum can take a `too_big` value later without a breaking change.
+
+## Revisions
+- 2026-11-12 — Triage moves after the dependency check: a new issue with open blockers waits untriaged and is triaged once they close ([ADR 0102](0102-triage-runs-once-blockers-clear.md)).
+- 2026-11-12 — The triage flow gains a `blocked` route to `TriageBlockedIssue` that links the named blockers in the tracker ([ADR 0103](0103-triage-defers-on-open-dependencies-by-linking-blockers.md)).
+- 2026-11-17 — The dispatch tier order becomes Revision 0, Review 1, Continuation 2, Triage 3, Fresh 4 ([ADR 0113](0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)).

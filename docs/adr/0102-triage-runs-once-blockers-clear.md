@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Triage Runs Once an Issue's Blockers Clear
 
 ## Context

@@ -1,8 +1,8 @@
+---
+reaches: structure
+---
+
 # Foundry Rebases Worker Branches Through the Provider After Each Run
-
-> **2026-11-10 — Amended:** the **Conflicts** clause in Decision (resolve in a merge commit, never rebase) is replaced by [ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md). Residue missing from the start: on a repository that allows only rebase merges or requires linear history, a merge commit leaves the pull request unmergeable. The rebase step records the merged branch as `UpToDate` and never linearises it.
-
-> **2026-11-14 — Amended:** the Consequences clause that re-syncing open pull requests is not covered is narrowed by [ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md): a pull request whose merge Foundry attempts and the provider refuses for being behind is rebased through a serialized catch-up queue. Pull requests waiting in `review` are still not re-synced.
 
 ## Context
 
@@ -14,7 +14,7 @@ Foundry, not the agent, rebases the worker branch onto the default branch after 
 
 - **Lifecycle state** — a worker exit with an open pull request moves the issue to `RebasePendingIssue` rather than `ChecksPendingIssue`. The issue leaves that state only once the provider shows the rebase has landed (a new head SHA on GitHub; `rebase_in_progress: false` with no `merge_error` on GitLab), so no checks verdict is ever read against the pre-rebase head. Both providers complete the rebase asynchronously.
 - **Fail open** — a transient failure retries within a bound. A permanent refusal, an exhausted retry budget, or a landing wait past its timeout resolves to `ChecksPending` with a persisted `RebaseOutcome` of `Skipped(reason)`. A branch that is behind remains a valid, reviewable state, and the outcome is shown on the dashboard.
-- **Conflicts** — a rebase conflict dispatches a revision run (`RevisionTrigger.RebaseConflict`). In that run the agent merges `origin/HEAD` into the branch and resolves the conflicts in a merge commit, never rebasing. A counter of consecutive conflicts (cap 2, reset by any successful sync) bounds the loop. The loop exists because a later server-side rebase drops the merge commit and re-raises the same conflicts whenever the default branch has moved again.
+- **Conflicts** — a rebase conflict dispatches a revision run (`RevisionTrigger.RebaseConflict`). In that run the agent rebases the branch onto `origin/HEAD` and resolves each stop, never merging, and Foundry pushes the rewritten branch with a lease ([ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)); a merge commit would leave the pull request unmergeable on a repository that allows only rebase merges or requires linear history. A counter of consecutive conflicts (cap 2, reset by any successful sync) bounds the loop, because the default branch can move again and re-raise conflicts before the next rebase.
 - **Opt-out** — the per-repository `RebaseAfterRun` toggle (default `true`) is read where the rebase runs, in the Monitoring module. When it is off, the issue resolves straight away as `Disabled`.
 
 ## Considered Options
@@ -28,5 +28,9 @@ Foundry, not the agent, rebases the worker branch onto the default branch after 
 ## Consequences
 
 - GitHub classifies every failure as `type: UNPROCESSABLE` and tells them apart only by message: `PullRequest::RebaseConflictError` (conflict), `There are no new commits on the base branch.` (up to date), and `head sha didn't match the current head ref.` (stale lease). These were observed by probe on 2026-11-04. The contract is string-typed, so a message the classifier does not recognise resolves as `Skipped`.
-- Every successful rebase pushes a new head, so CI runs again on top of the checks the worker already watched on the pre-rebase head.
-- Re-syncing open pull requests when the default branch advances later is not covered. It would force-push every open Foundry branch on each default-branch merge.
+- Every successful rebase pushes a new head, so CI runs again on the rebased head.
+- Pull requests waiting in `review` are not re-synced when the default branch advances later; that would force-push every open Foundry branch on each default-branch merge. A pull request whose merge Foundry attempts and the provider refuses for being behind is rebased through a serialized catch-up queue ([ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md)).
+
+## Revisions
+- 2026-11-10 — A rebase conflict is resolved by rebasing, not by a merge commit, which left the pull request unmergeable on linear-history repositories; Foundry pushes the rewritten branch with a lease ([ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md))
+- 2026-11-14 — A pull request whose merge the provider refuses for being behind is rebased through a serialized catch-up queue ([ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md))

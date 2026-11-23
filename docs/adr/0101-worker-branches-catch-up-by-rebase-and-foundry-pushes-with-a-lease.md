@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Worker Branches Catch Up by Rebase, and Foundry Pushes the Rewrite With a Lease
 
 ## Context
@@ -25,5 +29,5 @@ A worker catches its branch up with the default branch only by `git rebase origi
 
 ## Consequences
 
-- This decision depends on ADR 0100. Until the agent stops holding a credential, nothing can push a rebased branch without breaking ADR 0087's guardrail.
+- This decision depends on ADR 0100: only because the agent holds no credential can a rebased branch be pushed without breaking ADR 0087's guardrail.
 - The post-run provider rebase in ADR 0087 still handles the clean catch-up after every run. A rebase-conflict run that rebases leaves the branch zero commits behind, which the rebase step records as `UpToDate` and which resets the conflict counter.

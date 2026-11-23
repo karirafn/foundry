@@ -1,3 +1,7 @@
+---
+reaches: hidden-invariant
+---
+
 # A Review Issue Whose Checks Pass on a Rerun Returns to the Checks Gate
 
 ## Context

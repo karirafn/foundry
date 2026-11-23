@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Live Agent Activity from stream-json over the Container Log
 
 ## Context

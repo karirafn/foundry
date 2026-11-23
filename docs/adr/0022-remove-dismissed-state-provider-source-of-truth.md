@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Remove `dismissed` State — Provider as Source of Truth for Issue Closure
 
 ## Context

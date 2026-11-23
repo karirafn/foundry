@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Repository Identity: Nested-Namespace Path with Host-Scoped Uniqueness
 
 ## Context
@@ -18,5 +22,5 @@ Repository identity is the full namespace path plus the host it lives on.
 
 ## Consequences
 
-- Requires an EF Core migration: add the `host` column and replace the bare-slug unique index with a composite `(host, slug)` index.
+- Uniqueness is enforced by a composite `(host, slug)` unique index rather than a bare-slug index.
 - `RepositorySlug.Owner` now means "namespace path" and may contain `/` for GitLab; code treating it as a single segment is GitHub-specific by contract.

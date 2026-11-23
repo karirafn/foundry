@@ -13,6 +13,10 @@ setup() {
   mkdir -p "${FIXTURE_ADR}"
   # Minimal valid ADR file used as a baseline across tests.
   cat > "${FIXTURE_ADR}/0001-first-decision.md" <<'EOF'
+---
+reaches: structure
+---
+
 # First Decision
 
 ## Context
@@ -24,6 +28,10 @@ Some context.
 Some decision.
 EOF
   cat > "${FIXTURE_ADR}/0002-second-decision.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Second Decision
 
 ## Context
@@ -62,6 +70,10 @@ run_check() {
 
 @test "duplicate prefix exits non-zero and names the file" {
   cat > "${FIXTURE_ADR}/0001-duplicate-slug.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Duplicate Decision
 
 ## Decision
@@ -83,13 +95,13 @@ Missing the top-level heading.
 EOF
   run run_check
   [ "$status" -ne 0 ]
-  [[ "$output" == *"0003-no-title.md"* ]]
+  [[ "$output" == *"No H1 title found"*"0003-no-title.md"* ]]
 }
 
 @test "front matter present but no H1 exits non-zero and names the file" {
   cat > "${FIXTURE_ADR}/0004-fm-no-title.md" <<'EOF'
 ---
-status: accepted
+reaches: structure
 ---
 
 ## Context
@@ -98,7 +110,7 @@ Front matter is present but the H1 is missing.
 EOF
   run run_check
   [ "$status" -ne 0 ]
-  [[ "$output" == *"0004-fm-no-title.md"* ]]
+  [[ "$output" == *"No H1 title found"*"0004-fm-no-title.md"* ]]
 }
 
 # ── 4. Citation resolving to no file ─────────────────────────────────────────
@@ -106,6 +118,10 @@ EOF
 @test "bare citation to non-existent ADR exits non-zero and names the citing file" {
   # 0003 cites 9999, which has no matching file.
   cat > "${FIXTURE_ADR}/0003-dangling-citation.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Dangling Citation
 
 ## Decision
@@ -123,6 +139,10 @@ EOF
   # Add a valid 0013 ADR so the citation-resolution check (a) passes for 0013,
   # isolating the label-mismatch check (b) as the sole source of failure.
   cat > "${FIXTURE_ADR}/0013-valid-decision.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Valid Decision
 
 ## Decision
@@ -130,6 +150,10 @@ EOF
 Some decision with no citations.
 EOF
   cat > "${FIXTURE_ADR}/0003-mismatched-link.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Mismatched Link
 
 ## Decision
@@ -143,31 +167,15 @@ EOF
   [[ "$output" == *"label number"* ]] || [[ "$output" == *"does not match target prefix"* ]]
 }
 
-# ── 6. supersedes: pointer to a missing file ─────────────────────────────────
-
-@test "supersedes pointer to missing file exits non-zero and names the ADR" {
-  cat > "${FIXTURE_ADR}/0003-bad-supersedes.md" <<'EOF'
----
-status: accepted
-supersedes: 9999-nonexistent.md
----
-
-# Bad Supersedes
-
-## Decision
-
-Some decision.
-EOF
-  run run_check
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"0003-bad-supersedes.md"* ]]
-}
-
 # ── 7. Four digits inside a slug are not a prefix ────────────────────────────
 
 @test "four digits inside slug do not cause false duplicate failure" {
   # 0042-serialize-enums-as-strings-for-http pattern: digits in the middle.
   cat > "${FIXTURE_ADR}/0003-serialize-enums-1234-http.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Serialize Enums 1234 HTTP
 
 ## Decision
@@ -182,6 +190,10 @@ EOF
 
 @test "citation inside backtick fenced code block is not checked for resolution" {
   cat > "${FIXTURE_ADR}/0003-with-code-block.md" <<'EOF'
+---
+reaches: structure
+---
+
 # With Code Block
 
 ## Decision
@@ -200,6 +212,10 @@ EOF
 
 @test "citation inside tilde fenced code block is not checked for resolution" {
   cat > "${FIXTURE_ADR}/0003-with-tilde-block.md" <<'EOF'
+---
+reaches: structure
+---
+
 # With Tilde Block
 
 ## Decision
@@ -218,6 +234,10 @@ EOF
 
 @test "link with anchor fragment resolves the file and does not false-error" {
   cat > "${FIXTURE_ADR}/0003-with-anchor.md" <<'EOF'
+---
+reaches: structure
+---
+
 # With Anchor
 
 ## Decision
@@ -279,6 +299,10 @@ EOF
 
 @test "file that cites ADR NNNN but has no link form exits non-zero" {
   cat > "${FIXTURE_ADR}/0003-bare-only.md" <<'EOF'
+---
+reaches: structure
+---
+
 # Bare Only Citation
 
 ## Decision
@@ -290,16 +314,20 @@ EOF
   [[ "$output" == *"0003-bare-only.md"* ]]
 }
 
-# ── 12. superseded-by pointer to a missing file ──────────────────────────────
+# ── 12. Front matter names the reached architectural property ────────────────
 
-@test "superseded-by pointer to missing file exits non-zero and names the ADR" {
-  cat > "${FIXTURE_ADR}/0003-bad-superseded-by.md" <<'EOF'
----
-status: superseded
-superseded-by: 9999-nonexistent.md
----
+@test "every allowed reaches value exits 0" {
+  for value in structure module-contract external-contract non-functional dependency hidden-invariant; do
+    printf -- '---\nreaches: %s\n---\n\n# Reaches Value\n\n## Decision\n\nSome decision.\n' "${value}" \
+      > "${FIXTURE_ADR}/0003-reaches-value.md"
+    run run_check
+    [ "$status" -eq 0 ]
+  done
+}
 
-# Bad Superseded-By
+@test "ADR without front matter exits non-zero and names the file" {
+  cat > "${FIXTURE_ADR}/0003-no-front-matter.md" <<'EOF'
+# No Front Matter
 
 ## Decision
 
@@ -307,5 +335,60 @@ Some decision.
 EOF
   run run_check
   [ "$status" -ne 0 ]
-  [[ "$output" == *"0003-bad-superseded-by.md"* ]]
+  [[ "$output" == *"0003-no-front-matter.md"*"reaches"* ]]
+}
+
+@test "front matter without a reaches key exits non-zero and names the file" {
+  cat > "${FIXTURE_ADR}/0003-no-reaches-key.md" <<'EOF'
+---
+status: accepted
+---
+
+# No Reaches Key
+
+## Decision
+
+Some decision.
+EOF
+  run run_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"0003-no-reaches-key.md"*"reaches"* ]]
+}
+
+@test "reaches value outside the allowed list exits non-zero and names the file" {
+  cat > "${FIXTURE_ADR}/0003-invalid-reaches.md" <<'EOF'
+---
+reaches: local-choice
+---
+
+# Invalid Reaches
+
+## Decision
+
+Some decision.
+EOF
+  run run_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"0003-invalid-reaches.md"*"local-choice"* ]]
+}
+
+@test "reaches value with trailing whitespace is accepted" {
+  printf -- '---\nreaches: dependency  \t\n---\n\n# Trailing Whitespace\n\n## Decision\n\nSome decision.\n' \
+    > "${FIXTURE_ADR}/0003-trailing-whitespace.md"
+  run run_check
+  [ "$status" -eq 0 ]
+}
+
+@test "reaches line after the closing front-matter delimiter is not read as front matter" {
+  cat > "${FIXTURE_ADR}/0003-reaches-in-body.md" <<'EOF'
+---
+---
+
+# Reaches In Body
+
+reaches: structure
+EOF
+  run run_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"0003-reaches-in-body.md"* ]]
 }

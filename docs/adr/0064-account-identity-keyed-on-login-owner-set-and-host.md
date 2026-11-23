@@ -1,3 +1,7 @@
+---
+reaches: module-contract
+---
+
 # Account identity keyed on login, derived owner set, and host
 
 ## Context
@@ -15,10 +19,10 @@ An account is identified by `(PAT Owner, derived owner-namespace set, host)`, an
 
 A request is a duplicate when another credential on the same host carries the same `Credential.Name` *and* its Namespace Claims intersect the incoming token's derived owner namespaces.
 It is rejected with 409 naming the colliding account and the shared owner.
-Same login with disjoint owners is permitted; a different login reaching an already-claimed owner stays a Namespace Claim conflict resolved through takeover.
+Same login with disjoint owners is permitted; a different login reaching an already-claimed owner stays a Namespace Claim conflict: resolved through takeover on create, and rejected on rotation when it covers the whole derived set ([ADR 0038](0038-explicit-create-time-namespace-takeover.md)).
 
-On the update path the intersection is necessary but not sufficient.
-A rotation is rejected only when the same-login sibling covers the *entire* derived set — that is, when subtracting every namespace claimed by another credential would leave the rotated account with nothing.
+On both paths the intersection is necessary but not sufficient.
+A request is rejected only when the same-login siblings cover the *entire* derived set — that is, when subtracting every namespace claimed by another credential would leave the account with nothing.
 Intersection alone would reject exactly the rotation this decision exists to unblock: a classic PAT spanning both owners derives both namespaces, so rotating either of two same-login accounts always intersects the other's claim.
 `CredentialRotationService.RotateAsync` already subtracts namespaces held by others, so a partial overlap reduces to the account's own namespaces without a unique-constraint violation; the guard only has to catch the case where that subtraction empties the set.
 
@@ -56,12 +60,14 @@ During resolution the operator sees a valid "Authenticated as X" result and lear
 The unique `(host, namespace)` constraint on `credential_namespaces` is unchanged.
 This decision adds no invariant; it surfaces the existing one as a specific 409 ahead of the coarser conflict/takeover flow, which previously offered to transfer a namespace away from the operator's own identical account.
 
-The guard is deliberately qualified on the login, which leaves one case open: a token for a *different* login whose reachable owners are all already claimed still routes into the namespace-filtering path and can strand the account on zero claims.
-That defect is tracked separately as issue #439.
+The guard is deliberately qualified on the login. A token for a *different* login whose reachable owners are all already claimed is caught by a separate guard: the rotation is rejected with a `ClaimedElsewhere` 409 rather than stranding the account on zero claims ([ADR 0038](0038-explicit-create-time-namespace-takeover.md)).
 
 Create and update now share the same never-steal semantics, though they differ in mechanism.
 On the update path, `CredentialRotationService.RotateAsync` subtracts namespaces held by others; the empty-retained-set guard catches the case where that subtraction leaves nothing.
 On the create path, the handler subtracts same-login siblings from the conflict set so they are never offered for transfer, and the duplicate guard fires only when the same-login siblings cover the entire derived set — leaving the retained set empty.
 A bare intersection with an unclaimed owner creates the account claiming only the unclaimed owner; the sibling's namespace is never touched.
 Same-login sibling namespaces are excluded from the conflicts list on create, so no takeover is offered for a namespace the operator already holds on another account.
-The diverging-predicates description in the original decision no longer applies.
+
+## Revisions
+- 2026-08-29 — A different-login rotation whose owners are all claimed elsewhere is now rejected instead of stranding the account (#439, [ADR 0038](0038-explicit-create-time-namespace-takeover.md)).
+- 2026-08-31 — The create path adopted the same empty-retained-set duplicate predicate as the update path, so create and update share never-steal semantics (#501).

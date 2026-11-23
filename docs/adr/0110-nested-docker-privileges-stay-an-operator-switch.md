@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # Nested Docker Privileges Stay an Operator Switch
 
 ## Context
@@ -13,7 +17,7 @@ A boolean setting on `GlobalSettings`, outside `WorkerImageConfiguration`, decid
 A run gets the 0079 allowances and a daemon only when its capability profile is `Full` and the setting is on.
 `Restricted` runs never get them.
 Changing the setting rebuilds nothing, because it governs privileges, not image contents.
-Its initial value is the `InstallDocker` value the existing settings row holds, and the Settings page states the security cost beside the switch, as 0079 required of the old toggle.
+The Settings page states the security cost beside the switch, as 0079 required of the old toggle.
 With the setting off, a `Full` run has no `DOCKER_HOST`, and the prompt's existing branch tells the agent that integration tests are verified by CI.
 
 ## Considered Options

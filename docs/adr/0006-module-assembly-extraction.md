@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Module Assembly Extraction
 
 ## Context

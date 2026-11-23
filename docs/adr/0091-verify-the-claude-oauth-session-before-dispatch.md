@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Verify the Claude OAuth Session Before Dispatch
 
 ## Context

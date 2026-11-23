@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Worker Roles Ship in the Worker Image
 
 ## Context

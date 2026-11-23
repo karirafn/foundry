@@ -1,3 +1,7 @@
+---
+reaches: module-contract
+---
+
 # Dispatch Pause State Is Owned by the Workers Module
 
 ## Context
@@ -9,13 +13,13 @@ Two invariants rest on the current placement: every pause reason sits on one row
 
 ## Decision
 
-The runtime dispatch-pause state moves into a single-row aggregate owned by the Workers module.
+The runtime dispatch-pause state lives in a single-row aggregate owned by the Workers module.
 
-- **What moves** — `IsDispatchPaused`, `UsageLimitResetsAt`, `HostPauses`, and every other runtime pause reason on `GlobalSettings` at the time of the move (the package-proxy pause, once it ships). They are exactly what "Resume All" clears.
+- **What it holds** — `IsDispatchPaused`, `UsageLimitResetsAt`, `HostPauses`, the package-proxy pause, and every other runtime pause reason. They are exactly what "Resume All" clears.
 - **What stays in Settings** — `AutoResumeOnUsageReset` is an operator preference, edited by `PUT /api/settings/dispatch` together with the probe and poll intervals; Workers reads it through `IGlobalSettingsQueries`.
 - **Endpoints** — `POST /api/settings/dispatch/pause` and `/dispatch/resume` are registered by Workers on their existing routes; `GET /api/settings` keeps its pause fields, filled by Settings from a `Workers.Contracts` query. The HTTP contract does not change.
 - **Credentials** — the credit probe publishes its own integration event when it finds a usage limit, and a Workers handler applies it through the outbox.
-- **Cut-over** — one migration creates the new table, copies the values from the `global_settings` row and drops the moved columns; every reader and writer switches in the same change, so there is never a second source of truth. A Workers seeder creates the row on a fresh database with a fixed id, as `SettingsSeeder` does.
+- **One source of truth** — the pause state exists only on the Workers aggregate, never also on `GlobalSettings`. A Workers seeder creates the row on a fresh database with a fixed id, as `SettingsSeeder` does.
 
 The one-row invariant and the same-save host-pause staging both hold, because the state and its main writer now live in one module.
 
@@ -28,4 +32,3 @@ The one-row invariant and the same-save host-pause staging both hold, because th
 ## Consequences
 
 - Workers and Credentials drop their project references to `Foundry.Modules.Settings`.
-- The `DOMAIN.md` Global Settings entry, which describes the pause controls as Settings state, is corrected by the change that performs the move.

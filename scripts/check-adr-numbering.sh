@@ -7,7 +7,7 @@
 # Scanned file sets:
 #   Citation resolution  : docs/adr/*.md  +  DOMAIN.md  +  tests/**/*.cs  src/**/*.cs
 #   Link / at-least-one  : docs/adr/*.md  +  DOMAIN.md  (markdown only)
-#   Front-matter pointers: docs/adr/*.md
+#   Front-matter reaches: docs/adr/*.md
 #
 # Environment variables (all optional):
 #   ADR_DIR     — path to the ADR directory      (default: docs/adr)
@@ -33,6 +33,10 @@ if [[ -z "${REPO_ROOT:-}" ]]; then
 fi
 
 errors=0
+
+# The gate text under "### Decision records" in CLAUDE.md is the source of these
+# values; change both together.
+readonly ALLOWED_REACHES=(structure module-contract external-contract non-functional dependency hidden-invariant)
 
 # Temp directory for stripped markdown content files (one per scanned file).
 # Cleaned up on any exit.
@@ -71,6 +75,27 @@ make_stripped() {
   dest="${TMPDIR_WORK}/$(basename "$src").stripped"
   strip_fences < "$src" > "$dest"
   printf '%s' "$dest"
+}
+
+# Fail unless $1 opens with a front-matter block holding a reaches: key whose
+# value is one of ALLOWED_REACHES.
+check_reaches() {
+  local adr="$1"
+  local value
+  value=$(awk '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    /^reaches:/ { sub(/^reaches:[ \t]*/, ""); sub(/[ \t]+$/, ""); print; exit }
+  ' "$adr")
+  if [[ -z "$value" ]]; then
+    fail "$adr has no front matter with a reaches: value (allowed: ${ALLOWED_REACHES[*]})"
+    return
+  fi
+  local allowed
+  for allowed in "${ALLOWED_REACHES[@]}"; do
+    [[ "$value" == "$allowed" ]] && return
+  done
+  fail "$adr has reaches: value '${value}', which is not one of: ${ALLOWED_REACHES[*]}"
 }
 
 # ── 1. Filename format ────────────────────────────────────────────────────────
@@ -131,35 +156,10 @@ while IFS= read -r -d '' adr; do
   fi
 done < <(find "$ADR_DIR" -maxdepth 1 -name '*.md' -print0 | sort -z)
 
-# ── 4. Front-matter pointers resolve ─────────────────────────────────────────
+# ── 4. Front matter names the reached architectural property ──────────────
 
 while IFS= read -r -d '' adr; do
-  # Extract supersedes: and superseded-by: values from front matter only.
-  in_fm=0
-  line_num=0
-  while IFS= read -r line; do
-    line_num=$((line_num + 1))
-    if [[ $line_num -eq 1 ]]; then
-      if [[ "$line" == "---" ]]; then
-        in_fm=1
-        continue
-      else
-        break  # No front matter.
-      fi
-    fi
-    if [[ $in_fm -eq 1 && "$line" == "---" ]]; then
-      break  # End of front matter.
-    fi
-    if [[ $in_fm -eq 1 ]]; then
-      if [[ "$line" =~ ^(supersedes|superseded-by):\ (.+)$ ]]; then
-        target="${BASH_REMATCH[2]}"
-        target_path="${ADR_DIR}/${target}"
-        if [[ ! -f "$target_path" ]]; then
-          fail "Front-matter pointer '${target}' in $adr does not resolve to an existing file"
-        fi
-      fi
-    fi
-  done < "$adr"
+  check_reaches "$adr"
 done < <(find "$ADR_DIR" -maxdepth 1 -name '*.md' -print0 | sort -z)
 
 # ── 5 & 6. Citation resolution and link checks ───────────────────────────────
