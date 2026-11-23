@@ -10,7 +10,7 @@
             [disabled]="!canCancel()"
             [attr.aria-label]="'Stop worker for issue #' + d.issueNumber"
             [attr.aria-describedby]="cancelHint() ? hintId : null"
-            (click)="openCancelConfirm()"
+            (click)="perform('stop_worker')"
           >{{ cancelling() ? 'Stopping…' : 'Stop worker' }}</button>
           @if (cancelHint(); as hint) {
             <span class="pane-actions__hint" [id]="hintId">{{ hint }}</span>
@@ -20,101 +20,101 @@
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="publishActionPending()"
+            [disabled]="busy()"
             [attr.aria-label]="'Retry publishing for issue #' + d.issueNumber"
-            (click)="openPublishRetryConfirm()"
-          >{{ publishRetryPending() ? 'Retrying publish…' : 'Retry publish' }}</button>
+            (click)="perform('retry_publish')"
+          >{{ pendingAction() === 'retry_publish' ? 'Retrying publish…' : 'Retry publish' }}</button>
         }
         @case ('discard_run') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="publishActionPending()"
+            [disabled]="busy()"
             [attr.aria-label]="'Discard run for issue #' + d.issueNumber"
-            (click)="openDiscardConfirm()"
-          >{{ discardPending() ? 'Discarding…' : 'Discard run' }}</button>
+            (click)="perform('discard_run')"
+          >{{ pendingAction() === 'discard_run' ? 'Discarding…' : 'Discard run' }}</button>
         }
         @case ('confirm_false_positives') {
           <!-- Disabled until the blocked run has loaded: the dialog lists its findings and echoes its block time. -->
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="publishActionPending() || run()?.publishBlockedAt == null"
+            [disabled]="busy() || run()?.publishBlockedAt == null"
             [attr.aria-label]="'Confirm all findings as false positives and publish issue #' + d.issueNumber"
             (click)="openConfirmFalsePositives()"
-          >{{ confirmFalsePositivesPending() ? 'Confirming…' : 'Confirm all as false positives and publish' }}</button>
+          >{{ pendingAction() === 'confirm_false_positives' ? 'Confirming…' : 'Confirm all as false positives and publish' }}</button>
         }
         @case ('retry_issue') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="issueService.retrying()"
+            [disabled]="busy()"
             [attr.aria-label]="'Retry issue #' + d.issueNumber"
-            (click)="retryIssue()"
-          >{{ issueService.retrying() ? 'Retrying issue…' : 'Retry issue' }}</button>
+            (click)="perform('retry_issue')"
+          >{{ pendingAction() === 'retry_issue' ? 'Retrying issue…' : 'Retry issue' }}</button>
         }
         @case ('retry_fresh') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="issueService.retrying()"
+            [disabled]="busy()"
             [attr.aria-label]="'Retry issue #' + d.issueNumber + ' from a fresh branch'"
-            (click)="confirmRetryFreshOpen.set(true)"
+            (click)="perform('retry_fresh')"
           >Retry fresh</button>
         }
         @case ('retry_triage') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="triagePending() !== null"
+            [disabled]="busy()"
             [attr.aria-label]="'Retry triage for issue #' + d.issueNumber"
-            (click)="retryTriage()"
-          >{{ triagePending() === 'retry_triage' ? 'Retrying triage…' : 'Retry triage' }}</button>
+            (click)="perform('retry_triage')"
+          >{{ pendingAction() === 'retry_triage' ? 'Retrying triage…' : 'Retry triage' }}</button>
         }
         @case ('skip_triage') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="triagePending() !== null"
+            [disabled]="busy()"
             [attr.aria-label]="'Skip triage for issue #' + d.issueNumber"
-            (click)="confirmSkipTriageOpen.set(true)"
-          >{{ triagePending() === 'skip_triage' ? 'Skipping triage…' : 'Skip triage' }}</button>
+            (click)="perform('skip_triage')"
+          >{{ pendingAction() === 'skip_triage' ? 'Skipping triage…' : 'Skip triage' }}</button>
         }
         @case ('retriage') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="triagePending() !== null"
+            [disabled]="busy()"
             [attr.aria-label]="'Re-triage issue #' + d.issueNumber"
-            (click)="confirmRetriageOpen.set(true)"
-          >{{ triagePending() === 'retriage' ? 'Re-triaging…' : 'Re-triage' }}</button>
+            (click)="perform('retriage')"
+          >{{ pendingAction() === 'retriage' ? 'Re-triaging…' : 'Re-triage' }}</button>
         }
         @case ('retry_review') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="triagePending() !== null"
+            [disabled]="busy()"
             [attr.aria-label]="'Retry review for issue #' + d.issueNumber"
-            (click)="retryReview()"
-          >{{ triagePending() === 'retry_review' ? 'Retrying review…' : 'Retry review' }}</button>
+            (click)="perform('retry_review')"
+          >{{ pendingAction() === 'retry_review' ? 'Retrying review…' : 'Retry review' }}</button>
         }
         @case ('retry_post') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="triagePending() !== null"
+            [disabled]="busy()"
             [attr.aria-label]="'Retry posting the questions for issue #' + d.issueNumber"
-            (click)="retryQuestionPost()"
-          >{{ triagePending() === 'retry_post' ? 'Retrying post…' : 'Retry post' }}</button>
+            (click)="perform('retry_post')"
+          >{{ pendingAction() === 'retry_post' ? 'Retrying post…' : 'Retry post' }}</button>
         }
         @case ('continue_without_answer') {
           <button
             type="button"
             [class]="buttonClass(action, first)"
-            [disabled]="triagePending() !== null"
+            [disabled]="busy()"
             [attr.aria-label]="'Continue issue #' + d.issueNumber + ' without an answer'"
-            (click)="confirmContinueWithoutAnswerOpen.set(true)"
-          >{{ triagePending() === 'continue_without_answer' ? 'Continuing…' : 'Continue without answer' }}</button>
+            (click)="perform('continue_without_answer')"
+          >{{ pendingAction() === 'continue_without_answer' ? 'Continuing…' : 'Continue without answer' }}</button>
         }
       }
     }
@@ -123,55 +123,16 @@
 
 <span class="pane-actions__error" role="alert">{{ error() ?? '' }}</span>
 
-@if (offers('stop_worker')) {
-  <fd-confirm-dialog
-    [open]="confirmCancelOpen()"
-    [title]="d.state === 'triage_in_progress' ? 'Stop the triage worker?' : 'Stop the worker?'"
-    [message]="
-      d.state === 'triage_in_progress'
-        ? 'The issue moves to Triage failed, where you can retry or skip triage.'
-        : implementCancelMessage
-    "
-    confirmLabel="Stop worker"
-    cancelLabel="Keep running"
-    [destructive]="true"
-    (confirmed)="confirmCancel()"
-    (dismissed)="confirmCancelOpen.set(false)"
-  />
-}
-@if (offers('retry_publish')) {
-  <!-- Not destructive, but pushing triggers CI with repository secrets, so confirm first. -->
-  <fd-confirm-dialog
-    [open]="confirmPublishRetryOpen()"
-    title="Retry publishing?"
-    [message]="publishRetryMessage()"
-    confirmLabel="Retry publish"
-    cancelLabel="Not now"
-    [destructive]="false"
-    (confirmed)="confirmPublishRetry()"
-    (dismissed)="confirmPublishRetryOpen.set(false)"
-  />
-}
-@if (offers('discard_run')) {
-  <fd-confirm-dialog
-    [open]="confirmDiscardOpen()"
-    title="Discard this run?"
-    [message]="discardMessage()"
-    confirmLabel="Discard run"
-    cancelLabel="Keep run"
-    [destructive]="true"
-    (confirmed)="confirmDiscard()"
-    (dismissed)="confirmDiscardOpen.set(false)"
-  />
-}
+<!-- The other actions confirm through IssueActionsService; this dialog's body lists the findings. -->
 @if (offers('confirm_false_positives')) {
+  @let copy = confirmFalsePositivesCopy();
   <fd-confirm-dialog
     [open]="confirmFalsePositivesOpen()"
-    [title]="confirmFalsePositivesTitle()"
-    [message]="confirmFalsePositivesMessage()"
-    confirmLabel="Confirm and publish"
-    cancelLabel="Keep blocked"
-    [destructive]="true"
+    [title]="copy.title"
+    [message]="copy.message"
+    [confirmLabel]="copy.confirmLabel"
+    [cancelLabel]="copy.cancelLabel"
+    [destructive]="copy.destructive"
     [confirmDisabled]="!falsePositivesAcknowledged()"
     (confirmed)="confirmFalsePositives()"
     (dismissed)="confirmFalsePositivesOpen.set(false)"
@@ -195,63 +156,14 @@
     </div>
   </fd-confirm-dialog>
 }
-@if (offers('retry_fresh')) {
-  <fd-confirm-dialog
-    [open]="confirmRetryFreshOpen()"
-    title="Retry from a fresh branch?"
-    message="The branch and all of its commits will be deleted on the provider, and any open pull request for it closed. The next worker starts over from the default branch. This cannot be undone."
-    confirmLabel="Discard branch and retry"
-    cancelLabel="Keep branch"
-    [destructive]="true"
-    (confirmed)="confirmRetryFresh()"
-    (dismissed)="confirmRetryFreshOpen.set(false)"
-  />
-}
-@if (offers('skip_triage')) {
-  <fd-confirm-dialog
-    [open]="confirmSkipTriageOpen()"
-    [title]="'Skip triage for #' + d.issueNumber + '?'"
-    message="The issue is queued without a readiness check. If it has open blockers, it waits as Blocked first. Its kind stays as it is now."
-    confirmLabel="Skip triage"
-    cancelLabel="Cancel"
-    [destructive]="false"
-    (confirmed)="confirmSkipTriage()"
-    (dismissed)="confirmSkipTriageOpen.set(false)"
-  />
-}
-@if (offers('retriage')) {
-  <fd-confirm-dialog
-    [open]="confirmRetriageOpen()"
-    [title]="'Triage #' + d.issueNumber + ' again?'"
-    [message]="retriageMessage()"
-    confirmLabel="Re-triage"
-    cancelLabel="Cancel"
-    [destructive]="false"
-    (confirmed)="confirmRetriage()"
-    (dismissed)="confirmRetriageOpen.set(false)"
-  />
-}
-
-@if (offers('continue_without_answer')) {
-  <fd-confirm-dialog
-    [open]="confirmContinueWithoutAnswerOpen()"
-    [title]="'Continue #' + d.issueNumber + ' without an answer?'"
-    [message]="continueWithoutAnswerMessage()"
-    confirmLabel="Continue without answer"
-    cancelLabel="Keep waiting"
-    [destructive]="false"
-    (confirmed)="confirmContinueWithoutAnswer()"
-    (dismissed)="confirmContinueWithoutAnswerOpen.set(false)"
-  />
-}
 
 <!-- Outside the action rows: a successful action reloads the detail into a state without its
      button, and the announcement must survive that. -->
 <span class="pane-actions__success pane-actions__success--retry sr-only" aria-live="polite" aria-atomic="true">{{
-  issueService.retrySuccess() ?? ''
+  retrySuccess() ?? ''
 }}</span>
 <span class="pane-actions__success pane-actions__success--triage sr-only" aria-live="polite" aria-atomic="true">{{
-  issueService.issueActionSuccess() ?? ''
+  issueActionSuccess() ?? ''
 }}</span>
 <span class="pane-actions__success pane-actions__success--publish-retry sr-only" aria-live="polite" aria-atomic="true">{{
   publishRetrySuccess() ?? ''

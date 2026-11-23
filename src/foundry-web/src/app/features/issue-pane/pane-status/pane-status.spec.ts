@@ -1,8 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { IssueDetail, IssueStateDetails, IssueSummary } from '../../issues/issue.model';
-import { IssueService, IssueAction } from '../../issues/issue.service';
+import { IssueService } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { PaneStatusComponent } from './pane-status';
@@ -104,17 +103,11 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
 
 function setup(detail: IssueDetail | null, options: { run?: WorkerRunDetail | null; summary?: IssueSummary | null; error?: string | null } = {}) {
   const service = {
-    retrying: signal(false),
-    retryError: signal<string | null>(null),
-    retrySuccess: signal<string | null>(null),
-    issueActionPending: signal<IssueAction | null>(null),
-    issueActionError: signal<string | null>(null),
-    issueActionSuccess: signal<string | null>(null),
-    retryIssue: vi.fn(),
-    retryIssueFresh: vi.fn(),
-    retryTriage: vi.fn(),
-    skipTriage: vi.fn(),
-    retriage: vi.fn(),
+    retryIssue: vi.fn(() => of<string | null>(null)),
+    retryIssueFresh: vi.fn(() => of<string | null>(null)),
+    retryTriage: vi.fn(() => of<string | null>(null)),
+    skipTriage: vi.fn(() => of<string | null>(null)),
+    retriage: vi.fn(() => of<string | null>(null)),
   };
   TestBed.configureTestingModule({
     imports: [PaneStatusComponent],
@@ -386,9 +379,8 @@ describe('PaneStatusComponent', () => {
   describe('focus after an action', () => {
     it('moves focus to the callout title once the reloaded detail lands', async () => {
       // Arrange
-      const { fixture, el, service, render } = setup(issue('failed'));
+      const { fixture, el, render } = setup(issue('failed'));
       (el.querySelector('fd-pane-actions button') as HTMLButtonElement).click();
-      service.retrySuccess.set('Retry queued. Issue status is updating.');
       await render();
       const focusedBeforeReload = document.activeElement;
 

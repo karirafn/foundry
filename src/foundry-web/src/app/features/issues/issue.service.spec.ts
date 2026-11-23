@@ -5,6 +5,7 @@ import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { CODE_STEPS, IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
 import { vi } from 'vitest';
+import { Observable } from 'rxjs';
 import type { components } from '../../api/schema';
 
 type SchemaTokenTotal = components['schemas']['TokenTotal'];
@@ -773,46 +774,35 @@ describe('IssueService', () => {
   });
 
   // Cycle 16: retryIssue — POSTs to /api/issues/{id}/retry and reloads detail
-  it('should POST to /api/issues/{id}/retry when retryIssue is called', () => {
-    // Arrange — no additional setup
+  function outcome(source: Observable<string | null>): { value: string | null | undefined } {
+    const result: { value: string | null | undefined } = { value: undefined };
+    source.subscribe((v) => (result.value = v));
+    return result;
+  }
 
+  it('should POST to /api/issues/{id}/retry when retryIssue is subscribed', () => {
     // Act
-    service.retryIssue('abc123');
+    const result = outcome(service.retryIssue('abc123'));
 
     // Assert
     const req = httpMock.expectOne('/api/issues/abc123/retry');
     expect(req.request.method).toBe('POST');
     req.flush({});
     httpMock.expectOne('/api/issues/abc123').flush({});
+    expect(result.value).toBeNull();
   });
 
-  it('should set retrying to true while the retryIssue request is in flight', () => {
-    // Arrange — no additional setup
-
+  it('should not POST until retryIssue is subscribed', () => {
     // Act
     service.retryIssue('abc123');
-
-    // Assert — signal is true before the response arrives
-    expect(service.retrying()).toBe(true);
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({});
-  });
-
-  it('should set retrying to false after retryIssue succeeds', () => {
-    // Arrange
-    service.retryIssue('abc123');
-
-    // Act
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({});
 
     // Assert
-    expect(service.retrying()).toBe(false);
+    httpMock.expectNone('/api/issues/abc123/retry');
   });
 
   it('should reload issue detail after retryIssue succeeds', () => {
     // Arrange
-    service.retryIssue('abc123');
+    outcome(service.retryIssue('abc123'));
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
 
     // Act — loadDetail is triggered after success
@@ -823,54 +813,39 @@ describe('IssueService', () => {
     expect(req.request.method).toBe('GET');
   });
 
-  it('should set retryError and retrying to false when retryIssue fails', () => {
+  it('should emit the dedicated error and not reload when retryIssue fails', () => {
     // Arrange
-    service.retryIssue('abc123');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = outcome(service.retryIssue('abc123'));
 
     // Act
-    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
-
-    // Assert
-    expect(service.retrying()).toBe(false);
-    expect(service.retryError()).not.toBeNull();
-  });
-
-  it('should set retryError to the dedicated error constant when retryIssue fails', () => {
-    // Arrange — no additional setup
-
-    // Act
-    service.retryIssue('abc123');
     httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
     });
 
     // Assert — dedicated string, not the detail-load error
-    expect(service.retryError()).toBe('Failed to retry issue.');
+    expect(result.value).toBe('Failed to retry issue.');
+    httpMock.expectNone('/api/issues/abc123');
+    vi.restoreAllMocks();
   });
 
-  it('should POST to /api/issues/{id}/retry-fresh and reload detail when retryIssueFresh is called', () => {
-    // Arrange — no additional setup
-
+  it('should POST to /api/issues/{id}/retry-fresh and reload detail when retryIssueFresh is subscribed', () => {
     // Act
-    service.retryIssueFresh('abc123');
+    const result = outcome(service.retryIssueFresh('abc123'));
 
     // Assert
-    expect(service.retrying()).toBe(true);
     const req = httpMock.expectOne('/api/issues/abc123/retry-fresh');
     expect(req.request.method).toBe('POST');
     req.flush({});
     httpMock.expectOne('/api/issues/abc123').flush({});
-    expect(service.retrying()).toBe(false);
-    expect(service.retrySuccess()).toBe('Branch discarded. Issue queued fresh; status is updating.');
+    expect(result.value).toBeNull();
   });
 
   it('should explain the issue was not requeued when retryIssueFresh cannot delete the branch', () => {
     // Arrange
-    service.retryIssueFresh('abc123');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = outcome(service.retryIssueFresh('abc123'));
 
     // Act
     httpMock.expectOne('/api/issues/abc123/retry-fresh').flush('Bad Gateway', {
@@ -879,13 +854,14 @@ describe('IssueService', () => {
     });
 
     // Assert
-    expect(service.retrying()).toBe(false);
-    expect(service.retryError()).toBe('Could not delete the branch on the provider. The issue was not requeued.');
+    expect(result.value).toBe('Could not delete the branch on the provider. The issue was not requeued.');
+    vi.restoreAllMocks();
   });
 
-  it('should set the generic retry-fresh error when retryIssueFresh fails otherwise', () => {
+  it('should emit the generic retry-fresh error when retryIssueFresh fails otherwise', () => {
     // Arrange
-    service.retryIssueFresh('abc123');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = outcome(service.retryIssueFresh('abc123'));
 
     // Act
     httpMock.expectOne('/api/issues/abc123/retry-fresh').flush('Conflict', {
@@ -894,12 +870,14 @@ describe('IssueService', () => {
     });
 
     // Assert
-    expect(service.retryError()).toBe('Failed to retry issue from a fresh branch.');
+    expect(result.value).toBe('Failed to retry issue from a fresh branch.');
+    vi.restoreAllMocks();
   });
 
   it('should not change detailError when retryIssue fails', () => {
-    // Arrange — confirm detailError stays null (retryIssue has its own error surface)
-    service.retryIssue('abc123');
+    // Arrange — retryIssue reports its own error to its subscriber
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    outcome(service.retryIssue('abc123'));
     httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -907,104 +885,7 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.detailError()).toBeNull();
-  });
-
-  // UX-4: stale retry state cleared on issue switch
-  it('should clear retryError when switching to a different issue via selectIssue', () => {
-    // Arrange — set a retry error for abc123
-    service.retryIssue('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
-    expect(service.retryError()).not.toBeNull();
-
-    // Act — switch to a different issue
-    service.selectIssue('def456');
-
-    // Assert — retry error is cleared
-    expect(service.retryError()).toBeNull();
-    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
-  });
-
-  it('should clear retrying when switching to a different issue via selectIssue', () => {
-    // Arrange — simulate retrying stuck at true
-    service.retryIssue('abc123');
-    expect(service.retrying()).toBe(true);
-
-    // Act — switch to a different issue before the request resolves
-    service.selectIssue('def456');
-
-    // Assert — loading flag is cleared synchronously
-    expect(service.retrying()).toBe(false);
-
-    // Cleanup — flush retry (its loadDetail then cancels the def456 request)
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    // The retry success handler calls loadDetail('abc123'), which cancels the def456 request
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-  });
-
-  it('should clear retryError when clearing the selection via selectIssue', () => {
-    // Arrange — select and set error
-    service.selectIssue('abc123');
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-    service.retryIssue('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
-      status: 500, statusText: 'Internal Server Error',
-    });
-    expect(service.retryError()).not.toBeNull();
-
-    // Act — clear the selection
-    service.selectIssue(null);
-
-    // Assert
-    expect(service.retryError()).toBeNull();
-  });
-
-  // UX-5: success announcement signal
-  it('should set retrySuccess after a successful retryIssue', () => {
-    // Arrange — no additional setup
-
-    // Act
-    service.retryIssue('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-
-    // Assert
-    expect(service.retrySuccess()).toBe('Retry queued. Issue status is updating.');
-  });
-
-  it('should clear retrySuccess when selectIssue is called', () => {
-    // Arrange — get a success message set
-    service.retryIssue('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-    expect(service.retrySuccess()).not.toBeNull();
-
-    // Act — switch issue
-    service.selectIssue('def456');
-
-    // Assert
-    expect(service.retrySuccess()).toBeNull();
-    httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
-  });
-
-  it('should clear retrySuccess at the start of a new retryIssue call', () => {
-    // Arrange — set success
-    service.retryIssue('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-    expect(service.retrySuccess()).not.toBeNull();
-
-    // Act — initiate another retry
-    service.retryIssue('abc123');
-
-    // Assert — success cleared immediately when next retry starts
-    expect(service.retrySuccess()).toBeNull();
-
-    // Cleanup
-    httpMock.expectOne('/api/issues/abc123/retry').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+    vi.restoreAllMocks();
   });
 
   // Cycle 21: _upsertIssue removes issue from issues when its new state is resolved
@@ -2681,7 +2562,6 @@ describe('IssueService (triage actions)', () => {
       action: 'retry_triage' as const,
       call: (svc: IssueService, id: string) => svc.retryTriage(id),
       path: 'retry-triage',
-      success: 'Triage queued again. Issue status is updating.',
       conflict: 'This issue is no longer in Triage failed.',
       generic: 'Failed to retry triage.',
     },
@@ -2689,7 +2569,6 @@ describe('IssueService (triage actions)', () => {
       action: 'skip_triage' as const,
       call: (svc: IssueService, id: string) => svc.skipTriage(id),
       path: 'skip-triage',
-      success: 'Triage skipped. Issue status is updating.',
       conflict: 'This issue is no longer in Triage failed.',
       generic: 'Failed to skip triage.',
     },
@@ -2697,7 +2576,6 @@ describe('IssueService (triage actions)', () => {
       action: 'retriage' as const,
       call: (svc: IssueService, id: string) => svc.retriage(id),
       path: 'retriage',
-      success: 'Re-triage queued. Issue status is updating.',
       conflict:
         'Only queued or blocked issues can be re-triaged. It may have been dispatched already.',
       generic: 'Failed to re-triage the issue.',
@@ -2706,7 +2584,6 @@ describe('IssueService (triage actions)', () => {
       action: 'continue_without_answer' as const,
       call: (svc: IssueService, id: string) => svc.continueWithoutAnswer(id),
       path: 'continue-without-answer',
-      success: 'Continuing without an answer. Issue status is updating.',
       conflict: 'This issue is no longer awaiting input.',
       generic: 'Failed to continue without an answer.',
     },
@@ -2714,7 +2591,6 @@ describe('IssueService (triage actions)', () => {
       action: 'retry_post' as const,
       call: (svc: IssueService, id: string) => svc.retryQuestionPost(id),
       path: 'retry-post',
-      success: 'Posting the questions again. Issue status is updating.',
       conflict: 'Only a question whose post failed can be posted again. It may have been posted already.',
       generic: 'Failed to retry posting the questions.',
     },
@@ -2722,7 +2598,6 @@ describe('IssueService (triage actions)', () => {
       action: 'retry_review' as const,
       call: (svc: IssueService, id: string) => svc.retryReview(id),
       path: 'retry-review',
-      success: 'Review queued again. Issue status is updating.',
       conflict: "This issue's review is no longer skipped.",
       generic: 'Failed to retry review.',
     },
@@ -2730,37 +2605,27 @@ describe('IssueService (triage actions)', () => {
 
   for (const c of cases) {
     describe(c.action, () => {
-      it(`POSTs to /api/issues/{id}/${c.path} and marks the action pending while in flight`, () => {
-        // Act
-        c.call(service, 'abc123');
-
-        // Assert
-        expect(service.issueActionPending()).toBe(c.action);
-        const req = httpMock.expectOne(`/api/issues/abc123/${c.path}`);
-        expect(req.request.method).toBe('POST');
-        req.flush({});
-        httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-      });
-
-      it('sets the success text, clears pending and reloads the detail on success', () => {
+      it(`POSTs to /api/issues/{id}/${c.path}, emits null and reloads the detail on success`, () => {
         // Arrange
-        c.call(service, 'abc123');
+        let result: string | null | undefined;
+        c.call(service, 'abc123').subscribe((v) => (result = v));
 
         // Act
-        httpMock.expectOne(`/api/issues/abc123/${c.path}`).flush({});
+        const req = httpMock.expectOne(`/api/issues/abc123/${c.path}`);
+        req.flush({});
 
         // Assert
-        expect(service.issueActionPending()).toBeNull();
-        expect(service.issueActionSuccess()).toBe(c.success);
-        expect(service.issueActionError()).toBeNull();
+        expect(req.request.method).toBe('POST');
+        expect(result).toBeNull();
         const reload = httpMock.expectOne('/api/issues/abc123');
         expect(reload.request.method).toBe('GET');
         reload.flush({ ...mockSummary });
       });
 
-      it('sets the 409 message when the issue is in the wrong state', () => {
+      it('emits the 409 message when the issue is in the wrong state', () => {
         // Arrange
-        c.call(service, 'abc123');
+        let result: string | null | undefined;
+        c.call(service, 'abc123').subscribe((v) => (result = v));
 
         // Act
         httpMock
@@ -2768,15 +2633,14 @@ describe('IssueService (triage actions)', () => {
           .flush('Conflict', { status: 409, statusText: 'Conflict' });
 
         // Assert
-        expect(service.issueActionPending()).toBeNull();
-        expect(service.issueActionError()).toBe(c.conflict);
-        expect(service.issueActionSuccess()).toBeNull();
+        expect(result).toBe(c.conflict);
         httpMock.expectNone('/api/issues/abc123');
       });
 
-      it('sets the generic message on any other error', () => {
+      it('emits the generic message on any other error', () => {
         // Arrange
-        c.call(service, 'abc123');
+        let result: string | null | undefined;
+        c.call(service, 'abc123').subscribe((v) => (result = v));
 
         // Act
         httpMock
@@ -2784,73 +2648,10 @@ describe('IssueService (triage actions)', () => {
           .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
         // Assert
-        expect(service.issueActionPending()).toBeNull();
-        expect(service.issueActionError()).toBe(c.generic);
-      });
-
-      it('clears an earlier error and success message when started again', () => {
-        // Arrange — first call fails
-        c.call(service, 'abc123');
-        httpMock
-          .expectOne(`/api/issues/abc123/${c.path}`)
-          .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
-
-        // Act
-        c.call(service, 'abc123');
-
-        // Assert
-        expect(service.issueActionError()).toBeNull();
-        expect(service.issueActionSuccess()).toBeNull();
-        httpMock.expectOne(`/api/issues/abc123/${c.path}`).flush({});
-        httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+        expect(result).toBe(c.generic);
       });
     });
   }
-
-  it('does not touch the Retry Issue signals', () => {
-    // Act
-    service.retryTriage('abc123');
-    httpMock
-      .expectOne('/api/issues/abc123/retry-triage')
-      .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
-
-    // Assert
-    expect(service.retrying()).toBe(false);
-    expect(service.retryError()).toBeNull();
-  });
-
-  it('selectIssue clears pending, error and success', () => {
-    // Arrange
-    service.skipTriage('abc123');
-    httpMock
-      .expectOne('/api/issues/abc123/skip-triage')
-      .flush('Conflict', { status: 409, statusText: 'Conflict' });
-    service.retriage('abc123');
-
-    // Act
-    service.selectIssue('abc123');
-
-    // Assert
-    expect(service.issueActionPending()).toBeNull();
-    expect(service.issueActionError()).toBeNull();
-    expect(service.issueActionSuccess()).toBeNull();
-    httpMock.match('/api/issues/abc123/retriage');
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-  });
-
-  it('selectIssue clears a success message', () => {
-    // Arrange
-    service.retryTriage('abc123');
-    httpMock.expectOne('/api/issues/abc123/retry-triage').flush({});
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-
-    // Act
-    service.selectIssue('abc123');
-
-    // Assert
-    expect(service.issueActionSuccess()).toBeNull();
-    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
-  });
 });
 
 describe('IssueService board placement (#851)', () => {

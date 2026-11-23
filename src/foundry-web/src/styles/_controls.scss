@@ -26,3 +26,46 @@
 @mixin warning-callout($padding: var(--fd-spacing-xs) var(--fd-spacing-md)) {
   @include tone-callout(var(--fd-bg-warning-subtle), var(--fd-border-warning), $padding);
 }
+
+// Operator action button, outlined. A long label wraps inside the button by default; pass
+// `$white-space: nowrap` to keep it on one line.
+@mixin action-button($white-space: normal) {
+  background: transparent;
+  border: 1px solid var(--fd-text-link);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-link);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  min-height: 32px;
+  padding: 0 var(--fd-spacing-md);
+  white-space: $white-space;
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+// The filled fill of the primary action, included after action-button.
+@mixin action-button-primary {
+  background: var(--fd-text-link);
+  color: var(--fd-bg-page);
+
+  &:hover:not(:disabled) {
+    background: var(--fd-text-link);
+    filter: brightness(1.1);
+  }
+}

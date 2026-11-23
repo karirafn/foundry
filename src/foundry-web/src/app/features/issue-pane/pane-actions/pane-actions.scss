@@ -15,44 +15,11 @@
 
 // Secondary actions are outlined; the first, primary action is filled.
 .pane-actions__btn {
-  background: transparent;
-  border: 1px solid var(--fd-text-link);
-  border-radius: var(--fd-radius-sm);
-  color: var(--fd-text-link);
-  cursor: pointer;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  min-height: 32px;
-  padding: 0 var(--fd-spacing-md);
-  // A long label wraps inside its button rather than pushing the row past the pane.
-  white-space: normal;
-
-  &:hover:not(:disabled) {
-    background: var(--fd-bg-card-hover);
-  }
-
-  &:focus-visible {
-    @include focus-ring;
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-
-  @media (any-pointer: coarse) {
-    min-height: 44px;
-  }
+  @include action-button;
 }
 
 .pane-actions__btn--primary {
-  background: var(--fd-text-link);
-  color: var(--fd-bg-page);
-
-  &:hover:not(:disabled) {
-    background: var(--fd-text-link);
-    filter: brightness(1.1);
-  }
+  @include action-button-primary;
 }
 
 .pane-actions__btn--destructive {
