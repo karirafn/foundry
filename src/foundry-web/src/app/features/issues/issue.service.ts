@@ -12,6 +12,7 @@ import {
   LIVE_STATES,
   PublishPhase,
   QUEUED_TIER_STATES,
+  QuestionPostStatus,
   RunKind,
 } from './issue.model';
 import { RUN_KIND_LABELS } from '../../shared/utils/run-kind';
@@ -98,6 +99,11 @@ const RECONCILE_SAFETY_NET_MS = 30_000;
 // Narrows the wire value to a known publish phase; anything else reads as no phase.
 function toPublishPhase(value: string | null | undefined): PublishPhase | null {
   return value === 'publishing' || value === 'retrying' ? value : null;
+}
+
+// Narrows the wire value to a known post status; anything else reads as none.
+function toQuestionPostStatus(value: string | null | undefined): QuestionPostStatus | null {
+  return value === 'pending' || value === 'posted' || value === 'failed' ? value : null;
 }
 
 const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>([
@@ -336,6 +342,16 @@ export class IssueService {
     });
   }
 
+  /** The issue's detail, read without touching the pane's; null when it cannot be loaded. */
+  fetchDetail(id: string): Observable<IssueDetail | null> {
+    return this._http.get<IssueDetail>(`/api/issues/${encodeURIComponent(id)}`).pipe(
+      catchError((err: HttpErrorResponse) => {
+        console.error(err);
+        return of(null);
+      }),
+    );
+  }
+
   /**
    * Opens the detail of the issue with `id`, or closes it for `null`. Selecting the open issue again
    * keeps it open (and reloads its detail).
@@ -413,13 +429,21 @@ export class IssueService {
     errorMessage: (err: HttpErrorResponse) => string,
   ): Observable<string | null> {
     return this._http.post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/${path}`, {}).pipe(
-      tap(() => this.loadDetail(id)),
+      tap(() => this._reloadIfOpen(id)),
       map(() => null),
       catchError((err: HttpErrorResponse) => {
         console.error(err);
         return of(errorMessage(err));
       }),
     );
+  }
+
+  // A board row acts on issues the pane does not show; reloading those would replace the pane's detail
+  // request, and IssueUpdated delivers the row's new summary anyway.
+  private _reloadIfOpen(id: string): void {
+    if (this.selectedIssueId() === id) {
+      this.loadDetail(id);
+    }
   }
 
   private _upsertIssue(updated: IssueSummary): void {
@@ -435,7 +459,13 @@ export class IssueService {
 
     // The hub payload is the server summary as sent, so its placement is narrowed here as the
     // mapper narrows a loaded one.
-    updated = { ...updated, ...toPlacement(updated) };
+    updated = {
+      ...updated,
+      ...toPlacement(updated),
+      ...(updated.questionPostStatus === undefined
+        ? {}
+        : { questionPostStatus: toQuestionPostStatus(updated.questionPostStatus) }),
+    };
 
     const current = this.issues();
     const index = current.findIndex((i) => i.id === updated.id);
@@ -540,6 +570,8 @@ export class IssueService {
       repositoryId: i.repositoryId,
       enteredStateAt: i.enteredStateAt,
       round: this._toRound(i.round),
+      questionPostStatus: toQuestionPostStatus(i.questionPostStatus),
+      questionCommentUrl: i.questionCommentUrl ?? null,
       ...(i.lifecycle ? { lifecycle: i.lifecycle.map(toLifecycleStep) } : {}),
       ...toPlacement(i),
     };

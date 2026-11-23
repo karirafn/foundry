@@ -26,6 +26,7 @@ import { formatElapsed } from '../../../shared/utils/agent-activity-format';
 import { formatWaiting } from '../../../shared/utils/format-waiting';
 import { providerDisplayName, providerTerminology } from '../../../shared/utils/provider.util';
 import { ItemView } from '../board-state.service';
+import { rowAction } from '../board.model';
 import { IssueRefComponent } from '../issue-ref/issue-ref';
 import { LastEventComponent } from '../progress-band/worker-activity/last-event';
 import { WorkerActivityComponent } from '../progress-band/worker-activity/worker-activity';
@@ -168,11 +169,12 @@ export class LifecycleRowComponent {
     if (item.band !== 'needs') {
       return null;
     }
-    const { issue, reason } = item;
-    // A skipped merge or review still leaves a pull request for the person to review.
-    const skipped = issue.mergeOutcome === 'skipped' || issue.reviewOutcome === 'skipped';
-    const reviewable = reason.tone === 'ready' || (issue.state === 'review' && skipped);
-    if (!reviewable || !issue.pullRequestUrl) {
+    const issue = item.issue;
+    // A ready or merge-skipped row's own button opens the pull request; a skipped review's button
+    // retries it, so the pull request stays a link beside it.
+    const action = rowAction(item);
+    const retriesReview = action?.kind === 'action' && action.action === 'retry_review';
+    if (!retriesReview || !issue.pullRequestUrl) {
       return null;
     }
     const provider = issue.providerType ?? 'github';

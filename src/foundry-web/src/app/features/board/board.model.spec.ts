@@ -1,4 +1,5 @@
 import { IssueSummary } from '../issues/issue.model';
+import type { NeedsItem } from './board.model';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import {
   CODE_STEP_LABELS,
@@ -11,6 +12,7 @@ import {
   isRunning,
   needsReason,
   repoName,
+  rowAction,
 } from './board.model';
 
 function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
@@ -810,5 +812,204 @@ describe('isRunning', () => {
 
   it('is false for a state with no worker', () => {
     expect(isRunning(buildIssue({ state: 'checks_pending' }))).toBe(false);
+  });
+});
+
+describe('rowAction', () => {
+  function needsItem(overrides: Partial<IssueSummary>): NeedsItem {
+    const item = buildBoardBands([buildIssue({ issueNumber: 873, needsAction: true, ...overrides })], [], []).needs[0];
+    if (item === undefined) {
+      throw new Error('the issue is not in Needs you');
+    }
+    return item;
+  }
+
+  const PR = 'https://github.com/acme/api/pull/9';
+  const MR = 'https://gitlab.com/acme/api/-/merge_requests/9';
+
+  it('opens the pull request of a ready PR in a new tab', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'review', stage: 'review', pullRequestUrl: PR, providerType: 'github' }));
+
+    // Assert
+    expect(action).toEqual({
+      kind: 'link',
+      label: 'Open PR',
+      ariaLabel: 'Open PR for issue #873 (opens GitHub in a new tab)',
+      href: PR,
+    });
+  });
+
+  it('names a GitLab merge request MR', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'review', stage: 'review', pullRequestUrl: MR, providerType: 'gitlab' }));
+
+    // Assert
+    expect(action).toMatchObject({ kind: 'link', label: 'Open MR', href: MR });
+    expect(action?.ariaLabel).toBe('Open MR for issue #873 (opens GitLab in a new tab)');
+  });
+
+  it('opens the pull request when Foundry skipped the merge', () => {
+    // Act
+    const action = rowAction(
+      needsItem({ state: 'review', stage: 'review', pullRequestUrl: PR, mergeOutcome: 'skipped' }),
+    );
+
+    // Assert
+    expect(action).toMatchObject({ kind: 'link', label: 'Open PR', href: PR });
+  });
+
+  it('offers nothing for a ready PR with no pull request URL', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'review', stage: 'review', pullRequestUrl: null }));
+
+    // Assert
+    expect(action).toBeNull();
+  });
+
+  it('retries a skipped review', () => {
+    // Act
+    const action = rowAction(
+      needsItem({ state: 'review', stage: 'review', pullRequestUrl: PR, reviewOutcome: 'skipped' }),
+    );
+
+    // Assert
+    expect(action).toEqual({
+      kind: 'action',
+      label: 'Retry review',
+      pendingLabel: 'Retrying…',
+      ariaLabel: 'Retry review for issue #873',
+      action: 'retry_review',
+    });
+  });
+
+  it.each([['failed'], ['revision_failed'], ['unchanged'], ['continuable_failed']] as const)(
+    'retries the issue in %s',
+    (state) => {
+      // Act
+      const action = rowAction(needsItem({ state }));
+
+      // Assert
+      expect(action).toEqual({
+        kind: 'action',
+        label: 'Retry',
+        pendingLabel: 'Retrying…',
+        ariaLabel: 'Retry issue #873',
+        action: 'retry_issue',
+      });
+    },
+  );
+
+  it('retries a failed triage', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'triage_failed', stage: 'triage' }));
+
+    // Assert
+    expect(action).toMatchObject({ kind: 'action', label: 'Retry triage', action: 'retry_triage' });
+  });
+
+  it('retries a failed publish, with its own pending label', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'publish_failed' }));
+
+    // Assert
+    expect(action).toEqual({
+      kind: 'action',
+      label: 'Retry publish',
+      pendingLabel: 'Retrying publish…',
+      ariaLabel: 'Retry publish for issue #873',
+      action: 'retry_publish',
+    });
+  });
+
+  it('answers posted questions at their comment', () => {
+    // Arrange
+    const comment = 'https://github.com/acme/api/issues/873#issuecomment-1';
+
+    // Act
+    const action = rowAction(
+      needsItem({ state: 'awaiting_input', questionPostStatus: 'posted', questionCommentUrl: comment }),
+    );
+
+    // Assert
+    expect(action).toEqual({
+      kind: 'link',
+      label: 'Answer',
+      ariaLabel: 'Answer questions for issue #873 (opens GitHub in a new tab)',
+      href: comment,
+    });
+  });
+
+  it('answers posted questions on the issue when the comment URL is unknown', () => {
+    // Act
+    const action = rowAction(
+      needsItem({ state: 'awaiting_input', questionPostStatus: 'posted', questionCommentUrl: null }),
+    );
+
+    // Assert
+    expect(action).toMatchObject({ kind: 'link', label: 'Answer', href: 'https://github.com/acme/api/issues/1' });
+  });
+
+  it('offers nothing while the questions are being posted, and says so', () => {
+    // Arrange
+    const item = needsItem({ state: 'awaiting_input', questionPostStatus: 'pending' });
+
+    // Act
+    const action = rowAction(item);
+
+    // Assert
+    expect(action).toBeNull();
+    expect(item.explanation).toBe('Posting questions…');
+  });
+
+  it('retries a failed question post', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'awaiting_input', questionPostStatus: 'failed' }));
+
+    // Assert
+    expect(action).toEqual({
+      kind: 'action',
+      label: 'Retry post',
+      pendingLabel: 'Retrying post…',
+      ariaLabel: 'Retry post for issue #873',
+      action: 'retry_post',
+    });
+  });
+
+  it.each([['publish_blocked'], ['branch_diverged']] as const)('opens the pane to review %s', (state) => {
+    // Act
+    const action = rowAction(needsItem({ state }));
+
+    // Assert
+    expect(action).toEqual({ kind: 'open', label: 'Review', ariaLabel: 'Review issue #873' });
+  });
+
+  it.each([['still_failing'], ['infrastructure_failed']])('opens the checks when checks are %s', (checksOutcome) => {
+    // Act
+    const action = rowAction(needsItem({ state: 'review', stage: 'review', pullRequestUrl: PR, checksOutcome }));
+
+    // Assert
+    expect(action).toEqual({
+      kind: 'link',
+      label: 'Open checks',
+      ariaLabel: 'Open checks for issue #873 (opens GitHub in a new tab)',
+      href: `${PR}/checks`,
+    });
+  });
+
+  it('offers nothing for a failed review waiting for its automatic retry', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'review_failed', stage: 'review', needsAction: false }));
+
+    // Assert
+    expect(action).toBeNull();
+  });
+
+  it('offers nothing for a state this dashboard does not name', () => {
+    // Act
+    const action = rowAction(needsItem({ state: 'queued' }));
+
+    // Assert
+    expect(action).toBeNull();
   });
 });

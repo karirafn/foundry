@@ -1460,6 +1460,8 @@ export interface components {
              */
             round: number | string;
             lifecycle?: null | components["schemas"]["LifecycleStepInfo"][];
+            questionPostStatus?: null | string;
+            questionCommentUrl?: null | string;
         };
         LifecycleStepInfo: {
             step: string;

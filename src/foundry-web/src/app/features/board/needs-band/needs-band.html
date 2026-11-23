@@ -20,7 +20,15 @@
             [item]="item"
             [now]="now()"
             (open)="open.emit({ id: item.issue.id, invoker: $event })"
-          />
+          >
+            @if (item.phase === 'live') {
+              <fd-row-action
+                rowAction
+                [item]="item"
+                (open)="open.emit({ id: item.issue.id, invoker: $event })"
+              />
+            }
+          </fd-lifecycle-row>
         </li>
       }
     </ul>

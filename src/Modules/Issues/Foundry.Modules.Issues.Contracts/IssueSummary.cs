@@ -38,6 +38,11 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="Lifecycle"/> is the issue's whole lifecycle path, every step in order: the server decides which
 /// steps are off or skipped, and the dashboard only renders it.
 /// </para>
+/// <para>
+/// <paramref name="QuestionPostStatus"/> is <see cref="QuestionPostPending"/>, <see cref="QuestionPostPosted"/> or
+/// <see cref="QuestionPostFailed"/> for an <c>awaiting_input</c> issue and <see langword="null"/> otherwise;
+/// <paramref name="QuestionCommentUrl"/> links to the posted question comment when the provider's URL form is known.
+/// </para>
 /// </summary>
 public sealed record IssueSummary(
     Guid Id,
@@ -70,8 +75,14 @@ public sealed record IssueSummary(
     string? ReviewOutcome = null,
     string? ReviewSkippedReason = null,
     int Round = 1,
-    IReadOnlyList<LifecycleStepInfo>? Lifecycle = null)
+    IReadOnlyList<LifecycleStepInfo>? Lifecycle = null,
+    string? QuestionPostStatus = null,
+    string? QuestionCommentUrl = null)
 {
+    public const string QuestionPostPending = "pending";
+    public const string QuestionPostPosted = "posted";
+    public const string QuestionPostFailed = "failed";
+
     public const string PublishingPhase = "publishing";
     public const string RetryingPhase = "retrying";
 

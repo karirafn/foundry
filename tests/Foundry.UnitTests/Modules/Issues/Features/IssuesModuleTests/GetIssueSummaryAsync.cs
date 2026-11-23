@@ -944,4 +944,101 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         // Assert
         _mergeQueue.WaitingReads.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task WhenAwaitingInputPostIsPending_SummaryCarriesPendingPostStatusAndNoCommentUrl()
+    {
+        // Arrange
+        AwaitingInputIssue issue = new IssueBuilder().AwaitingInput();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.QuestionPostStatus.ShouldBe("pending"),
+            () => summary.QuestionCommentUrl.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenAwaitingInputPostIsPosted_SummaryCarriesPostedStatusAndTheCommentUrl()
+    {
+        // Arrange
+        AwaitingInputIssue issue = new IssueBuilder().AwaitingInput();
+        issue.RecordQuestionPosted(
+            commentId: 42,
+            DateTimeOffset.UtcNow,
+            commentUrl: "https://github.com/acme/repo/issues/7#issuecomment-42");
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.QuestionPostStatus.ShouldBe("posted"),
+            () => summary.QuestionCommentUrl.ShouldBe("https://github.com/acme/repo/issues/7#issuecomment-42"));
+    }
+
+    [Fact]
+    public async Task WhenAwaitingInputPostIsPostedWithoutUrl_SummaryCarriesPostedStatusAndNoCommentUrl()
+    {
+        // Arrange
+        AwaitingInputIssue issue = new IssueBuilder().AwaitingInputPosted(DateTimeOffset.UtcNow);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.QuestionPostStatus.ShouldBe("posted"),
+            () => summary.QuestionCommentUrl.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenAwaitingInputPostFailed_SummaryCarriesFailedPostStatusAndNoCommentUrl()
+    {
+        // Arrange
+        AwaitingInputIssue issue = new IssueBuilder().AwaitingInput();
+        issue.RecordQuestionPostFailed("forbidden", transient: false, DateTimeOffset.UtcNow);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.QuestionPostStatus.ShouldBe("failed"),
+            () => summary.QuestionCommentUrl.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenNotAwaitingInput_SummaryCarriesNoQuestionPostFields()
+    {
+        // Arrange
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(MonitoredRepositoryId.New());
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(detected.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.QuestionPostStatus.ShouldBeNull(),
+            () => summary.QuestionCommentUrl.ShouldBeNull());
+    }
 }

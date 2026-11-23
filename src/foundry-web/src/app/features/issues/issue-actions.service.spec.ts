@@ -15,6 +15,7 @@ function fakeIssueService() {
     continueWithoutAnswer: vi.fn((_id: string) => of<string | null>(null)),
     retryQuestionPost: vi.fn((_id: string) => of<string | null>(null)),
     retryReview: vi.fn((_id: string) => of<string | null>(null)),
+    fetchDetail: vi.fn((_id: string) => of<{ stateDetails: { workerRunId: string | null } | null } | null>(null)),
   };
 }
 
@@ -173,6 +174,41 @@ describe('IssueActionsService', () => {
     expect(called).toBe(0);
     expect(runs.requestPublishRetry).toHaveBeenCalledWith('run-1');
     expect(service.success('issue-a')()?.message).toBe('Publish retry started. Issue status is updating.');
+  });
+
+  it('loads the run of a publish retry from the issue detail once confirmed, when the caller has none', async () => {
+    // Arrange
+    const { service, issues, runs } = setup();
+    issues.fetchDetail.mockReturnValue(of({ stateDetails: { workerRunId: 'run-7' } }));
+    service.perform('issue-a', { kind: 'retry_publish', workerRunId: null, branchName: null });
+    const message = openDialog()?.querySelector('.confirm-dialog__message')?.textContent;
+    const loadedBeforeConfirm = issues.fetchDetail.mock.calls.length;
+
+    // Act
+    await answerDialog('.confirm-dialog__confirm');
+
+    // Assert
+    expect(message).toContain('the issue branch');
+    expect(loadedBeforeConfirm).toBe(0);
+    expect(issues.fetchDetail).toHaveBeenCalledWith('issue-a');
+    expect(runs.requestPublishRetry).toHaveBeenCalledWith('run-7');
+  });
+
+  it.each([
+    [null, 'Failed to retry publish.'],
+    [{ stateDetails: { workerRunId: null } }, 'This run is no longer waiting to publish.'],
+  ])('fails a publish retry whose detail is %o without posting', async (detail, error) => {
+    // Arrange
+    const { service, issues, runs } = setup();
+    issues.fetchDetail.mockReturnValue(of(detail));
+    service.perform('issue-a', { kind: 'retry_publish', workerRunId: null, branchName: null });
+
+    // Act
+    await answerDialog('.confirm-dialog__confirm');
+
+    // Assert
+    expect(runs.requestPublishRetry).not.toHaveBeenCalled();
+    expect(service.error('issue-a')()).toBe(error);
   });
 
   it('does not run the action when its confirmation is dismissed', async () => {
