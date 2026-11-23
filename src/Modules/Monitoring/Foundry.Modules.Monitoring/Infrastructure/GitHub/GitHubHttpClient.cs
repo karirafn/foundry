@@ -311,7 +311,8 @@ internal sealed partial class GitHubHttpClient(
         string query,
         object variables,
         string token,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<HttpResponseMessage, Error>? classifyNonSuccess = null)
         where TData : class
     {
         if (restBaseUrl.Scheme is not "https")
@@ -330,7 +331,7 @@ internal sealed partial class GitHubHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<TData>.Fail(ErrorFromNonSuccess(response));
+            return Result<TData>.Fail((classifyNonSuccess ?? ErrorFromNonSuccess)(response));
         }
 
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
