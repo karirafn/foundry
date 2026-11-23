@@ -1,0 +1,36 @@
+@let event = line();
+@if (event.kind === 'waiting') {
+  <!-- The count, not the raw command, is read with the line; the pane lists the commands. -->
+  <span class="last-event__waiting" aria-hidden="true" [attr.title]="event.title">
+    <span>waiting on</span>&ngsp;<span class="last-event__command">{{ event.command }}</span
+    >&ngsp;
+    @if (event.more) {
+      <span class="last-event__more">{{ event.more }}</span>&ngsp;
+    }
+    <span class="last-event__waited">· {{ event.elapsed }}</span>
+  </span>
+  <span class="sr-only">{{ event.srText }}</span>
+} @else {
+  <span class="last-event__event" [class.last-event__event--silent]="event.kind === 'silent'">
+    @if (event.kind === 'silent') {
+      <svg
+        class="last-event__warning"
+        xmlns="http://www.w3.org/2000/svg"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+        <path d="M12 9v4M12 17h.01" />
+      </svg>
+    }
+    {{ event.text }}
+  </span>
+}

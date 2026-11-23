@@ -16,6 +16,7 @@ import { formatElapsed } from '../../../../shared/utils/agent-activity-format';
 import { ItemView } from '../../board-state.service';
 import { WorkerItem } from '../../board.model';
 import { IssueRefComponent } from '../../issue-ref/issue-ref';
+import { LastEventComponent } from '../worker-activity/last-event';
 import { WorkerActivityComponent } from '../worker-activity/worker-activity';
 import {
   ActivityPanel,
@@ -29,7 +30,7 @@ import {
  */
 @Component({
   selector: 'fd-worker-card',
-  imports: [IssueRefComponent, RunKindTagComponent, WorkerActivityComponent],
+  imports: [IssueRefComponent, LastEventComponent, RunKindTagComponent, WorkerActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'item().issue.id',

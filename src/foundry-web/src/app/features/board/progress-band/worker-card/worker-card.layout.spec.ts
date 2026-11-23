@@ -153,3 +153,38 @@ describe('worker card run kind tag layout', () => {
     },
   );
 });
+
+describe('worker card last-event layout', () => {
+  it('truncates a long waiting command so its count and waited time stay inside the card', async () => {
+    // Arrange
+    const activity: AgentActivity = {
+      ...activityWithTasks(3),
+      lastEventAt: '2026-01-01T11:50:00Z',
+      backgroundTasks: [
+        { taskType: 'local_bash', description: 'dotnet test '.repeat(16).trim() },
+        { taskType: 'local_bash', description: 'npm test' },
+      ],
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: WorkerSignalRService,
+          useValue: { activeAgentCount: signal(1), agentActivityForIssue: () => activity },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(HostComponent);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+
+    // Act
+    const card = root.querySelector('.worker-card')!.getBoundingClientRect();
+    const command = root.querySelector<HTMLElement>('.last-event__command')!;
+    const waited = root.querySelector('.last-event__waited')!.getBoundingClientRect();
+
+    // Assert
+    expect(command.scrollWidth).toBeGreaterThan(command.clientWidth);
+    expect(waited.width).toBeGreaterThan(0);
+    expect(waited.right).toBeLessThanOrEqual(card.right);
+  });
+});
