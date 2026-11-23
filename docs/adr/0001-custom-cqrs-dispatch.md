@@ -1,3 +1,7 @@
+---
+reaches: dependency
+---
+
 # Custom CQRS Dispatch over MediatR
 
 ## Context

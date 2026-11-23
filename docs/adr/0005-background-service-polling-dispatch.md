@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Background Service Polling over Domain Event-Driven Dispatch
 
 ## Context

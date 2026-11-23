@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Read Credential Volume via an Ephemeral Helper Container
 
 ## Context

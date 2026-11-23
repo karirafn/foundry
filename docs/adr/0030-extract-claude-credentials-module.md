@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Extract Claude Worker Credentials into a Credentials Module
 
 ## Context

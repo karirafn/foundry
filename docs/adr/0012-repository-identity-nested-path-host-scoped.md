@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Repository Identity: Nested-Namespace Path with Host-Scoped Uniqueness
 
 ## Context

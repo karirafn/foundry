@@ -1,3 +1,7 @@
+---
+reaches: hidden-invariant
+---
+
 # Shared Dispatch Order for Dispatcher and Dashboard
 
 ## Context

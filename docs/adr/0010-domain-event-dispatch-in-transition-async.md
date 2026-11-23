@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Domain Event Dispatch in TransitionAsync
 
 ## Context

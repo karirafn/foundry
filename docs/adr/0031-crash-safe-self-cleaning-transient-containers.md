@@ -47,3 +47,6 @@ Rejected: `AutoRemove` only fires when the container exits. A hung `claude` proc
 - Leaks are covered at three layers — in-process `finally`, container self-termination, and the periodic reaper — so no single failure (including a silent host crash) leaves an orphan for long.
 - The periodic reaper is a background service; its tick is defensively wrapped so a Docker-API hiccup logs and retries next tick rather than stopping the host.
 - The login image (`node:22-bookworm-slim`) already ships coreutils `timeout`; no image change is required.
+
+## Revisions
+- 2026-11-13 — The startup `LoginContainerReaper` is gone, leaving the periodic `TransientContainerReaper` as the only reaper, which now also covers Publisher containers and reaps a non-running container only after a 30-minute grace period (#888).
