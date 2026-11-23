@@ -9,8 +9,16 @@ public abstract record CiJobLog
     {
     }
 
-    /// <summary>The job's full log text as the provider returned it.</summary>
-    public sealed record Available(string Text) : CiJobLog;
+    /// <summary>
+    /// The end of the job's log as the provider returned it, and the lines near its start that look like failures.
+    /// </summary>
+    /// <param name="Text">The log's final bytes, decoded.</param>
+    /// <param name="Length">The whole log's length in bytes; <paramref name="Text"/> ends at this offset.</param>
+    /// <param name="FailureExcerpt">
+    /// Lines that look like failures, each with the lines that follow it, read from the start of the log in log
+    /// order. A line may also fall inside <paramref name="Text"/>.
+    /// </param>
+    public sealed record Available(string Text, long Length, IReadOnlyList<JobLogLine> FailureExcerpt) : CiJobLog;
 
     /// <summary>
     /// The check is not a CI job the provider exposes logs for (a commit status, a third-party check app),

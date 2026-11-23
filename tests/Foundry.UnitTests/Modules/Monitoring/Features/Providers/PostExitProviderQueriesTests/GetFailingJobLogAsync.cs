@@ -74,13 +74,14 @@ public sealed class GetFailingJobLogAsync : IAsyncDisposable
     {
         // Arrange
         _provider.Lookup = Result<CiJobLookup>.Ok(new CiJobLookup.Found(2));
-        _provider.Log = Result<string>.Ok("boom");
+        CiJobLog.Available log = new("boom", 4, [new JobLogLine(1, 0, "boom")]);
+        _provider.Log = Result<CiJobLog.Available>.Ok(log);
 
         // Act
         Result<CiJobLog> result = await ActAsync();
 
         // Assert
-        result.ShouldBeOfType<Result<CiJobLog>.Success>().Value.ShouldBe(new CiJobLog.Available("boom"));
+        result.ShouldBeOfType<Result<CiJobLog>.Success>().Value.ShouldBeSameAs(log);
         _provider.RequestedJobIds.ShouldBe([2L]);
     }
 
@@ -116,7 +117,7 @@ public sealed class GetFailingJobLogAsync : IAsyncDisposable
     {
         // Arrange
         _provider.Lookup = Result<CiJobLookup>.Ok(new CiJobLookup.Found(2));
-        _provider.Log = Result<string>.Fail(JobLogErrors.Unavailable(2, 410));
+        _provider.Log = Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(2, 410));
 
         // Act
         Result<CiJobLog> result = await ActAsync();
@@ -143,14 +144,14 @@ public sealed class GetFailingJobLogAsync : IAsyncDisposable
 
         public Result<CiJobLookup> Lookup { get; set; } = Result<CiJobLookup>.Ok(new CiJobLookup.NotACiJob());
 
-        public Result<string> Log { get; set; } = Result<string>.Ok(string.Empty);
+        public Result<CiJobLog.Available> Log { get; set; } = Result<CiJobLog.Available>.Ok(new CiJobLog.Available(string.Empty, 0, []));
 
         public IReadOnlyList<long> RequestedJobIds => _requestedJobIds;
 
         public Task<Result<CiJobLookup>> ResolveCiJobAsync(RepositorySlug slug, FailingCheck check, CancellationToken cancellationToken) =>
             Task.FromResult(Lookup);
 
-        public Task<Result<string>> GetJobLogAsync(RepositorySlug slug, long jobId, CancellationToken cancellationToken)
+        public Task<Result<CiJobLog.Available>> GetJobLogAsync(RepositorySlug slug, long jobId, CancellationToken cancellationToken)
         {
             _requestedJobIds.Add(jobId);
             return Task.FromResult(Log);

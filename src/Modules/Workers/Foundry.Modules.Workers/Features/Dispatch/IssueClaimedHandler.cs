@@ -428,7 +428,7 @@ internal sealed class IssueClaimedHandler(
 
             if (result is Result<CiJobLog>.Success { Value: CiJobLog.Available available })
             {
-                logs.Add(new FailingJobLog(check.Name, available.Text));
+                logs.Add(new FailingJobLog(check.Name, available.Text, available.Length, available.FailureExcerpt));
             }
             else if (result is Result<CiJobLog>.Failure failure)
             {

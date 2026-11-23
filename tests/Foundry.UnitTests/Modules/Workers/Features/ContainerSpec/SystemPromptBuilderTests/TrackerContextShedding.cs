@@ -325,7 +325,7 @@ public sealed class TrackerContextShedding
 
     private static List<FailingJobLog> JobLogsOfLength(int length) =>
         Enumerable.Range(0, JobLogCount)
-            .Select(i => new FailingJobLog($"ci/job-{i}", new string((char)('P' + i), length)))
+            .Select(i => new FailingJobLog($"ci/job-{i}", new string((char)('P' + i), length), length, []))
             .ToList();
 
     private static bool JobLogsRenderedWhole(string prompt, int length) =>

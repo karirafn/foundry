@@ -100,7 +100,10 @@ public sealed class GetFailingJobLogAsyncGitLab : IAsyncDisposable
         Result<CiJobLog> result = await _sut.GetFailingJobLogAsync(repo.Id, check, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeOfType<Result<CiJobLog>.Success>().Value.ShouldBe(new CiJobLog.Available(TraceBody));
+        CiJobLog.Available log = result.ShouldBeOfType<Result<CiJobLog>.Success>().Value.ShouldBeOfType<CiJobLog.Available>();
+        log.ShouldSatisfyAllConditions(
+            () => log.Text.ShouldBe(TraceBody),
+            () => log.Length.ShouldBe(TraceBody.Length));
         _handler.AllRequests.ShouldContain(request => request.RequestUri!.AbsoluteUri.EndsWith(ExpectedTraceRequest, StringComparison.Ordinal));
     }
 

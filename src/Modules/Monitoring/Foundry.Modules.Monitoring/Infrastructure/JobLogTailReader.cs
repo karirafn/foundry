@@ -17,11 +17,13 @@ internal static class JobLogTailReader
     private static ReadOnlySpan<byte> ByteOrderMark => [0xEF, 0xBB, 0xBF];
 
     /// <param name="content">The log body.</param>
-    /// <param name="startsMidLog">Whether the body begins part-way into the log, as a range response does.</param>
+    /// <param name="startOffset">The log offset the body begins at: above zero when a range response starts part-way into the log.</param>
+    /// <param name="scanner">Fed every byte read, when the body begins at the log's first byte and its failure lines are wanted.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    public static async Task<string> ReadAsync(
+    public static async Task<JobLogTail> ReadAsync(
         HttpContent content,
-        bool startsMidLog,
+        long startOffset,
+        FailureExcerptScanner? scanner,
         CancellationToken cancellationToken)
     {
         // Twice the tail, so the kept bytes move back only once per tail's worth read rather than on every read.
@@ -44,13 +46,14 @@ internal static class JobLogTailReader
                 break;
             }
 
+            scanner?.Append(buffer.AsSpan(length, read));
             length += read;
             totalRead += read;
         }
 
         int start = Math.Max(0, length - JobLogTailBytes);
-        bool isCut = startsMidLog || totalRead > JobLogTailBytes;
-        return Decode(buffer.AsSpan(start, length - start), isCut);
+        bool isCut = startOffset > 0 || totalRead > JobLogTailBytes;
+        return new JobLogTail(Decode(buffer.AsSpan(start, length - start), isCut), startOffset + totalRead);
     }
 
     private static string Decode(ReadOnlySpan<byte> bytes, bool isCut)
@@ -77,3 +80,6 @@ internal static class JobLogTailReader
 
     private static bool IsContinuationByte(byte value) => (value & 0b1100_0000) == 0b1000_0000;
 }
+
+/// <summary>A job log's final bytes, decoded, and the whole log's length in bytes.</summary>
+internal sealed record JobLogTail(string Text, long Length);

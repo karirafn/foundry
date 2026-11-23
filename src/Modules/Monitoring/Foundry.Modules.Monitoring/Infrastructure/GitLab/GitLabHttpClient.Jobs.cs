@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
@@ -25,9 +26,10 @@ internal sealed partial class GitLabHttpClient
 
     /// <summary>
     /// Reads the final <see cref="JobLogTailReader.JobLogTailBytes"/> of the log of CI job <paramref name="jobId"/>
-    /// (<c>GET /projects/:id/jobs/:job_id/trace</c>).
+    /// (<c>GET /projects/:id/jobs/:job_id/trace</c>), and collects the failure lines near its start from the same
+    /// stream.
     /// </summary>
-    public async Task<Result<string>> GetJobTraceAsync(
+    public async Task<Result<CiJobLog.Available>> GetJobTraceAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         long jobId,
@@ -36,7 +38,7 @@ internal sealed partial class GitLabHttpClient
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<string>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<CiJobLog.Available>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
@@ -47,17 +49,20 @@ internal sealed partial class GitLabHttpClient
         request.Headers.Add("PRIVATE-TOKEN", token);
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
 
-        // A trace can run past the client's buffer cap, so its body is streamed and only its tail kept.
+        // A trace can run past the client's buffer cap, so its body is streamed and only its tail and early failure
+        // lines kept.
         using HttpResponseMessage response = await httpClient.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<string>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
+            return Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
         }
 
         RecordRestHeadroom(response);
-        return Result<string>.Ok(await JobLogTailReader.ReadAsync(response.Content, false, cancellationToken));
+        FailureExcerptScanner scanner = new();
+        JobLogTail tail = await JobLogTailReader.ReadAsync(response.Content, 0, scanner, cancellationToken);
+        return Result<CiJobLog.Available>.Ok(new CiJobLog.Available(tail.Text, tail.Length, scanner.Complete()));
     }
 
     /// <summary>
