@@ -1,8 +1,8 @@
-import { Component, input, signal } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { IssueDetail } from '../../issues/issue.model';
-import { IssueAction, IssueService } from '../../issues/issue.service';
+import { IssueService } from '../../issues/issue.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { PaneAction } from '../pane-callout.model';
 import { PaneActionsComponent } from './pane-actions';
@@ -47,14 +47,7 @@ async function render(width: number): Promise<HTMLElement> {
     providers: [
       {
         provide: IssueService,
-        useValue: {
-          retrying: signal(false),
-          retryError: signal<string | null>(null),
-          retrySuccess: signal<string | null>(null),
-          issueActionPending: signal<IssueAction | null>(null),
-          issueActionError: signal<string | null>(null),
-          issueActionSuccess: signal<string | null>(null),
-        },
+        useValue: {},
       },
       { provide: WorkerRunService, useValue: { requestCancel: () => of(null) } },
     ],

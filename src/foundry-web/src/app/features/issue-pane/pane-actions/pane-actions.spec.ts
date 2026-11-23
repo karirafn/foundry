@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
 import { Subject, of } from 'rxjs';
 import { IssueDetail, IssueStateDetails } from '../../issues/issue.model';
-import { IssueService, IssueAction } from '../../issues/issue.service';
+import { IssueActionsService } from '../../issues/issue-actions.service';
+import { IssueService } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { PaneAction } from '../pane-callout.model';
@@ -80,20 +80,14 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
 
 function fakeIssueService() {
   return {
-    retrying: signal(false),
-    retryError: signal<string | null>(null),
-    retrySuccess: signal<string | null>(null),
-    issueActionPending: signal<IssueAction | null>(null),
-    issueActionError: signal<string | null>(null),
-    issueActionSuccess: signal<string | null>(null),
-    retryIssue: vi.fn(),
-    retryIssueFresh: vi.fn(),
-    retryTriage: vi.fn(),
-    skipTriage: vi.fn(),
-    retriage: vi.fn(),
-    continueWithoutAnswer: vi.fn(),
-    retryQuestionPost: vi.fn(),
-    retryReview: vi.fn(),
+    retryIssue: vi.fn((_id: string) => of<string | null>(null)),
+    retryIssueFresh: vi.fn((_id: string) => of<string | null>(null)),
+    retryTriage: vi.fn((_id: string) => of<string | null>(null)),
+    skipTriage: vi.fn((_id: string) => of<string | null>(null)),
+    retriage: vi.fn((_id: string) => of<string | null>(null)),
+    continueWithoutAnswer: vi.fn((_id: string) => of<string | null>(null)),
+    retryQuestionPost: vi.fn((_id: string) => of<string | null>(null)),
+    retryReview: vi.fn((_id: string) => of<string | null>(null)),
   };
 }
 
@@ -110,10 +104,11 @@ interface SetupOptions {
   run?: WorkerRunDetail | null;
   providerType?: string;
   workerRuns?: ReturnType<typeof fakeWorkerRunService>;
+  service?: ReturnType<typeof fakeIssueService>;
 }
 
 function setup(state: IssueDetail['state'], actions: PaneAction[], options: SetupOptions = {}) {
-  const service = fakeIssueService();
+  const service = options.service ?? fakeIssueService();
   const workerRuns = options.workerRuns ?? fakeWorkerRunService();
   TestBed.configureTestingModule({
     imports: [PaneActionsComponent],
@@ -134,13 +129,15 @@ function setup(state: IssueDetail['state'], actions: PaneAction[], options: Setu
   const render = () => fixture.detectChanges();
   const buttons = () => Array.from(el.querySelectorAll<HTMLButtonElement>('.pane-actions button'));
   const button = (label: string) => buttons().find((b) => b.textContent?.trim() === label) ?? null;
-  const openDialog = () => Array.from(el.querySelectorAll<HTMLDialogElement>('dialog.confirm-dialog')).find((d) => d.open) ?? null;
-  const confirm = () => {
+  const openDialog = () => Array.from(document.querySelectorAll<HTMLDialogElement>('dialog.confirm-dialog')).find((d) => d.open) ?? null;
+  const confirm = async () => {
     (openDialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    await fixture.whenStable();
     render();
   };
-  const dismiss = () => {
+  const dismiss = async () => {
     (openDialog()!.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    await fixture.whenStable();
     render();
   };
   const error = () => el.querySelector('.pane-actions__error[role="alert"]')?.textContent?.trim() ?? '';
@@ -148,7 +145,11 @@ function setup(state: IssueDetail['state'], actions: PaneAction[], options: Setu
 }
 
 describe('PaneActionsComponent', () => {
-  it('renders the actions in order, the first filled and the rest outlined', () => {
+  afterEach(() => {
+    document.querySelectorAll('body > fd-confirm-dialog').forEach((dialog) => dialog.remove());
+  });
+
+  it('renders the actions in order, the first filled and the rest outlined', async () => {
     // Act
     const { buttons } = setup('continuable_failed', ['retry_issue', 'retry_fresh']);
 
@@ -158,7 +159,7 @@ describe('PaneActionsComponent', () => {
     expect(buttons()[1].classList.contains('pane-actions__btn--primary')).toBe(false);
   });
 
-  it('renders no button row and no dialog without actions, keeping the announcements mounted', () => {
+  it('renders no button row and no dialog without actions, keeping the announcements mounted', async () => {
     // Act
     const { el } = setup('completed', []);
 
@@ -169,7 +170,7 @@ describe('PaneActionsComponent', () => {
   });
 
   describe('Stop worker', () => {
-    it('opens a confirm dialog worded for an implement run instead of stopping straight away', () => {
+    it('opens a confirm dialog worded for an implement run instead of stopping straight away', async () => {
       // Arrange
       const { button, openDialog, render, workerRuns } = setup('in_progress', ['stop_worker']);
 
@@ -185,7 +186,7 @@ describe('PaneActionsComponent', () => {
       expect(workerRuns.requestCancel).not.toHaveBeenCalled();
     });
 
-    it('words the dialog for a triage run', () => {
+    it('words the dialog for a triage run', async () => {
       // Arrange
       const { button, openDialog, render } = setup('triage_in_progress', ['stop_worker']);
 
@@ -198,35 +199,35 @@ describe('PaneActionsComponent', () => {
       expect(openDialog()?.textContent).toContain('The issue moves to Triage failed, where you can retry or skip triage.');
     });
 
-    it('requests the stop and shows Stopping… once confirmed', () => {
+    it('requests the stop and shows Stopping… once confirmed', async () => {
       // Arrange
       const { button, render, confirm, workerRuns } = setup('in_progress', ['stop_worker']);
       button('Stop worker')!.click();
       render();
 
       // Act
-      confirm();
+      await confirm();
 
       // Assert
       expect(workerRuns.requestCancel).toHaveBeenCalledWith('run-1');
       expect(button('Stopping…')?.disabled).toBe(true);
     });
 
-    it('does not stop the worker when the dialog is dismissed', () => {
+    it('does not stop the worker when the dialog is dismissed', async () => {
       // Arrange
       const { button, render, dismiss, workerRuns } = setup('in_progress', ['stop_worker']);
       button('Stop worker')!.click();
       render();
 
       // Act
-      dismiss();
+      await dismiss();
 
       // Assert
       expect(workerRuns.requestCancel).not.toHaveBeenCalled();
       expect(button('Stop worker')).not.toBeNull();
     });
 
-    it('shows Stopping… on load when the run already carries a stop request', () => {
+    it('shows Stopping… on load when the run already carries a stop request', async () => {
       // Act
       const { button } = setup('in_progress', ['stop_worker'], { run: run({ cancelRequestedAt: '2026-11-04T10:00:00Z' }) });
 
@@ -237,7 +238,7 @@ describe('PaneActionsComponent', () => {
     it.each([
       ['starting', run({ state: 'starting' })],
       ['not loaded', null],
-    ])('disables the button with a Starting… hint while the run is %s', (_label, current) => {
+    ])('disables the button with a Starting… hint while the run is %s', async (_label, current) => {
       // Act
       const { el, button } = setup('in_progress', ['stop_worker'], { run: current });
 
@@ -248,7 +249,7 @@ describe('PaneActionsComponent', () => {
       expect(el.querySelector(`[id="${hintId}"]`)?.textContent?.trim()).toBe('Starting…');
     });
 
-    it('restores the button and shows the error in the alert when the stop fails', () => {
+    it('restores the button and shows the error in the alert when the stop fails', async () => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       workerRuns.requestCancel.mockReturnValue(of('The run is no longer running.'));
@@ -257,7 +258,7 @@ describe('PaneActionsComponent', () => {
       render();
 
       // Act
-      confirm();
+      await confirm();
 
       // Assert
       expect(button('Stop worker')).not.toBeNull();
@@ -266,13 +267,14 @@ describe('PaneActionsComponent', () => {
   });
 
   describe('Retry issue and Retry fresh', () => {
-    it('retries straight away and reads Retrying issue… while pending', () => {
+    it('retries straight away and reads Retrying issue… while pending', async () => {
       // Arrange
-      const { button, render, service } = setup('failed', ['retry_issue']);
+      const service = fakeIssueService();
+      service.retryIssue.mockReturnValue(new Subject<string | null>());
+      const { button, render } = setup('failed', ['retry_issue'], { service });
 
       // Act
       button('Retry issue')!.click();
-      service.retrying.set(true);
       render();
 
       // Assert
@@ -280,7 +282,7 @@ describe('PaneActionsComponent', () => {
       expect(button('Retrying issue…')?.disabled).toBe(true);
     });
 
-    it('names the issue in the Retry issue label', () => {
+    it('names the issue in the Retry issue label', async () => {
       // Act
       const { button } = setup('failed', ['retry_issue']);
 
@@ -288,19 +290,21 @@ describe('PaneActionsComponent', () => {
       expect(button('Retry issue')?.getAttribute('aria-label')).toBe('Retry issue #42');
     });
 
-    it('shows the retry error in the alert', () => {
+    it('shows the retry error in the alert', async () => {
       // Arrange
-      const { render, service, error } = setup('failed', ['retry_issue']);
+      const service = fakeIssueService();
+      service.retryIssue.mockReturnValue(of('Failed to retry issue.'));
+      const { button, render, error } = setup('failed', ['retry_issue'], { service });
 
       // Act
-      service.retryError.set('Failed to retry issue.');
+      button('Retry issue')!.click();
       render();
 
       // Assert
       expect(error()).toBe('Failed to retry issue.');
     });
 
-    it('confirms Retry fresh as destructive before retrying from a fresh branch', () => {
+    it('confirms Retry fresh as destructive before retrying from a fresh branch', async () => {
       // Arrange
       const { button, render, openDialog, confirm, service } = setup('continuable_failed', ['retry_issue', 'retry_fresh']);
 
@@ -309,7 +313,7 @@ describe('PaneActionsComponent', () => {
       render();
       const dialog = openDialog();
       const text = dialog?.textContent ?? '';
-      confirm();
+      await confirm();
 
       // Assert
       expect(text).toContain('Retry from a fresh branch?');
@@ -317,26 +321,29 @@ describe('PaneActionsComponent', () => {
       expect(service.retryIssueFresh).toHaveBeenCalledWith('abc');
     });
 
-    it('does not retry fresh when the confirmation is dismissed', () => {
+    it('does not retry fresh when the confirmation is dismissed', async () => {
       // Arrange
       const { button, render, dismiss, service } = setup('continuable_failed', ['retry_issue', 'retry_fresh']);
       button('Retry fresh')!.click();
       render();
 
       // Act
-      dismiss();
+      await dismiss();
 
       // Assert
       expect(service.retryIssueFresh).not.toHaveBeenCalled();
     });
 
-    it('announces the retry success politely and reports the action as succeeded', () => {
+    it('announces the retry success politely and reports the action as succeeded', async () => {
       // Arrange
-      const { el, button, render, service, succeeded } = setup('failed', ['retry_issue']);
+      const response = new Subject<string | null>();
+      const service = fakeIssueService();
+      service.retryIssue.mockReturnValue(response);
+      const { el, button, render, succeeded } = setup('failed', ['retry_issue'], { service });
       button('Retry issue')!.click();
 
       // Act
-      service.retrySuccess.set('Retry queued. Issue status is updating.');
+      response.next(null);
       render();
 
       // Assert
@@ -348,7 +355,7 @@ describe('PaneActionsComponent', () => {
   });
 
   describe('triage actions', () => {
-    it('retries triage straight away, with no confirmation', () => {
+    it('retries triage straight away, with no confirmation', async () => {
       // Arrange
       const { button, openDialog, render, service } = setup('triage_failed', ['retry_triage', 'skip_triage']);
 
@@ -361,7 +368,7 @@ describe('PaneActionsComponent', () => {
       expect(openDialog()).toBeNull();
     });
 
-    it('confirms Skip triage with its copy before skipping', () => {
+    it('confirms Skip triage with its copy before skipping', async () => {
       // Arrange
       const { button, render, openDialog, confirm, service } = setup('triage_failed', ['retry_triage', 'skip_triage']);
 
@@ -369,7 +376,7 @@ describe('PaneActionsComponent', () => {
       button('Skip triage')!.click();
       render();
       const text = openDialog()?.textContent ?? '';
-      confirm();
+      await confirm();
 
       // Assert
       expect(text).toContain('Skip triage for #42?');
@@ -377,7 +384,7 @@ describe('PaneActionsComponent', () => {
       expect(service.skipTriage).toHaveBeenCalledWith('abc');
     });
 
-    it('confirms Re-triage from queued with its copy', () => {
+    it('confirms Re-triage from queued with its copy', async () => {
       // Arrange
       const { button, render, openDialog, confirm, service } = setup('queued', ['retriage']);
 
@@ -385,7 +392,7 @@ describe('PaneActionsComponent', () => {
       button('Re-triage')!.click();
       render();
       const text = openDialog()?.textContent ?? '';
-      confirm();
+      await confirm();
 
       // Assert
       expect(text).toContain('Triage #42 again?');
@@ -394,7 +401,7 @@ describe('PaneActionsComponent', () => {
       expect(service.retriage).toHaveBeenCalledWith('abc');
     });
 
-    it('tells the Re-triage dialog from blocked that triage waits for open blockers', () => {
+    it('tells the Re-triage dialog from blocked that triage waits for open blockers', async () => {
       // Arrange
       const { button, render, openDialog } = setup('blocked', ['retriage']);
 
@@ -406,54 +413,65 @@ describe('PaneActionsComponent', () => {
       expect(openDialog()?.textContent).toContain('While its blockers are open it waits untriaged, and triage runs once they close.');
     });
 
-    it('shows Re-triaging… and disables Re-triage while it is pending', () => {
+    it('shows Re-triaging… and disables Re-triage while it is pending', async () => {
       // Arrange
-      const { button, render, service } = setup('queued', ['retriage']);
+      const service = fakeIssueService();
+      service.retriage.mockReturnValue(new Subject<string | null>());
+      const { button, render, confirm } = setup('queued', ['retriage'], { service });
+      button('Re-triage')!.click();
+      render();
 
       // Act
-      service.issueActionPending.set('retriage');
-      render();
+      await confirm();
 
       // Assert
       expect(button('Re-triaging…')?.disabled).toBe(true);
     });
 
-    it('shows a triage action error in the alert', () => {
+    it('shows a triage action error in the alert', async () => {
       // Arrange
-      const { render, service, error } = setup('triage_failed', ['retry_triage', 'skip_triage']);
+      const service = fakeIssueService();
+      service.retryTriage.mockReturnValue(of('Failed to retry triage.'));
+      const { button, render, error } = setup('triage_failed', ['retry_triage', 'skip_triage'], { service });
 
       // Act
-      service.issueActionError.set('Failed to retry triage.');
+      button('Retry triage')!.click();
       render();
 
       // Assert
       expect(error()).toBe('Failed to retry triage.');
     });
 
-    it('reports a triage action as succeeded while an earlier retry success is still shown', () => {
+    it('reports a triage action as succeeded while an earlier retry success is still shown', async () => {
       // Arrange
-      const { button, render, confirm, service, succeeded } = setup('queued', ['retriage']);
-      service.retrySuccess.set('Retry queued. Issue status is updating.');
+      const response = new Subject<string | null>();
+      const service = fakeIssueService();
+      service.retriage.mockReturnValue(response);
+      const { button, render, confirm, succeeded } = setup('queued', ['retriage'], { service });
+      TestBed.inject(IssueActionsService).perform('abc', { kind: 'retry_issue' });
       render();
       button('Re-triage')!.click();
       render();
-      confirm();
+      await confirm();
 
       // Act
-      service.issueActionSuccess.set('Re-triage queued. Issue status is updating.');
+      response.next(null);
       render();
 
       // Assert
       expect(succeeded).toEqual(['retriage']);
     });
 
-    it('keeps the triage success announcement once the actions are gone', () => {
+    it('keeps the triage success announcement once the actions are gone', async () => {
       // Arrange
-      const { fixture, el, button, render, service, succeeded } = setup('triage_failed', ['retry_triage', 'skip_triage']);
+      const response = new Subject<string | null>();
+      const service = fakeIssueService();
+      service.retryTriage.mockReturnValue(response);
+      const { fixture, el, button, render, succeeded } = setup('triage_failed', ['retry_triage', 'skip_triage'], { service });
       button('Retry triage')!.click();
 
       // Act
-      service.issueActionSuccess.set('Triage queued again. Issue status is updating.');
+      response.next(null);
       fixture.componentRef.setInput('detail', issue('triage_queued'));
       fixture.componentRef.setInput('actions', []);
       render();
@@ -467,7 +485,7 @@ describe('PaneActionsComponent', () => {
   });
 
   describe('review actions', () => {
-    it('retries a skipped review straight away, with no confirmation', () => {
+    it('retries a skipped review straight away, with no confirmation', async () => {
       // Arrange
       const { button, openDialog, render, service } = setup('review', ['retry_review']);
 
@@ -480,7 +498,7 @@ describe('PaneActionsComponent', () => {
       expect(openDialog()).toBeNull();
     });
 
-    it('names the issue in the Retry review button for screen readers', () => {
+    it('names the issue in the Retry review button for screen readers', async () => {
       // Arrange
       const { button } = setup('review', ['retry_review']);
 
@@ -491,12 +509,14 @@ describe('PaneActionsComponent', () => {
       expect(label).toBe('Retry review for issue #42');
     });
 
-    it('reads Retrying review… and is disabled while the retry is pending', () => {
+    it('reads Retrying review… and is disabled while the retry is pending', async () => {
       // Arrange
-      const { el, render, service } = setup('review', ['retry_review']);
+      const service = fakeIssueService();
+      service.retryReview.mockReturnValue(new Subject<string | null>());
+      const { el, button, render } = setup('review', ['retry_review'], { service });
 
       // Act
-      service.issueActionPending.set('retry_review');
+      button('Retry review')!.click();
       render();
 
       // Assert
@@ -505,13 +525,16 @@ describe('PaneActionsComponent', () => {
       expect(retry.disabled).toBe(true);
     });
 
-    it('announces the retry once the action is gone', () => {
+    it('announces the retry once the action is gone', async () => {
       // Arrange
-      const { fixture, el, button, render, service, succeeded } = setup('review', ['retry_review']);
+      const response = new Subject<string | null>();
+      const service = fakeIssueService();
+      service.retryReview.mockReturnValue(response);
+      const { fixture, el, button, render, succeeded } = setup('review', ['retry_review'], { service });
       button('Retry review')!.click();
 
       // Act
-      service.issueActionSuccess.set('Review queued again. Issue status is updating.');
+      response.next(null);
       fixture.componentRef.setInput('detail', issue('review_queued'));
       fixture.componentRef.setInput('actions', []);
       render();
@@ -523,12 +546,14 @@ describe('PaneActionsComponent', () => {
       expect(succeeded).toEqual(['retry_review']);
     });
 
-    it('shows the conflict message when the review is no longer skipped', () => {
+    it('shows the conflict message when the review is no longer skipped', async () => {
       // Arrange
-      const { render, service, error } = setup('review', ['retry_review']);
+      const service = fakeIssueService();
+      service.retryReview.mockReturnValue(of("This issue's review is no longer skipped."));
+      const { button, render, error } = setup('review', ['retry_review'], { service });
 
       // Act
-      service.issueActionError.set("This issue's review is no longer skipped.");
+      button('Retry review')!.click();
       render();
 
       // Assert
@@ -537,7 +562,7 @@ describe('PaneActionsComponent', () => {
   });
 
   describe('awaiting-input actions', () => {
-    it('retries the question post straight away, with no confirmation', () => {
+    it('retries the question post straight away, with no confirmation', async () => {
       // Arrange
       const { button, openDialog, render, service } = setup('awaiting_input', ['retry_post', 'continue_without_answer']);
 
@@ -550,7 +575,7 @@ describe('PaneActionsComponent', () => {
       expect(openDialog()).toBeNull();
     });
 
-    it('confirms Continue without answer, saying the run cannot ask again, before continuing', () => {
+    it('confirms Continue without answer, saying the run cannot ask again, before continuing', async () => {
       // Arrange
       const { button, render, openDialog, confirm, service } = setup('awaiting_input', ['continue_without_answer']);
 
@@ -558,7 +583,7 @@ describe('PaneActionsComponent', () => {
       button('Continue without answer')!.click();
       render();
       const text = openDialog()?.textContent ?? '';
-      confirm();
+      await confirm();
 
       // Assert
       expect(text).toContain('Continue #42 without an answer?');
@@ -566,7 +591,7 @@ describe('PaneActionsComponent', () => {
       expect(service.continueWithoutAnswer).toHaveBeenCalledWith('abc');
     });
 
-    it('tells the Continue dialog of a triage question that the issue skips triage', () => {
+    it('tells the Continue dialog of a triage question that the issue skips triage', async () => {
       // Arrange
       const { fixture, button, render, openDialog } = setup('awaiting_input', ['continue_without_answer']);
       fixture.componentRef.setInput('detail', {
@@ -596,39 +621,45 @@ describe('PaneActionsComponent', () => {
       expect(openDialog()?.textContent).toContain('as Skip triage does');
     });
 
-    it('does not continue when the dialog is dismissed', () => {
+    it('does not continue when the dialog is dismissed', async () => {
       // Arrange
       const { button, render, dismiss, service } = setup('awaiting_input', ['continue_without_answer']);
 
       // Act
       button('Continue without answer')!.click();
       render();
-      dismiss();
+      await dismiss();
 
       // Assert
       expect(service.continueWithoutAnswer).not.toHaveBeenCalled();
     });
 
-    it('shows Continuing… and disables both buttons while Continue is pending', () => {
+    it('shows Continuing… and disables both buttons while Continue is pending', async () => {
       // Arrange
-      const { button, render, service } = setup('awaiting_input', ['retry_post', 'continue_without_answer']);
+      const service = fakeIssueService();
+      service.continueWithoutAnswer.mockReturnValue(new Subject<string | null>());
+      const { button, render, confirm } = setup('awaiting_input', ['retry_post', 'continue_without_answer'], { service });
+      button('Continue without answer')!.click();
+      render();
 
       // Act
-      service.issueActionPending.set('continue_without_answer');
-      render();
+      await confirm();
 
       // Assert
       expect(button('Continuing…')?.disabled).toBe(true);
       expect(button('Retry post')?.disabled).toBe(true);
     });
 
-    it('shows an awaiting-input action error in the alert', () => {
+    it('shows an awaiting-input action error in the alert', async () => {
       // Arrange
-      const { render, service, error } = setup('awaiting_input', ['continue_without_answer']);
+      const service = fakeIssueService();
+      service.continueWithoutAnswer.mockReturnValue(of('This issue is no longer awaiting input.'));
+      const { button, render, confirm, error } = setup('awaiting_input', ['continue_without_answer'], { service });
+      button('Continue without answer')!.click();
+      render();
 
       // Act
-      service.issueActionError.set('This issue is no longer awaiting input.');
-      render();
+      await confirm();
 
       // Assert
       expect(error()).toBe('This issue is no longer awaiting input.');
@@ -636,7 +667,7 @@ describe('PaneActionsComponent', () => {
   });
 
   describe('Retry publish and Discard run', () => {
-    it('opens a non-destructive confirm naming the branch instead of retrying straight away', () => {
+    it('opens a non-destructive confirm naming the branch instead of retrying straight away', async () => {
       // Arrange
       const { button, render, openDialog, workerRuns } = setup('publish_failed', ['retry_publish', 'discard_run']);
 
@@ -652,7 +683,7 @@ describe('PaneActionsComponent', () => {
       expect(workerRuns.requestPublishRetry).not.toHaveBeenCalled();
     });
 
-    it('disables both buttons and reads Retrying publish… while pending', () => {
+    it('disables both buttons and reads Retrying publish… while pending', async () => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       const response = new Subject<string | null>();
@@ -662,7 +693,7 @@ describe('PaneActionsComponent', () => {
       render();
 
       // Act
-      confirm();
+      await confirm();
 
       // Assert
       expect(workerRuns.requestPublishRetry).toHaveBeenCalledWith('run-1');
@@ -670,12 +701,12 @@ describe('PaneActionsComponent', () => {
       expect(button('Discard run')?.disabled).toBe(true);
     });
 
-    it('announces the publish retry success across the reload that removes the button', () => {
+    it('announces the publish retry success across the reload that removes the button', async () => {
       // Arrange
       const { fixture, el, button, render, confirm, succeeded } = setup('publish_failed', ['retry_publish', 'discard_run']);
       button('Retry publish')!.click();
       render();
-      confirm();
+      await confirm();
 
       // Act
       fixture.componentRef.setInput('detail', issue('in_progress'));
@@ -689,7 +720,7 @@ describe('PaneActionsComponent', () => {
       expect(succeeded).toEqual(['retry_publish']);
     });
 
-    it('opens a destructive confirm naming the provider before discarding', () => {
+    it('opens a destructive confirm naming the provider before discarding', async () => {
       // Arrange
       const { button, render, openDialog, workerRuns } = setup('publish_blocked', ['discard_run'], { providerType: 'gitlab' });
 
@@ -706,14 +737,14 @@ describe('PaneActionsComponent', () => {
       expect(workerRuns.requestDiscard).not.toHaveBeenCalled();
     });
 
-    it('discards once confirmed and announces it across the reload', () => {
+    it('discards once confirmed and announces it across the reload', async () => {
       // Arrange
       const { fixture, el, button, render, confirm, workerRuns, succeeded } = setup('publish_blocked', ['discard_run']);
       button('Discard run')!.click();
       render();
 
       // Act
-      confirm();
+      await confirm();
       fixture.componentRef.setInput('detail', issue('failed'));
       fixture.componentRef.setInput('actions', ['retry_issue']);
       render();
@@ -726,20 +757,20 @@ describe('PaneActionsComponent', () => {
       expect(succeeded).toEqual(['discard_run']);
     });
 
-    it('does not discard when the dialog is dismissed', () => {
+    it('does not discard when the dialog is dismissed', async () => {
       // Arrange
       const { button, render, dismiss, workerRuns } = setup('publish_blocked', ['discard_run']);
       button('Discard run')!.click();
       render();
 
       // Act
-      dismiss();
+      await dismiss();
 
       // Assert
       expect(workerRuns.requestDiscard).not.toHaveBeenCalled();
     });
 
-    it('shows the discard error in the alert', () => {
+    it('shows the discard error in the alert', async () => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       workerRuns.requestDiscard.mockReturnValue(of('The run holds no unpublished work.'));
@@ -748,7 +779,7 @@ describe('PaneActionsComponent', () => {
       render();
 
       // Act
-      confirm();
+      await confirm();
 
       // Assert
       expect(error()).toBe('The run holds no unpublished work.');
@@ -793,7 +824,7 @@ describe('PaneActionsComponent', () => {
       return ctx.openDialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement;
     }
 
-    it('offers Discard run then the confirmation, neither filled, each named for the issue', () => {
+    it('offers Discard run then the confirmation, neither filled, each named for the issue', async () => {
       // Act
       const { buttons, button } = setupBlocked();
 
@@ -808,7 +839,7 @@ describe('PaneActionsComponent', () => {
       );
     });
 
-    it('opens a destructive dialog naming the count, branch and provider, without confirming straight away', () => {
+    it('opens a destructive dialog naming the count, branch and provider, without confirming straight away', async () => {
       // Arrange
       const ctx = setupBlocked({ providerType: 'gitlab' });
 
@@ -827,7 +858,7 @@ describe('PaneActionsComponent', () => {
       expect(ctx.workerRuns.requestConfirmFalsePositives).not.toHaveBeenCalled();
     });
 
-    it('words the dialog title for a single finding', () => {
+    it('words the dialog title for a single finding', async () => {
       // Arrange
       const ctx = setup('publish_blocked', BLOCKED_ACTIONS, { run: blockedRun({ secretFindings: [FINDINGS[0]] }) });
 
@@ -838,7 +869,7 @@ describe('PaneActionsComponent', () => {
       expect(ctx.openDialog()?.querySelector('.confirm-dialog__title')?.textContent).toBe('Publish with 1 possible secret?');
     });
 
-    it('lists every finding in a focusable scroll region named by the findings heading', () => {
+    it('lists every finding in a focusable scroll region named by the findings heading', async () => {
       // Arrange
       const ctx = setupBlocked();
 
@@ -862,7 +893,7 @@ describe('PaneActionsComponent', () => {
       ]);
     });
 
-    it('says the confirmation covers only these findings, and labels the acknowledgement', () => {
+    it('says the confirmation covers only these findings, and labels the acknowledgement', async () => {
       // Arrange
       const ctx = setupBlocked();
 
@@ -881,7 +912,7 @@ describe('PaneActionsComponent', () => {
       );
     });
 
-    it('keeps Confirm and publish disabled until the acknowledgement is checked', () => {
+    it('keeps Confirm and publish disabled until the acknowledgement is checked', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
@@ -895,12 +926,12 @@ describe('PaneActionsComponent', () => {
       expect(confirmButton(ctx).disabled).toBe(false);
     });
 
-    it('unchecks the acknowledgement each time the dialog opens', () => {
+    it('unchecks the acknowledgement each time the dialog opens', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
       acknowledge(ctx);
-      ctx.dismiss();
+      await ctx.dismiss();
 
       // Act
       openConfirm(ctx);
@@ -910,33 +941,33 @@ describe('PaneActionsComponent', () => {
       expect(confirmButton(ctx).disabled).toBe(true);
     });
 
-    it('does not confirm when the dialog is dismissed', () => {
+    it('does not confirm when the dialog is dismissed', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
       acknowledge(ctx);
 
       // Act
-      ctx.dismiss();
+      await ctx.dismiss();
 
       // Assert
       expect(ctx.workerRuns.requestConfirmFalsePositives).not.toHaveBeenCalled();
     });
 
-    it('sends the block time of the run it rendered once confirmed', () => {
+    it('sends the block time of the run it rendered once confirmed', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
       acknowledge(ctx);
 
       // Act
-      ctx.confirm();
+      await ctx.confirm();
 
       // Assert
       expect(ctx.workerRuns.requestConfirmFalsePositives).toHaveBeenCalledWith('run-1', BLOCKED_AT);
     });
 
-    it('reads Confirming… and disables Discard run while the confirmation is pending', () => {
+    it('reads Confirming… and disables Discard run while the confirmation is pending', async () => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       workerRuns.requestConfirmFalsePositives.mockReturnValue(new Subject<string | null>());
@@ -945,14 +976,14 @@ describe('PaneActionsComponent', () => {
       acknowledge(ctx);
 
       // Act
-      ctx.confirm();
+      await ctx.confirm();
 
       // Assert
       expect(ctx.button('Confirming…')?.disabled).toBe(true);
       expect(ctx.button('Discard run')?.disabled).toBe(true);
     });
 
-    it('disables the confirmation while a discard is pending', () => {
+    it('disables the confirmation while a discard is pending', async () => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       workerRuns.requestDiscard.mockReturnValue(new Subject<string | null>());
@@ -961,14 +992,14 @@ describe('PaneActionsComponent', () => {
       ctx.render();
 
       // Act
-      ctx.confirm();
+      await ctx.confirm();
 
       // Assert
       expect(ctx.button('Discarding…')?.disabled).toBe(true);
       expect(ctx.button(CONFIRM_LABEL)?.disabled).toBe(true);
     });
 
-    it('disables the confirmation until the run with its findings has loaded', () => {
+    it('disables the confirmation until the run with its findings has loaded', async () => {
       // Act
       const { button } = setup('publish_blocked', BLOCKED_ACTIONS, { run: null });
 
@@ -980,7 +1011,7 @@ describe('PaneActionsComponent', () => {
       ['a 409', 'The findings changed or this run is no longer blocked. Review the current state.'],
       ['a 404', 'The run was not found.'],
       ['any other failure', 'Failed to confirm the findings.'],
-    ])('shows the error for %s in the alert and restores both buttons', (_case, message) => {
+    ])('shows the error for %s in the alert and restores both buttons', async (_case, message) => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       workerRuns.requestConfirmFalsePositives.mockReturnValue(of(message));
@@ -989,7 +1020,7 @@ describe('PaneActionsComponent', () => {
       acknowledge(ctx);
 
       // Act
-      ctx.confirm();
+      await ctx.confirm();
 
       // Assert
       expect(ctx.error()).toBe(message);
@@ -997,14 +1028,14 @@ describe('PaneActionsComponent', () => {
       expect(ctx.button('Discard run')?.disabled).toBe(false);
     });
 
-    it('clears the confirmation and discard errors when the dialog opens', () => {
+    it('clears the confirmation and discard errors when the dialog opens', async () => {
       // Arrange
       const workerRuns = fakeWorkerRunService();
       workerRuns.requestConfirmFalsePositives.mockReturnValue(of('Failed to confirm the findings.'));
       const ctx = setupBlocked({ workerRuns });
       openConfirm(ctx);
       acknowledge(ctx);
-      ctx.confirm();
+      await ctx.confirm();
       const errorBefore = ctx.error();
 
       // Act
@@ -1015,14 +1046,14 @@ describe('PaneActionsComponent', () => {
       expect(ctx.error()).toBe('');
     });
 
-    it('announces the success across the reload and reports the action as succeeded', () => {
+    it('announces the success across the reload and reports the action as succeeded', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
       acknowledge(ctx);
 
       // Act
-      ctx.confirm();
+      await ctx.confirm();
       ctx.fixture.componentRef.setInput('detail', issue('in_progress'));
       ctx.fixture.componentRef.setInput('actions', []);
       ctx.render();
@@ -1034,7 +1065,7 @@ describe('PaneActionsComponent', () => {
       expect(ctx.succeeded).toEqual(['confirm_false_positives']);
     });
 
-    it('closes the dialog when the detail reloads out of publish_blocked', () => {
+    it('closes the dialog when the detail reloads out of publish_blocked', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
@@ -1048,7 +1079,7 @@ describe('PaneActionsComponent', () => {
       expect(ctx.openDialog()).toBeNull();
     });
 
-    it('closes the dialog when the run is blocked again on a new finding set', () => {
+    it('closes the dialog when the run is blocked again on a new finding set', async () => {
       // Arrange
       const ctx = setupBlocked();
       openConfirm(ctx);
@@ -1061,7 +1092,7 @@ describe('PaneActionsComponent', () => {
       expect(ctx.openDialog()).toBeNull();
     });
 
-    it('offers no control to reveal, show or copy a secret anywhere', () => {
+    it('offers no control to reveal, show or copy a secret anywhere', async () => {
       // Arrange
       const ctx = setupBlocked();
 
