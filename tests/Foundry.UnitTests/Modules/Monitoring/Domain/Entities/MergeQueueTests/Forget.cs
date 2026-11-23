@@ -14,7 +14,7 @@ public sealed class Forget
     private static readonly DateTimeOffset Episode = new(2026, 11, 1, 10, 0, 0, TimeSpan.Zero);
 
     private static MergePendingIssueInfo Issue(int number) =>
-        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", Episode, Episode);
+        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", Episode, Episode, IsPullRequestMarkedReady: false);
 
     [Fact]
     public void ReturnsOnlyRowsWhoseIssueIsNoLongerMergePending()

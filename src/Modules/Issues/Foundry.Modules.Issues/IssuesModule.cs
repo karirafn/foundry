@@ -68,6 +68,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
         services.AddIntegrationEventHandler<MonitoredRepositoryRemoved, MonitoredRepositoryRemovedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
+        services.AddIntegrationEventHandler<PullRequestMarkedReady, PullRequestMarkedReadyHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestHeadMoved, ProviderPullRequestHeadMovedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestChecksPassed, ProviderPullRequestChecksPassedHandler>();

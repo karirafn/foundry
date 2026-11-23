@@ -15,7 +15,7 @@ public sealed class Track
     private static readonly DateTimeOffset Now = new(2026, 11, 1, 11, 0, 0, TimeSpan.Zero);
 
     private static MergePendingIssueInfo Issue(int number, DateTimeOffset enteredAt) =>
-        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", enteredAt, enteredAt);
+        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", enteredAt, enteredAt, IsPullRequestMarkedReady: false);
 
     [Fact]
     public void FirstSighting_StartsANewRowForTheEpisode()

@@ -243,4 +243,40 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         // Assert
         result.ShouldHaveSingleItem().ChecksPassed.ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task WhenReviewIssuePullRequestMarkedReady_ReportsMarkedReady()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        const string pullRequestUrl = "https://github.com/owner/repo/pull/42";
+        ReviewIssue review = await CreateAndPersistReviewIssueAsync(repositoryId, issueNumber: 10, pullRequestUrl);
+        review.RecordPullRequestMarkedReady(pullRequestUrl);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldHaveSingleItem().IsPullRequestMarkedReady.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenReviewIssuePullRequestNeverMarkedReady_ReportsNotMarkedReady()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        await CreateAndPersistReviewIssueAsync(repositoryId, issueNumber: 10, "https://github.com/owner/repo/pull/42");
+
+        // Act
+        IReadOnlyList<ReviewIssueInfo> result = await _sut.GetReviewIssuesAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldHaveSingleItem().IsPullRequestMarkedReady.ShouldBeFalse();
+    }
 }

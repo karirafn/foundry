@@ -94,6 +94,20 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public bool HasPersonFeedback { get; private set; }
 
     /// <summary>
+    /// The URL of the pull request Foundry marked ready for review, or <see langword="null"/> when it marked none.
+    /// Carried through every transition with the shared properties; only <see cref="IsPullRequestMarkedReady"/> tells
+    /// whether it is the issue's current pull request.
+    /// </summary>
+    public string? MarkedReadyPullRequestUrl { get; private set; }
+
+    /// <summary>
+    /// True when Foundry marked the issue's current pull request ready for review. Keyed to the URL, so a new pull
+    /// request (a fresh run after a retry) is unmarked without any reset, and a person's later re-draft stands.
+    /// </summary>
+    public bool IsPullRequestMarkedReady =>
+        LinkedPullRequestUrl is { } linked && linked == MarkedReadyPullRequestUrl;
+
+    /// <summary>
     /// The most review-driven revisions (<see cref="RevisionTrigger.ReviewFindings"/>) a round of review may start
     /// before a changes-requested verdict goes to a person instead (ADR 0113). Bounds a reviewer/implementer loop.
     /// </summary>
@@ -233,9 +247,26 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         TriageVerdict = source.TriageVerdict;
         Clarifications = source.Clarifications;
         HasPersonFeedback = source.HasPersonFeedback;
+        MarkedReadyPullRequestUrl = source.MarkedReadyPullRequestUrl;
         ReviewFixAttempts = source.ReviewFixAttempts;
         ChecksFixAttempts = source.ChecksFixAttempts;
         LatestReview = source.LatestReview;
+    }
+
+    /// <summary>
+    /// Records that Foundry marked <paramref name="pullRequestUrl"/> ready for review. Only the issue's current pull
+    /// request is recorded, so a late event for an earlier pull request cannot unmark the current one. Returns
+    /// <see langword="false"/> when nothing changed: the issue holds no such pull request, or it is already recorded.
+    /// </summary>
+    public bool RecordPullRequestMarkedReady(string pullRequestUrl)
+    {
+        if (LinkedPullRequestUrl is not { } linked || linked != pullRequestUrl || IsPullRequestMarkedReady)
+        {
+            return false;
+        }
+
+        MarkedReadyPullRequestUrl = linked;
+        return true;
     }
 
     /// <summary>A checks fix run is queued: it spends one of the pushed code's checks fix runs.</summary>

@@ -478,7 +478,7 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewIssueInfo reviewIssue = new(
             IssueNumber: 42,
             PullRequestUrl: "https://github.com/owner/repo/pull/99",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -511,7 +511,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -608,7 +608,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -644,8 +644,8 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewIssueInfo failingIssue = new(
             IssueNumber: 10,
             PullRequestUrl: "https://github.com/owner/repo/pull/100",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -680,7 +680,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -713,7 +713,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -780,7 +780,7 @@ public sealed class PollAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
         DateTimeOffset cutoff = Now.AddHours(-1);
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -836,7 +836,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: null,
-            reviewIssues: [new ReviewIssueInfo(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true)]);
+            reviewIssues: [new ReviewIssueInfo(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false)]);
         StubIssueProvider provider = new(
             [],
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
@@ -861,7 +861,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -902,8 +902,8 @@ public sealed class PollAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         string prUrl1 = "https://github.com/owner/repo/pull/10";
         string prUrl2 = "https://github.com/owner/repo/pull/20";
-        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -955,7 +955,7 @@ public sealed class PollAsync : IAsyncDisposable
         string prUrl = "https://github.com/owner/repo/pull/99";
         DateTimeOffset cutoff = Now.AddHours(-1);
         DateTimeOffset newestCommentAt = Now.AddMinutes(-5);
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -1010,7 +1010,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -2068,7 +2068,7 @@ public sealed class PollAsync : IAsyncDisposable
         Result<Checks>? checksResult = null)
     {
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1), VerifiedHeadSha: verifiedHeadSha, ChecksPassed: checksPassed);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1), VerifiedHeadSha: verifiedHeadSha, ChecksPassed: checksPassed, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),

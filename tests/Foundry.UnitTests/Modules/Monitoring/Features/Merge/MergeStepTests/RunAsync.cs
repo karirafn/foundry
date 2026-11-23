@@ -452,7 +452,7 @@ public sealed class RunAsync : IAsyncDisposable
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
 
         // Act
-        await BuildSut(new MergePendingIssueInfo(IssueNumber, PrUrl, Branch, VerifiedHead, FeedbackCutoff, EnteredAt.AddHours(1)))
+        await BuildSut(new MergePendingIssueInfo(IssueNumber, PrUrl, Branch, VerifiedHead, FeedbackCutoff, EnteredAt.AddHours(1), IsPullRequestMarkedReady: false))
             .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -494,7 +494,7 @@ public sealed class RunAsync : IAsyncDisposable
         int issueNumber = IssueNumber,
         string branch = Branch,
         DateTimeOffset? enteredAt = null) =>
-        new(issueNumber, PrUrl, branch, VerifiedHead, FeedbackCutoff, enteredAt ?? EnteredAt);
+        new(issueNumber, PrUrl, branch, VerifiedHead, FeedbackCutoff, enteredAt ?? EnteredAt, IsPullRequestMarkedReady: false);
 
     private void RefuseBehind(string branch = Branch)
     {
