@@ -75,10 +75,11 @@
           >{{ elapsed() }}</span
         >
         @if (lastEvent(); as event) {
-          <span class="lifecycle-row__sep" aria-hidden="true">·</span><span class="sr-only">, </span>
+          <span class="lifecycle-row__sep" aria-hidden="true">·</span
+          ><span class="sr-only">, </span>
           <fd-last-event [line]="event" />
-        }</span
-      >
+        }
+      </span>
     } @else if (st.kind === 'step') {
       <span class="lifecycle-row__doing">{{ st.text }}</span>
       <span class="lifecycle-row__clock"
