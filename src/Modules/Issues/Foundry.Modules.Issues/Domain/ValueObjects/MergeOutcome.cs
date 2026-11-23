@@ -48,7 +48,7 @@ public abstract record MergeOutcome
 
     /// <summary>
     /// The merge did not happen for <see cref="Reason"/>: <c>not_mergeable</c>, <c>unauthorized</c>,
-    /// <c>head_moved</c>, <c>provider_error</c>, <c>fell_behind</c> or <c>catch_up_failed</c>.
+    /// <c>head_moved</c>, <c>provider_error</c>, <c>fell_behind</c>, <c>catch_up_failed</c> or <c>draft</c>.
     /// </summary>
     public sealed record Skipped(string Reason) : MergeOutcome;
 }

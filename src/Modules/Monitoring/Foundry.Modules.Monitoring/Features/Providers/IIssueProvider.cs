@@ -195,8 +195,8 @@ internal interface IIssueProvider
         => Task.FromResult(Result.Fail(BlockerLinkErrors.NotSupported()));
 
     /// <summary>
-    /// Opens a pull/merge request from <paramref name="sourceBranch"/> into the repository's default branch and
-    /// returns its web URL. When the provider refuses because one is already open for the branch, returns that
+    /// Opens a draft pull/merge request from <paramref name="sourceBranch"/> into the repository's default branch
+    /// and returns its web URL. When the provider refuses because one is already open for the branch, returns that
     /// one's URL, so a retried publish is idempotent. A failure is
     /// <see cref="RunPublishingErrors.TransientCode"/> or <see cref="RunPublishingErrors.PermanentCode"/>, except
     /// that a failed default-branch read keeps the provider's own error; this call never retries.

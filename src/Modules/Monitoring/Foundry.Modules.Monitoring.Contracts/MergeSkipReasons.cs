@@ -26,4 +26,10 @@ public static class MergeSkipReasons
 
     /// <summary>A catch-up rebase could not bring the pull request up to date with the default branch (ADR 0111).</summary>
     public const string CatchUpFailed = "catch_up_failed";
+
+    /// <summary>
+    /// A person converted the pull request back to a draft after Foundry marked it ready for review; Foundry never
+    /// undoes a person's re-draft, so it attempts no merge.
+    /// </summary>
+    public const string Draft = "draft";
 }

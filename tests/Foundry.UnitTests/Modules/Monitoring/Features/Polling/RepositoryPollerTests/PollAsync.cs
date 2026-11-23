@@ -2068,7 +2068,7 @@ public sealed class PollAsync : IAsyncDisposable
         Result<Checks>? checksResult = null)
     {
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1), VerifiedHeadSha: verifiedHeadSha, ChecksPassed: checksPassed, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1), VerifiedHeadSha: verifiedHeadSha, ChecksPassed: checksPassed, IsPullRequestMarkedReady: true);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -2117,6 +2117,173 @@ public sealed class PollAsync : IAsyncDisposable
         capturingLogger.WarningCount.ShouldBe(0);
     }
 
+    private const string GitHubPullRequestUrl = "https://github.com/owner/repo/pull/99";
+    private const string GitLabMergeRequestUrl = "https://gitlab.com/group/project/-/merge_requests/99";
+
+    private async Task<StubIssueProvider> RunReviewPassAsync(
+        MonitoredRepository repository,
+        string prUrl,
+        bool isDraft,
+        bool isMarkedReady,
+        Result? markReadyResult = null)
+    {
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues:
+            [
+                new ReviewIssueInfo(
+                    IssueNumber: 42,
+                    PullRequestUrl: prUrl,
+                    FeedbackCutoffAt: Now,
+                    VerifiedHeadSha: null,
+                    ChecksPassed: true,
+                    IsPullRequestMarkedReady: isMarkedReady),
+            ]);
+        StubIssueProvider provider = new(
+            [],
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [prUrl] = Result<PullRequestStatus>.Ok(
+                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: isDraft)),
+            },
+            markReadyResult: markReadyResult);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: null, CancellationToken.None);
+
+        return provider;
+    }
+
+    [Theory]
+    [InlineData(GitHubPullRequestUrl)]
+    [InlineData(GitLabMergeRequestUrl)]
+    public async Task WhenReviewIssuePullRequestIsAnUnmarkedDraft_MarksItReadyAndRecordsIt(string prUrl)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Act
+        StubIssueProvider provider = await RunReviewPassAsync(repository, prUrl, isDraft: true, isMarkedReady: false);
+
+        // Assert
+        PullRequestMarkedReady marked = _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldHaveSingleItem();
+        marked.ShouldSatisfyAllConditions(
+            () => provider.MarkReadyCalls.ShouldBe([prUrl]),
+            () => marked.RepositoryId.ShouldBe(repository.Id),
+            () => marked.IssueNumber.ShouldBe(42),
+            () => marked.PullRequestUrl.ShouldBe(prUrl));
+    }
+
+    [Fact]
+    public async Task WhenMarkingTheDraftReadyFails_RecordsNothingAndStillReadsFeedback()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Act
+        StubIssueProvider provider = await RunReviewPassAsync(
+            repository,
+            GitHubPullRequestUrl,
+            isDraft: true,
+            isMarkedReady: false,
+            markReadyResult: Result.Fail(new Error("RunPublishing.Transient", "GitHub returned 502.")));
+
+        // Assert
+        provider.ShouldSatisfyAllConditions(
+            () => provider.MarkReadyCalls.ShouldBe([GitHubPullRequestUrl]),
+            () => provider.LastPostedComments.ShouldNotBeNull(),
+            () => _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenMarkingTheDraftReadyFailedOnTheLastPass_TheNextPassMarksItAgain()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        await RunReviewPassAsync(
+            repository,
+            GitHubPullRequestUrl,
+            isDraft: true,
+            isMarkedReady: false,
+            markReadyResult: Result.Fail(new Error("RunPublishing.Permanent", "GitHub returned 403.")));
+
+        // Act
+        StubIssueProvider provider = await RunReviewPassAsync(
+            repository,
+            GitHubPullRequestUrl,
+            isDraft: true,
+            isMarkedReady: false);
+
+        // Assert
+        provider.MarkReadyCalls.ShouldBe([GitHubPullRequestUrl]);
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldHaveSingleItem()
+            .PullRequestUrl.ShouldBe(GitHubPullRequestUrl);
+    }
+
+    [Theory]
+    [InlineData(GitHubPullRequestUrl)]
+    [InlineData(GitLabMergeRequestUrl)]
+    public async Task WhenReviewIssuePullRequestIsAlreadyReadyButUnmarked_RecordsItWithoutCallingTheProvider(string prUrl)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Act
+        StubIssueProvider provider = await RunReviewPassAsync(repository, prUrl, isDraft: false, isMarkedReady: false);
+
+        // Assert
+        provider.MarkReadyCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldHaveSingleItem()
+            .PullRequestUrl.ShouldBe(prUrl);
+    }
+
+    [Theory]
+    [InlineData(GitHubPullRequestUrl, true)]
+    [InlineData(GitHubPullRequestUrl, false)]
+    [InlineData(GitLabMergeRequestUrl, true)]
+    [InlineData(GitLabMergeRequestUrl, false)]
+    public async Task WhenReviewIssuePullRequestIsAlreadyMarked_NeitherMarksNorRecordsAgain(string prUrl, bool isDraft)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Act
+        StubIssueProvider provider = await RunReviewPassAsync(repository, prUrl, isDraft, isMarkedReady: true);
+
+        // Assert
+        provider.MarkReadyCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenReviewStepPullRequestIsADraft_LeavesItADraft()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewStepIssues: [new ReviewStepIssueInfo(42, GitHubPullRequestUrl)]);
+        StubIssueProvider provider = new(
+            [],
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [GitHubPullRequestUrl] = Result<PullRequestStatus>.Ok(
+                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: true)),
+            });
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: null, CancellationToken.None);
+
+        // Assert
+        provider.MarkReadyCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldBeEmpty();
+    }
+
     private sealed class StubIssueProvider(
         IReadOnlyList<ProviderIssue> issues,
         IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null,
@@ -2125,10 +2292,22 @@ public sealed class PollAsync : IAsyncDisposable
         IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null,
         Result<BranchProtection>? branchProtectionResult = null,
         bool isComplete = true,
-        Result<Checks>? checksResult = null) : IIssueProvider
+        Result<Checks>? checksResult = null,
+        Result? markReadyResult = null) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
+        }
+
+        public List<string> MarkReadyCalls { get; } = [];
+
+        public Task<Result> MarkPullRequestReadyAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+        {
+            MarkReadyCalls.Add(pullRequestUrl);
+            return Task.FromResult(markReadyResult ?? Result.Ok());
         }
 
         public PostedCommentIds? LastPostedComments { get; private set; }

@@ -14,7 +14,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 internal sealed partial class GitLabHttpClient
 {
     /// <summary>
-    /// Opens a merge request from <paramref name="sourceBranch"/> into <paramref name="targetBranch"/>
+    /// Opens a draft merge request (title prefixed <c>Draft: </c>) from <paramref name="sourceBranch"/> into <paramref name="targetBranch"/>
     /// (<c>POST /projects/:id/merge_requests</c>). The body leaves out <c>remove_source_branch</c> and
     /// <c>squash</c>, so GitLab's create service fills in branch removal from the project's
     /// <c>remove_source_branch_after_merge</c> and squash from its <c>squash_option</c>, exactly as its own web form
@@ -46,7 +46,7 @@ internal sealed partial class GitLabHttpClient
         AddCommonHeaders(request, token);
         request.Content = new StringContent(
             JsonSerializer.Serialize(
-                new GitLabMergeRequestWriteDto(sourceBranch, targetBranch, title, description),
+                new GitLabMergeRequestWriteDto(sourceBranch, targetBranch, DraftTitlePrefix + title, description),
                 JsonOptions),
             Encoding.UTF8,
             "application/json");
