@@ -16,7 +16,7 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// </summary>
 public sealed class MergePendingIssue : Issue
 {
-    public override IssueStage Stage => IssueStage.Implement;
+    public override IssueStage Stage => IssueStage.Merge;
 
     public override bool NeedsAction => false;
 

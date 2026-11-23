@@ -593,7 +593,7 @@ internal sealed class IssueQueries(
             IssueStage.Triage => IssueSummary.TriageStage,
             IssueStage.Implement => IssueSummary.ImplementStage,
             IssueStage.Review => IssueSummary.ReviewStage,
-            IssueStage.AwaitingReview => IssueSummary.AwaitingReviewStage,
+            IssueStage.Merge => IssueSummary.MergeStage,
             IssueStage.Done => IssueSummary.DoneStage,
             _ => throw new InvalidOperationException($"Unknown issue stage: {stage}"),
         };

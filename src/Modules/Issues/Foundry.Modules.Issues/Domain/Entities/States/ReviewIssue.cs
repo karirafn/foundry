@@ -8,7 +8,7 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class ReviewIssue : Issue
 {
-    public override IssueStage Stage => IssueStage.AwaitingReview;
+    public override IssueStage Stage => IssueStage.Merge;
 
     public override bool NeedsAction => true;
 

@@ -64,7 +64,7 @@ public sealed class BroadcastAsync
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
             RunStats: null,
-            Stage: "awaiting_review",
+            Stage: "merge",
             NeedsAction: true,
             AwaitsDispatch: false,
             CodeStep: null,
@@ -78,7 +78,7 @@ public sealed class BroadcastAsync
         // Assert
         IssueSummary sent = hubContext.SentArgs.ShouldHaveSingleItem().ShouldBeOfType<IssueSummary>();
         sent.ShouldSatisfyAllConditions(
-            () => sent.Stage.ShouldBe("awaiting_review"),
+            () => sent.Stage.ShouldBe("merge"),
             () => sent.NeedsAction.ShouldBeTrue(),
             () => sent.AwaitsDispatch.ShouldBeFalse(),
             () => sent.CodeStep.ShouldBeNull());

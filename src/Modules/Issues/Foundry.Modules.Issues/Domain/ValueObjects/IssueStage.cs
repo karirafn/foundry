@@ -11,11 +11,11 @@ public enum IssueStage
 
     /// <summary>
     /// The review role is judging a green pull request (ADR 0113): its run is queued, running, or failed and waiting for
-    /// an automatic retry. Not the person's review, which is <see cref="AwaitingReview"/>.
+    /// an automatic retry. Not the person's review, which is in <see cref="Merge"/>.
     /// </summary>
     Review,
 
-    /// <summary>An open pull request waiting for a person.</summary>
-    AwaitingReview,
+    /// <summary>The final stage: an open pull request waiting for a person (Your review), or Foundry merging it.</summary>
+    Merge,
     Done,
 }

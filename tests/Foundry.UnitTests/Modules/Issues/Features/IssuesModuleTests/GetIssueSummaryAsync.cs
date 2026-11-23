@@ -236,7 +236,8 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     }
 
     [Theory]
-    [InlineData("review", "awaiting_review")]
+    [InlineData("review", "merge")]
+    [InlineData("merge_pending", "merge")]
     [InlineData("rebase_pending", "implement")]
     [InlineData("completed", "done")]
     public async Task WhenInState_SummaryCarriesTheStateStage(string state, string expectedStage)
