@@ -1,6 +1,8 @@
-# A Checks Verdict Is Bound to the Head Commit It Was Read Against
+---
+reaches: hidden-invariant
+---
 
-> **2026-11-14 — Amended:** the "Trigger is the head commit only" clause in Decision is extended by [ADR 0108](0108-a-review-issue-whose-checks-pass-on-a-rerun-returns-to-the-checks-gate.md): a non-passed verdict that reads green on an unchanged head also returns the issue to the checks gate, with an exhausted fix budget.
+# A Checks Verdict Is Bound to the Head Commit It Was Read Against
 
 ## Context
 
@@ -14,7 +16,7 @@ This decision amends 0077's Decision clause that every verdict "leads to `Review
 
 Every checks verdict carries the head commit it was read against, and a `review` issue returns to the checks gate when its pull request's head is no longer that commit.
 
-- **Trigger is the head commit only.** A moved head sends the issue back to `checks_pending`; a newer red pipeline on an unchanged head does not.
+- **Trigger is the head commit, or a green rerun.** A moved head sends the issue back to `checks_pending`; a newer red pipeline on an unchanged head does not. A non-passed verdict that reads green on an unchanged head also returns the issue to the checks gate, with an exhausted fix budget ([ADR 0108](0108-a-review-issue-whose-checks-pass-on-a-rerun-returns-to-the-checks-gate.md)).
 - **Every outcome stores the commit.** `passed`, `still_failing`, `none_detected`, `unfinished` and `unreadable` all set it, and `ReviewIssue.VerifiedHeadSha` holds it.
 - **One source: the PR status read.** The poller reads status before checks, so the stored commit equals or precedes the verdict's commit, and a race costs one extra re-check.
 - **A null stored commit counts as moved.** Rows that predate the field re-check once; a null *current* head skips detection that poll.
@@ -40,3 +42,6 @@ Every checks verdict carries the head commit it was read against, and a `review`
   On a fast-forward-only project every merge forces other pull requests to rebase, which multiplies pipelines but not worker runs.
 - 0105's pinned merge reads the stored commit; a race that stored an older commit refuses the merge as `head_moved`, which routes to `review`.
 - `review` is no longer terminal for the checks gate: an issue can cycle `review` → `checks_pending` → `review` once per head move.
+
+## Revisions
+- 2026-11-14 — A non-passed verdict that reads green on an unchanged head also returns the issue to the checks gate, with an exhausted fix budget ([ADR 0108](0108-a-review-issue-whose-checks-pass-on-a-rerun-returns-to-the-checks-gate.md)).
