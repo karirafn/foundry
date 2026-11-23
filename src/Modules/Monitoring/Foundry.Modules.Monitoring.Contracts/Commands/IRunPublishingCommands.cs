@@ -16,9 +16,9 @@ namespace Foundry.Modules.Monitoring.Contracts.Commands;
 public interface IRunPublishingCommands
 {
     /// <summary>
-    /// Opens a pull/merge request from <paramref name="branchName"/> into the repository's default branch and
+    /// Opens a draft pull/merge request from <paramref name="branchName"/> into the repository's default branch and
     /// returns its web URL. When the provider reports one already open for the branch, returns that one's URL,
-    /// so a retried publish never fails on its own earlier success.
+    /// so a retried publish never fails on its own earlier success; that one's draft state is left as it is.
     /// </summary>
     Task<Result<string>> OpenPullRequestAsync(
         MonitoredRepositoryId repositoryId,

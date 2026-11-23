@@ -122,6 +122,35 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldBeEmpty();
     }
 
+    // --- Draft pull requests stay drafts while the checks gate runs ---
+
+    [Fact]
+    public async Task WhenChecksPendingPullRequestIsADraft_LeavesItADraft()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Green()),
+            },
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
+                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: "abc123", IsDraft: true)),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+
+        // Assert
+        provider.MarkReadyCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldBeEmpty();
+    }
+
     // --- Green verdict → "passed" ---
 
     [Fact]
@@ -856,6 +885,17 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
         IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null) : IIssueProvider
     {
+        public List<string> MarkReadyCalls { get; } = [];
+
+        public Task<Result> MarkPullRequestReadyAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+        {
+            MarkReadyCalls.Add(pullRequestUrl);
+            return Task.FromResult(Result.Ok());
+        }
+
         public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)

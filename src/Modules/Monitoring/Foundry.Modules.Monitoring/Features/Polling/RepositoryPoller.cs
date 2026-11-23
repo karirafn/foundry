@@ -560,6 +560,8 @@ internal sealed class RepositoryPoller(
                 continue;
             }
 
+            await ReconcileMarkedReadyAsync(repository, provider, reviewIssue, prStatusSuccess.Value, cancellationToken);
+
             Result<ReviewFeedback> feedbackResult = await provider.GetReviewFeedbackAsync(
                 repository.Slug,
                 reviewIssue.PullRequestUrl,
@@ -615,6 +617,46 @@ internal sealed class RepositoryPoller(
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Marks a review issue's draft pull request ready for review, once: the issue reaching review ends Foundry's
+    /// checks-fix and review-fix cycle. A pull request already found ready (a person marked it, or it opened before
+    /// drafts) is recorded without a provider call. Once recorded, the pull request is never touched again, so a
+    /// person's re-draft stands. A failed call records nothing, so the next pass retries.
+    /// </summary>
+    private async Task ReconcileMarkedReadyAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        ReviewIssueInfo reviewIssue,
+        PullRequestStatus status,
+        CancellationToken cancellationToken)
+    {
+        if (reviewIssue.IsPullRequestMarkedReady)
+        {
+            return;
+        }
+
+        if (status.IsDraft)
+        {
+            Result marked = await provider.MarkPullRequestReadyAsync(
+                repository.Slug,
+                reviewIssue.PullRequestUrl,
+                cancellationToken);
+
+            if (marked is Result.Failure failure)
+            {
+                logger.LogWarning(
+                    "Marking the pull request of issue #{IssueNumber} in '{Slug}' ready for review failed; the next poll retries: {Error}",
+                    reviewIssue.IssueNumber,
+                    repository.Slug,
+                    failure.Error.Message);
+                return;
+            }
+        }
+
+        repository.RecordIntegrationEvent(
+            new PullRequestMarkedReady(repository.Id, reviewIssue.IssueNumber, reviewIssue.PullRequestUrl));
     }
 
     /// <summary>

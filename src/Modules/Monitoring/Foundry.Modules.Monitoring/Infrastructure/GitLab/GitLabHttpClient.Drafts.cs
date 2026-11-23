@@ -16,6 +16,12 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 internal sealed partial class GitLabHttpClient
 {
     /// <summary>
+    /// The prefix every merge request Foundry opens carries, so it opens as a draft; Foundry marks it ready once its
+    /// review cycle ends.
+    /// </summary>
+    private const string DraftTitlePrefix = "Draft: ";
+
+    /// <summary>
     /// Reads the merge request's current title (<c>GET /projects/:id/merge_requests/:iid</c>) and, when it starts
     /// with a draft prefix, <c>PUT</c>s the title with that one prefix and the whitespace after it removed. The
     /// rest of the title is sent back as read, so a person's edits survive. A title without a prefix sends no

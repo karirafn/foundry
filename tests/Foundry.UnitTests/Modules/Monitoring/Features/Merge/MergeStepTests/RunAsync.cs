@@ -493,8 +493,10 @@ public sealed class RunAsync : IAsyncDisposable
     private static MergePendingIssueInfo Pending(
         int issueNumber = IssueNumber,
         string branch = Branch,
-        DateTimeOffset? enteredAt = null) =>
-        new(issueNumber, PrUrl, branch, VerifiedHead, FeedbackCutoff, enteredAt ?? EnteredAt, IsPullRequestMarkedReady: false);
+        DateTimeOffset? enteredAt = null,
+        bool isMarkedReady = true,
+        string prUrl = PrUrl) =>
+        new(issueNumber, prUrl, branch, VerifiedHead, FeedbackCutoff, enteredAt ?? EnteredAt, isMarkedReady);
 
     private void RefuseBehind(string branch = Branch)
     {
@@ -1047,6 +1049,166 @@ public sealed class RunAsync : IAsyncDisposable
         LoadProgress().AwaitsCatchUp.ShouldBeTrue();
     }
 
+    // --- Marking the pull request ready for review before the merge ---
+
+    private const string GitLabMrUrl = "https://gitlab.com/group/project/-/merge_requests/99";
+
+    private void ReadDraft(bool isDraft) =>
+        _provider.PullRequestStatus = new(IsClosed: false, IsMerged: false, HeadSha: VerifiedHead, IsDraft: isDraft);
+
+    [Theory]
+    [InlineData(PrUrl)]
+    [InlineData(GitLabMrUrl)]
+    public async Task WhenPullRequestIsAnUnmarkedDraft_MarksItReadyRecordsItThenMerges(string prUrl)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: true);
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+
+        // Act
+        await BuildSut(Pending(isMarkedReady: false, prUrl: prUrl))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => _provider.MarkReadyCalls.ShouldBe([prUrl]),
+            () => _provider.MergeCalls.ShouldHaveSingleItem().ShouldBe((prUrl, VerifiedHead)),
+            () => _dispatcher.DispatchedEvents.Count.ShouldBe(2),
+            () => _dispatcher.DispatchedEvents[0].ShouldBe(new PullRequestMarkedReady(repository.Id, IssueNumber, prUrl)),
+            () => _dispatcher.DispatchedEvents[1].ShouldBeOfType<MergeResolved>().Outcome.ShouldBe("merged"));
+    }
+
+    [Fact]
+    public async Task WhenMarkingTheDraftReadyFails_CountsATransientFailureWithoutMerging()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: true);
+        _provider.MarkReadyResults.Enqueue(Result.Fail(RunPublishingErrors.Permanent("403 Forbidden")));
+
+        // Act
+        await BuildSut(Pending(isMarkedReady: false))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.MergeCalls.ShouldBeEmpty();
+        LoadProgress().TransientFailures.ShouldBe(1);
+        DrainNudges().ShouldHaveSingleItem().Key.Pass.ShouldBe(NudgePass.Merge);
+    }
+
+    [Fact]
+    public async Task WhenMarkingTheDraftReadyFailedOnTheLastAttempt_TheNextAttemptMarksItAndMerges()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: true);
+        _provider.MarkReadyResults.Enqueue(Result.Fail(RunPublishingErrors.Transient("502 Bad Gateway")));
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+        await BuildSut(Pending(isMarkedReady: false))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Act
+        await BuildSut(Pending(isMarkedReady: false))
+            .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.MarkReadyCalls.Count.ShouldBe(2);
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldHaveSingleItem();
+        SingleResolved().Outcome.ShouldBe("merged");
+    }
+
+    [Fact]
+    public async Task WhenMarkingTheDraftReadyKeepsFailing_ResolvesSkippedProviderError()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: true);
+        DateTimeOffset now = Now;
+        for (int attempt = 0; attempt < PendingMerge.MaxTransientFailures; attempt++)
+        {
+            _provider.MarkReadyResults.Enqueue(Result.Fail(RunPublishingErrors.Transient("502 Bad Gateway")));
+        }
+
+        // Act
+        for (int attempt = 0; attempt < PendingMerge.MaxTransientFailures; attempt++)
+        {
+            await BuildSut(Pending(isMarkedReady: false))
+                .RunAsync(repository, _provider, null, now, TestContext.Current.CancellationToken);
+            now = now.AddHours(1);
+        }
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.Outcome.ShouldBe("skipped");
+        resolved.Reason.ShouldBe("provider_error");
+        _provider.MergeCalls.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(PrUrl)]
+    [InlineData(GitLabMrUrl)]
+    public async Task WhenAMarkedPullRequestWasReDrafted_ResolvesSkippedDraftWithoutMerging(string prUrl)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: true);
+
+        // Act
+        await BuildSut(Pending(isMarkedReady: true, prUrl: prUrl))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MergeResolved resolved = SingleResolved();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe("skipped"),
+            () => resolved.Reason.ShouldBe("draft"),
+            () => _provider.MarkReadyCalls.ShouldBeEmpty(),
+            () => _provider.MergeCalls.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldBeEmpty());
+    }
+
+    [Theory]
+    [InlineData(PrUrl)]
+    [InlineData(GitLabMrUrl)]
+    public async Task WhenAnUnmarkedPullRequestIsAlreadyReady_RecordsItWithoutCallingTheProviderThenMerges(string prUrl)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: false);
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+
+        // Act
+        await BuildSut(Pending(isMarkedReady: false, prUrl: prUrl))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => _provider.MarkReadyCalls.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldHaveSingleItem()
+                .ShouldBe(new PullRequestMarkedReady(repository.Id, IssueNumber, prUrl)),
+            () => SingleResolved().Outcome.ShouldBe("merged"));
+    }
+
+    [Fact]
+    public async Task WhenAMarkedPullRequestIsReady_MergesWithoutRecordingItAgain()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ReadDraft(isDraft: false);
+        _provider.Merges.Enqueue(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Merged()));
+
+        // Act
+        await BuildSut(Pending(isMarkedReady: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.MarkReadyCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<PullRequestMarkedReady>().ShouldBeEmpty();
+        SingleResolved().Outcome.ShouldBe("merged");
+    }
+
     private sealed class CapturingIntegrationEventProcessor : IIntegrationEventProcessor
     {
         public List<IIntegrationEvent> Events { get; } = [];
@@ -1166,6 +1328,19 @@ public sealed class RunAsync : IAsyncDisposable
 
     private sealed class ScriptedProvider : IIssueProvider
     {
+        public Queue<Result> MarkReadyResults { get; } = new();
+
+        public List<string> MarkReadyCalls { get; } = [];
+
+        public Task<Result> MarkPullRequestReadyAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+        {
+            MarkReadyCalls.Add(pullRequestUrl);
+            return Task.FromResult(MarkReadyResults.TryDequeue(out Result? result) ? result : Result.Ok());
+        }
+
         public Queue<Result<MergeRequestOutcome>> Merges { get; } = new();
 
         public List<(string PullRequestUrl, string ExpectedHeadSha)> MergeCalls { get; } = [];

@@ -16,7 +16,7 @@ internal sealed partial class GitHubHttpClient
     private const string ApiSubdomainPrefix = "api.";
 
     /// <summary>
-    /// Opens a pull request from <paramref name="headBranch"/> into <paramref name="baseBranch"/>
+    /// Opens a draft pull request from <paramref name="headBranch"/> into <paramref name="baseBranch"/>
     /// (<c>POST /repos/{owner}/{repo}/pulls</c>). GitHub's 422 "A pull request already exists" answers
     /// <see cref="PullRequestCreation.AlreadyOpen"/>; every other failure is a <see cref="RunPublishingErrors"/>
     /// transient or permanent error.
@@ -45,7 +45,7 @@ internal sealed partial class GitHubHttpClient
             new Uri(EnsureTrailingSlash(apiBaseUrl), $"repos/{owner}/{repo}/pulls"));
         AddGitHubHeaders(request, token);
         request.Content = new StringContent(
-            JsonSerializer.Serialize(new GitHubPullRequestWriteDto(title, headBranch, baseBranch, body), JsonOptions),
+            JsonSerializer.Serialize(new GitHubPullRequestWriteDto(title, headBranch, baseBranch, body, Draft: true), JsonOptions),
             Encoding.UTF8,
             "application/json");
 
@@ -300,7 +300,7 @@ internal sealed partial class GitHubHttpClient
         }
     }
 
-    private sealed record GitHubPullRequestWriteDto(string Title, string Head, string Base, string Body);
+    private sealed record GitHubPullRequestWriteDto(string Title, string Head, string Base, string Body, bool Draft);
 
     private sealed record GitHubCreatedPullRequestDto(string? HtmlUrl);
 

@@ -24,7 +24,7 @@ namespace Foundry.Modules.Monitoring.Features.Merge;
 /// progress is persisted in <see cref="PendingMerge"/>, so a host restart resumes where it left off. Every outcome
 /// other than <c>merged</c> and <c>catch_up</c> sends the issue to review, where a person decides. Before it merges,
 /// the step reads the pull request's review feedback: a person's comment stops the merge and drives a revision
-/// instead (issue #917).
+/// instead (issue #917). A draft pull request is marked ready for review before it merges.
 /// <para>
 /// A merge refused because the pull request is behind the default branch joins the repository's catch-up queue
 /// (<see cref="MergeQueue"/>, ADR 0111) instead of going to review. A waiting entry attempts no merge; once it heads
@@ -78,6 +78,7 @@ internal sealed class MergeStep(
         }
 
         List<IIntegrationEvent> events = [];
+        List<IIntegrationEvent> markedReady = [];
         HashSet<int> resolvedIssueNumbers = [];
         PostedCommentIds? postedComments = null;
         bool merged = false;
@@ -117,6 +118,7 @@ internal sealed class MergeStep(
                 merge,
                 pass,
                 postedComments,
+                markedReady,
                 cancellationToken);
             int eventCount = events.Count;
             Apply(repository, pending, merge, pass, result, now, events);
@@ -135,7 +137,8 @@ internal sealed class MergeStep(
             ScheduleNudge(repository, head.IssueNumber, notBefore: null);
         }
 
-        await integrationEventDispatcher.DispatchAsync(events, cancellationToken);
+        // Marked-ready first: the issue records its pull request before a merge outcome moves it on.
+        await integrationEventDispatcher.DispatchAsync([.. markedReady, .. events], cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         List<int> changed = ChangedEntries(queue, pass, entriesBefore, resolvedIssueNumbers);
@@ -303,11 +306,12 @@ internal sealed class MergeStep(
         PendingMerge merge,
         QueuePass pass,
         PostedCommentIds postedComments,
+        List<IIntegrationEvent> markedReady,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await StepAsync(repository, provider, pending, merge, pass, postedComments, cancellationToken);
+            return await StepAsync(repository, provider, pending, merge, pass, postedComments, markedReady, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
@@ -327,6 +331,7 @@ internal sealed class MergeStep(
         PendingMerge merge,
         QueuePass pass,
         PostedCommentIds postedComments,
+        List<IIntegrationEvent> markedReady,
         CancellationToken cancellationToken)
     {
         // The setting is read at merge time, not snapshotted when the issue entered merge-pending.
@@ -356,6 +361,12 @@ internal sealed class MergeStep(
             return await TryStartCatchUpAsync(repository, provider, pending, merge, pass, status, cancellationToken);
         }
 
+        StepResult? notReady = await EnsureMarkedReadyAsync(repository, provider, pending, status, markedReady, cancellationToken);
+        if (notReady is not null)
+        {
+            return notReady;
+        }
+
         Result<MergeRequestOutcome> mergeResult = await provider.MergePullRequestAsync(
             repository.Slug,
             pending.PullRequestUrl,
@@ -377,6 +388,43 @@ internal sealed class MergeStep(
             MergeRequestOutcome other => throw new UnreachableException(
                 $"Unknown {nameof(MergeRequestOutcome)} variant: {other.GetType().Name}"),
         };
+    }
+
+    /// <summary>
+    /// Marks a draft pull request ready for review before it merges, once: a draft cannot be merged, and reaching
+    /// merge-pending ends Foundry's checks-fix and review-fix cycle. A pull request already found ready is recorded
+    /// without a provider call. A failed call is transient and counts against the merge's budget, which fails open to
+    /// review. A pull request recorded earlier but a draft again was re-drafted by a person; that stands, so the
+    /// merge resolves <c>skipped(draft)</c>.
+    /// </summary>
+    private static async Task<StepResult?> EnsureMarkedReadyAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        MergePendingIssueInfo pending,
+        PullRequestStatus status,
+        List<IIntegrationEvent> markedReady,
+        CancellationToken cancellationToken)
+    {
+        if (pending.IsPullRequestMarkedReady)
+        {
+            return status.IsDraft ? Skipped(MergeSkipReasons.Draft) : null;
+        }
+
+        if (status.IsDraft)
+        {
+            Result marked = await provider.MarkPullRequestReadyAsync(
+                repository.Slug,
+                pending.PullRequestUrl,
+                cancellationToken);
+
+            if (marked is Result.Failure failure)
+            {
+                return new StepResult.Transient(failure.Error.Message);
+            }
+        }
+
+        markedReady.Add(new PullRequestMarkedReady(repository.Id, pending.IssueNumber, pending.PullRequestUrl));
+        return null;
     }
 
     /// <summary>

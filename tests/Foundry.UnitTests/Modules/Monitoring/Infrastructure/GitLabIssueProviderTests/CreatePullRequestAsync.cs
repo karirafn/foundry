@@ -46,7 +46,7 @@ public sealed class CreatePullRequestAsync
         sut.CreatePullRequestAsync(ValidSlug, "feat/42-add-retry", title, "Body\n\nCloses #42", CancellationToken.None);
 
     [Fact]
-    public async Task WhenCreated_PostsTheBranchIntoTheDefaultBranchAndReturnsTheWebUrl()
+    public async Task WhenCreated_PostsTheBranchIntoTheDefaultBranchAsADraftAndReturnsTheWebUrl()
     {
         // Arrange
         SequentialFakeHandler handler = new([(HttpStatusCode.OK, ProjectJson), (HttpStatusCode.Created, CreatedJson)]);
@@ -62,7 +62,7 @@ public sealed class CreatePullRequestAsync
             () => handler.Requests[1].RequestUri!.AbsolutePath.ShouldBe("/api/v4/projects/group%2Fproject/merge_requests"),
             () => handler.Requests[1].Headers.GetValues("PRIVATE-TOKEN").ShouldBe([ValidToken]),
             () => handler.RequestBodies[1].ShouldBe(
-                """{"source_branch":"feat/42-add-retry","target_branch":"main","title":"feat: add retry","description":"Body\n\nCloses #42"}"""));
+                """{"source_branch":"feat/42-add-retry","target_branch":"main","title":"Draft: feat: add retry","description":"Body\n\nCloses #42"}"""));
     }
 
     [Fact]
