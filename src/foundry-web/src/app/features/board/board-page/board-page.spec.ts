@@ -557,7 +557,7 @@ describe('BoardPageComponent', () => {
         expect([...panel.querySelectorAll('p')].map((line) => text(line))).toEqual([
           "Waiting for the agent's first event",
         ]);
-        expect(el.querySelector('.worker-card__event')).toBeNull();
+        expect(el.querySelector('.last-event__event')).toBeNull();
         expect(el.querySelector('.worker-card__sep')).toBeNull();
       });
 
@@ -676,7 +676,7 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const event = h.el.querySelector('.worker-card__status .worker-card__event')!;
+        const event = h.el.querySelector('.worker-card__status .last-event__event')!;
         expect(text(event)).toBe('last event 2m ago');
         expect(h.el.querySelector('.worker-card__sep')?.getAttribute('aria-hidden')).toBe('true');
         expect(h.el.querySelector('.worker-card--silent')).toBeNull();
@@ -701,9 +701,9 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const event = h.el.querySelector('.worker-card__event')!;
+        const event = h.el.querySelector('.last-event__event')!;
         expect(text(event)).toBe('silent 6m · Bash running');
-        expect(event.classList).toContain('worker-card__event--silent');
+        expect(event.classList).toContain('last-event__event--silent');
         expect(event.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
         expect(h.el.querySelector('.worker-card--silent')).not.toBeNull();
       });
@@ -732,16 +732,16 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const waiting = h.el.querySelector('.worker-card__status .worker-card__waiting')!;
+        const waiting = h.el.querySelector('.worker-card__status .last-event__waiting')!;
         expect(waiting.getAttribute('aria-hidden')).toBe('true');
         expect(text(waiting)).toBe('waiting on dotnet test +2 more · 7m');
-        expect(text(waiting.querySelector('.worker-card__command'))).toBe('dotnet test');
+        expect(text(waiting.querySelector('.last-event__command'))).toBe('dotnet test');
         expect(waiting.getAttribute('title')).toBe('dotnet test\nnpm test\na background task');
         expect(text(h.el.querySelector('.worker-card__status .sr-only:last-child'))).toBe(
           'waiting on 3 background tasks, 7m',
         );
-        expect(h.el.querySelector('.worker-card__event')).toBeNull();
-        expect(h.el.querySelector('.worker-card__warning')).toBeNull();
+        expect(h.el.querySelector('.last-event__event')).toBeNull();
+        expect(h.el.querySelector('.last-event__warning')).toBeNull();
         expect(h.el.querySelector('.worker-card--silent')).toBeNull();
       });
 
@@ -764,8 +764,8 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        expect(text(h.el.querySelector('.worker-card__event'))).toBe('last event 2m ago');
-        expect(h.el.querySelector('.worker-card__waiting')).toBeNull();
+        expect(text(h.el.querySelector('.last-event__event'))).toBe('last event 2m ago');
+        expect(h.el.querySelector('.last-event__waiting')).toBeNull();
       });
 
       it("keeps the summary's run kind when the run's activity arrives", async () => {

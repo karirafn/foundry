@@ -119,55 +119,6 @@
   font-weight: 600;
 }
 
-.worker-card__event {
-  align-items: center;
-  color: var(--fd-text-secondary);
-  display: inline-flex;
-  gap: var(--fd-spacing-xs);
-  max-width: 100%;
-  min-width: 0;
-  overflow-wrap: anywhere;
-
-  &--silent {
-    color: var(--fd-text-warning);
-    font-weight: 600;
-  }
-}
-
-.worker-card__warning {
-  flex-shrink: 0;
-}
-
-// Neutral on purpose: waiting on its own background task is expected, warnings are for states that
-// need a person. Raised above the stretched title button so its title shows on hover.
-.worker-card__waiting {
-  color: var(--fd-text-secondary);
-  column-gap: var(--fd-spacing-xs);
-  display: flex;
-  flex: 1 1 auto;
-  font-weight: 400;
-  min-width: 0;
-  position: relative;
-  z-index: 1;
-}
-
-// Only the command shrinks; the server already caps it at 200 characters.
-.worker-card__command {
-  flex: 0 1 auto;
-  font-family: var(--fd-font-mono);
-  font-size: 0.75rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.worker-card__more,
-.worker-card__waited {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
 @media (forced-colors: active) {
   .worker-card {
     border-inline-start-color: CanvasText;

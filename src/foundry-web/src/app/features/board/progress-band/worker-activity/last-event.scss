@@ -1,0 +1,53 @@
+// Its spans lay out as items of the status line it sits in, beside the running time.
+:host {
+  display: contents;
+}
+
+.last-event__event {
+  align-items: center;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  gap: var(--fd-spacing-xs);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  &--silent {
+    color: var(--fd-text-warning);
+    font-weight: 600;
+  }
+}
+
+.last-event__warning {
+  flex-shrink: 0;
+}
+
+// Neutral on purpose: waiting on its own background task is expected, warnings are for states that
+// need a person. Raised above the stretched title button so its title shows on hover.
+.last-event__waiting {
+  color: var(--fd-text-secondary);
+  column-gap: var(--fd-spacing-xs);
+  display: flex;
+  flex: 1 1 auto;
+  font-weight: 400;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+// Only the command shrinks; the server already caps it at 200 characters.
+.last-event__command {
+  flex: 0 1 auto;
+  font-family: var(--fd-font-mono);
+  font-size: 0.75rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.last-event__more,
+.last-event__waited {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
