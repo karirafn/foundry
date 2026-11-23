@@ -132,6 +132,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("latest_review");
 
+                    b.Property<string>("MarkedReadyPullRequestUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("marked_ready_pull_request_url");
+
                     b.Property<Guid>("MonitoredRepositoryId")
                         .HasColumnType("TEXT")
                         .HasColumnName("monitored_repository_id");

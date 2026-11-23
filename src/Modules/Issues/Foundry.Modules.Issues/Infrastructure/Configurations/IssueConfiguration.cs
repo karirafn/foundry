@@ -190,6 +190,13 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasDefaultValue(false)
             .HasColumnName("has_person_feedback");
 
+        builder.Property(i => i.MarkedReadyPullRequestUrl)
+            .HasMaxLength(UrlMaxLength)
+            .IsRequired(false)
+            .HasColumnName("marked_ready_pull_request_url");
+
+        builder.Ignore(i => i.IsPullRequestMarkedReady);
+
         builder.Property(i => i.ReviewFixAttempts)
             .IsRequired()
             .HasDefaultValue(0)

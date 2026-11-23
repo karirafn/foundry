@@ -17,7 +17,7 @@ public sealed class CatchUpQueue
     private static readonly DateTimeOffset Now = new(2026, 11, 1, 11, 0, 0, TimeSpan.Zero);
 
     private static MergePendingIssueInfo Issue(int number, DateTimeOffset? enteredAt = null) =>
-        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", enteredAt ?? Episode, enteredAt ?? Episode);
+        new(number, $"https://github.com/octocat/hello-world/pull/{number}", $"feat/{number}-thing", "abc123", enteredAt ?? Episode, enteredAt ?? Episode, IsPullRequestMarkedReady: false);
 
     private static MergeQueueIssueInfo QueueIssue(int number, bool isCatchingUp = false, bool hasPersonFeedback = false) =>
         new(number, $"feat/{number}-thing", isCatchingUp, hasPersonFeedback);

@@ -6,6 +6,7 @@ namespace Foundry.Modules.Issues.Contracts;
 /// review feedback from before it merges, so a person's comment stops the merge (issue #917).
 /// <paramref name="BranchName"/> is the pull request's source branch, whose ancestry a refused merge reads to tell
 /// whether the pull request fell behind (ADR 0111).
+/// <paramref name="IsPullRequestMarkedReady"/> is whether Foundry already marked this pull request ready for review.
 /// </summary>
 public sealed record MergePendingIssueInfo(
     int IssueNumber,
@@ -13,4 +14,5 @@ public sealed record MergePendingIssueInfo(
     string BranchName,
     string HeadSha,
     DateTimeOffset FeedbackCutoffAt,
-    DateTimeOffset EnteredMergePendingAt);
+    DateTimeOffset EnteredMergePendingAt,
+    bool IsPullRequestMarkedReady);

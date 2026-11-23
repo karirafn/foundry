@@ -142,7 +142,8 @@ internal sealed class IssueQueries(
                 i.PullRequestUrl,
                 i.FeedbackCutoffAt,
                 i.VerifiedHeadSha,
-                i.ChecksOutcome is ChecksOutcome.Passed))
+                i.ChecksOutcome is ChecksOutcome.Passed,
+                i.IsPullRequestMarkedReady))
             .ToListAsync(cancellationToken);
     }
 
@@ -214,7 +215,8 @@ internal sealed class IssueQueries(
                 i.BranchName,
                 i.HeadSha,
                 i.FeedbackCutoffAt,
-                i.EnteredMergePendingAt))
+                i.EnteredMergePendingAt,
+                i.IsPullRequestMarkedReady))
             .ToListAsync(cancellationToken);
     }
 

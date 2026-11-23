@@ -194,6 +194,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_PullRequestMarkedReadyHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<PullRequestMarkedReady> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<PullRequestMarkedReady>>();
+        handler.ShouldBeOfType<PullRequestMarkedReadyHandler>();
+    }
+
+    [Fact]
     public void WhenServicesRegistered_IssueQueuedHandlerResolvable()
     {
         // Arrange & Act

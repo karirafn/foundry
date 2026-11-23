@@ -23,8 +23,8 @@ public sealed class Map
     private static readonly WebhookTrackingContext Tracked = new(
         new HashSet<int> { 10, 20, 30, 40, 50, 60 },
         [
-            new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At, null, ChecksPassed: true),
-            new ReviewIssueInfo(60, "https://github.com/owner/repo/pull/61", At, null, ChecksPassed: false),
+            new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At, null, ChecksPassed: true, IsPullRequestMarkedReady: false),
+            new ReviewIssueInfo(60, "https://github.com/owner/repo/pull/61", At, null, ChecksPassed: false, IsPullRequestMarkedReady: false),
         ],
         [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)],
         new HashSet<int> { 77, 20 },
