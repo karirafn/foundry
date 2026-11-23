@@ -25,6 +25,7 @@ const summary: IssueSummary = {
   runKind: null,
   repositoryId: 'repo-1',
   enteredStateAt: '2026-01-01T00:00:00Z',
+  round: 1,
 };
 
 // The detail as the API sends it: it carries none of the summary's placement or provider fields.

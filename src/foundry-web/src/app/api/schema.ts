@@ -1454,6 +1454,11 @@ export interface components {
             runKind?: null | string;
             reviewOutcome?: null | string;
             reviewSkippedReason?: null | string;
+            /**
+             * Format: int32
+             * @default 1
+             */
+            round: number | string;
         };
         MergeWaitDetails: {
             /** Format: int32 */

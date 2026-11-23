@@ -37,6 +37,7 @@ function issue(state: IssueDetail['state']): IssueDetail {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     author: 'dev',
     labels: [],
     stateDetails,

@@ -30,6 +30,10 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="ReviewOutcome"/> is set for a <c>review</c> issue whose review run failed open: <c>skipped</c>, with
 /// <paramref name="ReviewSkippedReason"/> holding the run's failure category token (ADR 0113).
 /// </para>
+/// <para>
+/// <paramref name="Round"/> is the issue's revision round, starting at 1: each revision trigger (review findings, a
+/// person's feedback, failed checks, a rebase conflict) starts the next one.
+/// </para>
 /// </summary>
 public sealed record IssueSummary(
     Guid Id,
@@ -60,7 +64,8 @@ public sealed record IssueSummary(
     string? PublishPhase = null,
     string? RunKind = null,
     string? ReviewOutcome = null,
-    string? ReviewSkippedReason = null)
+    string? ReviewSkippedReason = null,
+    int Round = 1)
 {
     public const string PublishingPhase = "publishing";
     public const string RetryingPhase = "retrying";

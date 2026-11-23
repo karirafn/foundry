@@ -94,6 +94,14 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public bool HasPersonFeedback { get; private set; }
 
     /// <summary>
+    /// How many times the issue's Implement step has run against published work, starting at 1. A revision trigger
+    /// (review findings, a person's feedback, failed checks, a rebase conflict) starts a new round; a retry, a resume
+    /// after answers and a continuation stay in the same round. Carried through every transition with the shared
+    /// properties.
+    /// </summary>
+    public int Round { get; private set; } = 1;
+
+    /// <summary>
     /// The URL of the pull request Foundry marked ready for review, or <see langword="null"/> when it marked none.
     /// Carried through every transition with the shared properties; only <see cref="IsPullRequestMarkedReady"/> tells
     /// whether it is the issue's current pull request.
@@ -247,6 +255,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         TriageVerdict = source.TriageVerdict;
         Clarifications = source.Clarifications;
         HasPersonFeedback = source.HasPersonFeedback;
+        Round = source.Round;
         MarkedReadyPullRequestUrl = source.MarkedReadyPullRequestUrl;
         ReviewFixAttempts = source.ReviewFixAttempts;
         ChecksFixAttempts = source.ChecksFixAttempts;
@@ -267,6 +276,12 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
         MarkedReadyPullRequestUrl = linked;
         return true;
+    }
+
+    /// <summary>A revision trigger sends the issue back to implement: a new round starts.</summary>
+    private protected void StartRound()
+    {
+        Round++;
     }
 
     /// <summary>A checks fix run is queued: it spends one of the pushed code's checks fix runs.</summary>

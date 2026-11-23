@@ -37,6 +37,7 @@ function detail(state: IssueDetail['state'], details: Partial<IssueStateDetails>
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     author: 'dev',
     labels: [],
     stateDetails: details === null ? null : stateDetails(details),
@@ -64,6 +65,7 @@ function summary(overrides: Partial<IssueSummary> = {}): IssueSummary {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     ...overrides,
   };
 }

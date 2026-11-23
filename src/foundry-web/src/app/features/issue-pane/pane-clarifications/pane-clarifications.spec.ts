@@ -45,6 +45,7 @@ function detail(
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: ASKED_AT,
+    round: 1,
     author: 'dev',
     labels: [],
     stateDetails: {

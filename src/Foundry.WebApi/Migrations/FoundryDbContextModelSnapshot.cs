@@ -147,6 +147,12 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("review_fix_attempts");
 
+                    b.Property<int>("Round")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1)
+                        .HasColumnName("round");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(500)
