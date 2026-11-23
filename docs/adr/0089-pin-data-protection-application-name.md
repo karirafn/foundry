@@ -1,3 +1,7 @@
+---
+reaches: hidden-invariant
+---
+
 # Pin the Data Protection application name and re-encrypt legacy ciphertext at startup
 
 ## Context

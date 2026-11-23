@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Code Decides; Claude Judges Only What Code Cannot
 
 ## Context
