@@ -171,8 +171,14 @@ internal sealed class WorkerRunCompletedHandler(
             // same as a first run, so a comment posted while the run was working is still read.
             // The ?? UtcNow fallback is back-compat for events serialized before RunStartedAt existed (see above).
             // Both paths rebase: a revision that pushed nothing may still be behind the default branch (ADR 0087).
+            // A revision changed the branch only when it pushed a new head: it always runs against an existing branch
+            // and pull request, so their presence says nothing about this run. An event serialized before runs were
+            // published carries no Publish facts and keeps the older branch-and-pull-request rule.
             DateTimeOffset revisionRunStartedAt = @event.RunStartedAt ?? now;
-            if (@event.BranchName is not null && @event.PullRequestUrl is not null)
+            bool revisionPushed = @event.Publish is { } revisionPublish
+                ? revisionPublish.PushedHeadSha is not null
+                : @event.BranchName is not null && @event.PullRequestUrl is not null;
+            if (revisionPushed)
             {
                 RebasePendingIssue revisionRebasePending = revisionInProgress.MarkRebasePending(revisionRunStartedAt, now);
                 await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
