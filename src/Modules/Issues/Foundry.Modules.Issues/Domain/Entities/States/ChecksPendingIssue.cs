@@ -21,6 +21,8 @@ public sealed class ChecksPendingIssue : Issue
 
     public override IssueCodeStep? CodeStep => IssueCodeStep.Checks;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Checks;
+
     public override RunKind? RunKind => null;
 
     /// <summary>

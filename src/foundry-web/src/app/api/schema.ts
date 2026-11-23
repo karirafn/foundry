@@ -1459,6 +1459,13 @@ export interface components {
              * @default 1
              */
             round: number | string;
+            lifecycle?: null | components["schemas"]["LifecycleStepInfo"][];
+        };
+        LifecycleStepInfo: {
+            step: string;
+            actor: string;
+            status: string;
+            phase: null | string;
         };
         MergeWaitDetails: {
             /** Format: int32 */

@@ -25,6 +25,8 @@ public sealed class ReviewQueuedIssue : QueuedIssue, IReviewStepState
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.ReviewQueued;
+
     public override RunKind? RunKind => ValueObjects.RunKind.Review;
 
     // Private parameterless constructor for EF Core materialization.

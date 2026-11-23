@@ -46,7 +46,8 @@ public sealed class GetIssueDetailAsync_RunKind : IAsyncDisposable
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

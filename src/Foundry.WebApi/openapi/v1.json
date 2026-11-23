@@ -4887,6 +4887,41 @@
             ],
             "format": "int32",
             "default": 1
+          },
+          "lifecycle": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LifecycleStepInfo"
+            }
+          }
+        }
+      },
+      "LifecycleStepInfo": {
+        "required": [
+          "step",
+          "actor",
+          "status",
+          "phase"
+        ],
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

@@ -59,6 +59,7 @@ public sealed class AddIssuesModule : IAsyncDisposable
         services.AddScoped<IWorkerRunQueries, NullWorkerRunQueries>();
         services.AddScoped<IGlobalSettingsQueries, NullGlobalSettingsQueries>();
         services.AddScoped<IMergeQueueQueries, NullMergeQueueQueries>();
+        services.AddScoped<IRepositoryLifecycleSettingsQueries, NullRepositoryLifecycleSettingsQueries>();
         services.AddScoped<IIssueBroadcaster, NullIssueBroadcaster>();
         services.AddIssuesModule();
 

@@ -26,6 +26,8 @@ public sealed class TriageBlockedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.TriageQueued;
+
     public override RunKind? RunKind => ValueObjects.RunKind.Triage;
 
     /// <summary>The longest failure reason the failed issue stores; the provider's text is cut to fit.</summary>

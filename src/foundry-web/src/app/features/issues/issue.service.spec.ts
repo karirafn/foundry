@@ -2809,6 +2809,35 @@ describe('IssueService board placement (#851)', () => {
     expect(svc.issues()[0].round).toBe(1);
   });
 
+  it('carries the served lifecycle path in order', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const lifecycle = [
+      { step: 'implement', actor: 'claude', status: 'done', phase: null },
+      { step: 'publish', actor: 'code', status: 'current', phase: 'retrying' },
+      { step: 'rebase', actor: 'code', status: 'off', phase: null },
+    ];
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, lifecycle }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].lifecycle).toEqual(lifecycle);
+  });
+
+  it.each([[undefined], [null]])('leaves the lifecycle out when the server sends %j', (lifecycle) => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, lifecycle }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].lifecycle).toBeUndefined();
+  });
+
   it('maps a skipped review and its reason so the board can show it', () => {
     // Arrange
     const { svc, http } = setup();

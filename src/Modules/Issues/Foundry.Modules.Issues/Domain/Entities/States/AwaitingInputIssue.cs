@@ -58,6 +58,10 @@ public sealed class AwaitingInputIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    // The step is the one the answer resumes, as the stage is.
+    public override IssueLifecycleStep LifecycleStep =>
+        ResumeTarget is ResumeTarget.Retriage ? IssueLifecycleStep.Triage : IssueLifecycleStep.Implement;
+
     public override RunKind? RunKind => null;
 
     /// <summary>The questions waiting for input: the open round of the clarification log.</summary>

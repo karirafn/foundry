@@ -24,7 +24,8 @@ internal sealed class IssueQueries(
     IWorkerRunQueries workerRunQueries,
     InFlightWorkerCountQuery inFlightWorkerCountQuery,
     IGlobalSettingsQueries globalSettingsQueries,
-    IMergeQueueQueries mergeQueueQueries) : IIssueQueries
+    IMergeQueueQueries mergeQueueQueries,
+    IRepositoryLifecycleSettingsQueries lifecycleSettingsQueries) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -342,6 +343,8 @@ internal sealed class IssueQueries(
         IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases = await GetRunPhasesAsync(issues, cancellationToken);
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
             await GetCatchUpWaitingAsync(issues, cancellationToken);
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryLifecycleSettings> lifecycleSettings =
+            await lifecycleSettingsQueries.GetLifecycleSettingsAsync(repositoryIds, cancellationToken);
 
         return issues
             .Select(i => ToSummary(
@@ -350,7 +353,8 @@ internal sealed class IssueQueries(
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates,
                 runPhases,
-                catchUpWaiting))
+                catchUpWaiting,
+                lifecycleSettings))
             .ToList();
     }
 
@@ -456,6 +460,8 @@ internal sealed class IssueQueries(
         IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases = await GetRunPhasesAsync([issue], cancellationToken);
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
             await GetCatchUpWaitingAsync([issue], cancellationToken);
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryLifecycleSettings> lifecycleSettings =
+            await lifecycleSettingsQueries.GetLifecycleSettingsAsync(repoIds, cancellationToken);
 
         return ToSummary(
             issue,
@@ -463,7 +469,8 @@ internal sealed class IssueQueries(
             eligibilityStatus,
             runAggregates,
             runPhases,
-            catchUpWaiting);
+            catchUpWaiting,
+            lifecycleSettings);
     }
 
     private static IssueSummary ToSummary(
@@ -472,12 +479,19 @@ internal sealed class IssueQueries(
         string? eligibilityStatus,
         IReadOnlyDictionary<Guid, RunAggregate> runAggregates,
         IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases,
-        IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting)
+        IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting,
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryLifecycleSettings> lifecycleSettings)
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
         MergeOutcome? mergeOutcome = GetMergeOutcome(issue);
         ReviewOutcome? reviewOutcome = (issue as ReviewIssue)?.ReviewOutcome;
         string? publishPhase = PublishPhaseName(issue, runPhases);
+        bool waitsToCatchUp = catchUpWaiting.Contains((issue.MonitoredRepositoryId, issue.IssueNumber));
+        IReadOnlyList<LifecyclePathStep> lifecycle = IssueLifecyclePath.For(
+            issue,
+            runPhases.TryGetValue(issue.Id.Value, out WorkerRunPhase runPhase) ? runPhase : null,
+            waitsToCatchUp,
+            lifecycleSettings.GetValueOrDefault(issue.MonitoredRepositoryId) ?? RepositoryLifecycleSettings.Default);
 
         return new IssueSummary(
             Id: issue.Id.Value,
@@ -495,10 +509,7 @@ internal sealed class IssueQueries(
             Stage: StageName(issue.Stage),
             NeedsAction: issue.NeedsAction,
             AwaitsDispatch: issue.AwaitsDispatch,
-            CodeStep: CodeStepName(
-                issue.CodeStep,
-                publishPhase,
-                catchUpWaiting.Contains((issue.MonitoredRepositoryId, issue.IssueNumber))),
+            CodeStep: CodeStepName(issue.CodeStep, publishPhase, waitsToCatchUp),
             RepositoryId: issue.MonitoredRepositoryId.Value,
             WaitsOnBlockers: issue.WaitsOnBlockers,
             EnteredStateAt: issue.EnteredStateAt,
@@ -514,8 +525,67 @@ internal sealed class IssueQueries(
             RunKind: RunKindName(issue.RunKind),
             ReviewOutcome: reviewOutcome?.Discriminator,
             ReviewSkippedReason: (reviewOutcome as ReviewOutcome.Skipped)?.Reason,
-            Round: issue.Round);
+            Round: issue.Round,
+            Lifecycle: lifecycle.Select(ToStepInfo).ToList());
     }
+
+    private static LifecycleStepInfo ToStepInfo(LifecyclePathStep step) =>
+        new(
+            LifecycleStepName(step.Step),
+            LifecycleActorName(step.Actor),
+            LifecycleStatusName(step.Status),
+            step.Phase is { } phase ? LifecyclePhaseName(phase) : null);
+
+    private static string LifecycleStepName(IssueLifecycleStep step) =>
+        step switch
+        {
+            IssueLifecycleStep.Detected => LifecycleStepInfo.DetectedStep,
+            IssueLifecycleStep.TriageQueued => LifecycleStepInfo.TriageQueuedStep,
+            IssueLifecycleStep.Triage => LifecycleStepInfo.TriageStep,
+            IssueLifecycleStep.Queued => LifecycleStepInfo.QueuedStep,
+            IssueLifecycleStep.Implement => LifecycleStepInfo.ImplementStep,
+            IssueLifecycleStep.Publish => LifecycleStepInfo.PublishStep,
+            IssueLifecycleStep.Rebase => LifecycleStepInfo.RebaseStep,
+            IssueLifecycleStep.Checks => LifecycleStepInfo.ChecksStep,
+            IssueLifecycleStep.ReviewQueued => LifecycleStepInfo.ReviewQueuedStep,
+            IssueLifecycleStep.Review => LifecycleStepInfo.ReviewStep,
+            IssueLifecycleStep.YourReview => LifecycleStepInfo.YourReviewStep,
+            IssueLifecycleStep.Merge => LifecycleStepInfo.MergeStep,
+            IssueLifecycleStep.Done => LifecycleStepInfo.DoneStep,
+            _ => throw new InvalidOperationException($"Unknown lifecycle step: {step}"),
+        };
+
+    private static string LifecycleActorName(LifecycleActor actor) =>
+        actor switch
+        {
+            LifecycleActor.Claude => LifecycleStepInfo.ClaudeActor,
+            LifecycleActor.Code => LifecycleStepInfo.CodeActor,
+            LifecycleActor.Person => LifecycleStepInfo.PersonActor,
+            _ => throw new InvalidOperationException($"Unknown lifecycle actor: {actor}"),
+        };
+
+    private static string LifecycleStatusName(LifecycleStepStatus status) =>
+        status switch
+        {
+            LifecycleStepStatus.Done => LifecycleStepInfo.DoneStatus,
+            LifecycleStepStatus.Current => LifecycleStepInfo.CurrentStatus,
+            LifecycleStepStatus.Upcoming => LifecycleStepInfo.UpcomingStatus,
+            LifecycleStepStatus.Off => LifecycleStepInfo.OffStatus,
+            LifecycleStepStatus.Skipped => LifecycleStepInfo.SkippedStatus,
+            _ => throw new InvalidOperationException($"Unknown lifecycle step status: {status}"),
+        };
+
+    private static string LifecyclePhaseName(LifecyclePhase phase) =>
+        phase switch
+        {
+            LifecyclePhase.Waiting => LifecycleStepInfo.WaitingPhase,
+            LifecyclePhase.Preparing => LifecycleStepInfo.PreparingPhase,
+            LifecyclePhase.Running => LifecycleStepInfo.RunningPhase,
+            LifecyclePhase.NeedsYou => LifecycleStepInfo.NeedsYouPhase,
+            LifecyclePhase.Failed => LifecycleStepInfo.FailedPhase,
+            LifecyclePhase.Retrying => LifecycleStepInfo.RetryingPhase,
+            _ => throw new InvalidOperationException($"Unknown lifecycle phase: {phase}"),
+        };
 
     private static string StageName(IssueStage stage) =>
         stage switch
@@ -1347,6 +1417,8 @@ internal sealed class IssueQueries(
         IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases = await GetRunPhasesAsync(issues, cancellationToken);
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
             await GetCatchUpWaitingAsync(issues, cancellationToken);
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryLifecycleSettings> lifecycleSettings =
+            await lifecycleSettingsQueries.GetLifecycleSettingsAsync(repositoryIds, cancellationToken);
 
         return orderedIssues
             .Select(i => ToSummary(
@@ -1355,7 +1427,8 @@ internal sealed class IssueQueries(
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates,
                 runPhases,
-                catchUpWaiting))
+                catchUpWaiting,
+                lifecycleSettings))
             .ToList();
     }
 

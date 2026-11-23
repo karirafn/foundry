@@ -45,7 +45,8 @@ public sealed class HandleAsync : IAsyncDisposable
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            _mergeQueue);
+            _mergeQueue,
+            new NullRepositoryLifecycleSettingsQueries());
         _sut = new MergeQueueChangedHandler(_dbContext, new IssueStateChangedHandler(issueQueries, _broadcaster));
     }
 

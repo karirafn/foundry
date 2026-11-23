@@ -51,7 +51,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -372,7 +373,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -419,7 +421,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -464,7 +467,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -507,7 +511,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -554,7 +559,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullWorkerRunQueries(consecutiveTransientRuns: 0),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -596,7 +602,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             stubRunQueries,
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -627,7 +634,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             new NullWorkerRunQueries(consecutiveTransientRuns),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(issue.Id, TestContext.Current.CancellationToken);
 

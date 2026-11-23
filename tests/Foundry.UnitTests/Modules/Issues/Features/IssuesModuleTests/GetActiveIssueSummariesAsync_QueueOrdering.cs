@@ -71,7 +71,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             globalSettingsQueries,
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
 
     private FreshQueuedIssue SeedQueuedIssue(
         MonitoredRepositoryId repositoryId,
