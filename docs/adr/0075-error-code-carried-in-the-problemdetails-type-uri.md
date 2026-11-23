@@ -1,3 +1,7 @@
+---
+reaches: module-contract
+---
+
 # Error code carried in the ProblemDetails type URI
 
 ## Context
@@ -38,9 +42,9 @@ Endpoints narrow their `Results<...>` union to carry `ProblemHttpResult` as the 
 
 ## Consequences
 
-An explicit `type` survives `ProblemDetailsDefaults`, which otherwise fills a null `type` with the RFC 9110 status-section URI. Verified against `Microsoft.AspNetCore.OpenApi` 10.0.12 (the version pinned in `Directory.Packages.props`) with a throwaway probe: `TypedResults.Problem(detail:, statusCode: 409, type: "tag:...")` serialises as `{"type":"tag:...","title":"Conflict","status":409,"detail":"..."}` with `Content-Type: application/problem+json`. The 6 endpoints that already return a real `ProblemDetails` currently send the status-generic RFC 9110 URI, which this convention replaces with a code-specific one.
+An explicit `type` survives `ProblemDetailsDefaults`, which otherwise fills a null `type` with the RFC 9110 status-section URI. Verified against `Microsoft.AspNetCore.OpenApi` 10.0.12 (the version pinned in `Directory.Packages.props`) with a throwaway probe: `TypedResults.Problem(detail:, statusCode: 409, type: "tag:...")` serialises as `{"type":"tag:...","title":"Conflict","status":409,"detail":"..."}` with `Content-Type: application/problem+json`.
 
-**The declaration side stays unenforced.** The same probe showed that `Results<Created<T>, ProblemHttpResult>` with no `.Produces*` calls emits only the 201 — `ProblemHttpResult` contributes nothing to the generated document. So `.ProducesProblem(N)` remains hand-written and unchecked against what the endpoint returns, which is the hole that produced all 47 mislabels. Union narrowing closes the return side at compile time; the declaration side needs a reflection test over `EndpointDataSource` asserting that any endpoint declaring `.ProducesProblem(N)` has a return-type union whose error arms are exclusively `ProblemHttpResult`. That test cannot go green until every site is migrated, so it lands with the migration rather than with this decision. Three endpoints return a bare `IResult` and are opaque to it.
+**The declaration side is enforced by a reflection test, not by the compiler.** The same probe showed that `Results<Created<T>, ProblemHttpResult>` with no `.Produces*` calls emits only the 201 — `ProblemHttpResult` contributes nothing to the generated document. So `.ProducesProblem(N)` remains hand-written, which is the hole that produced all 47 mislabels. Union narrowing closes the return side at compile time; on the declaration side `ProblemDetailsContractTests` walks `EndpointDataSource` and asserts that any endpoint declaring `.ProducesProblem(N)` has a return-type union whose error arms are exclusively `ProblemHttpResult`, flagging an endpoint that returns a bare `IResult` as opaque.
 
 Extending the enum of reachable codes is wire-compatible: a client that does not recognise a `type` still has `detail` to render, per RFC 9457 §3.2, which requires consumers to ignore unrecognised extensions and leaves `detail` always populated.
 

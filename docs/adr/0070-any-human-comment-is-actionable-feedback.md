@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Any Human Comment on a PR Is Actionable Review Feedback
 
 ## Context

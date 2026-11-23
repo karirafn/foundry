@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # Removed Repositories Are Soft-Deleted and Restored on Re-Add
 
 ## Context

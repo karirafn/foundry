@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # One Account Token, Verified Against Every Permission Foundry Uses
 
 ## Context

@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # Generic Secret Patterns Are Published for Review
 
 ## Context

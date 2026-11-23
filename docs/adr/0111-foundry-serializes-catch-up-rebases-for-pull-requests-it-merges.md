@@ -1,3 +1,7 @@
+---
+reaches: structure
+---
+
 # Foundry Serializes Catch-Up Rebases for Pull Requests It Merges
 
 ## Context

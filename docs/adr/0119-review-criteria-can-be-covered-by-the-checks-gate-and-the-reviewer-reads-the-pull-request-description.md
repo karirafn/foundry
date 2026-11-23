@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Review Criteria Can Be Covered by the Checks Gate, and the Reviewer Reads the Pull Request Description
 
 ## Context
@@ -37,4 +41,4 @@ The review facts carry the checks gate's result and the live pull request descri
 ## Consequences
 
 - A criterion about the description that is `unmet` cannot be fixed by a findings revision, because a revision posts a summary comment and never edits the body; it spends the findings budget and reaches `review`.
-- A worker image whose schema offers `covered_by_checks` must not run against an API that does not parse it — that verdict is `verdict_invalid` and fails open as `Skipped` — so the API ships first.
+- A worker image whose schema offers `covered_by_checks` must not run against an API that does not parse it — that verdict is `verdict_invalid` and fails open as `Skipped` — so the API must parse a new criterion status before any worker image offers it.

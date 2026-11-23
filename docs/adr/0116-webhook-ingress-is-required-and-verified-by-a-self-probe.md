@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # Webhook Ingress Is Required and Verified by a Self-Probe
 
 ## Context

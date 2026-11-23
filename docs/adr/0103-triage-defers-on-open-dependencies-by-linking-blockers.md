@@ -1,8 +1,8 @@
+---
+reaches: external-contract
+---
+
 # Triage Defers on Open Dependencies by Linking Blockers
-
-> **2026-11-12 — Consequence:** a poll can race the blocker link. `TriageInProgressIssue.MarkBlocked` records `BlockedBy` locally, while Monitoring writes the tracker link later through the outbox. Every poll reads each issue's dependencies from the tracker (`RepositoryPoller.DetectDependenciesAsync`) and `IssueDependencyApplier.ApplyAsync` overwrites `BlockedBy` with what it read. A poll whose read precedes the link write and whose apply follows `MarkBlocked` therefore sets `BlockedBy` to `[]`, and a `TriageBlockedIssue` with no blockers `Unblock()`s back to `TriageQueuedIssue`. The cost is one extra triage run: the re-run links whatever blockers it names, and a further extra run needs another poll to land inside that run's link-write window, so repeats are unlikely and each costs one run. This was present from the start (an omission in this ADR, not drift) and is accepted.
-
-> **2026-11-12 — Consequence:** the supplied-set check stops fabricated and cross-repository issue numbers, but issue text can still steer the verdict toward any open issue Foundry supplied to the run. Foundry then links that issue and comments on it. The effect is a link and a comment inside the same repository, on an issue triaged only after a maintainer applied the trigger label. This is accepted because narrowing the set to related issues would defeat finding real blockers. It was present from the start (an omission in this ADR, not drift).
 
 ## Context
 
@@ -33,3 +33,9 @@ Triage returns `outcome: "blocked"` with `blockedBy: [{ issue, reason }]` when t
 - Foundry now writes issue links to the tracker. The account token needs issue write access on GitHub, and on GitLab the right to update both issues; Foundry already posts issue comments under the same access.
 - A wrong dependency costs a wait until that issue closes, or until a person removes the link the comment names.
 - A transient failure that exhausts the relay's retries costs one extra triage run before the link is written again.
+- A poll can race the blocker link. `TriageInProgressIssue.MarkBlocked` records `BlockedBy` locally, while Monitoring writes the tracker link later through the outbox. Every poll reads each issue's dependencies from the tracker (`RepositoryPoller.DetectDependenciesAsync`) and `IssueDependencyApplier.ApplyAsync` overwrites `BlockedBy` with what it read. A poll whose read precedes the link write and whose apply follows `MarkBlocked` therefore sets `BlockedBy` to `[]`, and a `TriageBlockedIssue` with no blockers `Unblock()`s back to `TriageQueuedIssue`. The cost is one extra triage run: the re-run links whatever blockers it names, and a further extra run needs another poll to land inside that run's link-write window, so repeats are unlikely and each costs one run. This is accepted.
+- The supplied-set check stops fabricated and cross-repository issue numbers, but issue text can still steer the verdict toward any open issue Foundry supplied to the run. Foundry then links that issue and comments on it. The effect is a link and a comment inside the same repository, on an issue triaged only after a maintainer applied the trigger label. This is accepted because narrowing the set to related issues would defeat finding real blockers.
+
+## Revisions
+- 2026-11-12 — Recorded the accepted race between a poll and the blocker-link write, present from the start and omitted from this ADR (#876).
+- 2026-11-12 — Recorded that issue text can steer a `blocked` verdict toward any supplied open issue, present from the start and omitted from this ADR (#877).

@@ -1,3 +1,7 @@
+---
+reaches: hidden-invariant
+---
+
 # 0073. Stable handler dedup identity
 
 ## Context
@@ -24,15 +28,10 @@ attribute throws at registration; a duplicate identity throws at startup
 boot. The identity string is chosen once and frozen; a later class rename or
 namespace move does not change it.
 
-Existing `processed_events` rows keyed under the old `FullName` scheme are
-explicitly accepted as expired rather than migrated. The new identity vocabulary
-is not a mechanical transform of the old strings, so a SQL rewrite would embed 32
-hand-mapped literals and require a backfill entry for every future handler. At
-the single deploy, a message still within its ≤20s redelivery horizon may invoke
-its handler once more, because the old-scheme row does not match the new-scheme
-lookup. Handlers are already required to be replay-safe by the inbox design, so a
-one-off duplicate invocation is tolerable. Old rows age out under the existing
-retention prune.
+`processed_events` rows keyed under the earlier `FullName` scheme were accepted
+as expired rather than migrated: the identity vocabulary is not a mechanical
+transform of the old strings, and handlers are already replay-safe by the inbox
+design. Those rows age out under the retention prune.
 
 ## Consequences
 
@@ -42,5 +41,3 @@ retention prune.
 - The `processed_events.handler` column value vocabulary changes from CLR full
   type names to `<Module>.<HandlerName>` strings — more readable, greppable,
   and decoupled from code structure.
-- A bounded (~20s) one-time window of at-most-once-extra invocation exists at the
-  deploy that introduces this change; no migration code is required.

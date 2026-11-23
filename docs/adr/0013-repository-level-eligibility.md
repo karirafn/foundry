@@ -1,9 +1,8 @@
-# Repository-Level Eligibility Instead of Per-Issue Ineligible State
+---
+reaches: module-contract
+---
 
-> **Partially superseded.** The "branch-protection check runs every cycle" clause applies to the
-> branch-rules GET only. The write-probe half is superseded by [ADR 0054](0054-split-eligibility-cadence.md), which makes write probes
-> event-triggered (repository add, manual re-check, credential update) and persists the last
-> verdict as `WriteProbeVerdict` on `MonitoredRepository`.
+# Repository-Level Eligibility Instead of Per-Issue Ineligible State
 
 ## Context
 
@@ -14,7 +13,7 @@ Branch protection is a property of a repository, yet eligibility was modelled on
 Eligibility moves to the `MonitoredRepository` aggregate and the per-issue `IneligibleIssue` state is removed.
 
 - `MonitoredRepository` carries a `RepositoryEligibility` value object modelled as a discriminated union: `Eligible`, `Ineligible(violations)` (non-empty, user-actionable), `Unreachable` (provider API could not be reached — transient). This makes invalid combinations (eligible-with-violations, ineligible-without) unrepresentable.
-- The branch-protection check becomes an unconditional repo-level poll step that runs every cycle regardless of issue count, plus a synchronous check at repository creation and a manual per-repo "re-check" endpoint (replacing the per-issue retry endpoint). A fixed repo heals automatically on the next poll.
+- The branch-rules check becomes an unconditional repo-level poll step that runs every cycle regardless of issue count, plus a synchronous check at repository creation and a manual per-repo "re-check" endpoint (replacing the per-issue retry endpoint). A fixed repo heals automatically on the next poll. The write probe is not a per-cycle step: it is event-triggered (repository add, manual re-check, credential update), and its last verdict is persisted as `WriteProbeVerdict` on `MonitoredRepository` ([ADR 0054](0054-split-eligibility-cadence.md)).
 - Issue-ineligibility is derived, not stored. Issues stay in their natural states (`Detected`/`Queued`/`Blocked`); eligibility gates only dispatch. `WorkerCapacityAvailableHandler` filters the claimable-issue selection to issues whose repo is `Eligible`, reading stored state via a Monitoring read-query contract (`IRepositoryEligibilityQuery`) — no live API call at claim time. Detection, dependency reconciliation, and review polling continue on ineligible repos, and already-running workers are unaffected.
 - The Issues read model joins repo eligibility to show a warning marker/banner on queued issues whose repo is ineligible; repository cards in settings show validity and the actionable violation list.
 
@@ -27,5 +26,8 @@ Eligibility moves to the `MonitoredRepository` aggregate and the per-issue `Inel
 
 ## Consequences
 
-- Requires an EF Core migration: convert existing `IneligibleIssue` rows to `DetectedIssue` (re-derived on the next poll), drop the `IneligibleIssue` discriminator and violation columns, and add eligibility storage to `MonitoredRepository`.
+- There is no `IneligibleIssue` state or per-issue violation storage; eligibility is stored only on `MonitoredRepository`.
 - `IssueEligibilityChecked` / `IssueEligibilityCheckedHandler`, the per-issue retry endpoint, and the claim-time `IBranchProtectionValidator` call are removed; `IBranchProtectionValidator` is replaced for consumers by stored-state reads via `IRepositoryEligibilityQuery`.
+
+## Revisions
+- 2026-08-22 — The write-probe half of eligibility moves from every poll cycle to event-triggered probes with a persisted `WriteProbeVerdict`; only the branch-rules GET stays per-cycle ([ADR 0054](0054-split-eligibility-cadence.md)).

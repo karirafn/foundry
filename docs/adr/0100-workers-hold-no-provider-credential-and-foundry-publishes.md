@@ -1,8 +1,8 @@
+---
+reaches: non-functional
+---
+
 # Workers Hold No Provider Credential; Foundry Publishes Their Work
-
-> **2026-11-10 — Amended:** in Decision, the **Hand-off by bundle only** clause's Run bundle range and the **The token holder never runs git in agent-written state** clause's fast-forward-only push, and its divergence merge for a rebased tip, are replaced by [ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md). The `<base>..HEAD` range was false from the start: once a run merges or rebases onto the default branch, the range includes the default branch's commits, and the author rewrite would give them new SHAs.
-
-> **2026-11-14 — Amended:** in Decision, the **Diff gate** clause's "a detected secret blocks the push" now holds for provider patterns only; a generic-pattern match is published and listed in the pull request, per [ADR 0107](0107-generic-secret-patterns-are-published-for-review.md).
 
 ## Context
 
@@ -12,9 +12,9 @@ Implementation workers receive the account PAT as `GIT_PAT` for the clone and as
 
 No worker container spec contains a provider credential, for any role. A model-free **Publisher** container holds the PAT for one run and performs every git transfer with the provider:
 
-- **Hand-off by bundle only** — each run gets a per-run **Hand-off volume** holding only `in/base.bundle` and `out/run.bundle`. In **Prepare** mode the Publisher fetches the default branch (and the existing branch for revisions) into a fresh repository and writes the base bundle. The worker entrypoint clones from it into its own anonymous `/workspace` and resets `origin` to a credential-less URL. When `claude` exits, or on `SIGTERM` at a timeout, the entrypoint commits any uncommitted non-ignored changes and writes the **Run bundle** of `<base>..HEAD`.
-- **The token holder never runs git in agent-written state** — hooks, `core.fsmonitor`, `url.*.insteadOf` and credential helpers in an agent-written `.git` would execute or redirect with the PAT present. In **Publish** mode the Publisher starts from a fresh repository with safe configuration, fetches the base from the remote and the Run bundle on top, rewrites author and committer to the account identity, runs the **Diff gate**, and pushes fast-forward only to the branch Foundry chose. A diverged remote branch is merged by code; a conflicting merge pushes the run tip to a side branch and moves the issue to Needs attention.
-- **Diff gate** — a detected secret blocks the push (nothing reaches the remote; Needs attention). Oversized and binary files are reverted by a code-authored commit and listed in the pull request. CI/CD files are published like any other file; human review is the gate.
+- **Hand-off by bundle only** — each run gets a per-run **Hand-off volume** holding only `in/base.bundle` and `out/run.bundle`. In **Prepare** mode the Publisher fetches the default branch (and the existing branch for revisions) into a fresh repository and writes the base bundle. The worker entrypoint clones from it into its own anonymous `/workspace` and resets `origin` to a credential-less URL. When `claude` exits, or on `SIGTERM` at a timeout, the entrypoint commits any uncommitted non-ignored changes and writes the **Run bundle** of the run's own commits, `tip --not <base> <D>`, where `D` is the default-branch head recorded at Prepare, so commits the run pulled in from the default branch are never rewritten ([ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)).
+- **The token holder never runs git in agent-written state** — hooks, `core.fsmonitor`, `url.*.insteadOf` and credential helpers in an agent-written `.git` would execute or redirect with the PAT present. In **Publish** mode the Publisher starts from a fresh repository with safe configuration, fetches the base from the remote and the Run bundle on top, rewrites author and committer to the account identity, runs the **Diff gate**, and pushes to the branch Foundry chose: a tip that descends from the base fast-forward, and a rebased tip with a lease on the base ([ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)). A diverged remote branch under a fast-forward tip is merged by code; a conflicting merge, or any divergence under a rebased tip, pushes the run tip to a side branch and moves the issue to Needs attention.
+- **Diff gate** — a detected provider-pattern secret blocks the push (nothing reaches the remote; Needs attention); a generic-pattern match is published and listed in the pull request ([ADR 0107](0107-generic-secret-patterns-are-published-for-review.md)). Oversized and binary files are reverted by a code-authored commit and listed in the pull request. CI/CD files are published like any other file; human review is the gate.
 - **Pull request owned by code** — the implement verdict carries `pullRequest: { summary, body }`. Code builds the title and appends `Closes #N`. Later runs post one summary comment each, whose ID is recorded in a posted-comment registry that the review-feedback reader skips.
 - **Run lifecycle** — publishing is a phase of the worker run (`Running → Publishing → Completed`, with `PublishFailed` retried with backoff, then Needs attention, with a TTL backstop on the Hand-off volume). `WorkerRunCompleted` carries the publish facts. Failed runs publish to the branch without opening a pull request, so a Continuation resumes from the branch.
 - **Provider reads move to code** — issue body and comments are supplied at dispatch, failing-job log tails are supplied in `FailedChecks` revision prompts, and the in-run CI watch loop is removed.
@@ -39,3 +39,7 @@ No worker container spec contains a provider credential, for any role. A model-f
 - The live per-tick branch commit count is removed; the count is set from the publish facts.
 - A crash between posting a summary comment and recording its ID leaves one unregistered comment, causing at most one spurious revision.
 - With no provider token in the worker, provider egress can be blocked entirely (network isolation).
+
+## Revisions
+- 2026-11-10 — The Run bundle range becomes `tip --not <base> <D>` (the `<base>..HEAD` range was wrong from the start, since it swept in and rewrote default-branch commits), and a rebased tip is pushed with a lease and never merged on divergence ([ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md)).
+- 2026-11-14 — A detected secret blocks the push only for provider patterns; a generic-pattern match is published and listed in the pull request ([ADR 0107](0107-generic-secret-patterns-are-published-for-review.md)).
