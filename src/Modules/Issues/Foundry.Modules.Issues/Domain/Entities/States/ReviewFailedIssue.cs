@@ -24,6 +24,8 @@ public sealed class ReviewFailedIssue : Issue, IReviewStepState, IAutoRetryableF
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Review;
+
     public override RunKind? RunKind => null;
 
     // Private parameterless constructor for EF Core materialization.

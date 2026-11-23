@@ -89,6 +89,19 @@ export interface IssueSummary {
   enteredStateAt: string;
   /** The issue's revision round, starting at 1: each revision trigger starts the next one. */
   round: number;
+  /**
+   * The issue's whole lifecycle path, every step in order, as the server decides it. Absent when the server sends
+   * none. Tokens stay as served, so a step this dashboard does not know yet is kept.
+   */
+  lifecycle?: LifecycleStepInfo[];
+}
+
+/** One step on an issue's lifecycle path; `phase` is set only on the current step. */
+export interface LifecycleStepInfo {
+  step: string;
+  actor: string;
+  status: string;
+  phase: string | null;
 }
 
 export interface EligibilityViolation {

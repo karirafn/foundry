@@ -34,6 +34,10 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="Round"/> is the issue's revision round, starting at 1: each revision trigger (review findings, a
 /// person's feedback, failed checks, a rebase conflict) starts the next one.
 /// </para>
+/// <para>
+/// <paramref name="Lifecycle"/> is the issue's whole lifecycle path, every step in order: the server decides which
+/// steps are off or skipped, and the dashboard only renders it.
+/// </para>
 /// </summary>
 public sealed record IssueSummary(
     Guid Id,
@@ -65,7 +69,8 @@ public sealed record IssueSummary(
     string? RunKind = null,
     string? ReviewOutcome = null,
     string? ReviewSkippedReason = null,
-    int Round = 1)
+    int Round = 1,
+    IReadOnlyList<LifecycleStepInfo>? Lifecycle = null)
 {
     public const string PublishingPhase = "publishing";
     public const string RetryingPhase = "retrying";

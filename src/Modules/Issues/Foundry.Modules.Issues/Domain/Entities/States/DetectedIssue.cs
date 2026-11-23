@@ -17,6 +17,8 @@ public sealed class DetectedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Detected;
+
     public override RunKind? RunKind => ValueObjects.RunKind.Triage;
 
     // Private parameterless constructor for EF Core materialization.

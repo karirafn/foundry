@@ -25,6 +25,8 @@ public sealed class RebasePendingIssue : Issue
 
     public override IssueCodeStep? CodeStep => IssueCodeStep.Rebasing;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Rebase;
+
     public override RunKind? RunKind => null;
 
     /// <summary>

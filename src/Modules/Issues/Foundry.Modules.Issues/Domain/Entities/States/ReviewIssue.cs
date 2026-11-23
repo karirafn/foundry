@@ -18,6 +18,8 @@ public sealed class ReviewIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.YourReview;
+
     public override RunKind? RunKind => null;
 
     // Private parameterless constructor for EF Core materialization.

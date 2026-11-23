@@ -539,6 +539,7 @@ export class IssueService {
       repositoryId: i.repositoryId,
       enteredStateAt: i.enteredStateAt,
       round: this._toRound(i.round),
+      ...(i.lifecycle ? { lifecycle: i.lifecycle.map((s) => ({ ...s, phase: s.phase ?? null })) } : {}),
       ...toPlacement(i),
     };
   }

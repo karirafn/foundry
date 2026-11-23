@@ -175,6 +175,12 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public abstract IssueCodeStep? CodeStep { get; }
 
     /// <summary>
+    /// The issue's current step on its lifecycle path. A working issue whose run publishes sits on
+    /// <see cref="IssueLifecycleStep.Publish"/> instead, read from the run by <see cref="IssueLifecyclePath"/>.
+    /// </summary>
+    public abstract IssueLifecycleStep LifecycleStep { get; }
+
+    /// <summary>
     /// The kind of worker run the issue will run when it is next dispatched, or <see langword="null"/> when the state
     /// has no run ahead (in-flight states also return <see langword="null"/> for now).
     /// </summary>

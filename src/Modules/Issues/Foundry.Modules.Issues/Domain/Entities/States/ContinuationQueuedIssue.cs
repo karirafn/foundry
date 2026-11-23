@@ -21,6 +21,8 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Queued;
+
     public override RunKind? RunKind => ValueObjects.RunKind.Continuation;
 
     public const int FailureReasonMaxLength = 500;

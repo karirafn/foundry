@@ -24,6 +24,8 @@ public sealed class TriageQueuedIssue : QueuedIssue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.TriageQueued;
+
     public override RunKind? RunKind => ValueObjects.RunKind.Triage;
 
     // Private parameterless constructor for EF Core materialization.

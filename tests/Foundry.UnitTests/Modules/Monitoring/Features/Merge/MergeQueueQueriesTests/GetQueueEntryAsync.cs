@@ -60,7 +60,8 @@ public sealed class GetQueueEntryAsync : IAsyncDisposable
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext, new NullWorkerRunQueries()),
             new NullGlobalSettingsQueries(),
-            new NullMergeQueueQueries());
+            new NullMergeQueueQueries(),
+            new NullRepositoryLifecycleSettingsQueries());
         _sut = new MergeQueueQueries(_dbContext, () => issueQueries);
     }
 

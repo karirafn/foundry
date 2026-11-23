@@ -17,6 +17,8 @@ public sealed class InProgressIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Implement;
+
     public override RunKind? RunKind => Origin switch
     {
         ImplementRunOrigin.Fresh => ValueObjects.RunKind.Fresh,
