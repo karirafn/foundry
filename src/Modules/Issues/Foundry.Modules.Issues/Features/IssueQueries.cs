@@ -339,7 +339,7 @@ internal sealed class IssueQueries(
             issueIds,
             cancellationToken);
 
-        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync(issues, cancellationToken);
+        IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases = await GetRunPhasesAsync(issues, cancellationToken);
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
             await GetCatchUpWaitingAsync(issues, cancellationToken);
 
@@ -349,13 +349,13 @@ internal sealed class IssueQueries(
                 displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates,
-                publishPhases,
+                runPhases,
                 catchUpWaiting))
             .ToList();
     }
 
-    // Only a working issue's run can be publishing, so the other issues are never asked about.
-    private async Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesAsync(
+    // Only a working issue has a run that is starting or publishing, so the other issues are never asked about.
+    private async Task<IReadOnlyDictionary<Guid, WorkerRunPhase>> GetRunPhasesAsync(
         IReadOnlyCollection<Issue> issues,
         CancellationToken cancellationToken)
     {
@@ -366,13 +366,16 @@ internal sealed class IssueQueries(
 
         if (workingIssueIds.Count == 0)
         {
-            return new Dictionary<Guid, WorkerRunPublishPhase>();
+            return new Dictionary<Guid, WorkerRunPhase>();
         }
 
-        return await workerRunQueries.GetPublishPhasesForIssuesAsync(workingIssueIds, cancellationToken);
+        return await workerRunQueries.GetRunPhasesForIssuesAsync(workingIssueIds, cancellationToken);
     }
 
-    private static bool IsWorking(Issue issue) => issue is InProgressIssue or RevisionInProgressIssue;
+    private static bool IsWorking(Issue issue) =>
+        issue is InProgressIssue or RevisionInProgressIssue or TriageInProgressIssue or ReviewInProgressIssue;
+
+    private static bool PublishesCommits(Issue issue) => issue is InProgressIssue or RevisionInProgressIssue;
 
     // Only a merge-pending issue can wait in the catch-up queue, so the queue is read only when the batch holds one.
     private async Task<IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)>> GetCatchUpWaitingAsync(
@@ -392,19 +395,20 @@ internal sealed class IssueQueries(
         return await mergeQueueQueries.GetWaitingIssuesAsync(repositoryIds, cancellationToken);
     }
 
+    // The board reads a non-null publish phase as "no longer running", so a starting run leaves it null.
     private static string? PublishPhaseName(
         Issue issue,
-        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases)
+        IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases)
     {
-        if (!IsWorking(issue) || !publishPhases.TryGetValue(issue.Id.Value, out WorkerRunPublishPhase phase))
+        if (!PublishesCommits(issue) || !runPhases.TryGetValue(issue.Id.Value, out WorkerRunPhase phase))
         {
             return null;
         }
 
         return phase switch
         {
-            WorkerRunPublishPhase.Publishing => IssueSummary.PublishingPhase,
-            WorkerRunPublishPhase.Retrying => IssueSummary.RetryingPhase,
+            WorkerRunPhase.Publishing => IssueSummary.PublishingPhase,
+            WorkerRunPhase.Retrying => IssueSummary.RetryingPhase,
             _ => null,
         };
     }
@@ -449,7 +453,7 @@ internal sealed class IssueQueries(
             [issue.Id.Value],
             cancellationToken);
 
-        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync([issue], cancellationToken);
+        IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases = await GetRunPhasesAsync([issue], cancellationToken);
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
             await GetCatchUpWaitingAsync([issue], cancellationToken);
 
@@ -458,7 +462,7 @@ internal sealed class IssueQueries(
             displayInfos.GetValueOrDefault(issue.MonitoredRepositoryId),
             eligibilityStatus,
             runAggregates,
-            publishPhases,
+            runPhases,
             catchUpWaiting);
     }
 
@@ -467,13 +471,13 @@ internal sealed class IssueQueries(
         RepositoryDisplayInfo? displayInfo,
         string? eligibilityStatus,
         IReadOnlyDictionary<Guid, RunAggregate> runAggregates,
-        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases,
+        IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases,
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting)
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
         MergeOutcome? mergeOutcome = GetMergeOutcome(issue);
         ReviewOutcome? reviewOutcome = (issue as ReviewIssue)?.ReviewOutcome;
-        string? publishPhase = PublishPhaseName(issue, publishPhases);
+        string? publishPhase = PublishPhaseName(issue, runPhases);
 
         return new IssueSummary(
             Id: issue.Id.Value,
@@ -1340,7 +1344,7 @@ internal sealed class IssueQueries(
 
         List<Issue> orderedIssues = [..eligibleQueued, ..ineligibleQueued, ..nonQueuedIssues];
 
-        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync(issues, cancellationToken);
+        IReadOnlyDictionary<Guid, WorkerRunPhase> runPhases = await GetRunPhasesAsync(issues, cancellationToken);
         IReadOnlySet<(MonitoredRepositoryId RepositoryId, int IssueNumber)> catchUpWaiting =
             await GetCatchUpWaitingAsync(issues, cancellationToken);
 
@@ -1350,7 +1354,7 @@ internal sealed class IssueQueries(
                 displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates,
-                publishPhases,
+                runPhases,
                 catchUpWaiting))
             .ToList();
     }

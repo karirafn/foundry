@@ -34,10 +34,10 @@ public interface IWorkerRunQueries
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// The publish phase of each issue's run that is publishing or retrying a publish (ADR 0100), keyed by issue ID.
-    /// Issues whose run is in neither phase are absent.
+    /// The phase of each issue's run that is starting, publishing or retrying a publish (ADR 0100), keyed by issue ID.
+    /// Issues whose run is in none of these phases are absent.
     /// </summary>
-    Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+    Task<IReadOnlyDictionary<Guid, WorkerRunPhase>> GetRunPhasesForIssuesAsync(
         IReadOnlyCollection<Guid> issueIds,
         CancellationToken cancellationToken);
 
