@@ -87,6 +87,8 @@ export interface IssueSummary {
   repositoryId: string;
   /** When the issue entered its current state (ISO 8601). */
   enteredStateAt: string;
+  /** The issue's revision round, starting at 1: each revision trigger starts the next one. */
+  round: number;
 }
 
 export interface EligibilityViolation {

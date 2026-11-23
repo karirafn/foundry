@@ -29,6 +29,7 @@ function buildIssue(id: string, title: string): IssueSummary {
     runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T11:50:00Z',
+    round: 1,
   };
 }
 

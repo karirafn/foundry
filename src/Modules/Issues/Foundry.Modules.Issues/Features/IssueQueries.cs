@@ -509,7 +509,8 @@ internal sealed class IssueQueries(
             PublishPhase: publishPhase,
             RunKind: RunKindName(issue.RunKind),
             ReviewOutcome: reviewOutcome?.Discriminator,
-            ReviewSkippedReason: (reviewOutcome as ReviewOutcome.Skipped)?.Reason);
+            ReviewSkippedReason: (reviewOutcome as ReviewOutcome.Skipped)?.Reason,
+            Round: issue.Round);
     }
 
     private static string StageName(IssueStage stage) =>

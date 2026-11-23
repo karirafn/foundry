@@ -31,6 +31,7 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     ...overrides,
   };
 }
@@ -159,6 +160,7 @@ describe('buildBoardBands', () => {
         state: 'review',
         needsAction: true,
         enteredStateAt: '2026-01-01T00:00:00Z',
+        round: 1,
       }),
       buildIssue({
         id: 'neutral',
@@ -166,6 +168,7 @@ describe('buildBoardBands', () => {
         state: 'unchanged',
         needsAction: true,
         enteredStateAt: '2026-01-01T00:00:00Z',
+        round: 1,
       }),
       buildIssue({
         id: 'error-new',
@@ -173,6 +176,7 @@ describe('buildBoardBands', () => {
         state: 'failed',
         needsAction: true,
         enteredStateAt: '2026-01-03T00:00:00Z',
+        round: 1,
       }),
       buildIssue({
         id: 'warning',
@@ -180,6 +184,7 @@ describe('buildBoardBands', () => {
         state: 'awaiting_input',
         needsAction: true,
         enteredStateAt: '2026-01-01T00:00:00Z',
+        round: 1,
       }),
       buildIssue({
         id: 'error-old-9',
@@ -187,6 +192,7 @@ describe('buildBoardBands', () => {
         state: 'failed',
         needsAction: true,
         enteredStateAt: '2026-01-02T00:00:00Z',
+        round: 1,
       }),
       buildIssue({
         id: 'error-old-5',
@@ -194,6 +200,7 @@ describe('buildBoardBands', () => {
         state: 'publish_failed',
         needsAction: true,
         enteredStateAt: '2026-01-02T00:00:00Z',
+        round: 1,
       }),
     ];
 

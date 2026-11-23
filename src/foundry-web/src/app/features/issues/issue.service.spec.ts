@@ -32,6 +32,7 @@ const mockSummary: IssueSummary = {
   runKind: null,
   repositoryId: 'repo-1',
   enteredStateAt: '2026-01-01T00:00:00Z',
+  round: 1,
 };
 
 function setupWithCapturingSignalR(callbacks: Record<string, (data: IssueSummary) => void>, reconnectCallbacks: Array<() => void>) {
@@ -991,6 +992,7 @@ describe('IssueService (band transitions)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
   };
 
   const resolvedSummary: IssueSummary = {
@@ -1009,6 +1011,7 @@ describe('IssueService (band transitions)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
   };
 
   beforeEach(() => {
@@ -1176,6 +1179,7 @@ describe('IssueService (resolved paging)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
   };
 
   beforeEach(() => {
@@ -1584,6 +1588,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
   };
 
   beforeEach(() => {
@@ -1794,6 +1799,7 @@ describe('IssueService (queue-order reconcile)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     repositoryEligibilityStatus: null,
   };
 
@@ -1813,6 +1819,7 @@ describe('IssueService (queue-order reconcile)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     repositoryEligibilityStatus: null,
   };
 
@@ -2432,6 +2439,7 @@ describe('IssueService (nextUpAnnouncement)', () => {
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     repositoryEligibilityStatus: null,
   };
 
@@ -2673,6 +2681,7 @@ describe('IssueService board placement (#851)', () => {
     codeStep: 'checks',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
     checksOutcome: null,
   };
 
@@ -2771,6 +2780,33 @@ describe('IssueService board placement (#851)', () => {
 
     // Assert
     expect(svc.issues()[0].runKind).toBe(runKind);
+  });
+
+  it.each([
+    [3, 3],
+    ['2', 2],
+  ])('maps the revision round %j to %d', (round, expected) => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, round }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].round).toBe(expected);
+  });
+
+  it.each([[undefined], [0], ['not-a-number']])('reads an absent or invalid round %j as round 1', (round) => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, round }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].round).toBe(1);
   });
 
   it('maps a skipped review and its reason so the board can show it', () => {
@@ -2896,6 +2932,7 @@ describe('IssueService board placement (#851)', () => {
         repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
         waitsOnBlockers: true,
         enteredStateAt: '2026-11-12T16:30:15.123Z',
+        round: 1,
       }],
       nextCursor: null,
     });
@@ -2905,6 +2942,7 @@ describe('IssueService board placement (#851)', () => {
       repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
       waitsOnBlockers: true,
       enteredStateAt: '2026-11-12T16:30:15.123Z',
+      round: 1,
     });
   });
 
@@ -2921,6 +2959,7 @@ describe('IssueService board placement (#851)', () => {
       repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
       waitsOnBlockers: true,
       enteredStateAt: '2026-11-12T16:30:15.123Z',
+      round: 1,
     } as unknown as IssueSummary);
 
     // Assert
@@ -2928,6 +2967,7 @@ describe('IssueService board placement (#851)', () => {
       repositoryId: '6f1c2a9e-1b7d-4c3e-9a51-0d2f3b4c5e6a',
       waitsOnBlockers: true,
       enteredStateAt: '2026-11-12T16:30:15.123Z',
+      round: 1,
     });
   });
 

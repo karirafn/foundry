@@ -28,6 +28,7 @@ function buildIssue(issueNumber: number, runKind: RunKind): IssueSummary {
     runKind,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
+    round: 1,
   };
 }
 

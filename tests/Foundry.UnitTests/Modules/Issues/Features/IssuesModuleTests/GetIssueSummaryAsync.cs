@@ -656,6 +656,36 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         summary.PullRequestUrl.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenIssueWasNeverRevised_RoundIsOne()
+    {
+        // Arrange
+        DetectedIssue issue = await CreateAndPersistDetectedIssueAsync(MonitoredRepositoryId.New());
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().Round.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenIssueWasRevised_RoundCountsTheRevision()
+    {
+        // Arrange
+        RevisionQueuedIssue issue = new IssueBuilder().RevisionQueued();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().Round.ShouldBe(2);
+    }
+
     [Theory]
     [InlineData("review_feedback", "revision_queued")]
     [InlineData("review_feedback", "revision_in_progress")]

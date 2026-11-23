@@ -538,8 +538,15 @@ export class IssueService {
       reviewSkippedReason: i.reviewSkippedReason ?? null,
       repositoryId: i.repositoryId,
       enteredStateAt: i.enteredStateAt,
+      round: this._toRound(i.round),
       ...toPlacement(i),
     };
+  }
+
+  // A round starts at 1; a value that is not a positive integer (or none, from an older server) reads as the first.
+  private _toRound(value: number | string | undefined): number {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 1 ? n : 1;
   }
 
   // Coerces a number | string to a finite number. Non-finite results (NaN, Infinity) degrade to 0

@@ -190,6 +190,11 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasDefaultValue(false)
             .HasColumnName("has_person_feedback");
 
+        builder.Property(i => i.Round)
+            .IsRequired()
+            .HasDefaultValue(1)
+            .HasColumnName("round");
+
         builder.Property(i => i.MarkedReadyPullRequestUrl)
             .HasMaxLength(UrlMaxLength)
             .IsRequired(false)
