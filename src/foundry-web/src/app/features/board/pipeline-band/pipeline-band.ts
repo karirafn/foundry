@@ -10,7 +10,10 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { RunKindTagComponent } from '../../../shared/components/run-kind-tag/run-kind-tag';
+import { LifecycleRailComponent } from '../../../shared/components/lifecycle-rail/lifecycle-rail';
+import { stepCopy } from '../../../shared/components/lifecycle-rail/lifecycle-steps';
+import { RUN_KIND_LABELS } from '../../../shared/utils/run-kind';
+import { currentStep } from '../../issues/lifecycle.model';
 import { BoardBandComponent } from '../board-band/board-band';
 import { BoardRowComponent } from '../board-row/board-row';
 import { ItemView } from '../board-state.service';
@@ -22,7 +25,7 @@ export const PIPELINE_PREVIEW = 10;
 /** Every issue waiting for dispatch, as one list in global dispatch order. */
 @Component({
   selector: 'fd-pipeline-band',
-  imports: [BoardBandComponent, BoardRowComponent, RunKindTagComponent],
+  imports: [BoardBandComponent, BoardRowComponent, LifecycleRailComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pipeline-band.html',
   styleUrl: './pipeline-band.scss',
@@ -44,5 +47,17 @@ export class PipelineBandComponent {
 
   protected isNext(item: PipelineItem): boolean {
     return item.slot.kind === 'position' && item.slot.position === 1;
+  }
+
+  /** The row's one status phrase: the step it waits on, and the round past the first. */
+  protected phrase(item: PipelineItem): string {
+    const current = currentStep(item.issue.lifecycle);
+    const step =
+      current !== null
+        ? stepCopy(current.step, 'triage').label
+        : item.runKind !== null
+          ? `Queued: ${RUN_KIND_LABELS[item.runKind]}`
+          : 'Queued';
+    return item.issue.round > 1 ? `${step} · round ${item.issue.round}` : step;
   }
 }

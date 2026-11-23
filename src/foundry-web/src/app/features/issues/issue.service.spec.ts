@@ -2732,7 +2732,7 @@ describe('IssueService board placement (#851)', () => {
     // Act
     svc.loadIssues();
     http.expectOne('/api/issues').flush({
-      items: [{ ...placedItem, state: 'review', stage: 'awaiting_review', codeStep: null, checksOutcome: 'still_failing' }],
+      items: [{ ...placedItem, state: 'review', stage: 'merge', codeStep: null, checksOutcome: 'still_failing' }],
       nextCursor: null,
     });
 
@@ -2826,6 +2826,21 @@ describe('IssueService board placement (#851)', () => {
     expect(svc.issues()[0].lifecycle).toEqual(lifecycle);
   });
 
+  it('narrows an unknown actor, status and phase in the served lifecycle', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const lifecycle = [{ step: 'mark_ready', actor: 'robot', status: 'paused', phase: 'sleeping' }];
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, lifecycle }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].lifecycle).toEqual([
+      { step: 'mark_ready', actor: 'code', status: 'upcoming', phase: null },
+    ]);
+  });
+
   it.each([[undefined], [null]])('leaves the lifecycle out when the server sends %j', (lifecycle) => {
     // Arrange
     const { svc, http } = setup();
@@ -2849,7 +2864,7 @@ describe('IssueService board placement (#851)', () => {
         {
           ...placedItem,
           state: 'review',
-          stage: 'awaiting_review',
+          stage: 'merge',
           needsAction: true,
           reviewOutcome: 'skipped',
           reviewSkippedReason: 'verdict_invalid',

@@ -25,7 +25,9 @@
           (open)="open.emit({ id: item.issue.id, invoker: $event })"
         >
           <span rowLead></span>
-          <fd-run-kind-tag rowLead [kind]="item.runKind" />
+          @if (item.runKind !== null) {
+            <fd-run-kind-tag rowLead [kind]="item.runKind" />
+          }
         </fd-board-row>
       </li>
     }

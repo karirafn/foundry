@@ -14,11 +14,27 @@ import { DispatchService } from '../../../core/services/dispatch.service';
         (click)="toggle()"
       >
         @if (isPaused()) {
-          <svg class="dispatch-controls__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <svg
+            class="dispatch-controls__icon"
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
         } @else {
-          <svg class="dispatch-controls__icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <svg
+            class="dispatch-controls__icon"
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
             <rect x="6" y="4" width="4" height="16"></rect>
             <rect x="14" y="4" width="4" height="16"></rect>
           </svg>
@@ -39,7 +55,8 @@ export class DispatchControlsComponent {
   protected readonly dispatchService = inject(DispatchService);
 
   protected readonly isPaused: Signal<boolean> = computed(
-    () => this.dispatchService.isDispatchPaused() || this.dispatchService.usageLimitResetsAt() !== null
+    () =>
+      this.dispatchService.isDispatchPaused() || this.dispatchService.usageLimitResetsAt() !== null,
   );
 
   protected readonly buttonLabel: Signal<string> = computed(() => {

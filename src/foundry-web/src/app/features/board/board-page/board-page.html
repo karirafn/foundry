@@ -29,16 +29,17 @@
           [class.board--glided]="board.glided()"
           [attr.inert]="sheetCoversBoard() ? '' : null"
         >
-          <fd-needs-band
-            [alerts]="bands.alerts"
-            [items]="bands.needs"
-            [now]="now()"
-            (open)="openCard($event)"
-          />
+          @if (bands.alerts.length > 0 || bands.needs.length > 0) {
+            <fd-needs-band
+              [alerts]="bands.alerts"
+              [items]="bands.needs"
+              [now]="now()"
+              (open)="openCard($event)"
+            />
+          }
           <fd-progress-band
             [workers]="bands.workers"
             [steps]="bands.steps"
-            [queuedCount]="bands.pipeline.length"
             [now]="now()"
             (open)="openCard($event)"
           />

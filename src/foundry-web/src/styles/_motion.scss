@@ -103,15 +103,6 @@
 
 // Board card pulses and list-item motion, kept here to hold the card stylesheets inside their style
 // budget.
-@keyframes fd-board-needs-pulse {
-  from {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fd-card-accent) 55%, transparent);
-  }
-  to {
-    box-shadow: 0 0 0 8px transparent;
-  }
-}
-
 @keyframes fd-board-card-collapse {
   to {
     grid-template-rows: 0fr;
@@ -176,5 +167,75 @@
   to {
     opacity: 0;
     transform: scale(1);
+  }
+}
+
+// The lifecycle rail. Changes play once (pop, settle, grow, shake, beacon); only the current node of
+// a running row loops (arc, ring), and only by transform. Component styles are emulated-encapsulation,
+// so the keyframes live here.
+:root {
+  --fd-motion-shake: 400ms;
+  --fd-motion-beacon: 1400ms;
+  --fd-motion-arc: 1400ms;
+  --fd-motion-ring: 5000ms;
+}
+
+@keyframes fd-rail-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fd-rail-settle {
+  from {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+// From empty to the connector's own fill.
+@keyframes fd-rail-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes fd-rail-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-3px);
+  }
+  40%,
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes fd-rail-beacon {
+  from {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@keyframes fd-rail-spin {
+  to {
+    transform: rotate(1turn);
   }
 }

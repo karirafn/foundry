@@ -20,7 +20,7 @@ function buildIssue(issueNumber: number, codeStep: CodeStep): IssueSummary {
     detectedAt: '2026-01-01T00:00:00Z',
     url: `https://github.com/acme/api/issues/${issueNumber}`,
     repositoryEligibilityStatus: 'eligible',
-    stage: 'awaiting_review',
+    stage: 'merge',
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
@@ -36,7 +36,7 @@ function step(issueNumber: number, codeStep: CodeStep): ItemView<StepItem> {
   return {
     band: 'steps',
     issue: buildIssue(issueNumber, codeStep),
-    stage: 'awaiting_review',
+    stage: 'merge',
     step: codeStep,
     phase: 'live',
     arrived: false,
@@ -64,7 +64,11 @@ function render(): HTMLElement {
       },
       {
         provide: DispatchCapacityService,
-        useValue: { capacity: signal(null), loadError: signal(null), load: () => Promise.resolve('loaded') },
+        useValue: {
+          capacity: signal(null),
+          loadError: signal(null),
+          load: () => Promise.resolve('loaded'),
+        },
       },
       { provide: IssueService, useValue: { liveIssueCount: signal(2) } },
     ],
@@ -107,6 +111,8 @@ describe('progress band step rows layout', () => {
     expect(getComputedStyle(waiting, '::after').display).toBe('none');
     expect(getComputedStyle(waiting.querySelector('.step-chip__dot')!).animationName).toBe('none');
     expect(getComputedStyle(working, '::after').animationName).not.toBe('none');
-    expect(getComputedStyle(working.querySelector('.step-chip__dot')!).animationName).not.toBe('none');
+    expect(getComputedStyle(working.querySelector('.step-chip__dot')!).animationName).not.toBe(
+      'none',
+    );
   });
 });

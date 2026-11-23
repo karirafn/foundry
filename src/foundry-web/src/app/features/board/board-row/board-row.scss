@@ -39,6 +39,10 @@
     color: var(--fd-text-success);
   }
 
+  &--rail {
+    grid-template-columns: 5rem 6.5rem minmax(0, 1fr) 11rem auto;
+  }
+
   @media (any-pointer: coarse) {
     min-height: 44px;
   }
@@ -54,6 +58,14 @@
 
 .board-row__repo {
   font-size: 0.8125rem;
+}
+
+.board-row--rail .board-row__lead {
+  grid-column: 1;
+}
+
+.board-row__rail {
+  min-width: 0;
 }
 
 .board-row__title {
@@ -120,6 +132,18 @@
 
   .board-row__marker {
     grid-area: marker;
+  }
+
+  .board-row--rail {
+    grid-template-areas:
+      'lead repo marker'
+      'title title title'
+      'rail rail rail';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .board-row__rail {
+    grid-area: rail;
   }
 }
 

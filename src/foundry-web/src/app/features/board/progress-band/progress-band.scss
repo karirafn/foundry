@@ -30,37 +30,12 @@
   }
 }
 
-.progress-band__empty {
-  color: var(--fd-text-secondary);
-  font-size: 0.875rem;
-  margin: 0;
-}
-
-.progress-band__cards {
-  @include card-grid;
-}
-
 .progress-band__item {
   min-width: 0;
 }
 
-.progress-band__subheading {
-  color: var(--fd-text-secondary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  margin: var(--fd-spacing-lg) 0 var(--fd-spacing-sm);
-
-  &:first-child {
-    margin-top: 0;
-  }
-}
-
 .progress-band__rows {
-  @include row-list;
-}
-
-.progress-band__step {
-  grid-column: 1 / -1;
+  @include row-stack;
 }
 
 @media (forced-colors: active) {

@@ -2,14 +2,22 @@ import { TestBed } from '@angular/core/testing';
 import { WritableSignal, computed, signal } from '@angular/core';
 import { vi } from 'vitest';
 import { IssueSummary } from '../issues/issue.model';
+import { LifecycleStep } from '../issues/lifecycle.model';
 import { IssueService } from '../issues/issue.service';
 import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
 import { AgentActivity } from '../../core/models/agent-activity.model';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { FakeConnectionGate, provideFakeConnectionGate } from '../../core/testing/fake-connection-gate';
+import {
+  FakeConnectionGate,
+  provideFakeConnectionGate,
+} from '../../core/testing/fake-connection-gate';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { RepositoryService } from '../settings/repositories/repository.service';
 import { BoardBandsView, BoardStateService } from './board-state.service';
+
+function onStep(step: string, phase: LifecycleStep['phase'] = 'running'): LifecycleStep {
+  return { step, actor: 'code', status: 'current', phase };
+}
 
 function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
   return {
@@ -232,7 +240,7 @@ describe('BoardStateService', () => {
     ]);
     change(h, [
       buildIssue({ id: 'a', needsAction: true, state: 'failed' }),
-      buildIssue({ id: 'b', stage: 'awaiting_review', state: 'review', needsAction: true }),
+      buildIssue({ id: 'b', stage: 'merge', state: 'review', needsAction: true }),
     ]);
     await vi.advanceTimersByTimeAsync(150);
 
@@ -262,9 +270,7 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a' })]);
 
     // Act
-    change(h, [
-      buildIssue({ id: 'a', stage: 'awaiting_review', state: 'review', needsAction: true }),
-    ]);
+    change(h, [buildIssue({ id: 'a', stage: 'merge', state: 'review', needsAction: true })]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
@@ -425,34 +431,134 @@ describe('BoardStateService', () => {
     expect(h.service.announcement()).toBe('#142 needs you: Failed');
   });
 
-  it('announces a card that starts a code step', async () => {
+  it('announces the new step of an issue whose step changes', async () => {
     // Arrange
     const h = setup();
-    load(h, [buildIssue({ id: 'a', issueNumber: 60 })]);
+    load(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 60,
+        state: 'checks_pending',
+        lifecycle: [onStep('checks')],
+      }),
+    ]);
 
     // Act
     change(h, [
-      buildIssue({ id: 'a', issueNumber: 60, state: 'rebase_pending', codeStep: 'rebasing' }),
+      buildIssue({
+        id: 'a',
+        issueNumber: 60,
+        state: 'rebase_pending',
+        lifecycle: [onStep('rebase')],
+      }),
     ]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
-    expect(h.service.announcement()).toBe('#60 Rebasing…');
+    expect(h.service.announcement()).toBe('#60 Rebase');
   });
 
-  it('does not announce a code step that has not changed', async () => {
+  it('announces the phase of a step whose phase changes', async () => {
     // Arrange
     const h = setup();
-    load(h, [buildIssue({ id: 'a', state: 'checks_pending', codeStep: 'checks' })]);
+    load(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 61,
+        state: 'checks_pending',
+        lifecycle: [onStep('publish')],
+      }),
+    ]);
 
     // Act
     change(h, [
-      buildIssue({ id: 'a', state: 'checks_pending', codeStep: 'checks', title: 'Renamed' }),
+      buildIssue({
+        id: 'a',
+        issueNumber: 61,
+        state: 'checks_pending',
+        lifecycle: [onStep('publish', 'retrying')],
+      }),
+    ]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.announcement()).toBe('#61 Publish, retrying');
+  });
+
+  it('announces a new round', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 62,
+        state: 'checks_pending',
+        lifecycle: [onStep('checks')],
+      }),
+    ]);
+
+    // Act
+    change(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 62,
+        state: 'checks_pending',
+        round: 2,
+        lifecycle: [onStep('checks')],
+      }),
+    ]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.announcement()).toBe('#62 Checks, round 2');
+  });
+
+  it('does not announce a step that has not changed', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [buildIssue({ id: 'a', state: 'checks_pending', lifecycle: [onStep('checks')] })]);
+
+    // Act
+    change(h, [
+      buildIssue({
+        id: 'a',
+        state: 'checks_pending',
+        title: 'Renamed',
+        lifecycle: [onStep('checks')],
+      }),
     ]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
     expect(h.service.announcement()).toBe('');
+  });
+
+  it('announces an arrival in Needs you once, not its new step as well', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 63,
+        state: 'checks_pending',
+        lifecycle: [onStep('checks')],
+      }),
+    ]);
+
+    // Act
+    change(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 63,
+        state: 'failed',
+        needsAction: true,
+        lifecycle: [onStep('implement', 'failed')],
+      }),
+    ]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.announcement()).toBe('#63 needs you: Failed');
   });
 
   describe('completion', () => {
@@ -475,12 +581,12 @@ describe('BoardStateService', () => {
       const h = setup();
       const review = buildIssue({
         id: 'a',
-        stage: 'awaiting_review',
+        stage: 'merge',
         state: 'review',
         needsAction: true,
       });
       load(h, [
-        buildIssue({ id: 'z', stage: 'awaiting_review', state: 'review', needsAction: true }),
+        buildIssue({ id: 'z', stage: 'merge', state: 'review', needsAction: true }),
         review,
       ]);
 
@@ -496,12 +602,36 @@ describe('BoardStateService', () => {
       ]);
     });
 
+    it('holds the completed summary in the ghost, so its rail reaches Done', async () => {
+      // Arrange
+      const h = setup();
+      const merging = buildIssue({
+        id: 'a',
+        state: 'merge_pending',
+        stage: 'merge',
+        lifecycle: [onStep('merge')],
+      });
+      load(h, [merging]);
+
+      // Act
+      complete(h, {
+        ...merging,
+        lifecycle: [{ step: 'done', actor: 'code', status: 'current', phase: null }],
+      });
+      await vi.advanceTimersByTimeAsync(150);
+
+      // Assert
+      const ghost = h.service.bands().steps[0];
+      expect(ghost.phase).toBe('confirm');
+      expect(ghost.issue.lifecycle?.[0].step).toBe('done');
+    });
+
     it('collapses the ghost after 1200 ms', async () => {
       // Arrange
       const h = setup();
       const review = buildIssue({
         id: 'a',
-        stage: 'awaiting_review',
+        stage: 'merge',
         state: 'review',
         needsAction: true,
       });
@@ -520,7 +650,7 @@ describe('BoardStateService', () => {
       const h = setup();
       const review = buildIssue({
         id: 'a',
-        stage: 'awaiting_review',
+        stage: 'merge',
         state: 'review',
         needsAction: true,
       });
@@ -540,7 +670,7 @@ describe('BoardStateService', () => {
       const review = buildIssue({
         id: 'a',
         issueNumber: 139,
-        stage: 'awaiting_review',
+        stage: 'merge',
         state: 'review',
         needsAction: true,
       });
@@ -568,7 +698,7 @@ describe('BoardStateService', () => {
     });
   });
 
-  it('leaves out a card with an unknown stage and warns', () => {
+  it('still shows a card with an unknown stage, without a warning', () => {
     // Arrange
     const h = setup();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -577,8 +707,8 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a', stage: null })]);
 
     // Assert
-    expect(idsIn(h.service.bands(), 'workers')).toEqual([]);
-    expect(warn).toHaveBeenCalled();
+    expect(idsIn(h.service.bands(), 'workers')).toEqual(['a']);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('counts every alert and item on the board', () => {
@@ -612,7 +742,13 @@ describe('BoardStateService', () => {
       buildIssue({ id: 'w' }),
       buildIssue({ id: 's', state: 'checks_pending', codeStep: 'checks' }),
       buildIssue({ id: 'p', state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
-      buildIssue({ id: 'b', state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }),
+      buildIssue({
+        id: 'b',
+        state: 'blocked',
+        awaitsDispatch: true,
+        runKind: 'fresh',
+        waitsOnBlockers: true,
+      }),
     ]);
 
     // Assert
@@ -682,7 +818,15 @@ describe('BoardStateService', () => {
   it('announces a worker that starts', async () => {
     // Arrange
     const h = setup();
-    load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true, runKind: 'fresh' })]);
+    load(h, [
+      buildIssue({
+        id: 'a',
+        issueNumber: 7,
+        state: 'queued',
+        awaitsDispatch: true,
+        runKind: 'fresh',
+      }),
+    ]);
 
     // Act
     change(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'in_progress' })]);
@@ -696,11 +840,19 @@ describe('BoardStateService', () => {
     // Arrange
     const h = setup();
     load(h, [
-      buildIssue({ id: 'a', issueNumber: 8, state: 'revision_queued', awaitsDispatch: true, runKind: 'checks_fix' }),
+      buildIssue({
+        id: 'a',
+        issueNumber: 8,
+        state: 'revision_queued',
+        awaitsDispatch: true,
+        runKind: 'checks_fix',
+      }),
     ]);
 
     // Act
-    change(h, [buildIssue({ id: 'a', issueNumber: 8, state: 'revision_in_progress', runKind: 'checks_fix' })]);
+    change(h, [
+      buildIssue({ id: 'a', issueNumber: 8, state: 'revision_in_progress', runKind: 'checks_fix' }),
+    ]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
@@ -711,7 +863,13 @@ describe('BoardStateService', () => {
     // Arrange
     const h = setup();
     load(h, [
-      buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true, runKind: 'fresh', repositorySlug: 'acme/web' }),
+      buildIssue({
+        id: 'a',
+        state: 'queued',
+        awaitsDispatch: true,
+        runKind: 'fresh',
+        repositorySlug: 'acme/web',
+      }),
     ]);
 
     // Act
@@ -860,7 +1018,13 @@ describe('BoardStateService', () => {
       const h = setup();
       load(h, [
         buildIssue({ id: 'a', issueNumber: 7 }),
-        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
+        buildIssue({
+          id: 'b',
+          issueNumber: 8,
+          state: 'queued',
+          awaitsDispatch: true,
+          runKind: 'fresh',
+        }),
       ]);
       silentRun(h, 'a', 'run-a', new Date(START - 300_000).toISOString());
       expect(h.service.announcement()).toBe('#7 worker silent for 5 minutes');
@@ -884,7 +1048,13 @@ describe('BoardStateService', () => {
       const h = setup();
       load(h, [
         buildIssue({ id: 'a', issueNumber: 7 }),
-        buildIssue({ id: 'b', issueNumber: 8, state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
+        buildIssue({
+          id: 'b',
+          issueNumber: 8,
+          state: 'queued',
+          awaitsDispatch: true,
+          runKind: 'fresh',
+        }),
       ]);
       silentRun(h, 'a', 'run-a', new Date(START - 300_000).toISOString());
       change(h, [
@@ -906,7 +1076,15 @@ describe('BoardStateService', () => {
     it('does not announce silence for a run whose issue is not running', async () => {
       // Arrange
       const h = setup();
-      load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true, runKind: 'fresh' })]);
+      load(h, [
+        buildIssue({
+          id: 'a',
+          issueNumber: 7,
+          state: 'queued',
+          awaitsDispatch: true,
+          runKind: 'fresh',
+        }),
+      ]);
       silentRun(h, 'a', 'run-a', new Date(START - 600_000).toISOString());
 
       // Act

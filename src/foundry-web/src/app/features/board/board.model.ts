@@ -14,10 +14,10 @@ export const STAGE_LABELS: Readonly<Record<BoardStage, string>> = {
   triage: 'Triage',
   implement: 'Implement',
   review: 'Review',
-  awaiting_review: 'Your review',
+  merge: 'Merge',
 };
 
-export const STAGE_ORDER: readonly BoardStage[] = ['triage', 'implement', 'review', 'awaiting_review'];
+export const STAGE_ORDER: readonly BoardStage[] = ['triage', 'implement', 'review', 'merge'];
 
 /** The label that starts work on an issue; the backend constant `WebhookRelevance.TriggerLabel`. */
 export const TRIGGER_LABEL = 'foundry';
@@ -56,7 +56,8 @@ export type BoardBand = 'needs' | 'workers' | 'steps' | 'pipeline' | 'blocked';
 
 interface ItemBase {
   readonly issue: IssueSummary;
-  readonly stage: BoardStage;
+  /** Null when the server sent a stage this dashboard does not know; the row is still shown. */
+  readonly stage: BoardStage | null;
 }
 
 export interface NeedsItem extends ItemBase {
@@ -68,12 +69,12 @@ export interface NeedsItem extends ItemBase {
 
 export interface WorkerItem extends ItemBase {
   readonly band: 'workers';
-  readonly runKind: RunKind;
+  readonly runKind: RunKind | null;
 }
 
+/** In progress with no worker running: a step Foundry's own code runs, or facts no other rule places. */
 export interface StepItem extends ItemBase {
   readonly band: 'steps';
-  readonly step: CodeStep;
 }
 
 /**
@@ -87,13 +88,13 @@ export type PipelineSlot =
 
 export interface PipelineItem extends ItemBase {
   readonly band: 'pipeline';
-  readonly runKind: RunKind;
+  readonly runKind: RunKind | null;
   readonly slot: PipelineSlot;
 }
 
 export interface BlockedItem extends ItemBase {
   readonly band: 'blocked';
-  readonly runKind: RunKind;
+  readonly runKind: RunKind | null;
 }
 
 export type BoardItem = NeedsItem | WorkerItem | StepItem | PipelineItem | BlockedItem;
@@ -116,11 +117,6 @@ export interface BoardBands {
   readonly steps: readonly StepItem[];
   readonly pipeline: readonly PipelineItem[];
   readonly blocked: readonly BlockedItem[];
-  /**
-   * Issues no band rule places: an unknown stage, an unknown combination of facts, or a pipeline or
-   * blocked issue without a known run kind.
-   */
-  readonly unplaced: readonly IssueSummary[];
 }
 
 /** The lists that hold issue items, keyed by band. */
@@ -274,8 +270,11 @@ export function isRunning(issue: IssueSummary): boolean {
   return WORKING_STATES.has(issue.state) && issue.publishPhase == null;
 }
 
-/** The band an issue belongs in, from the server's facts only; the first matching rule wins. */
-export function bandFor(issue: IssueSummary): BoardBand | null {
+/**
+ * The band an issue belongs in, from the server's facts only; the first matching rule wins. Facts no
+ * rule matches still show in In progress, so live work never disappears from the board.
+ */
+export function bandFor(issue: IssueSummary): BoardBand {
   // A failed review run waits for its automatic retry with no worker, step or queue slot, so it
   // shows with the failures, as every other auto-retryable failed state does, rather than vanish.
   if (issue.needsAction || issue.state === 'review_failed') {
@@ -284,16 +283,13 @@ export function bandFor(issue: IssueSummary): BoardBand | null {
   if (isRunning(issue)) {
     return 'workers';
   }
-  if (issue.codeStep !== null) {
-    return 'steps';
-  }
   if (issue.waitsOnBlockers) {
     return 'blocked';
   }
   if (issue.awaitsDispatch) {
     return 'pipeline';
   }
-  return null;
+  return 'steps';
 }
 
 function isHeldByRepository(issue: IssueSummary): boolean {
@@ -395,18 +391,13 @@ export function buildBoardBands(
   const steps: StepItem[] = [];
   const pipeline: PipelineItem[] = [];
   const blocked: BlockedItem[] = [];
-  const unplaced: IssueSummary[] = [];
 
   for (const issue of issues) {
     const stage = issue.stage;
     if (stage === 'done') {
       continue;
     }
-    const band = stage === null ? null : bandFor(issue);
-    if (stage === null || band === null) {
-      unplaced.push(issue);
-      continue;
-    }
+    const band = bandFor(issue);
     switch (band) {
       case 'needs': {
         const { label, tone, explanation } = reasonCopy(issue);
@@ -420,32 +411,15 @@ export function buildBoardBands(
         break;
       }
       case 'workers':
-        // The tag names the run in flight; without a known run kind the card isn't guessed at.
-        if (issue.runKind === null) {
-          unplaced.push(issue);
-          break;
-        }
         workers.push({ band, issue, stage, runKind: issue.runKind });
         break;
       case 'steps':
-        // bandFor places an issue here only with a code step.
-        if (issue.codeStep !== null) {
-          steps.push({ band, issue, stage, step: issue.codeStep });
-        }
+        steps.push({ band, issue, stage });
         break;
       case 'blocked':
-        // The tag names the run ahead; without a known run kind the row isn't guessed at.
-        if (issue.runKind === null) {
-          unplaced.push(issue);
-          break;
-        }
         blocked.push({ band, issue, stage, runKind: issue.runKind });
         break;
       case 'pipeline':
-        if (issue.runKind === null) {
-          unplaced.push(issue);
-          break;
-        }
         pipeline.push({
           band,
           issue,
@@ -465,7 +439,6 @@ export function buildBoardBands(
     steps,
     pipeline: orderedPipeline,
     blocked,
-    unplaced,
   };
 }
 

@@ -9,7 +9,10 @@ import { vi } from 'vitest';
 import { LoadOutcome } from '../../../core/models/load-outcome';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { SettingsService } from '../../../core/services/settings.service';
-import { FakeConnectionGate, provideFakeConnectionGate } from '../../../core/testing/fake-connection-gate';
+import {
+  FakeConnectionGate,
+  provideFakeConnectionGate,
+} from '../../../core/testing/fake-connection-gate';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { AgentActivity } from '../../../core/models/agent-activity.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
@@ -240,7 +243,12 @@ describe('BoardPageComponent', () => {
   it('shows the bands in priority order', async () => {
     // Act
     const { el } = await loaded([
-      item('b', 1, { state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }),
+      item('b', 1, {
+        state: 'blocked',
+        awaitsDispatch: true,
+        runKind: 'fresh',
+        waitsOnBlockers: true,
+      }),
       item('p', 2, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       item('w', 3),
       item('n', 4, { state: 'failed', needsAction: true }),
@@ -254,7 +262,7 @@ describe('BoardPageComponent', () => {
       'board-band-blocked',
     ]);
     expect(idsIn(el, '[aria-label="Issues that need you"]')).toEqual(['n']);
-    expect(idsIn(el, '[aria-label="Running workers"]')).toEqual(['w']);
+    expect(idsIn(el, '[aria-label="Issues in progress"]')).toEqual(['w']);
     expect(idsIn(el, '[aria-label="Pipeline in dispatch order"]')).toEqual(['p']);
     expect(idsIn(el, '[aria-label="Blocked issues"]')).toEqual(['b']);
   });
@@ -265,20 +273,18 @@ describe('BoardPageComponent', () => {
 
     // Assert
     const sections = [...el.querySelectorAll('.board section')];
-    expect(sections.map((s) => s.getAttribute('aria-labelledby'))).toEqual([
-      'board-band-needs',
-      'board-band-progress',
-    ]);
+    expect(sections.map((s) => s.getAttribute('aria-labelledby'))).toEqual(['board-band-progress']);
   });
 
   describe('Needs you', () => {
-    it('says nothing needs you, untinted, when it is empty', async () => {
+    it('is hidden when nothing needs you', async () => {
       // Act
       const { el } = await loaded([item('w', 3)]);
 
       // Assert
-      expect(text(el.querySelector('.needs-band__empty'))).toBe('Nothing needs you');
+      expect(el.querySelector('#board-band-needs')).toBeNull();
       expect(el.querySelector('.board-band--tinted')).toBeNull();
+      expect(text(el)).not.toContain('Nothing needs you');
     });
 
     it('is the one tinted band, and counts its alerts and cards', async () => {
@@ -350,7 +356,7 @@ describe('BoardPageComponent', () => {
       // Act
       const { el } = await loaded([
         item('ready', 1, {
-          stage: 'awaiting_review',
+          stage: 'merge',
           state: 'review',
           needsAction: true,
           enteredStateAt: minutesAgo(90),
@@ -388,14 +394,13 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const card = el.querySelector('fd-needs-card')!;
-      expect(text(card.querySelector('.needs-card__reason'))).toBe('Needs answers');
-      expect(text(card.querySelector('fd-stage-chip'))).toBe('Stage: Implement');
-      const ref = card.querySelector('fd-issue-ref.needs-card__ref')!;
+      const card = el.querySelector('fd-lifecycle-row')!;
+      expect(text(card.querySelector('.lifecycle-row__reason'))).toBe('Needs answers');
+      const ref = card.querySelector('fd-issue-ref.lifecycle-row__ref')!;
       expect(text(ref.querySelector('.issue-ref__name'))).toBe('api');
       expect(text(ref.querySelector('.issue-ref__number'))).toBe('#42');
       expect(ref.getAttribute('title')).toBe('acme/api');
-      expect(text(card.querySelector('.needs-card__why'))).toBe(
+      expect(text(card.querySelector('.lifecycle-row__why'))).toBe(
         'Questions are waiting for your answers',
       );
       expect(text(card.querySelector('time'))).toBe('waiting 12m');
@@ -408,8 +413,8 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const card = el.querySelector('fd-needs-card')!;
-      const buttons = card.querySelectorAll('button');
+      const card = el.querySelector('fd-lifecycle-row')!;
+      const buttons = card.querySelectorAll('button:not([hidden])');
       expect(buttons).toHaveLength(1);
       expect(buttons[0].getAttribute('aria-label')).toBe('Add retry, #42');
       expect(buttons[0].getAttribute('aria-haspopup')).toBe('dialog');
@@ -420,7 +425,7 @@ describe('BoardPageComponent', () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
-          stage: 'awaiting_review',
+          stage: 'merge',
           state: 'review',
           needsAction: true,
           providerType: 'gitlab',
@@ -429,7 +434,7 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const link = el.querySelector<HTMLAnchorElement>('fd-needs-card a')!;
+      const link = el.querySelector<HTMLAnchorElement>('fd-lifecycle-row a')!;
       expect(link.getAttribute('href')).toBe('https://gitlab.com/acme/api/-/merge_requests/3');
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
@@ -440,7 +445,7 @@ describe('BoardPageComponent', () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
-          stage: 'awaiting_review',
+          stage: 'merge',
           state: 'review',
           needsAction: true,
           providerType: 'github',
@@ -451,7 +456,7 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const link = el.querySelector<HTMLAnchorElement>('fd-needs-card a')!;
+      const link = el.querySelector<HTMLAnchorElement>('fd-lifecycle-row a')!;
       expect(link.getAttribute('href')).toBe('https://github.com/acme/api/pull/3');
       expect(text(link)).toBe('Review PR ↗ (opens GitHub in a new tab)');
     });
@@ -460,7 +465,7 @@ describe('BoardPageComponent', () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
-          stage: 'awaiting_review',
+          stage: 'merge',
           state: 'review',
           needsAction: true,
           providerType: 'github',
@@ -471,14 +476,14 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const card = el.querySelector('fd-needs-card')!;
-      expect(text(card.querySelector('.needs-card__why'))).toBe(
+      const card = el.querySelector('fd-lifecycle-row')!;
+      expect(text(card.querySelector('.lifecycle-row__why'))).toBe(
         "Checks passed; the review didn't finish: invalid verdict",
       );
       expect(text(card.querySelector('a'))).toBe('Review PR ↗ (opens GitHub in a new tab)');
     });
 
-    it('shows a failed review run in the Review stage, the third of four pips', async () => {
+    it('shows its lifecycle rail with the current step marked', async () => {
       // Act
       const { el } = await loaded([
         item('f', 8, {
@@ -487,23 +492,36 @@ describe('BoardPageComponent', () => {
           needsAction: false,
           runKind: null,
           failureClassification: 'transient_api_error',
+          lifecycle: [
+            { step: 'implement', actor: 'claude', status: 'done', phase: null },
+            { step: 'review', actor: 'claude', status: 'current', phase: 'retrying' },
+            { step: 'your_review', actor: 'person', status: 'upcoming', phase: null },
+          ],
         }),
       ]);
 
       // Assert
-      const chip = el.querySelector('fd-needs-card fd-stage-chip')!;
-      expect(text(chip)).toBe('Stage: Review');
-      expect([...chip.querySelectorAll('.stage-chip__pip')].map((p) => p.getAttribute('data-pip'))).toEqual([
-        'past',
-        'past',
-        'current',
-        'next',
-      ]);
+      const rail = el.querySelector(
+        'fd-lifecycle-row fd-lifecycle-rail ol[aria-label="Lifecycle"]',
+      )!;
+      expect(rail.querySelector('[aria-current="step"]')?.getAttribute('aria-label')).toBe(
+        'Review, by Claude, current, retrying',
+      );
+      expect(rail.querySelectorAll('li')).toHaveLength(3);
+    });
+
+    it('shows no rail when the server serves no lifecycle', async () => {
+      // Act
+      const { el } = await loaded([item('n', 4, { state: 'failed', needsAction: true })]);
+
+      // Assert
+      expect(el.querySelector('fd-lifecycle-row')).not.toBeNull();
+      expect(el.querySelector('fd-lifecycle-rail')).toBeNull();
     });
   });
 
   describe('In progress', () => {
-    it('shows a worker card with its run kind, elapsed time and a status-only footer', async () => {
+    it('shows a running row with its run kind, number and elapsed time', async () => {
       // Act
       const { el } = await loaded([
         item('w', 3, {
@@ -515,18 +533,45 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const card = el.querySelector('fd-worker-card')!;
-      expect(text(card.querySelector('fd-run-kind-tag'))).toBe('Run: triage');
-      const meta = card.querySelector('.worker-card__meta')!;
-      expect([...meta.children].map((c) => c.tagName.toLowerCase())).toEqual([
-        'fd-run-kind-tag',
-        'fd-issue-ref',
+      const row = el.querySelector('fd-lifecycle-row')!;
+      expect(text(row.querySelector('fd-run-kind-tag'))).toBe('Run: triage');
+      expect(text(row.querySelector('.lifecycle-row__head fd-issue-ref .issue-ref__number'))).toBe(
+        '#3',
+      );
+      expect(text(row.querySelector('.lifecycle-row__status .lifecycle-row__clock'))).toBe(
+        'Running for running 12m',
+      );
+      expect(row.querySelector('a')).toBeNull();
+    });
+
+    it('shows a running row with an unknown run kind, without a tag', async () => {
+      // Act
+      const { el } = await loaded([item('w', 3, { runKind: 'deploy' })]);
+
+      // Assert
+      expect(idsIn(el, '[aria-label="Issues in progress"]')).toEqual(['w']);
+      expect(el.querySelector('fd-run-kind-tag')).toBeNull();
+    });
+
+    it('loops only the current node of a running row', async () => {
+      // Act
+      const { el } = await loaded([
+        item('w', 3, {
+          lifecycle: [{ step: 'implement', actor: 'claude', status: 'current', phase: 'running' }],
+        }),
+        item('m', 4, {
+          state: 'merge_pending',
+          stage: 'merge',
+          codeStep: 'catch_up_waiting',
+          lifecycle: [{ step: 'merge', actor: 'code', status: 'current', phase: 'waiting' }],
+        }),
       ]);
-      expect(text(meta.querySelector('fd-issue-ref .issue-ref__number'))).toBe('#3');
-      const status = card.querySelector('.worker-card__footer .worker-card__status')!;
-      expect(text(status.querySelector('.worker-card__elapsed'))).toBe('Running for running 12m');
-      expect(card.querySelector('.worker-card__footer')!.children.length).toBe(1);
-      expect(card.querySelector('a')).toBeNull();
+
+      // Assert
+      const running = [...el.querySelectorAll('.lifecycle-row--running')].map((r) =>
+        r.closest('fd-lifecycle-row')!.getAttribute('data-issue-id'),
+      );
+      expect(running).toEqual(['w']);
     });
 
     describe('worker activity', () => {
@@ -558,7 +603,7 @@ describe('BoardPageComponent', () => {
           "Waiting for the agent's first event",
         ]);
         expect(el.querySelector('.last-event__event')).toBeNull();
-        expect(el.querySelector('.worker-card__sep')).toBeNull();
+        expect(el.querySelector('.lifecycle-row__sep')).toBeNull();
       });
 
       it('shows the current task and its position on a hidden segmented bar, with no tool line', async () => {
@@ -618,12 +663,12 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const button = h.el.querySelector('.worker-card__title')!;
+        const button = h.el.querySelector('.lifecycle-row__title')!;
         const ids = button.getAttribute('aria-describedby')!.split(' ');
         expect(ids.map((id) => text(h.el.querySelector(`[id="${id}"]`)))).toContain(
           'Running tests',
         );
-        const card = h.el.querySelector('fd-worker-card')!;
+        const card = h.el.querySelector('fd-lifecycle-row')!;
         expect(card.querySelector('[aria-live], [role="status"]')).toBeNull();
       });
 
@@ -636,14 +681,12 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const button = h.el.querySelector('.worker-card__title')!;
+        const button = h.el.querySelector('.lifecycle-row__title')!;
         expect(button.getAttribute('aria-describedby')).toBe(
-          'worker-card-w-meta worker-card-w-task worker-card-w-status',
+          'lifecycle-row-w-ref lifecycle-row-w-task lifecycle-row-w-clock',
         );
-        expect(spoken(h.el.querySelector('[id="worker-card-w-meta"]'))).toMatch(
-          /^Run: implement ?acme\/api #3$/,
-        );
-        expect(spoken(h.el.querySelector('[id="worker-card-w-status"]'))).toBe(
+        expect(spoken(h.el.querySelector('[id="lifecycle-row-w-ref"]'))).toMatch(/acme\/api ?#3/);
+        expect(spoken(h.el.querySelector('[id="lifecycle-row-w-clock"]'))).toBe(
           'Running for 12m, last event 2m ago',
         );
       });
@@ -657,13 +700,12 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const card = h.el.querySelector('fd-worker-card')!;
-        const button = card.querySelector('.worker-card__title')!;
+        const card = h.el.querySelector('fd-lifecycle-row')!;
+        const button = card.querySelector('.lifecycle-row__title')!;
         expect(button.getAttribute('aria-describedby')).toBe(
-          'worker-card-w-meta worker-card-w-status',
+          'lifecycle-row-w-ref lifecycle-row-w-status',
         );
-        expect(text(card.querySelector('[id="worker-card-w-status"]'))).toBe('Completed');
-        expect(card.querySelector('.worker-card__meta .worker-card__completed')).toBeNull();
+        expect(text(card.querySelector('[id="lifecycle-row-w-status"]'))).toBe('Completed');
         expect(card.querySelector('fd-worker-activity')).toBeNull();
       });
 
@@ -676,10 +718,10 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const event = h.el.querySelector('.worker-card__status .last-event__event')!;
+        const event = h.el.querySelector('.lifecycle-row__status .last-event__event')!;
         expect(text(event)).toBe('last event 2m ago');
-        expect(h.el.querySelector('.worker-card__sep')?.getAttribute('aria-hidden')).toBe('true');
-        expect(h.el.querySelector('.worker-card--silent')).toBeNull();
+        expect(h.el.querySelector('.lifecycle-row__sep')?.getAttribute('aria-hidden')).toBe('true');
+        expect(h.el.querySelector('.lifecycle-row[data-tone="warning"]')).toBeNull();
       });
 
       it('turns the card silent at the silence threshold', async () => {
@@ -705,7 +747,7 @@ describe('BoardPageComponent', () => {
         expect(text(event)).toBe('silent 6m · Bash running');
         expect(event.classList).toContain('last-event__event--silent');
         expect(event.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
-        expect(h.el.querySelector('.worker-card--silent')).not.toBeNull();
+        expect(h.el.querySelector('.lifecycle-row[data-tone="warning"]')).not.toBeNull();
       });
 
       it('names the background task it waits on instead of turning silent', async () => {
@@ -732,17 +774,17 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        const waiting = h.el.querySelector('.worker-card__status .last-event__waiting')!;
+        const waiting = h.el.querySelector('.lifecycle-row__status .last-event__waiting')!;
         expect(waiting.getAttribute('aria-hidden')).toBe('true');
         expect(text(waiting)).toBe('waiting on dotnet test +2 more · 7m');
         expect(text(waiting.querySelector('.last-event__command'))).toBe('dotnet test');
         expect(waiting.getAttribute('title')).toBe('dotnet test\nnpm test\na background task');
-        expect(text(h.el.querySelector('.worker-card__status .sr-only:last-child'))).toBe(
+        expect(text(h.el.querySelector('.lifecycle-row__status .sr-only:last-child'))).toBe(
           'waiting on 3 background tasks, 7m',
         );
         expect(h.el.querySelector('.last-event__event')).toBeNull();
         expect(h.el.querySelector('.last-event__warning')).toBeNull();
-        expect(h.el.querySelector('.worker-card--silent')).toBeNull();
+        expect(h.el.querySelector('.lifecycle-row[data-tone="warning"]')).toBeNull();
       });
 
       it('keeps the last-event line below the threshold while background tasks run', async () => {
@@ -777,18 +819,24 @@ describe('BoardPageComponent', () => {
         await h.render();
 
         // Assert
-        expect(text(h.el.querySelector('fd-worker-card fd-run-kind-tag'))).toBe('Run: implement');
+        expect(text(h.el.querySelector('fd-lifecycle-row fd-run-kind-tag'))).toBe('Run: implement');
       });
     });
 
-    it('lists the steps Foundry runs under their own heading', async () => {
+    it('shows a step Foundry runs as a row in the same list, saying what it does', async () => {
       // Act
-      const { el } = await loaded([item('s', 3, { state: 'checks_pending', codeStep: 'checks' })]);
+      const { el } = await loaded([
+        item('s', 3, {
+          state: 'checks_pending',
+          codeStep: 'checks',
+          lifecycle: [{ step: 'checks', actor: 'code', status: 'current', phase: 'running' }],
+        }),
+      ]);
 
       // Assert
-      expect(text(el.querySelector('h3'))).toBe('Handled by Foundry');
-      const row = el.querySelector('[aria-label="Steps Foundry is running"] fd-board-row')!;
-      expect(text(row.querySelector('fd-step-chip'))).toBe('Checks running…');
+      expect(el.querySelector('h3')).toBeNull();
+      expect(idsIn(el, '[aria-label="Issues in progress"]')).toEqual(['s']);
+      expect(text(el.querySelector('.lifecycle-row__doing'))).toBe('Waiting for checks');
     });
 
     it('shows the slots in use in its heading', async () => {
@@ -818,25 +866,16 @@ describe('BoardPageComponent', () => {
       );
     });
 
-    it('says how many are queued when nothing runs', async () => {
+    it('is hidden when nothing runs', async () => {
       // Act
       const { el } = await loaded([
         item('a', 1, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
-        item('b', 2, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
+        item('n', 4, { state: 'failed', needsAction: true }),
       ]);
 
       // Assert
-      expect(text(el.querySelector('.progress-band__empty'))).toBe(
-        'No runs. 2 queued, waiting to dispatch',
-      );
-    });
-
-    it('says idle when nothing runs or waits', async () => {
-      // Act
-      const { el } = await loaded([item('n', 4, { state: 'failed', needsAction: true })]);
-
-      // Assert
-      expect(text(el.querySelector('.progress-band__empty'))).toBe('Idle');
+      expect(el.querySelector('#board-band-progress')).toBeNull();
+      expect(el.querySelector('.progress-band__pips')).toBeNull();
     });
   });
 
@@ -844,8 +883,18 @@ describe('BoardPageComponent', () => {
     it('lists every queued issue in global dispatch order with its position', async () => {
       // Act
       const { el } = await loaded([
-        item('t', 1, { stage: 'triage', state: 'triage_queued', awaitsDispatch: true, runKind: 'triage' }),
-        item('d', 2, { stage: 'triage', state: 'detected', awaitsDispatch: true, runKind: 'triage' }),
+        item('t', 1, {
+          stage: 'triage',
+          state: 'triage_queued',
+          awaitsDispatch: true,
+          runKind: 'triage',
+        }),
+        item('d', 2, {
+          stage: 'triage',
+          state: 'detected',
+          awaitsDispatch: true,
+          runKind: 'triage',
+        }),
         item('x', 3, {
           state: 'queued',
           awaitsDispatch: true,
@@ -916,7 +965,9 @@ describe('BoardPageComponent', () => {
 
     it('says the queue order may be out of date beside its heading', async () => {
       // Arrange
-      const h = await loaded([item('i', 4, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' })]);
+      const h = await loaded([
+        item('i', 4, { state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
+      ]);
 
       // Act
       (
@@ -932,17 +983,29 @@ describe('BoardPageComponent', () => {
       );
     });
 
-    it("leads a revision queued by failing checks with its run kind, not its role", async () => {
+    it('shows a static mini rail and one status phrase on a pipeline row', async () => {
       // Act
       const { el } = await loaded([
-        item('r', 1030, { state: 'revision_queued', awaitsDispatch: true, runKind: 'checks_fix' }),
+        item('r', 1030, {
+          state: 'revision_queued',
+          awaitsDispatch: true,
+          runKind: 'checks_fix',
+          round: 2,
+          lifecycle: [
+            { step: 'implement', actor: 'claude', status: 'done', phase: null },
+            { step: 'queued', actor: 'code', status: 'current', phase: 'waiting' },
+            { step: 'implement', actor: 'claude', status: 'upcoming', phase: null },
+          ],
+        }),
       ]);
 
       // Assert
-      const lead = el.querySelector('ol[aria-label="Pipeline in dispatch order"] fd-board-row .board-row__lead');
-      expect(text(lead?.querySelector('fd-run-kind-tag'))).toBe('Run: checks fix');
-      expect(lead?.querySelector('fd-role-tag')).toBeNull();
-      expect(text(lead)).toBe('Position #1 next Run: checks fix');
+      const row = el.querySelector('ol[aria-label="Pipeline in dispatch order"] fd-board-row')!;
+      expect(text(row.querySelector('.board-row__lead'))).toBe('Position #1 next');
+      expect(row.querySelector('fd-lifecycle-rail .rail')?.getAttribute('aria-hidden')).toBe(
+        'true',
+      );
+      expect(text(row.querySelector('.board-row__marker'))).toBe('Queued for implement · round 2');
     });
 
     it('is hidden with no rows', async () => {
@@ -956,7 +1019,12 @@ describe('BoardPageComponent', () => {
 
   describe('Blocked', () => {
     const blocked = () => [
-      item('b', 1, { state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }),
+      item('b', 1, {
+        state: 'blocked',
+        awaitsDispatch: true,
+        runKind: 'fresh',
+        waitsOnBlockers: true,
+      }),
     ];
 
     it('is collapsed by default behind a disclosure in its heading', async () => {
@@ -977,7 +1045,13 @@ describe('BoardPageComponent', () => {
     it('leads each row with its run kind, not its role', async () => {
       // Act
       const { el } = await loaded([
-        item('b', 1, { stage: 'triage', state: 'triage_blocked', awaitsDispatch: true, runKind: 'triage', waitsOnBlockers: true }),
+        item('b', 1, {
+          stage: 'triage',
+          state: 'triage_blocked',
+          awaitsDispatch: true,
+          runKind: 'triage',
+          waitsOnBlockers: true,
+        }),
       ]);
 
       // Assert
@@ -1110,7 +1184,9 @@ describe('BoardPageComponent', () => {
       // Assert
       expect(h.el.querySelector('.board')).toBeNull();
       expect(h.el.querySelector('#board-heading')).toBeNull();
-      expect(text(h.el.querySelector('.connection-gate__heading'))).toBe('Reconnecting to Foundry…');
+      expect(text(h.el.querySelector('.connection-gate__heading'))).toBe(
+        'Reconnecting to Foundry…',
+      );
       expect(h.el.textContent).not.toContain('showing last known state');
     });
 
@@ -1209,7 +1285,9 @@ describe('BoardPageComponent', () => {
       // Assert
       expect(TestBed.inject(Router).url).toBe('/');
       expect(h.el.querySelector('[role="dialog"].side-sheet:not(.side-sheet--leave)')).toBeNull();
-      expect(announced(h)).toBe('Issue #142 is no longer on the board. Board is up to date. Nothing needs you.');
+      expect(announced(h)).toBe(
+        'Issue #142 is no longer on the board. Board is up to date. Nothing needs you.',
+      );
     });
   });
 
@@ -1405,7 +1483,12 @@ describe('BoardPageComponent', () => {
       await openCard(h, 'f');
       h.httpMock.expectOne('/api/issues/f');
       TestBed.inject(IssueService).issues.set([
-        item('f', 142, { state: 'blocked', awaitsDispatch: true, runKind: 'fresh', waitsOnBlockers: true }) as never,
+        item('f', 142, {
+          state: 'blocked',
+          awaitsDispatch: true,
+          runKind: 'fresh',
+          waitsOnBlockers: true,
+        }) as never,
       ]);
       await new Promise((resolve) => setTimeout(resolve, 200));
       await h.render();

@@ -5,3 +5,7 @@ $sheet-overlay-breakpoint: 900px;
 // Below this width the top bar wraps to two rows, page padding tightens, board rows reflow to two
 // lines and cards go full width.
 $compact-breakpoint: 640px;
+
+// Below this width the board's lifecycle rail drops its stage brackets and step labels and shrinks
+// its nodes, so every step still fits one row.
+$rail-breakpoint: 760px;

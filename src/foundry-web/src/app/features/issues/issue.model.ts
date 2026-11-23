@@ -4,6 +4,7 @@ import { WORKING_STATES } from '../../shared/utils/issue-state';
 import type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-kind';
 import type { RunKind } from '../../shared/utils/run-kind';
 import type { TokenTotal } from '../workers/run-totals.model';
+import type { LifecycleStep } from './lifecycle.model';
 
 export interface RunStats {
   runCount: number;
@@ -22,7 +23,7 @@ export type PublishPhase = 'publishing' | 'retrying';
  * The part of the lifecycle that owns the issue, as the server declares it. `done` is a known value
  * that the board never places.
  */
-export type IssueStage = 'triage' | 'implement' | 'review' | 'awaiting_review' | 'done';
+export type IssueStage = 'triage' | 'implement' | 'review' | 'merge' | 'done';
 
 export const CODE_STEPS = [
   'publishing',
@@ -93,15 +94,7 @@ export interface IssueSummary {
    * The issue's whole lifecycle path, every step in order, as the server decides it. Absent when the server sends
    * none. Tokens stay as served, so a step this dashboard does not know yet is kept.
    */
-  lifecycle?: LifecycleStepInfo[];
-}
-
-/** One step on an issue's lifecycle path; `phase` is set only on the current step. */
-export interface LifecycleStepInfo {
-  step: string;
-  actor: string;
-  status: string;
-  phase: string | null;
+  lifecycle?: readonly LifecycleStep[];
 }
 
 export interface EligibilityViolation {
