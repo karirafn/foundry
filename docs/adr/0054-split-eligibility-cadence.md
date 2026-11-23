@@ -1,6 +1,8 @@
-# Split Repository-Eligibility Cadence: Branch Rules Per-Cycle, Write Probes Event-Triggered
+---
+reaches: non-functional
+---
 
-> **2026-11-18 — Amended:** the event-triggered-only cadence for a `Denied` verdict in Decision is replaced by [ADR 0115](0115-one-account-token-verified-against-every-permission-foundry-uses.md): a `Denied` verdict is re-probed after a one-hour cooldown, and a verdict taken against an older permission list is re-probed as unprobed. `Granted` stays event-triggered.
+# Split Repository-Eligibility Cadence: Branch Rules Per-Cycle, Write Probes Event-Triggered
 
 ## Context
 
@@ -32,36 +34,40 @@ object (`Granted` / `Denied` / `Unknown`).
 current `RepositoryEligibility`.
 `Unknown` maps to `Unreachable` so a repository that has never been probed is never dispatchable.
 
+Two verdicts also re-probe on their own, so neither is an absorbing state:
+
+- **`Unknown` self-heals on a 15-minute cooldown.** A repository whose stored verdict is `Unknown`
+  (a never-probed repository, or a probe that failed or was rate-limited) is re-probed on the next
+  poll cycle once `MonitoredRepository.WriteProbeCooldown` has elapsed since its last attempt. A
+  failed automatic probe stamps the attempt time (`WriteProbeVerdict.Unknown.LastAttemptedAt`), so
+  the next retry is one cooldown away rather than immediate.
+- **`Denied` is re-probed after a one-hour cooldown** (`MonitoredRepository.DeniedWriteProbeCooldown`),
+  because a permission gained in place on the provider leaves the token unchanged and so raises no
+  credential event ([ADR 0115](0115-one-account-token-verified-against-every-permission-foundry-uses.md)).
+
+A verdict taken against an older permission list is re-probed as unprobed. A current `Granted`
+stays strictly event-triggered.
+
 This supersedes the "runs every cycle" clause of ADR 0013 for the write-probe half only — the
 branch-rules half remains an unconditional per-cycle step as originally decided.
 It realises the "on add or recheck" cadence.
 
 ## Consequences
 
-- Steady-state polling issues zero write probes; the GitHub secondary rate limit is no longer
-  approached during normal operation.
-- A write-permission change is picked up by manual re-check or credential update, not automatically
+- Steady-state polling issues zero write probes for a granted repository; the GitHub secondary rate
+  limit is no longer approached during normal operation.
+- A write-permission loss is picked up by manual re-check or credential update, not automatically
   on the next poll. An automatic push-failure trigger is deferred to a follow-up (no
   distinguishable push-permission-failure signal exists in the worker exit taxonomy today).
 - Auto-heal for branch rulesets is unchanged: a protection-rule change is reflected on the very
   next poll cycle.
-- Requires a migration adding a nullable `write_probe_verdict TEXT` column (`NULL` → `Unknown`).
+- Sizing constraint: while re-probing, a repository issues 3 content-creation POSTs per probe, so
+  the worst case is `R × 3 × 60 / C` POSTs/hour for `R` repositories at a `C`-minute cooldown —
+  84/hour for 7 repositories at 15 minutes, against a 500/hour GitHub secondary limit, and zero in
+  steady state. Past roughly 40 repositories the 15-minute window exceeds the budget; the global
+  request governor ([ADR 0066](0066-provider-api-request-budget-governor.md)) inherits this
+  constraint rather than a second local throttle.
 
-## Amendment (2026-08-25): Unknown self-heal cooldown
-
-`Unknown` was an absorbing state — the only exits were operator/credential events, so a
-migration-backfilled `NULL` verdict or a rate-limited probe parked a repository at `Unreachable`
-indefinitely, silently halting dispatch (#465).
-
-`Unknown` now self-heals: a repository whose stored verdict is `Unknown` is re-probed on the next
-poll cycle once a **15-minute cooldown** has elapsed since its last attempt. A failed automatic
-probe stamps the attempt time (`WriteProbeVerdict.Unknown.LastAttemptedAt`), so the next retry is
-one cooldown away rather than immediate. `Granted` and `Denied` remain strictly event-triggered —
-`Denied` is knowledge and self-healing it would reintroduce a permanent probe floor for
-read-only repositories (#463 owns the push-failure trigger).
-
-Sizing constraint: while failing, a repository issues 3 content-creation POSTs per probe, so worst
-case is `R × 3 × 60 / C` POSTs/hour for `R` repositories at a `C`-minute cooldown — 84/hour for 7
-repositories at 15 minutes, against a 500/hour GitHub secondary limit, and zero in steady state.
-Past roughly 40 repositories the 15-minute window exceeds the budget; a global request governor
-(#454) inherits this constraint rather than a second local throttle.
+## Revisions
+- 2026-08-25 — `Unknown` self-heals: re-probed on the next poll once a 15-minute cooldown has elapsed since its last attempt (#465).
+- 2026-11-18 — A `Denied` verdict is re-probed after a one-hour cooldown, and a verdict taken against an older permission list is re-probed as unprobed ([ADR 0115](0115-one-account-token-verified-against-every-permission-foundry-uses.md)).

@@ -1,3 +1,7 @@
+---
+reaches: external-contract
+---
+
 # 429 Status as Primary Usage-Limit Signal
 
 ## Context

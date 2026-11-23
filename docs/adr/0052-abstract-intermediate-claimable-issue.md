@@ -1,3 +1,7 @@
+---
+reaches: hidden-invariant
+---
+
 # Abstract intermediate QueuedIssue collapses three-way queued-variant unions
 
 ## Context
@@ -13,17 +17,17 @@ Introduce `abstract QueuedIssue : Issue` as an explicit intermediate in the Issu
 - `TierRank` (abstract, computed) — dispatch-priority rank, overridden by each concrete variant.
 - `DispatchBranchName` (abstract, computed) — branch name the worker operates on.
 - `Context` (abstract, computed) — the `DispatchContext` union value (Fresh / Revision / Continuation), assembled on the aggregate, not in the handler.
-- `Claim(Guid workerRunId)` (abstract) — transitions to the in-progress state with a covariant return override on each concrete type.
+- `Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)` (abstract) — transitions to the in-progress state with a covariant return override on each concrete type.
 
 Every three-way union in the codebase collapses to `is QueuedIssue` or `OfType<QueuedIssue>()`.
 `DispatchOrderKey.For` is narrowed to accept `QueuedIssue` directly, deleting its runtime `InvalidOperationException` guard — the invalid case is now unrepresentable at compile time.
 
 The handler is decomposed into two collaborators:
 
-- **`DispatchCandidateSelector`** (3 dependencies) — resolves eligible repositories, sorts candidates by `DispatchOrderKey`, memoizes dispatch-info resolution per repository within a tick, and falls through unresolvable candidates rather than aborting the tick.
-- **`IssueClaimer`** (3 dependencies) — executes the atomic state transition, integration-event dispatch, and persistence for the selected `DispatchCandidate`.
+- **`DispatchCandidateSelector`** — resolves eligible repositories, sorts candidates by `DispatchOrderKey`, memoizes dispatch-info resolution per repository within a tick, and falls through unresolvable candidates rather than aborting the tick.
+- **`IssueClaimer`** — executes the atomic state transition, integration-event dispatch, and persistence for the selected `DispatchCandidate`.
 
-`WorkerCapacityAvailableHandler` becomes a 2-dependency orchestrator that delegates to both collaborators and logs terminal outcomes.
+`WorkerCapacityAvailableHandler` becomes an orchestrator that delegates to both collaborators and logs terminal outcomes.
 
 **EF Core registration is load-bearing.**
 EF Core 10 omits an abstract intermediate from the model unless it is explicitly registered.

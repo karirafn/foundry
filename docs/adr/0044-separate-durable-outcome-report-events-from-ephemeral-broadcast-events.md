@@ -1,3 +1,7 @@
+---
+reaches: module-contract
+---
+
 # Separate Durable Outcome-Report Events from Ephemeral Broadcast Events
 
 ## Context

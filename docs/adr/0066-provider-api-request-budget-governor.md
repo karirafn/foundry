@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # Provider API Request Budget Governor
 
 ## Context
@@ -43,8 +47,6 @@ Foundry reads monitored-repository issues via the GitHub GraphQL API.
 The GraphQL response envelope already contains `rateLimit { cost remaining limit resetAt }`.
 `remaining` is recorded by the governor on every GraphQL response; `limit` and `resetAt` are
 carried for display.
-The GraphQL migration itself is a separate issue; this decision records the intent and establishes
-the headroom-recording path.
 
 ### 2. Named fixed-cost cap constant
 
@@ -100,22 +102,14 @@ process lifetime.
 
 ## Finding: the eligibility-cadence contradiction is already resolved
 
-The contradiction that issue #454 asked to resolve is already settled in the repository:
+The contradiction that issue #454 asked to resolve is settled by
+[ADR 0054](0054-split-eligibility-cadence.md): branch-rules GET stays per-cycle (ADR 0013's
+auto-heal guarantee), and write probes become event-triggered (the "on add or recheck" cadence),
+with self-healing cooldowns for `Unknown` and `Denied` verdicts. ADR 0054 supersedes the "runs
+every cycle" clause of ADR 0013 for the write-probe half only, and names this governor as the
+inheritor of its write-probe sizing constraint rather than a second local throttle.
 
-- [ADR 0054](0054-split-eligibility-cadence.md) is the resolution: branch-rules GET stays
-  per-cycle (ADR 0013's auto-heal guarantee), write probes become event-triggered (the "on
-  add or recheck" cadence), with `Unknown` self-healing on a 15-minute cooldown. ADR 0054
-  explicitly states it "supersedes the 'runs every cycle' clause of ADR 0013 for the write-probe
-  half only".
-- ADR 0013 carries a "Partially superseded" banner linking ADR 0054, scoping the superseded
-  clause to the write-probe half. It must not be re-amended here.
-- ADR 0054's 2026-08-25 amendment names issue #454 as the owner of the global request governor
-  ("a global request governor (#454) inherits this constraint rather than a second local
-  throttle"). This ADR is the back-reference that closes that loop.
-
-This ADR therefore does **not** re-edit ADR 0013 or re-state the cadence resolution.
-AC7's requirement ("the ADR 0013 vs write-probe cadence contradiction … is resolved rather than left
-standing") is satisfied by construction — by ADR 0054, not by this ADR.
+This ADR therefore does **not** re-state the cadence resolution.
 
 ## Considered Options
 
@@ -124,7 +118,7 @@ standing") is satisfied by construction — by ADR 0054, not by this ADR.
   justification above.
 - **Cadence derived from live headroom** (poll faster when remaining is high) — rejected: makes
   pickup latency nondeterministic and hard to test; deferred to a follow-up.
-- **Operator-editable floor** — deferred; AC5 requires the floor be operator-*visible*, not
+- **Operator-editable floor** — deferred; the floor need only be operator-*visible*, not
   operator-*editable*. The floor ships as a named constant (`ProviderBudgetPolicy.DefaultFloor`)
   surfaced read-only on the dashboard; an editable floor is a clean follow-up.
 
@@ -142,6 +136,6 @@ standing") is satisfied by construction — by ADR 0054, not by this ADR.
   (approximately 40-repository ceiling at the 15-minute cooldown against the 500/hour secondary
   limit) is inherited by this governor rather than re-stated with a second local throttle.
 - This ADR builds on the rate-limit signal infrastructure established in
-  [ADR 0046](0046-parseable-reset-time-as-usage-limit-discriminator.md) (parseable reset time as
+  [ADR 0014](0014-remove-immediate-requeue-always-pause.md) (parseable reset time as
   usage-limit discriminator) and [ADR 0058](0058-429-primary-usage-limit-signal.md) (429 as
   primary usage-limit signal).

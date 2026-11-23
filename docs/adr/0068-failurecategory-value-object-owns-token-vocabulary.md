@@ -1,3 +1,7 @@
+---
+reaches: module-contract
+---
+
 # FailureCategory Value Object Owns the Failure-Token Vocabulary in Workers.Contracts
 
 ## Context
@@ -10,12 +14,12 @@ module, only the reverse direction is legal).
 
 ## Decision
 
-Introduce a `FailureCategory` value object in `Foundry.Modules.Workers.Contracts` owning the ten tokens as
+Introduce a `FailureCategory` value object in `Foundry.Modules.Workers.Contracts` owning the tokens as
 `public const string` fields, a validating factory (`Create` returning `Result<FailureCategory>`), and named
 static members (e.g. `FailureCategory.TransientApiError`, `FailureCategory.PrClosed`).
-`FailureReason`'s nine discriminator consts each derive from the matching `FailureCategory` const — a
+`FailureReason`'s discriminator consts each derive from the matching `FailureCategory` const — a
 cross-assembly `const` initialisation, which keeps discriminators compile-time.
-The three failed-issue entity properties (`FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`)
+The failed-issue entity properties (`FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`, `TriageFailedIssue`, `ReviewFailedIssue`)
 become typed `FailureCategory`, persisted via an EF `ValueConverter` to the unchanged `TEXT` column.
 The `WorkerRunFailed` contract `Category` stays `string?`; the domain boundary (`WorkerRunFailedHandler`)
 converts and falls back to `FailureCategory.NonZeroExit` with a logged warning on an unknown or null token.
