@@ -26,6 +26,8 @@ The rule moves out of both HTTP clients into one provider-agnostic `ActionableFe
   authors, so GitLab bot exclusion rests on `system` plus the worker self-comment prompt instruction.
 - **`createdAt` semantics.** The cutoff compares `createdAt`, never `updatedAt` — a comment created
   before the cutoff but edited after it stays excluded.
+- **Cutoff advance.** A revision run started by review feedback advances `FeedbackCutoffAt` to the
+  newest comment it consumed, so feedback posted after that batch is still read on the next poll.
 - **Quiet period.** Comments newer than `now - 2 minutes` are held and consumed on a later poll,
   preventing a revision from firing mid-conversation. Hardcoded 2-minute constant on the policy.
 - **Cap.** The newest 50 by `createdAt` are kept; the omitted count is rendered in the worker prompt.
@@ -40,11 +42,12 @@ The rule moves out of both HTTP clients into one provider-agnostic `ActionableFe
   authors; a username heuristic is fragile and out of scope.
 - **`GlobalSettings` tunable for the quiet period** — rejected: a 2-minute constant is sufficient now;
   promotion is a one-line change.
-- **Advance `FeedbackCutoffAt` to the newest consumed comment now** — deferred to a follow-up;
-  `NewestCommentAt` is plumbed on the event and `RevisionQueuedIssue` but not yet consumed.
 
 ## Consequences
 
 One place owns the actionability rule; the clients shrink to mappers.
 The worker can still comment on its own PR (mitigated only by prompt).
 GitLab bot comments other than system notes are not filtered.
+
+## Revisions
+- 2026-11-23 — The cutoff advances to the newest consumed comment; the deferred option is built (#925).

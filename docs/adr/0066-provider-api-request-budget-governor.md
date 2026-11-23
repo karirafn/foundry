@@ -117,10 +117,10 @@ This ADR therefore does **not** re-state the cadence resolution.
   automatic exit (headroom only refreshes by making the requests the block suppresses). See
   justification above.
 - **Cadence derived from live headroom** (poll faster when remaining is high) — rejected: makes
-  pickup latency nondeterministic and hard to test; deferred to a follow-up.
-- **Operator-editable floor** — deferred; the floor need only be operator-*visible*, not
-  operator-*editable*. The floor ships as a named constant (`ProviderBudgetPolicy.DefaultFloor`)
-  surfaced read-only on the dashboard; an editable floor is a clean follow-up.
+  pickup latency nondeterministic and hard to test.
+- **Operator-editable floor** — rejected: the floor need only be operator-*visible*, not
+  operator-*editable*. The floor is a named constant (`ProviderBudgetPolicy.DefaultFloor`)
+  surfaced read-only on the dashboard.
 
 ## Consequences
 

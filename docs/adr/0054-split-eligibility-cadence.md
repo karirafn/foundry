@@ -57,8 +57,8 @@ It realises the "on add or recheck" cadence.
 - Steady-state polling issues zero write probes for a granted repository; the GitHub secondary rate
   limit is no longer approached during normal operation.
 - A write-permission loss is picked up by manual re-check or credential update, not automatically
-  on the next poll. An automatic push-failure trigger is deferred to a follow-up (no
-  distinguishable push-permission-failure signal exists in the worker exit taxonomy today).
+  on the next poll. No push-failure trigger exists: the worker exit taxonomy has no
+  distinguishable push-permission-failure signal.
 - Auto-heal for branch rulesets is unchanged: a protection-rule change is reflected on the very
   next poll cycle.
 - Sizing constraint: while re-probing, a repository issues 3 content-creation POSTs per probe, so
