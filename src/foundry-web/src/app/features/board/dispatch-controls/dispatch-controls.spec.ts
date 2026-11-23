@@ -46,9 +46,7 @@ function setup(overrides: DispatchServiceOverrides = {}) {
 
   TestBed.configureTestingModule({
     imports: [DispatchControlsComponent],
-    providers: [
-      { provide: DispatchService, useValue: mockDispatch },
-    ],
+    providers: [{ provide: DispatchService, useValue: mockDispatch }],
   });
 
   const fixture = TestBed.createComponent(DispatchControlsComponent);
@@ -73,7 +71,14 @@ describe('DispatchControlsComponent', () => {
   it('should still show "Pause all" and no status text when only provider hosts are paused', () => {
     // Arrange / Act
     const { fixture } = setup({
-      pausedHosts: [{ host: 'gitlab.com', pausedAt: '2026-07-01T07:39:00Z', nextProbeAt: '2026-07-01T07:52:00Z', probeAttempts: 1 }],
+      pausedHosts: [
+        {
+          host: 'gitlab.com',
+          pausedAt: '2026-07-01T07:39:00Z',
+          nextProbeAt: '2026-07-01T07:52:00Z',
+          probeAttempts: 1,
+        },
+      ],
     });
 
     // Assert

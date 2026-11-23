@@ -1,0 +1,91 @@
+@let row = item();
+<div
+  class="lifecycle-row"
+  [attr.data-tone]="tone()"
+  [class.lifecycle-row--running]="running()"
+  [class.fd-board-moved]="row.moved"
+>
+  <div class="lifecycle-row__head">
+    <fd-issue-ref
+      class="lifecycle-row__ref"
+      [id]="idBase() + '-ref'"
+      [slug]="row.issue.repositorySlug"
+      [issueNumber]="row.issue.issueNumber"
+    />
+    <button
+      #button
+      type="button"
+      class="lifecycle-row__title"
+      aria-haspopup="dialog"
+      [attr.aria-label]="label()"
+      [attr.aria-describedby]="describedBy()"
+      [attr.title]="row.issue.title"
+      (click)="open.emit(button)"
+    >
+      {{ row.issue.title }}
+    </button>
+    @if (row.issue.round > 1) {
+      <span class="lifecycle-row__round">Round {{ row.issue.round }}</span>
+    }
+    @if (row.band === 'workers' && row.runKind !== null) {
+      <fd-run-kind-tag [kind]="row.runKind" />
+    }
+  </div>
+  @if (row.issue.lifecycle; as lifecycle) {
+    <fd-lifecycle-rail
+      class="lifecycle-row__rail"
+      [lifecycle]="lifecycle"
+      [round]="row.issue.round"
+      [arriving]="row.arrived"
+    />
+  }
+  <div class="lifecycle-row__status" [id]="idBase() + '-status'">
+    @if (stepLabel(); as step) {
+      <span class="lifecycle-row__step">{{ step }}<span aria-hidden="true"> ·</span></span>
+    }
+    @let st = status();
+    @if (st.kind === 'completed') {
+      <span class="lifecycle-row__completed">Completed</span>
+    } @else if (st.kind === 'needs' && row.band === 'needs') {
+      <span class="lifecycle-row__reason">{{ row.reason.label }}</span>
+      <span class="lifecycle-row__why">{{ row.explanation }}</span>
+      <time
+        class="lifecycle-row__clock"
+        [attr.datetime]="row.issue.enteredStateAt"
+        [attr.title]="row.issue.enteredStateAt | date: 'medium'"
+        >waiting {{ waiting() }}</time
+      >
+      @if (reviewLink(); as link) {
+        @if (link.href | safeHref; as href) {
+          <a class="lifecycle-row__link" [href]="href" target="_blank" rel="noopener noreferrer"
+            >{{ link.label }} <span aria-hidden="true">↗</span
+            ><span class="sr-only">{{ link.hint }}</span></a
+          >
+        }
+      }
+    } @else if (st.kind === 'activity') {
+      <fd-worker-activity
+        class="lifecycle-row__activity"
+        [panel]="panel()"
+        [taskLineId]="idBase() + '-task'"
+      />
+      <span class="lifecycle-row__live" [id]="idBase() + '-clock'"
+        ><span class="lifecycle-row__clock"
+          ><span class="sr-only">Running for </span><span aria-hidden="true">running </span
+          >{{ elapsed() }}</span
+        >
+        @if (lastEvent(); as event) {
+          <span class="lifecycle-row__sep" aria-hidden="true">·</span
+          ><span class="sr-only">, </span>
+          <fd-last-event [line]="event" />
+        }
+      </span>
+    } @else if (st.kind === 'step') {
+      <span class="lifecycle-row__doing">{{ st.text }}</span>
+      <span class="lifecycle-row__clock"
+        >{{ st.clock }} {{ st.clock === 'waiting' ? waiting() : elapsed() }}</span
+      >
+    }
+    <ng-content select="[rowAction]" />
+  </div>
+</div>

@@ -8,7 +8,7 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="Stage"/>, <paramref name="NeedsAction"/>, <paramref name="AwaitsDispatch"/> and
 /// <paramref name="CodeStep"/> place the issue on the board (#851): the server decides, the dashboard renders.
 /// <paramref name="Stage"/> is one of <see cref="TriageStage"/>, <see cref="ImplementStage"/>, <see cref="ReviewStage"/>,
-/// <see cref="AwaitingReviewStage"/> or <see cref="DoneStage"/>; <paramref name="CodeStep"/> is one of
+/// <see cref="MergeStage"/> or <see cref="DoneStage"/>; <paramref name="CodeStep"/> is one of
 /// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/>,
 /// <see cref="ChecksStep"/>, <see cref="MergingStep"/> or <see cref="CatchUpWaitingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
 /// </para>
@@ -78,7 +78,7 @@ public sealed record IssueSummary(
     public const string TriageStage = "triage";
     public const string ImplementStage = "implement";
     public const string ReviewStage = "review";
-    public const string AwaitingReviewStage = "awaiting_review";
+    public const string MergeStage = "merge";
     public const string DoneStage = "done";
 
     public const string TriageRunKind = "triage";

@@ -65,6 +65,11 @@
 }
 
 .board {
+  // A needs-you beacon waits for a glide to land.
+  &--glided {
+    --fd-rail-delay: var(--fd-motion-glide);
+  }
+
   display: flex;
   flex-direction: column;
   gap: var(--fd-spacing-3xl);

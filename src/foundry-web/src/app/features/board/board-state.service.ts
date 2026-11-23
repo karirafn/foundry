@@ -26,7 +26,6 @@ import {
   BoardBand,
   BoardBands,
   BoardItem,
-  CODE_STEP_LABELS,
   ITEM_BANDS,
   NeedsItem,
   PipelineItem,
@@ -36,6 +35,9 @@ import {
   buildBoardBands,
   repoName,
 } from './board.model';
+import { PHASE_WORDS } from '../../shared/components/lifecycle-rail/lifecycle-rail.model';
+import { stepCopy } from '../../shared/components/lifecycle-rail/lifecycle-steps';
+import { currentStep } from '../issues/lifecycle.model';
 import { silenceEpisode } from './progress-band/worker-activity/worker-activity.model';
 
 /** `confirm` shows a completed card's check mark; `collapse` folds it away before removal. */
@@ -73,7 +75,8 @@ interface Batch {
 
 const DEBOUNCE_MS = 150;
 const MAX_WAIT_MS = 500;
-const ARRIVAL_MS = 1300;
+// Three needs-you beacon pulses (--fd-motion-beacon in styles/_motion.scss) after a glide lands.
+const ARRIVAL_MS = 3 * 1400 + 300;
 const CONFIRM_MS = 1200;
 // Matches --fd-motion-exit in styles/_motion.scss.
 const COLLAPSE_MS = 180;
@@ -103,6 +106,25 @@ function placementKeys(bands: BoardBands): Map<string, BoardBand> {
 
 function itemsById(bands: BoardBands): Map<string, BoardItem> {
   return new Map(itemsOf(bands).map((item) => [item.issue.id, item]));
+}
+
+/**
+ * The issue's new step, for the announcement, when its current step, phase or round changed:
+ * "Rebase", "Publish, retrying", "Implement, round 2". Null when nothing changed.
+ */
+function stepChange(before: IssueSummary, after: IssueSummary): string | null {
+  const was = currentStep(before.lifecycle);
+  const now = currentStep(after.lifecycle);
+  if (now === null) {
+    return null;
+  }
+  const roundChanged = before.round !== after.round;
+  if (!roundChanged && was?.step === now.step && was.phase === now.phase) {
+    return null;
+  }
+  const phase = now.phase !== null && now.phase !== 'running' ? `, ${PHASE_WORDS[now.phase]}` : '';
+  const round = roundChanged ? `, round ${after.round}` : '';
+  return `${stepCopy(now.step, 'triage').label}${phase}${round}`;
 }
 
 // A skipped transition rejects its promises with AbortError; that is expected, anything else is not.
@@ -204,7 +226,6 @@ export class BoardStateService {
   private _maxWaitHandle: ReturnType<typeof setTimeout> | null = null;
   private readonly _timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly _pendingCompletions: string[] = [];
-  private readonly _warnedIds = new Set<string>();
   // Silence episodes already announced, so each is announced once.
   private _silentEpisodes: ReadonlySet<string> = new Set();
   private readonly _onIssueUpdated = (updated: IssueSummary): void =>
@@ -350,16 +371,7 @@ export class BoardStateService {
   }
 
   private _build(batch: Batch): BoardBands {
-    const bands = buildBoardBands(batch.issues, batch.queueIds, batch.repositories);
-    for (const issue of bands.unplaced) {
-      if (!this._warnedIds.has(issue.id)) {
-        this._warnedIds.add(issue.id);
-        console.warn(
-          `Board: left out issue #${issue.issueNumber}, whose placement this dashboard does not know`,
-        );
-      }
-    }
-    return bands;
+    return buildBoardBands(batch.issues, batch.queueIds, batch.repositories);
   }
 
   private _canGlide(): boolean {
@@ -408,14 +420,25 @@ export class BoardStateService {
     previousItems: ReadonlyMap<string, BoardItem>,
     arrivals: readonly NeedsItem[],
   ): void {
+    const startedItems = next.workers.filter(
+      (item) => previousItems.get(item.issue.id)?.band !== 'workers',
+    );
+    // Without a known run kind there is nothing to name, so the start goes unsaid.
+    const started = startedItems.flatMap((item) =>
+      item.runKind === null
+        ? []
+        : [`#${item.issue.issueNumber} started: ${RUN_KIND_LABELS[item.runKind]}`],
+    );
+    // Arrivals and starts are announced on their own, so their new step is not said twice.
+    const announced = new Set([...arrivals, ...startedItems].map((item) => item.issue.id));
     const steps = itemsOf(next).flatMap((item) => {
-      const step = item.issue.codeStep;
-      const changed = step !== null && previousItems.get(item.issue.id)?.issue.codeStep !== step;
-      return changed ? [`#${item.issue.issueNumber} ${CODE_STEP_LABELS[step]}`] : [];
+      const before = previousItems.get(item.issue.id);
+      const text =
+        before === undefined || announced.has(item.issue.id)
+          ? null
+          : stepChange(before.issue, item.issue);
+      return text === null ? [] : [`#${item.issue.issueNumber} ${text}`];
     });
-    const started = next.workers
-      .filter((item) => previousItems.get(item.issue.id)?.band !== 'workers')
-      .map((item) => `#${item.issue.issueNumber} started: ${RUN_KIND_LABELS[item.runKind]}`);
     const alerted = new Set(previous.alerts.map((alert) => alert.repositoryId));
     const alerts = next.alerts
       .filter((alert) => !alerted.has(alert.repositoryId))
@@ -473,7 +496,8 @@ export class BoardStateService {
       if (index < 0) {
         continue;
       }
-      const item = items[index];
+      // The ghost holds the completed summary, so its rail's Done node pops before the row leaves.
+      const item = { ...items[index], issue: updated };
       this._setGhost(updated.id, { item, index, phase: 'confirm' });
       this._pendingCompletions.push(`#${item.issue.issueNumber} completed`);
       this._after(CONFIRM_MS, () => {

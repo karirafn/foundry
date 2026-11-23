@@ -11,7 +11,7 @@ const summary: IssueSummary = {
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/acme/api/issues/142',
   providerType: 'github',
-  stage: 'awaiting_review',
+  stage: 'merge',
   needsAction: true,
   awaitsDispatch: false,
   waitsOnBlockers: false,

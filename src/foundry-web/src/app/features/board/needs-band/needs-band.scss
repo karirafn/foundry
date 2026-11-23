@@ -17,19 +17,6 @@
   text-align: center;
 }
 
-.needs-band__empty {
-  align-items: center;
-  color: var(--fd-text-secondary);
-  display: flex;
-  font-size: 0.875rem;
-  gap: var(--fd-spacing-sm);
-  margin: 0;
-
-  svg {
-    color: var(--fd-text-success);
-  }
-}
-
 .needs-band__alerts {
   list-style: none;
   padding: 0;
@@ -39,8 +26,8 @@
   margin: 0 0 var(--fd-spacing-md);
 }
 
-.needs-band__cards {
-  @include card-grid;
+.needs-band__rows {
+  @include row-stack;
 }
 
 .needs-band__item {

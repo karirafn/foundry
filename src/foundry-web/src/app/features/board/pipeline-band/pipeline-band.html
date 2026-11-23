@@ -34,6 +34,7 @@
           [next]="isNext(item)"
           [phase]="item.phase"
           [moved]="item.moved"
+          [rail]="true"
           (open)="open.emit({ id: item.issue.id, invoker: $event })"
         >
           <span
@@ -49,7 +50,14 @@
               —
             }
           </span>
-          <fd-run-kind-tag rowLead [kind]="item.runKind" />
+          @if (item.issue.lifecycle; as lifecycle) {
+            <fd-lifecycle-rail
+              rowRail
+              density="mini"
+              [lifecycle]="lifecycle"
+              [round]="item.issue.round"
+            />
+          }
           <span rowMarker [class.pipeline-band__ineligible]="item.slot.kind === 'ineligible'">
             @switch (item.slot.kind) {
               @case ('detected') {
@@ -57,6 +65,9 @@
               }
               @case ('ineligible') {
                 Repo ineligible
+              }
+              @default {
+                {{ phrase(item) }}
               }
             }
           </span>

@@ -13,9 +13,9 @@ import { CardPhase } from '../board-state.service';
 import { IssueRefComponent } from '../issue-ref/issue-ref';
 
 /**
- * A compact one-line issue row: a projected `[rowLead]` (position and run kind, or a step chip), the
- * repository and number, the title as the row's one button, and a projected `[rowMarker]`. Used by
- * the Pipeline, Blocked and step rows.
+ * A compact one-line issue row: a projected `[rowLead]` (position, or run kind), the repository and
+ * number, the title as the row's one button, an optional `[rowRail]`, and a projected `[rowMarker]`.
+ * Used by the Pipeline and Blocked rows.
  */
 @Component({
   selector: 'fd-board-row',
@@ -35,6 +35,8 @@ export class BoardRowComponent {
   readonly next: InputSignal<boolean> = input<boolean>(false);
   readonly phase: InputSignal<CardPhase> = input<CardPhase>('live');
   readonly moved: InputSignal<boolean> = input<boolean>(false);
+  /** The row carries a projected `[rowRail]` (the Pipeline's mini lifecycle rail) and one lead column. */
+  readonly rail: InputSignal<boolean> = input<boolean>(false);
   /** Emits the row's button, so focus can return to it when the pane closes. */
   readonly open: OutputEmitterRef<HTMLElement> = output<HTMLElement>();
 

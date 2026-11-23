@@ -64,7 +64,7 @@ public sealed class Placement
         ("revision_in_progress", IssueStage.Implement, false, false, false, null),
         ("rebase_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Rebasing),
         ("checks_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Checks),
-        ("merge_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Merging),
+        ("merge_pending", IssueStage.Merge, false, false, false, IssueCodeStep.Merging),
         ("failed", IssueStage.Implement, true, false, false, null),
         ("continuable_failed", IssueStage.Implement, true, false, false, null),
         ("revision_failed", IssueStage.Implement, true, false, false, null),
@@ -79,7 +79,7 @@ public sealed class Placement
         ("awaiting_input (revision)", IssueStage.Implement, true, false, false, null),
         ("awaiting_input (continuation)", IssueStage.Implement, true, false, false, null),
         ("awaiting_input (fresh)", IssueStage.Implement, true, false, false, null),
-        ("review", IssueStage.AwaitingReview, true, false, false, null),
+        ("review", IssueStage.Merge, true, false, false, null),
         ("completed", IssueStage.Done, false, false, false, null),
     ];
 

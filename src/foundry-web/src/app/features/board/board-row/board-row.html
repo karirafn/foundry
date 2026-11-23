@@ -2,6 +2,7 @@
   class="board-row"
   [class.board-row--next]="next()"
   [class.board-row--done]="phase() !== 'live'"
+  [class.board-row--rail]="rail()"
   [class.fd-board-moved]="moved()"
 >
   <span class="board-row__lead" [id]="idBase() + '-lead'"><ng-content select="[rowLead]" /></span>
@@ -23,6 +24,9 @@
   >
     {{ issue().title }}
   </button>
+  @if (rail()) {
+    <span class="board-row__rail"><ng-content select="[rowRail]" /></span>
+  }
   <span class="board-row__marker" [id]="idBase() + '-marker'">
     @if (phase() !== 'live') {
       <span class="board-row__completed">Completed</span>

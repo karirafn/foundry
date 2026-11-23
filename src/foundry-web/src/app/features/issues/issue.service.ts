@@ -17,6 +17,7 @@ import {
 import { RUN_KIND_LABELS } from '../../shared/utils/run-kind';
 import type { TokenTotal } from '../workers/run-totals.model';
 import { RESOLVED_STATES, isKnownState, isResolvedState } from './issue-lifecycle.model';
+import { toLifecycleStep } from './lifecycle.model';
 import { components } from '../../api/schema';
 import { LoadOutcome } from '../../core/models/load-outcome';
 
@@ -103,7 +104,7 @@ const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>([
   'triage',
   'implement',
   'review',
-  'awaiting_review',
+  'merge',
   'done',
 ]);
 const KNOWN_CODE_STEPS: ReadonlySet<string> = new Set<string>(CODE_STEPS);
@@ -539,7 +540,7 @@ export class IssueService {
       repositoryId: i.repositoryId,
       enteredStateAt: i.enteredStateAt,
       round: this._toRound(i.round),
-      ...(i.lifecycle ? { lifecycle: i.lifecycle.map((s) => ({ ...s, phase: s.phase ?? null })) } : {}),
+      ...(i.lifecycle ? { lifecycle: i.lifecycle.map(toLifecycleStep) } : {}),
       ...toPlacement(i),
     };
   }

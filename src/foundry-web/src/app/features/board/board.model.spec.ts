@@ -75,7 +75,12 @@ function ids(items: readonly { issue: IssueSummary }[]): string[] {
 
 describe('STAGE_LABELS', () => {
   it('names the stages in sentence case', () => {
-    expect(STAGE_ORDER.map((s) => STAGE_LABELS[s])).toEqual(['Triage', 'Implement', 'Review', 'Your review']);
+    expect(STAGE_ORDER.map((s) => STAGE_LABELS[s])).toEqual([
+      'Triage',
+      'Implement',
+      'Review',
+      'Merge',
+    ]);
   });
 });
 
@@ -122,8 +127,8 @@ describe('bandFor', () => {
     expect(bandFor(buildIssue({ state: 'queued', awaitsDispatch: true }))).toBe('pipeline');
   });
 
-  it('places an issue no rule matches nowhere', () => {
-    expect(bandFor(buildIssue({ state: 'checks_pending' }))).toBeNull();
+  it('puts an issue no rule matches in In progress, so it is still shown', () => {
+    expect(bandFor(buildIssue({ state: 'checks_pending' }))).toBe('steps');
   });
 });
 
@@ -133,22 +138,21 @@ describe('buildBoardBands', () => {
     const bands = buildBoardBands([buildIssue({ stage: 'done', state: 'completed' })], [], []);
 
     // Assert
-    expect(bands.unplaced).toEqual([]);
     expect(bands.workers).toEqual([]);
   });
 
-  it('reports issues with an unknown stage or no matching rule as unplaced', () => {
-    // Arrange
-    const issues = [
-      buildIssue({ id: 'a', stage: null }),
-      buildIssue({ id: 'b', state: 'checks_pending' }),
-    ];
-
+  it('still places an issue whose stage this dashboard does not know', () => {
     // Act
-    const bands = buildBoardBands(issues, [], []);
+    const bands = buildBoardBands(
+      [buildIssue({ id: 'a', stage: null, state: 'checks_pending' })],
+      [],
+      [],
+    );
 
     // Assert
-    expect(bands.unplaced.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(bands.steps).toEqual([
+      expect.objectContaining({ stage: null, issue: expect.objectContaining({ id: 'a' }) }),
+    ]);
   });
 
   it('orders needs by tone, then longest waiting, then issue number', () => {
@@ -327,19 +331,30 @@ describe('buildBoardBands', () => {
 
     // Assert
     expect(bands.pipeline).toEqual([
-      expect.objectContaining({ stage: 'review', runKind: 'review', slot: { kind: 'position', position: 1 } }),
+      expect.objectContaining({
+        stage: 'review',
+        runKind: 'review',
+        slot: { kind: 'position', position: 1 },
+      }),
     ]);
   });
 
   it('places a running review with the workers in the Review stage', () => {
     // Arrange
-    const issue = buildIssue({ id: 'r', state: 'review_in_progress', stage: 'review', runKind: 'review' });
+    const issue = buildIssue({
+      id: 'r',
+      state: 'review_in_progress',
+      stage: 'review',
+      runKind: 'review',
+    });
 
     // Act
     const bands = buildBoardBands([issue], [], []);
 
     // Assert
-    expect(bands.workers).toEqual([expect.objectContaining({ stage: 'review', runKind: 'review' })]);
+    expect(bands.workers).toEqual([
+      expect.objectContaining({ stage: 'review', runKind: 'review' }),
+    ]);
   });
 
   it('places a review run waiting for its automatic retry with the failures, in the Review stage', () => {
@@ -382,31 +397,24 @@ describe('buildBoardBands', () => {
     expect(bands.workers).toEqual([expect.objectContaining({ runKind: 'findings_fix' })]);
   });
 
-  it('leaves a pipeline issue without a known run kind unplaced', () => {
-    // Arrange
-    const issue = queued('q', { runKind: null });
+  it.each([
+    ['pipeline', 'queued', false],
+    ['blocked', 'blocked', true],
+  ] as const)(
+    'still places a %s issue without a known run kind',
+    (band, state, waitsOnBlockers) => {
+      // Arrange
+      const issue = queued('q', { state, waitsOnBlockers, runKind: null });
 
-    // Act
-    const bands = buildBoardBands([issue], ['q'], []);
+      // Act
+      const bands = buildBoardBands([issue], ['q'], []);
 
-    // Assert
-    expect(bands.pipeline).toEqual([]);
-    expect(bands.unplaced).toEqual([issue]);
-  });
+      // Assert
+      expect(bands[band]).toEqual([expect.objectContaining({ runKind: null, issue })]);
+    },
+  );
 
-  it('leaves a blocked issue without a known run kind unplaced', () => {
-    // Arrange
-    const issue = queued('b', { state: 'blocked', waitsOnBlockers: true, runKind: null });
-
-    // Act
-    const bands = buildBoardBands([issue], [], []);
-
-    // Assert
-    expect(bands.blocked).toEqual([]);
-    expect(bands.unplaced).toEqual([issue]);
-  });
-
-  it('leaves a worker whose run kind is null unplaced', () => {
+  it('still places a worker whose run kind is null', () => {
     // Arrange
     const issue = buildIssue({ id: 'w', state: 'in_progress', runKind: null });
 
@@ -414,15 +422,19 @@ describe('buildBoardBands', () => {
     const bands = buildBoardBands([issue], [], []);
 
     // Assert
-    expect(bands.workers).toEqual([]);
-    expect(bands.unplaced).toEqual([issue]);
+    expect(bands.workers).toEqual([expect.objectContaining({ runKind: null, issue })]);
   });
 
   it('lists blocked issues in server order', () => {
     // Arrange
     const issues = [
       queued('b2', { state: 'blocked', waitsOnBlockers: true, runKind: 'fresh' }),
-      queued('b1', { state: 'triage_blocked', stage: 'triage', waitsOnBlockers: true, runKind: 'triage' }),
+      queued('b1', {
+        state: 'triage_blocked',
+        stage: 'triage',
+        waitsOnBlockers: true,
+        runKind: 'triage',
+      }),
     ];
 
     // Act
@@ -575,7 +587,11 @@ describe('needs explanations', () => {
 
   it('names the review role for a failed review run', () => {
     expect(
-      explanation({ state: 'review_failed', stage: 'review', failureClassification: 'transient_api_error' }),
+      explanation({
+        state: 'review_failed',
+        stage: 'review',
+        failureClassification: 'transient_api_error',
+      }),
     ).toBe('Review run failed: claude api error');
   });
 
@@ -676,7 +692,12 @@ describe('needsReason', () => {
   it('reads a skipped merge as a warning', () => {
     expect(
       needsReason(
-        buildIssue({ state: 'review', needsAction: true, mergeOutcome: 'skipped', mergeSkippedReason: 'unauthorized' }),
+        buildIssue({
+          state: 'review',
+          needsAction: true,
+          mergeOutcome: 'skipped',
+          mergeSkippedReason: 'unauthorized',
+        }),
       ),
     ).toEqual({ label: 'Merge skipped', tone: 'warning' });
   });
@@ -684,7 +705,12 @@ describe('needsReason', () => {
   it('reads a skipped review as a warning', () => {
     expect(
       needsReason(
-        buildIssue({ state: 'review', needsAction: true, reviewOutcome: 'skipped', reviewSkippedReason: 'verdict_invalid' }),
+        buildIssue({
+          state: 'review',
+          needsAction: true,
+          reviewOutcome: 'skipped',
+          reviewSkippedReason: 'verdict_invalid',
+        }),
       ),
     ).toEqual({ label: 'Review skipped', tone: 'warning' });
   });
@@ -692,7 +718,12 @@ describe('needsReason', () => {
   it('reads a skipped review before a skipped merge', () => {
     expect(
       needsReason(
-        buildIssue({ state: 'review', needsAction: true, reviewOutcome: 'skipped', mergeOutcome: 'skipped' }),
+        buildIssue({
+          state: 'review',
+          needsAction: true,
+          reviewOutcome: 'skipped',
+          mergeOutcome: 'skipped',
+        }),
       )?.label,
     ).toBe('Review skipped');
   });
@@ -707,7 +738,12 @@ describe('needsReason', () => {
   it('reads red checks before a skipped merge', () => {
     expect(
       needsReason(
-        buildIssue({ state: 'review', needsAction: true, checksOutcome: 'still_failing', mergeOutcome: 'skipped' }),
+        buildIssue({
+          state: 'review',
+          needsAction: true,
+          checksOutcome: 'still_failing',
+          mergeOutcome: 'skipped',
+        }),
       )?.label,
     ).toBe('Checks red');
   });

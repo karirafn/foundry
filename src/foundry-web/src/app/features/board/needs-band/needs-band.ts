@@ -11,13 +11,13 @@ import {
 import { BoardBandComponent } from '../board-band/board-band';
 import { ItemView } from '../board-state.service';
 import { CardOpened, NeedsItem, RepoAlert, countWords } from '../board.model';
-import { NeedsCardComponent } from './needs-card/needs-card';
+import { LifecycleRowComponent } from '../lifecycle-row/lifecycle-row';
 import { RepoAlertComponent } from './repo-alert/repo-alert';
 
-/** The first band: repositories that hold issues, then every issue that needs a person. */
+/** The first band: repositories that hold issues, then every issue that needs a person. The page hides it when empty. */
 @Component({
   selector: 'fd-needs-band',
-  imports: [BoardBandComponent, NeedsCardComponent, RepoAlertComponent],
+  imports: [BoardBandComponent, LifecycleRowComponent, RepoAlertComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './needs-band.html',
   styleUrl: './needs-band.scss',
@@ -34,8 +34,5 @@ export class NeedsBandComponent {
   );
   protected readonly countText: Signal<string> = computed(
     () => `, ${countWords(this.count(), 'item')}`,
-  );
-  protected readonly empty: Signal<boolean> = computed(
-    () => this.alerts().length === 0 && this.items().length === 0,
   );
 }

@@ -1,0 +1,201 @@
+@use '../../../../styles/breakpoints' as *;
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+  min-height: 0;
+  min-width: 0;
+}
+
+// One tone sets the row's edge and the reason pill.
+[data-tone='error'] {
+  --fd-tone: var(--fd-state-failed);
+  --fd-tone-text: var(--fd-text-error);
+}
+[data-tone='warning'] {
+  --fd-tone: var(--fd-text-warning);
+  --fd-tone-text: var(--fd-text-warning);
+}
+[data-tone='ready'],
+[data-tone='completed'] {
+  --fd-tone: var(--fd-accent-ready);
+  --fd-tone-text: var(--fd-text-success);
+}
+[data-tone='neutral'] {
+  --fd-tone: var(--fd-border-control);
+  --fd-tone-text: var(--fd-text-secondary);
+}
+[data-tone='working'] {
+  --fd-tone: var(--fd-accent-working);
+}
+
+.lifecycle-row {
+  background: var(--fd-bg-card);
+  border: 1px solid var(--fd-border-default);
+  border-inline-start: 3px solid var(--fd-tone);
+  border-radius: var(--fd-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  min-width: 0;
+  padding: var(--fd-spacing-md) var(--fd-spacing-lg);
+  position: relative;
+  transition:
+    background 150ms ease,
+    border-inline-start-color 200ms ease;
+
+  &:hover {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:has(.lifecycle-row__title:focus-visible) {
+    @include focus-ring;
+  }
+}
+
+.lifecycle-row__head,
+.lifecycle-row__status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  min-width: 0;
+}
+
+.lifecycle-row__ref {
+  font-size: 0.75rem;
+}
+
+.lifecycle-row__title {
+  background: transparent;
+  border: 0;
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  flex: 1 1 12rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  // Stretches the button over the row, so the whole row opens the pane.
+  &::after {
+    content: '';
+    inset: 0;
+    position: absolute;
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.lifecycle-row__round {
+  background: var(--fd-bg-working-subtle);
+  border-radius: 9999px;
+  color: var(--fd-accent-working);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+// Not a live region: it ticks every second; the board announces step changes and silence once.
+.lifecycle-row__status {
+  border-top: 1px solid var(--fd-border-muted);
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  padding-top: var(--fd-spacing-sm);
+}
+
+.lifecycle-row__activity {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.lifecycle-row__step {
+  color: var(--fd-text-primary);
+  display: none;
+  font-weight: 600;
+}
+
+.lifecycle-row__reason {
+  border: 1px solid var(--fd-tone);
+  border-radius: 9999px;
+  color: var(--fd-tone-text);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.lifecycle-row__why {
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.lifecycle-row__clock {
+  white-space: nowrap;
+}
+
+.lifecycle-row__completed {
+  color: var(--fd-text-success);
+  font-weight: 600;
+}
+
+// Sits above the stretched title button, so links never nest inside it.
+.lifecycle-row__link {
+  align-items: center;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-link);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  gap: 2px;
+  margin-inline-start: auto;
+  min-height: 32px;
+  position: relative;
+  z-index: 1;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+@media (width < $rail-breakpoint) {
+  .lifecycle-row {
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  .lifecycle-row__title {
+    flex-basis: 100%;
+    order: 1;
+    white-space: normal;
+  }
+
+  .lifecycle-row__step {
+    display: inline;
+  }
+}
+
+@media (forced-colors: active) {
+  .lifecycle-row {
+    border-inline-start-color: CanvasText;
+  }
+}
+
+.lifecycle-row__live {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs);
+}

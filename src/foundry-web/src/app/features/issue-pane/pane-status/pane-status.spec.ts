@@ -212,7 +212,7 @@ describe('PaneStatusComponent', () => {
 
   it.each([
     ['triage', 'Triage'],
-    ['awaiting_review', 'Your review'],
+    ['merge', 'Merge'],
     ['done', 'Done'],
   ] as const)('labels the %s stage "%s"', (stage, label) => {
     // Act
