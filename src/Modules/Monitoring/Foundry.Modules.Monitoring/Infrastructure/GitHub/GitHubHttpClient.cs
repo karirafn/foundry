@@ -88,7 +88,7 @@ internal sealed partial class GitHubHttpClient(
         query PrStatus($owner: String!, $name: String!, $number: Int!) {
           rateLimit { cost remaining }
           repository(owner: $owner, name: $name) {
-            pullRequest(number: $number) { state merged headRefOid }
+            pullRequest(number: $number) { id state merged headRefOid isDraft }
           }
         }
         """;
@@ -642,7 +642,7 @@ internal sealed partial class GitHubHttpClient(
         GraphQlPullRequestStatus? pr = dataSuccess.Value.Repository?.PullRequest;
         bool isClosed = string.Equals(pr?.State, "CLOSED", StringComparison.OrdinalIgnoreCase);
         bool isMerged = pr?.Merged ?? false;
-        return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, pr?.HeadRefOid));
+        return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, pr?.HeadRefOid, pr?.IsDraft ?? false));
     }
 
     public async Task<Result<Checks>> GetChecksAsync(
@@ -2078,7 +2078,7 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record PrStatusRepository(GraphQlPullRequestStatus? PullRequest);
 
-    private sealed record GraphQlPullRequestStatus(string State, bool Merged, string? HeadRefOid);
+    private sealed record GraphQlPullRequestStatus(string? Id, string State, bool Merged, string? HeadRefOid, bool IsDraft);
 
     // GraphQL PrReviewFeedback query DTOs — deserialized with GraphQlJsonOptions (camelCase).
     private sealed record PrReviewFeedbackData(GraphQlRateLimit? RateLimit, PrReviewFeedbackRepository? Repository);
