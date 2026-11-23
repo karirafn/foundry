@@ -1,5 +1,6 @@
 using System.Text;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Infrastructure;
 
 using Shouldly;
@@ -12,11 +13,12 @@ public sealed class ReadAsync
 {
     private const int Tail = JobLogTailReader.JobLogTailBytes;
 
-    private static Task<string> ActAsync(long length, bool startsMidLog = false) =>
-        JobLogTailReader.ReadAsync(
+    private static async Task<string> ActAsync(long length) =>
+        (await JobLogTailReader.ReadAsync(
             new StreamContent(new GeneratedLogStream(0, length)),
-            startsMidLog,
-            TestContext.Current.CancellationToken);
+            0,
+            null,
+            TestContext.Current.CancellationToken)).Text;
 
     [Fact]
     public void TheTailIs256KiB() => JobLogTailReader.JobLogTailBytes.ShouldBe(256 * 1024);
@@ -85,7 +87,7 @@ public sealed class ReadAsync
         ByteArrayContent content = new(Encoding.UTF8.GetBytes(body));
 
         // Act
-        string log = await JobLogTailReader.ReadAsync(content, false, TestContext.Current.CancellationToken);
+        string log = (await JobLogTailReader.ReadAsync(content, 0, null, TestContext.Current.CancellationToken)).Text;
 
         // Assert
         log.ShouldBe(new string('€', Tail / 3));
@@ -99,7 +101,7 @@ public sealed class ReadAsync
         ByteArrayContent content = new([euro[2], .. Encoding.UTF8.GetBytes("ok")]);
 
         // Act
-        string log = await JobLogTailReader.ReadAsync(content, true, TestContext.Current.CancellationToken);
+        string log = (await JobLogTailReader.ReadAsync(content, 10, null, TestContext.Current.CancellationToken)).Text;
 
         // Assert
         log.ShouldBe("ok");
@@ -112,9 +114,35 @@ public sealed class ReadAsync
         ByteArrayContent content = new([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("log")]);
 
         // Act
-        string log = await JobLogTailReader.ReadAsync(content, false, TestContext.Current.CancellationToken);
+        string log = (await JobLogTailReader.ReadAsync(content, 0, null, TestContext.Current.CancellationToken)).Text;
 
         // Assert
         log.ShouldBe("log");
+    }
+
+    [Fact]
+    public async Task WhenTheBodyStartsMidLog_ReportsTheLogLengthFromTheStartOffset()
+    {
+        // Act
+        JobLogTail tail = await JobLogTailReader.ReadAsync(
+            new StreamContent(new GeneratedLogStream(0, 100)), 1000, null, TestContext.Current.CancellationToken);
+
+        // Assert
+        tail.Length.ShouldBe(1100);
+    }
+
+    [Fact]
+    public async Task WhenAScannerIsGiven_FeedsItEveryByteRead()
+    {
+        // Arrange
+        FailureExcerptScanner scanner = new();
+        string body = new string('x', 3 * Tail) + "\nerror late\n" + new string('y', Tail);
+
+        // Act
+        await JobLogTailReader.ReadAsync(
+            new ByteArrayContent(Encoding.UTF8.GetBytes(body)), 0, scanner, TestContext.Current.CancellationToken);
+
+        // Assert
+        scanner.Complete()[0].ShouldBe(new JobLogLine(2, (3L * Tail) + 1, "error late"));
     }
 }

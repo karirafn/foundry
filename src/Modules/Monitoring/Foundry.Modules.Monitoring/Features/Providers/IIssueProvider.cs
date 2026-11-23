@@ -388,14 +388,14 @@ internal interface IIssueProvider
         CancellationToken cancellationToken)
         => Task.FromResult(Result<CiJobLookup>.Ok(new CiJobLookup.NotACiJob()));
 
-    /// <summary>Reads the full log text of the CI job <paramref name="jobId"/>.</summary>
+    /// <summary>Reads the log of the CI job <paramref name="jobId"/>: its tail and the failure lines near its start.</summary>
     /// <remarks>Providers without job logs keep this default, which fails with
     /// <see cref="JobLogErrors.NotSupportedCode"/> without any provider call.</remarks>
-    Task<Result<string>> GetJobLogAsync(
+    Task<Result<CiJobLog.Available>> GetJobLogAsync(
         RepositorySlug slug,
         long jobId,
         CancellationToken cancellationToken)
-        => Task.FromResult(Result<string>.Fail(JobLogErrors.NotSupported()));
+        => Task.FromResult(Result<CiJobLog.Available>.Fail(JobLogErrors.NotSupported()));
 
     /// <summary>
     /// Reads the pull request branch head and how far it is behind its base branch, for the post-run rebase

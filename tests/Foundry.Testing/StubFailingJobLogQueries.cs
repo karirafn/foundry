@@ -15,9 +15,10 @@ public sealed class StubFailingJobLogQueries : IFailingJobLogQueries
 
     public IReadOnlyList<FailingCheck> RequestedChecks => _requestedChecks;
 
-    public StubFailingJobLogQueries WithLog(string checkName, string text)
+    public StubFailingJobLogQueries WithLog(string checkName, string text, IReadOnlyList<JobLogLine>? failureExcerpt = null)
     {
-        _resultsByCheckName[checkName] = () => Result<CiJobLog>.Ok(new CiJobLog.Available(text));
+        _resultsByCheckName[checkName] = () => Result<CiJobLog>.Ok(
+            new CiJobLog.Available(text, System.Text.Encoding.UTF8.GetByteCount(text), failureExcerpt ?? []));
         return this;
     }
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
@@ -11,14 +12,14 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 /// Downloads GitHub Actions job logs. <c>GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs</c> answers with a
 /// redirect to a short-lived (one minute) download URL on a storage host. The client this class is built with must
 /// not follow redirects itself: this class follows the redirect so it can drop the token, which must never reach the
-/// storage host. Only the log's final <see cref="JobLogTailReader.JobLogTailBytes"/> are read, since a log can run
-/// to hundreds of megabytes.
+/// storage host. Only the log's final <see cref="JobLogTailReader.JobLogTailBytes"/> and its first
+/// <see cref="FailureExcerptScanner.ScanBytes"/> are read, since a log can run to hundreds of megabytes.
 /// </summary>
 internal sealed class GitHubJobLogClient(HttpClient httpClient)
 {
     private const string ApiVersion = "2026-03-10";
 
-    public async Task<Result<string>> GetJobLogAsync(
+    public async Task<Result<CiJobLog.Available>> GetJobLogAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         long jobId,
@@ -27,7 +28,7 @@ internal sealed class GitHubJobLogClient(HttpClient httpClient)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<string>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<CiJobLog.Available>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         string owner = Uri.EscapeDataString(slug.Owner);
@@ -45,44 +46,48 @@ internal sealed class GitHubJobLogClient(HttpClient httpClient)
 
         if (response.IsSuccessStatusCode)
         {
-            return Result<string>.Ok(await JobLogTailReader.ReadAsync(response.Content, false, cancellationToken));
+            return Result<CiJobLog.Available>.Ok(await ReadWholeLogAsync(response.Content, cancellationToken));
         }
 
         if (!IsRedirect(response.StatusCode) || response.Headers.Location is not { } location)
         {
-            return Result<string>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
+            return Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
         }
 
         Uri downloadUri = location.IsAbsoluteUri ? location : new Uri(requestUri, location);
         if (downloadUri.Scheme is not "https")
         {
-            return Result<string>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
+            return Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
         }
 
-        // The download URL expires about a minute after the redirect, so the probe and the tail read follow at once.
-        return await ReadLogTailAsync(downloadUri, jobId, cancellationToken);
+        // The download URL expires about a minute after the redirect, so the probe and the reads follow at once.
+        return await ReadDownloadAsync(downloadUri, jobId, cancellationToken);
     }
 
     // The storage host ignores the suffix form "bytes=-N" (it answers 200 with the whole log), so the log's length
-    // is probed first and the tail is requested from its start offset.
-    private async Task<Result<string>> ReadLogTailAsync(Uri downloadUri, long jobId, CancellationToken cancellationToken)
+    // is probed first and the tail is requested from its start offset. A log no larger than the scan cap is read
+    // whole in one request; a larger one has its head read in a second range request, after the tail.
+    private async Task<Result<CiJobLog.Available>> ReadDownloadAsync(
+        Uri downloadUri,
+        long jobId,
+        CancellationToken cancellationToken)
     {
         long totalLength;
         using (HttpResponseMessage probe = await SendDownloadAsync(downloadUri, new RangeHeaderValue(0, 0), cancellationToken))
         {
             if (probe.StatusCode is HttpStatusCode.OK)
             {
-                return Result<string>.Ok(await JobLogTailReader.ReadAsync(probe.Content, false, cancellationToken));
+                return Result<CiJobLog.Available>.Ok(await ReadWholeLogAsync(probe.Content, cancellationToken));
             }
 
             if (probe.StatusCode is not (HttpStatusCode.PartialContent or HttpStatusCode.RequestedRangeNotSatisfiable))
             {
-                return Result<string>.Fail(JobLogErrors.Unavailable(jobId, (int)probe.StatusCode));
+                return Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(jobId, (int)probe.StatusCode));
             }
 
             if (probe.StatusCode is not HttpStatusCode.PartialContent || ProbedLength(probe) is not long probedLength)
             {
-                return await ReadWholeLogTailAsync(downloadUri, jobId, cancellationToken);
+                return await DownloadWholeLogAsync(downloadUri, jobId, cancellationToken);
             }
 
             totalLength = probedLength;
@@ -90,34 +95,67 @@ internal sealed class GitHubJobLogClient(HttpClient httpClient)
 
         if (totalLength == 0)
         {
-            return Result<string>.Ok(string.Empty);
+            return Result<CiJobLog.Available>.Ok(new CiJobLog.Available(string.Empty, 0, []));
         }
 
-        long start = Math.Max(0, totalLength - JobLogTailReader.JobLogTailBytes);
-        using HttpResponseMessage tail = await SendDownloadAsync(
-            downloadUri, new RangeHeaderValue(start, null), cancellationToken);
-
-        return tail.StatusCode switch
+        long start = totalLength <= FailureExcerptScanner.ScanBytes
+            ? 0
+            : totalLength - JobLogTailReader.JobLogTailBytes;
+        JobLogTail tail;
+        using (HttpResponseMessage tailResponse = await SendDownloadAsync(
+            downloadUri, new RangeHeaderValue(start, null), cancellationToken))
         {
-            HttpStatusCode.PartialContent =>
-                Result<string>.Ok(await JobLogTailReader.ReadAsync(tail.Content, start > 0, cancellationToken)),
-            HttpStatusCode.OK =>
-                Result<string>.Ok(await JobLogTailReader.ReadAsync(tail.Content, false, cancellationToken)),
-            HttpStatusCode.RequestedRangeNotSatisfiable => await ReadWholeLogTailAsync(downloadUri, jobId, cancellationToken),
-            _ => Result<string>.Fail(JobLogErrors.Unavailable(jobId, (int)tail.StatusCode)),
-        };
+            switch (tailResponse.StatusCode)
+            {
+                case HttpStatusCode.OK:
+                    return Result<CiJobLog.Available>.Ok(await ReadWholeLogAsync(tailResponse.Content, cancellationToken));
+                case HttpStatusCode.RequestedRangeNotSatisfiable:
+                    return await DownloadWholeLogAsync(downloadUri, jobId, cancellationToken);
+                case HttpStatusCode.PartialContent when start == 0:
+                    return Result<CiJobLog.Available>.Ok(await ReadWholeLogAsync(tailResponse.Content, cancellationToken));
+                case HttpStatusCode.PartialContent:
+                    tail = await JobLogTailReader.ReadAsync(tailResponse.Content, start, null, cancellationToken);
+                    break;
+                default:
+                    return Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(jobId, (int)tailResponse.StatusCode));
+            }
+        }
+
+        IReadOnlyList<JobLogLine> excerpt = await ReadHeadExcerptAsync(downloadUri, cancellationToken);
+        return Result<CiJobLog.Available>.Ok(new CiJobLog.Available(tail.Text, tail.Length, excerpt));
     }
 
-    private async Task<Result<string>> ReadWholeLogTailAsync(Uri downloadUri, long jobId, CancellationToken cancellationToken)
+    // The tail is already read, so a head the storage host will not serve leaves only the excerpt empty.
+    private async Task<IReadOnlyList<JobLogLine>> ReadHeadExcerptAsync(Uri downloadUri, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage head = await SendDownloadAsync(
+            downloadUri, new RangeHeaderValue(0, FailureExcerptScanner.ScanBytes - 1), cancellationToken);
+
+        return head.StatusCode is HttpStatusCode.OK or HttpStatusCode.PartialContent
+            ? await FailureExcerptScanner.ScanAsync(head.Content, cancellationToken)
+            : [];
+    }
+
+    private async Task<Result<CiJobLog.Available>> DownloadWholeLogAsync(
+        Uri downloadUri,
+        long jobId,
+        CancellationToken cancellationToken)
     {
         using HttpResponseMessage response = await SendDownloadAsync(downloadUri, null, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<string>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
+            return Result<CiJobLog.Available>.Fail(JobLogErrors.Unavailable(jobId, (int)response.StatusCode));
         }
 
-        return Result<string>.Ok(await JobLogTailReader.ReadAsync(response.Content, false, cancellationToken));
+        return Result<CiJobLog.Available>.Ok(await ReadWholeLogAsync(response.Content, cancellationToken));
+    }
+
+    private static async Task<CiJobLog.Available> ReadWholeLogAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        FailureExcerptScanner scanner = new();
+        JobLogTail tail = await JobLogTailReader.ReadAsync(content, 0, scanner, cancellationToken);
+        return new CiJobLog.Available(tail.Text, tail.Length, scanner.Complete());
     }
 
     // The download URL is pre-signed: it carries its own short-lived authorization, so the request sends no

@@ -494,7 +494,7 @@ internal sealed partial class GitHubIssueProvider(
             : Result<CiJobLookup>.Ok(new CiJobLookup.Found(job.Id));
     }
 
-    public Task<Result<string>> GetJobLogAsync(
+    public Task<Result<CiJobLog.Available>> GetJobLogAsync(
         RepositorySlug slug,
         long jobId,
         CancellationToken cancellationToken)

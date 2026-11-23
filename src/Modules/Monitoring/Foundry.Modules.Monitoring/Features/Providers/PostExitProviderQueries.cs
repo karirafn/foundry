@@ -139,11 +139,11 @@ internal sealed class PostExitProviderQueries(
             return Result<CiJobLog>.Ok(new CiJobLog.NotACiJob());
         }
 
-        Result<string> log = await provider.GetJobLogAsync(repo.Slug, found.JobId, cancellationToken);
+        Result<CiJobLog.Available> log = await provider.GetJobLogAsync(repo.Slug, found.JobId, cancellationToken);
         return log switch
         {
-            Result<string>.Success success => Result<CiJobLog>.Ok(new CiJobLog.Available(success.Value)),
-            Result<string>.Failure failure => Result<CiJobLog>.Fail(failure.Error),
+            Result<CiJobLog.Available>.Success success => Result<CiJobLog>.Ok(success.Value),
+            Result<CiJobLog.Available>.Failure failure => Result<CiJobLog>.Fail(failure.Error),
             _ => throw new UnreachableException(),
         };
     }

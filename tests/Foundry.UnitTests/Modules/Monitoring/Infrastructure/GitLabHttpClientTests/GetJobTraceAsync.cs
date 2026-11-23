@@ -1,6 +1,7 @@
 using System.Net;
 
 using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -25,7 +26,7 @@ public sealed class GetJobTraceAsync
 
     private static RepositorySlug Slug => RepositorySlug.Create("group/project").ValueOrThrow();
 
-    private static async Task<Result<string>> ActAsync(FakeHandler handler) =>
+    private static async Task<Result<CiJobLog.Available>> ActAsync(HttpMessageHandler handler) =>
         await new GitLabHttpClient(
                 new HttpClient(handler),
                 NullLogger<GitLabHttpClient>.Instance,
@@ -41,10 +42,10 @@ public sealed class GetJobTraceAsync
         FakeHandler handler = new(HttpStatusCode.OK, "$ dotnet test\nFailed!");
 
         // Act
-        Result<string> result = await ActAsync(handler);
+        Result<CiJobLog.Available> result = await ActAsync(handler);
 
         // Assert
-        result.ShouldBeOfType<Result<string>.Success>().Value.ShouldBe("$ dotnet test\nFailed!");
+        result.ShouldBeOfType<Result<CiJobLog.Available>.Success>().Value.Text.ShouldBe("$ dotnet test\nFailed!");
     }
 
     [Fact]
@@ -70,10 +71,10 @@ public sealed class GetJobTraceAsync
         FakeHandler handler = new(HttpStatusCode.NotFound, "{}");
 
         // Act
-        Result<string> result = await ActAsync(handler);
+        Result<CiJobLog.Available> result = await ActAsync(handler);
 
         // Assert
-        result.ShouldBeOfType<Result<string>.Failure>().Error.Code.ShouldBe(JobLogErrors.UnavailableCode);
+        result.ShouldBeOfType<Result<CiJobLog.Available>.Failure>().Error.Code.ShouldBe(JobLogErrors.UnavailableCode);
     }
 
     [Fact]
@@ -90,20 +91,52 @@ public sealed class GetJobTraceAsync
             TimeProvider.System);
 
         // Act
-        Result<string> result = await client.GetJobTraceAsync(
+        Result<CiJobLog.Available> result = await client.GetJobTraceAsync(
             ApiBaseUrl, Slug, 7, "glpat-token", TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeOfType<Result<string>.Success>().Value
+        result.ShouldBeOfType<Result<CiJobLog.Available>.Success>().Value.Text
             .ShouldBe(GeneratedLogStream.TextOf(length - JobLogTailReader.JobLogTailBytes, length));
     }
 
-    private sealed class GeneratedTraceHandler(long length) : HttpMessageHandler
+    [Fact]
+    public async Task WhenTheFailureSitsNearTheStartOfALargeTrace_TheRenderedPromptHoldsItsMarkerLineAndStackFrame()
+    {
+        // Arrange: a 9 MB trace whose failure sits in its first 64 KiB and whose last 256 KiB holds no marker line.
+        GeneratedTraceHandler handler = new(9_000_000, FailingJobLogPrompt.Head());
+
+        // Act
+        Result<CiJobLog.Available> result = await ActAsync(handler);
+
+        // Assert
+        string prompt = FailingJobLogPrompt.Render(result.ShouldBeOfType<Result<CiJobLog.Available>.Success>().Value);
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain(FailingJobLogPrompt.MarkerLine),
+            () => prompt.ShouldContain(FailingJobLogPrompt.StackFrame));
+    }
+
+    [Fact]
+    public async Task WhenTheTraceIsSmallerThanTheTail_ReportsItsLengthAndScansItForFailureLines()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "$ dotnet test\nerror CS1002\n");
+
+        // Act
+        Result<CiJobLog.Available> result = await ActAsync(handler);
+
+        // Assert
+        CiJobLog.Available log = result.ShouldBeOfType<Result<CiJobLog.Available>.Success>().Value;
+        log.ShouldSatisfyAllConditions(
+            () => log.Length.ShouldBe(27),
+            () => log.FailureExcerpt.ShouldBe([new JobLogLine(2, 14, "error CS1002")]));
+    }
+
+    private sealed class GeneratedTraceHandler(long length, byte[]? head = null) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StreamContent(new GeneratedLogStream(0, length)),
+                Content = new StreamContent(new HeadedLogStream(head ?? [], 0, length)),
             });
     }
 }
