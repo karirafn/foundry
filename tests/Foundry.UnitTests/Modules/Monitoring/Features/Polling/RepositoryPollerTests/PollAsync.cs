@@ -524,7 +524,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
@@ -590,7 +590,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: isClosed, IsMerged: isMerged, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: isClosed, IsMerged: isMerged, HeadSha: null, IsDraft: false)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
@@ -621,7 +621,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
@@ -693,7 +693,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
@@ -793,7 +793,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
         };
         ReviewComment comment = new("Please fix the indentation", "src/Foo.cs", 42);
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
@@ -842,7 +842,7 @@ public sealed class PollAsync : IAsyncDisposable
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
             });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -874,7 +874,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
         };
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
@@ -917,8 +917,8 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl1] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
-            [prUrl2] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
+            [prUrl1] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl2] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
         };
         Error feedbackError = new("GitHub.RateLimited", "Rate limited");
         ReviewComment comment = new("Please address this");
@@ -968,7 +968,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
         };
         ReviewComment comment = new("Fix this");
         ReviewFeedback feedback = new([comment], OmittedCommentCount: 12, NewestCommentAt: newestCommentAt);
@@ -1023,7 +1023,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null)),
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
         };
         // No feedback configured — if called, stub returns empty feedback (not a problem for this test's assertion)
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
@@ -2079,7 +2079,7 @@ public sealed class PollAsync : IAsyncDisposable
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, currentHeadSha)),
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, currentHeadSha, IsDraft: false)),
             },
             reviewFeedbackResults: new Dictionary<string, Result<ReviewFeedback>>
             {
@@ -2183,7 +2183,7 @@ public sealed class PollAsync : IAsyncDisposable
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
+            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
         }
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(

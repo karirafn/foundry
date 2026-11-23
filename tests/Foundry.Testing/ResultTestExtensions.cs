@@ -22,4 +22,12 @@ public static class ResultTestExtensions
             Result<T>.Success => throw new InvalidOperationException("Expected a failure but the result succeeded."),
             _ => throw new UnreachableException(),
         };
+
+    public static Error ErrorOrThrow(this Result result) =>
+        result switch
+        {
+            Result.Failure failure => failure.Error,
+            Result.Success => throw new InvalidOperationException("Expected a failure but the result succeeded."),
+            _ => throw new UnreachableException(),
+        };
 }

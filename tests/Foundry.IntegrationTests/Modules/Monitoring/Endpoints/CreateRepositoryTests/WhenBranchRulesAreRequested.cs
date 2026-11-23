@@ -222,7 +222,7 @@ public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken) =>
-            Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false, null)));
+            Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false, null, false)));
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,

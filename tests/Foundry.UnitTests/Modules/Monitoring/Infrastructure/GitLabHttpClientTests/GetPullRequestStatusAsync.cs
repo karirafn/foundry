@@ -241,4 +241,27 @@ public sealed class GetPullRequestStatusAsync
         Result<PullRequestStatus>.Failure failure = result.ShouldBeOfType<Result<PullRequestStatus>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenMrCarriesDraft_ReturnsItAsIsDraft(bool isDraft)
+    {
+        // Arrange — field shape per GitLab's "Get single MR" response (boolean "draft").
+        string json = $$"""{ "iid": 1, "state": "opened", "draft": {{(isDraft ? "true" : "false")}} }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestStatus>.Success>().Value.IsDraft.ShouldBe(isDraft);
+    }
 }

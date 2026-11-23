@@ -318,7 +318,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: VerifiedHead);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: VerifiedHead, IsDraft: false);
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -333,7 +333,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: VerifiedHead);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: VerifiedHead, IsDraft: false);
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -665,7 +665,7 @@ public sealed class RunAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         RefuseBehind();
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: new string('2', 40));
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: new string('2', 40), IsDraft: false);
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
@@ -1174,7 +1174,7 @@ public sealed class RunAsync : IAsyncDisposable
 
         public bool IssueClosed { get; set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: VerifiedHead);
+        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: VerifiedHead, IsDraft: false);
 
         public Exception? ThrowOnMerge { get; set; }
 

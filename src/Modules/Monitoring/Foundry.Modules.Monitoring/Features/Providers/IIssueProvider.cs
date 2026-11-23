@@ -213,6 +213,22 @@ internal interface IIssueProvider
             RunPublishingErrors.Permanent("This provider does not support opening pull requests.")));
 
     /// <summary>
+    /// Marks the draft pull/merge request at <paramref name="pullRequestUrl"/> ready for review. One that is
+    /// already ready succeeds without a change. GitLab has no draft attribute on its update endpoint, so only a
+    /// leading <c>Draft:</c>, <c>[Draft]</c> or <c>(Draft)</c> is removed from the title and the rest is kept as
+    /// a person may have edited it. A failure is <see cref="RunPublishingErrors.TransientCode"/> or
+    /// <see cref="RunPublishingErrors.PermanentCode"/>; this call never retries.
+    /// </summary>
+    /// <remarks>Providers without draft support keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result> MarkPullRequestReadyAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result.Fail(
+            RunPublishingErrors.Permanent("This provider does not support marking pull requests ready.")));
+
+    /// <summary>
     /// The commit identity of the account whose token this provider holds (see
     /// <see cref="IRunPublishingCommands.GetCommitIdentityAsync"/> for the per-provider rule).
     /// A failure is <see cref="RunPublishingErrors.TransientCode"/> or <see cref="RunPublishingErrors.PermanentCode"/>.

@@ -191,7 +191,7 @@ public sealed class GetPullRequestStatusAsync
     }
 
     [Fact]
-    public async Task WhenStatusIsRead_RequestsHeadRefOidInTheSameQuery()
+    public async Task WhenStatusIsRead_RequestsNodeIdHeadRefOidAndDraftStateInTheSameQuery()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, """{ "data": { "repository": { "pullRequest": { "state": "OPEN", "merged": false } } } }""");
@@ -206,7 +206,7 @@ public sealed class GetPullRequestStatusAsync
             CancellationToken.None);
 
         // Assert
-        handler.LastRequestBody.ShouldNotBeNull().ShouldContain("state merged headRefOid");
+        handler.LastRequestBody.ShouldNotBeNull().ShouldContain("id state merged headRefOid isDraft");
     }
 
     [Fact]
@@ -362,5 +362,35 @@ public sealed class GetPullRequestStatusAsync
         string body = handler.LastRequestBody.ShouldNotBeNull();
         body.ShouldContain("123");
         body.ShouldContain("rateLimit");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenResponseCarriesIsDraft_ReturnsItAsIsDraft(bool isDraft)
+    {
+        // Arrange — field shape per GitHub's GraphQL PullRequest.isDraft (Boolean!).
+        string json = $$"""
+            {
+              "data": {
+                "repository": {
+                  "pullRequest": { "id": "PR_kwDOABCD", "state": "OPEN", "merged": false, "isDraft": {{(isDraft ? "true" : "false")}} }
+                }
+              }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: "https://github.com/owner/repo/pull/123",
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestStatus>.Success>().Value.IsDraft.ShouldBe(isDraft);
     }
 }
