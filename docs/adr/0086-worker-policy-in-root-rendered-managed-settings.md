@@ -1,12 +1,8 @@
+---
+reaches: non-functional
+---
+
 # Worker Policy Lives in Root-Rendered Managed Settings
-
-> **2026-11-04 — Amended by [ADR 0088](0088-worker-containers-run-hardened-by-default.md):** the root phase now runs with only `SETUID`/`SETGID` (plus the DinD additions) under `no-new-privileges`, and it writes the managed file to a root-owned tmpfs at `/etc/claude-code` on a read-only root filesystem. The render-then-drop sequence and the non-root invariant check are unchanged.
-
-> **2026-11-05 — Amended:** the list of generated settings in Decision now also includes `attribution` (`commit` and `pr` empty, `sessionUrl` false), so a worker never adds AI attribution. The list drifted: `WorkerSettingsBuilder` gained the section after this ADR was written. The original list was accurate at the time.
-
-> **2026-11-06 — Amended:** [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md) removes host hooks. The Decision's "host hooks merged from the operator's host settings file" and the failed-host-hook-merge case under Fail closed no longer apply. The reason given for rejecting "Write the file from the API through the Docker archive API before start" (the API cannot read the host settings file) no longer holds, so that option is open for reconsideration.
-
-> **2026-11-10 — Amended:** the 2026-11-05 note's claim that the `attribution` setting means "a worker never adds AI attribution" was false from the start. The setting removes Claude Code's own attribution instruction from the prompt, but the model can still write a `Co-Authored-By` trailer or a "Generated with Claude Code" footer itself. A worker with no git identity configured did exactly that on PR #808. Managed settings reduce attribution but cannot guarantee its absence. Only code that strips it from commit messages and pull request text can.
 
 ## Context
 
@@ -14,12 +10,12 @@ A worker runs `claude --dangerously-skip-permissions` as `node`, and Foundry's g
 
 ## Decision
 
-Foundry's generated worker settings — the deny list, `model`, and the host hooks merged from the operator's host settings file — are written to Claude Code's Linux managed-settings path, `/etc/claude-code/managed-settings.json`, which outranks user, project, local and `--settings` values. Deny lists and hooks merge across scopes, and hooks from managed settings cannot be removed or disabled from any other file.
+Foundry's generated worker settings — the deny list, `model`, and `attribution` (`commit` and `pr` empty, `sessionUrl` false) — are written to Claude Code's Linux managed-settings path, `/etc/claude-code/managed-settings.json`, which outranks user, project, local and `--settings` values. Deny lists and hooks merge across scopes, and hooks from managed settings cannot be removed or disabled from any other file.
 
-- **Root phase, then drop** — the worker image starts as root. The entrypoint branches on `id -u`: as root it renders the managed file (directory `0755`, file `0644`, both `root:root`) and re-executes itself through `setpriv --reuid=node --regid=node --init-groups --inh-caps=-all`, keeping Docker's default capability bounding set because rootless dockerd relies on the setuid `newuidmap`/`newgidmap`. Nothing else — clone, dockerd, `claude` — runs before the drop.
+- **Root phase, then drop** — the worker image starts as root. The entrypoint branches on `id -u`: as root it renders the managed file (directory `0755`, file `0644`, both `root:root`) and re-executes itself through `setpriv --reuid=node --regid=node --init-groups --inh-caps=-all`. The root phase runs with only `SETUID`/`SETGID` (plus the rootless Docker additions) under `no-new-privileges` ([ADR 0088](0088-worker-containers-run-hardened-by-default.md)); the bounding set is not narrowed further because rootless dockerd relies on the setuid `newuidmap`/`newgidmap`. The root filesystem is read-only, so the managed file is written to a root-owned tmpfs at `/etc/claude-code`. Nothing else — clone, dockerd, `claude` — runs before the drop.
 - **Readable by `node`** — the file is world-readable. Claude Code starts without a managed source it cannot read, so a root-only file would silently drop the policy.
 - **Invariant check as `node`** — the non-root branch verifies the managed file exists, is owned by uid 0 and carries no group or other write bit, and fails bootstrap (stage `managed-settings`) otherwise. This also catches a container started directly as `node`, bypassing the root phase.
-- **Fail closed** — a non-root start without a valid managed file, an empty `CLAUDE_SETTINGS_JSON`, or a failed host-hook merge fails bootstrap before the drop; a worker never runs without its guardrails.
+- **Fail closed** — a non-root start without a valid managed file, or an empty `CLAUDE_SETTINGS_JSON` fails bootstrap before the drop; a worker never runs without its guardrails.
 - **User file cleared** — the entrypoint no longer writes `~/.claude/settings.json`, and deletes it on every start, so settings a worker injects into the shared volume never outlive the next worker start.
 - **`allowManagedHooksOnly` stays unset** — hooks in the target repository's own `.claude/settings.json` keep running; managed hooks are already tamper-proof without it.
 
@@ -29,7 +25,7 @@ Foundry's generated worker settings — the deny list, `model`, and the host hoo
 
 - **Keep the policy in `~/.claude/settings.json`** — rejected: the worker owns the file, and hot-reload applies its edits mid-session.
 - **Pass the policy as `claude --settings '<json>'`** — rejected: a command-line argument is tamper-proof and deny lists merge, but `disableAllHooks: true` in any non-managed file disables every non-managed hook, so a worker could silently switch off hooks delivered this way.
-- **Write the file from the API through the Docker archive API before start** — rejected: it avoids root in the container, but the API cannot read the host settings file (its filesystem is not necessarily the Docker host's), so the hook merge must run inside the container.
+- **Write the file from the API through the Docker archive API before start** — rejected: it avoids root in the container, but the API could not read the host settings file (its filesystem is not necessarily the Docker host's), so the hook merge had to run inside the container. [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md) removed host hooks, so that reason no longer holds and this option is open for reconsideration.
 - **Have the dispatcher create the container as `User = "root"` and keep `USER node` in the image** — rejected: it splits the privilege boundary between C# and the image, and a manual `docker run` takes a different path from production.
 - **A test-only switch to skip the managed-settings check** — rejected: it is a runtime bypass of the guardrail; the bats suite fakes `stat` instead, and one in-image test proves the real ownership and mode.
 
@@ -37,3 +33,10 @@ Foundry's generated worker settings — the deny list, `model`, and the host hoo
 
 - The worker image's default user is root. Container hardening (capability dropping, seccomp, read-only rootfs, non-root user) must preserve the root render-then-drop phase or move the render out of the container.
 - The shared OAuth config directory still exposes `CLAUDE.md`, `skills/`, `agents/`, `commands/` and `~/.claude.json` to cross-worker writes; this decision does not close that. [ADR 0090](0090-workers-share-only-the-oauth-credential-store.md) closes it for workers.
+- The `attribution` setting removes Claude Code's own attribution instruction from the prompt, but it cannot guarantee that a worker adds no AI attribution: the model can still write a `Co-Authored-By` trailer or a "Generated with Claude Code" footer itself, as a worker with no git identity configured did on PR #808. Only code that strips attribution from commit messages and pull request text can guarantee its absence.
+
+## Revisions
+- 2026-11-04 — The root phase runs with only `SETUID`/`SETGID` (plus the rootless Docker additions) under `no-new-privileges` and writes the managed file to a root-owned tmpfs on a read-only root filesystem ([ADR 0088](0088-worker-containers-run-hardened-by-default.md)).
+- 2026-11-05 — The list of generated settings now includes `attribution`, which `WorkerSettingsBuilder` gained after this ADR was written.
+- 2026-11-06 — Host hooks are removed, so the host-hook merge and its fail-closed case no longer apply and the archive-API option is open for reconsideration ([ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md)).
+- 2026-11-10 — The claim that the `attribution` setting means a worker never adds AI attribution was false from the start; managed settings reduce attribution but cannot guarantee its absence.

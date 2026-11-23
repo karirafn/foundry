@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # Workers Share Only the OAuth Credential Store
 
 ## Context
@@ -27,6 +31,6 @@ The worker entrypoint resolves the credential file the way the CLI does: `CLAUDE
 ## Consequences
 
 - Nothing a worker writes to its Claude config dir reaches another worker. The worker can still write arbitrary files into the credential volume, but no worker loads that directory as a config dir.
-- The login, credential-helper, Credit Probe and usage containers still mount the volume as their config dir (`/home/node/.claude`). Files a worker plants in the volume are therefore still visible to those Foundry-run containers. Moving them to the same split is follow-up work.
+- The login, credential-helper, Credit Probe and usage containers still mount the volume as their config dir (`/home/node/.claude`). Files a worker plants in the volume are therefore still visible to those Foundry-run containers.
 - `CLAUDE_SECURESTORAGE_CONFIG_DIR` is not a documented CLI setting. Before a CLI bump is merged, check that the credential store still follows it. The `entrypoint.bats` and `IssueClaimedHandler` tests pin Foundry's side of the wiring.
 - Two workers refreshing at once still serialise on the shared `.storage-write` lock, as before.

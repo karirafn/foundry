@@ -1,3 +1,7 @@
+---
+reaches: non-functional
+---
+
 # Workers Receive No Host Claude Code Configuration
 
 ## Context
