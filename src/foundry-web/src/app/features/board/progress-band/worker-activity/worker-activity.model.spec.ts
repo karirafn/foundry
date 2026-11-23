@@ -63,7 +63,23 @@ describe('activityPanel', () => {
       starting: true,
       taskLine: "Waiting for the agent's first event",
       taskBar: null,
+      tasks: [],
     });
+  });
+
+  it('lists the tasks for the checklist', () => {
+    // Arrange
+    const activity = activityWithTasks(3, 1, true);
+
+    // Act
+    const panel = activityPanel(activity);
+
+    // Assert
+    expect(panel.tasks.map((item) => [item.id, item.state])).toEqual([
+      ['1', 'done'],
+      ['2', 'current'],
+      ['3', 'upcoming'],
+    ]);
   });
 
   it("names the current task's active form", () => {

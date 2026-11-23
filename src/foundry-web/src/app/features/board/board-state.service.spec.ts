@@ -575,6 +575,73 @@ describe('BoardStateService', () => {
     expect(h.service.announcement()).toBe('#63 needs you: Failed');
   });
 
+  describe('task lists', () => {
+    it('starts every task list collapsed', () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a' })]);
+
+      // Act / Assert
+      expect(h.service.tasksExpanded('a')).toBe(false);
+    });
+
+    it("toggles one issue's task list only", () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a' }), buildIssue({ id: 'b' })]);
+
+      // Act
+      h.service.toggleTasks('a');
+
+      // Assert
+      expect([h.service.tasksExpanded('a'), h.service.tasksExpanded('b')]).toEqual([true, false]);
+    });
+
+    it('collapses a task list toggled twice', () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a' })]);
+
+      // Act
+      h.service.toggleTasks('a');
+      h.service.toggleTasks('a');
+
+      // Assert
+      expect(h.service.tasksExpanded('a')).toBe(false);
+    });
+
+    it('keeps a task list expanded while its issue moves section', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a' })]);
+      h.service.toggleTasks('a');
+
+      // Act
+      change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
+      await vi.advanceTimersByTimeAsync(150);
+
+      // Assert
+      expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
+      expect(h.service.tasksExpanded('a')).toBe(true);
+    });
+
+    it('forgets a task list once its issue leaves the board', async () => {
+      // Arrange
+      const h = setup();
+      load(h, [buildIssue({ id: 'a' })]);
+      h.service.toggleTasks('a');
+      change(h, []);
+      await vi.advanceTimersByTimeAsync(150);
+
+      // Act
+      change(h, [buildIssue({ id: 'a' })]);
+      await vi.advanceTimersByTimeAsync(150);
+
+      // Assert
+      expect(h.service.tasksExpanded('a')).toBe(false);
+    });
+  });
+
   describe('completion', () => {
     function complete(h: Harness, issue: IssueSummary): void {
       const completed = {

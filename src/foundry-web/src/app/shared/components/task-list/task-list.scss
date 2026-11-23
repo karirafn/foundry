@@ -1,0 +1,134 @@
+@use '../../../../styles/breakpoints' as *;
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+  min-width: 0;
+  // Above the row's stretched title button, so the list scrolls and a click on it opens nothing.
+  position: relative;
+  z-index: 1;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.task-list {
+  border-inline-start: 2px solid color-mix(in oklch, var(--fd-accent-working) 35%, transparent);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8125rem;
+  gap: 3px;
+  list-style: none;
+  margin: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  padding: 0 0 0 var(--fd-spacing-md);
+  // The tasks' offsetTop is measured from the list when revealing the current one.
+  position: relative;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+:host:not([hidden]) .task-list {
+  animation: fd-fade-in var(--fd-motion-fade) ease;
+}
+
+.task-list__item {
+  align-items: start;
+  color: var(--fd-text-secondary);
+  display: flex;
+  gap: var(--fd-spacing-sm);
+  min-width: 0;
+}
+
+// Shape, not just colour, tells the states apart: a filled disc, an open ring and an empty ring.
+.task-list__marker {
+  border: 2px solid var(--fd-border-default);
+  border-radius: 50%;
+  box-sizing: border-box;
+  color: var(--fd-bg-card);
+  display: grid;
+  flex: none;
+  height: 14px;
+  margin-top: 2px;
+  place-items: center;
+  width: 14px;
+
+  [data-state='done'] > & {
+    background: var(--fd-accent-working);
+    border-color: var(--fd-accent-working);
+  }
+
+  [data-state='current'] > & {
+    border-color: var(--fd-accent-working);
+    border-inline-end-color: transparent;
+  }
+}
+
+.task-list__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.task-list__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  [data-state='current'] & {
+    color: var(--fd-text-primary);
+    font-weight: 500;
+  }
+}
+
+.task-list__via {
+  font-size: 0.75rem;
+
+  b {
+    color: var(--fd-text-activity);
+    font-weight: 600;
+  }
+}
+
+.task-list__item--fresh-done .task-list__marker {
+  animation: fd-rail-pop var(--fd-motion-enter) var(--fd-ease-enter);
+}
+
+.task-list__item--fresh-current .task-list__text {
+  animation: fd-task-slide-in var(--fd-motion-enter) var(--fd-ease-enter);
+}
+
+@media (width < $rail-breakpoint) {
+  .task-list__text {
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-list,
+  .task-list__marker,
+  .task-list__text {
+    animation: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .task-list__marker {
+    border-color: CanvasText;
+
+    [data-state='done'] > &,
+    [data-state='current'] > & {
+      background: Highlight;
+      border-color: Highlight;
+    }
+
+    [data-state='current'] > & {
+      background: transparent;
+      border-inline-end-color: transparent;
+    }
+  }
+}

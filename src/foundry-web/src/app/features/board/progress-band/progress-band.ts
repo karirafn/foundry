@@ -16,7 +16,7 @@ import { WorkerSignalRService } from '../../../core/services/worker-signalr.serv
 import { DispatchCapacityService } from '../../../core/services/dispatch-capacity.service';
 import { IssueService } from '../../issues/issue.service';
 import { BoardBandComponent } from '../board-band/board-band';
-import { ItemView } from '../board-state.service';
+import { BoardStateService, ItemView } from '../board-state.service';
 import { CardOpened, StepItem, WorkerItem } from '../board.model';
 import { LifecycleRowComponent } from '../lifecycle-row/lifecycle-row';
 
@@ -46,6 +46,7 @@ export class ProgressBandComponent {
   private readonly _capacityService = inject(DispatchCapacityService);
   private readonly _workerSignalR = inject(WorkerSignalRService);
   private readonly _issueService = inject(IssueService);
+  protected readonly board = inject(BoardStateService);
 
   protected readonly capacity = this._capacityService.capacity;
   protected readonly capacityError = this._capacityService.loadError;

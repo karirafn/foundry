@@ -48,3 +48,33 @@ export function backgroundTaskText(task: BackgroundTask): string {
 export function backgroundTaskCount(count: number): string {
   return `${count} background task${count === 1 ? '' : 's'}`;
 }
+
+/** A task in the agent's checklist: finished, being worked on, or not started. */
+export type TaskListState = 'done' | 'current' | 'upcoming';
+
+export interface TaskListItem {
+  readonly id: string;
+  readonly text: string;
+  readonly state: TaskListState;
+  /** The subagent type running the current task; null on every other task. */
+  readonly subagent: string | null;
+}
+
+/**
+ * The agent's task list in its own order. The current task reads by its active form and carries the
+ * latest subagent; a current task missing from the list leaves no item current.
+ */
+export function taskListItems(activity: AgentActivity): readonly TaskListItem[] {
+  const currentId = activity.currentTask?.id ?? null;
+  const latest = activity.subagents.at(-1)?.subagentType.trim() ?? '';
+  const subagent = latest.length > 0 ? latest : null;
+  return activity.tasks.map((task): TaskListItem => {
+    if (task.status === 'completed') {
+      return { id: task.id, text: task.subject, state: 'done', subagent: null };
+    }
+    if (task.id === currentId) {
+      return { id: task.id, text: task.activeForm ?? task.subject, state: 'current', subagent };
+    }
+    return { id: task.id, text: task.subject, state: 'upcoming', subagent: null };
+  });
+}

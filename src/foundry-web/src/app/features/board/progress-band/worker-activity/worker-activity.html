@@ -5,11 +5,12 @@
       @switch (bar.shape.kind) {
         @case ('segments') {
           <span class="worker-activity__bar" aria-hidden="true">
-            @for (segment of bar.shape.segments; track $index) {
+            @for (segment of segments(); track $index) {
               <span
                 class="worker-activity__segment"
-                [class.worker-activity__segment--done]="segment === 'done'"
-                [class.worker-activity__segment--current]="segment === 'current'"
+                [class.worker-activity__segment--done]="segment.state === 'done'"
+                [class.worker-activity__segment--current]="segment.state === 'current'"
+                [class.worker-activity__segment--fill]="segment.fill"
               ></span>
             }
           </span>
@@ -30,6 +31,37 @@
         }
       }
       <span class="worker-activity__progress">{{ bar.progress }}</span>
+      <button
+        type="button"
+        class="worker-activity__toggle"
+        [attr.aria-expanded]="expanded()"
+        [attr.aria-controls]="listId()"
+        (click)="toggle()"
+      >
+        Tasks
+        <svg
+          class="worker-activity__chevron"
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
     </div>
+    <!-- Stays mounted while collapsed, so aria-controls always names an element. -->
+    <fd-task-list
+      class="worker-activity__list"
+      [items]="panel().tasks"
+      [listId]="listId()"
+      [hidden]="!expanded()"
+    />
   }
 </div>

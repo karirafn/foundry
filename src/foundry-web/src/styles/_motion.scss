@@ -111,16 +111,6 @@
   }
 }
 
-// The sheen across a worker card's current task segment.
-@keyframes fd-board-segment-sheen {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
 // A completed card's list item folds away; its child needs `min-height: 0`.
 .fd-board-collapse {
   animation: fd-board-card-collapse var(--fd-motion-exit) var(--fd-ease-exit) forwards;
@@ -237,5 +227,20 @@
 @keyframes fd-rail-spin {
   to {
     transform: rotate(1turn);
+  }
+}
+
+// The agent's task bar and checklist: a completed task fills its segment once and the next task
+// slides in once. Nothing in the task UI loops.
+@keyframes fd-task-segment-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes fd-task-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
   }
 }

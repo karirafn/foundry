@@ -1,0 +1,29 @@
+<ol class="task-list" aria-label="Agent tasks" tabindex="0" [id]="listId()">
+  @for (row of rows(); track row.id) {
+    <li
+      class="task-list__item"
+      [attr.data-state]="row.state"
+      [class.task-list__item--fresh-done]="row.fresh === 'done'"
+      [class.task-list__item--fresh-current]="row.fresh === 'current'"
+    >
+      <span class="task-list__marker" aria-hidden="true">
+        @if (row.state === 'done') {
+          <svg viewBox="0 0 16 16" width="10" height="10" focusable="false">
+            <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.25" />
+          </svg>
+        }
+      </span>
+      <span class="task-list__body">
+        <span class="task-list__text" [attr.title]="row.text"
+          ><span class="sr-only">{{ prefixes[row.state] }}</span
+          >{{ row.text }}</span
+        >
+        @if (row.state === 'current' && row.subagent !== null) {
+          <span class="task-list__via"
+            ><span class="sr-only">, </span>via <b>{{ row.subagent }}</b> subagent</span
+          >
+        }
+      </span>
+    </li>
+  }
+</ol>

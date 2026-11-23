@@ -157,6 +157,7 @@ export class BoardStateService {
   private readonly _announcement: WritableSignal<string> = signal('');
   private readonly _glided: WritableSignal<boolean> = signal(false);
   private readonly _now: WritableSignal<number> = signal(Date.now());
+  private readonly _tasksExpanded: WritableSignal<ReadonlySet<string>> = signal(new Set());
 
   /** The current time, in epoch ms, ticking every second; the board's one shared clock. */
   readonly now: Signal<number> = this._now.asReadonly();
@@ -211,6 +212,21 @@ export class BoardStateService {
       blocked: list(rendered.blocked, 'blocked'),
     };
   });
+
+  /** Whether the issue's task checklist is open; it stays open while the issue is on the board. */
+  tasksExpanded(issueId: string): boolean {
+    return this._tasksExpanded().has(issueId);
+  }
+
+  toggleTasks(issueId: string): void {
+    this._tasksExpanded.update((current) => {
+      const next = new Set(current);
+      if (!next.delete(issueId)) {
+        next.add(issueId);
+      }
+      return next;
+    });
+  }
 
   /** Every alert and item on the board. */
   readonly itemCount: Signal<number> = computed(() => {
@@ -336,7 +352,7 @@ export class BoardStateService {
     const placementChanged = moved.length > 0 || left.length > 0;
 
     const update = (): void => {
-      this._rendered.set(next);
+      this._render(next);
       this._markArrivals(arrivals);
     };
 
@@ -367,7 +383,17 @@ export class BoardStateService {
     this._arrived.set(new Set());
     this._moved.set(new Set());
     this._ghosts.set(new Map());
-    this._rendered.set(this._build(batch));
+    this._render(this._build(batch));
+  }
+
+  // An issue that leaves the board forgets its open task list.
+  private _render(bands: BoardBands): void {
+    this._rendered.set(bands);
+    const onBoard = placementKeys(bands);
+    const expanded = this._tasksExpanded();
+    if ([...expanded].some((id) => !onBoard.has(id))) {
+      this._tasksExpanded.set(new Set([...expanded].filter((id) => onBoard.has(id))));
+    }
   }
 
   private _build(batch: Batch): BoardBands {
