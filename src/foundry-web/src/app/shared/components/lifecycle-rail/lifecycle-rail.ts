@@ -11,28 +11,9 @@ import {
 import { NgTemplateOutlet } from '@angular/common';
 import { LifecycleStep, currentStep } from '../../../features/issues/lifecycle.model';
 import { formatElapsed } from '../../utils/agent-activity-format';
-import {
-  NodeTone,
-  RailGroupView,
-  RailStepView,
-  RailView,
-  railGroups,
-  railView,
-  stepStatusText,
-} from './lifecycle-rail.model';
+import { RailStepView, TONES, ToneColours, railView, stepStatusText } from './lifecycle-rail.model';
 
 export type RailOrientation = 'horizontal' | 'vertical';
-/** `full` labels every step under stage brackets; `mini` is dots only, static and hidden from assistive tech. */
-export type RailDensity = 'full' | 'mini';
-
-// Set inline rather than per tone in the stylesheet, which keeps it inside its style budget.
-const TONES: Readonly<Record<NodeTone, { readonly tone: string; readonly tint: string }>> = {
-  claude: { tone: 'var(--fd-accent-working)', tint: 'var(--fd-bg-working-subtle)' },
-  code: { tone: 'var(--fd-text-link)', tint: 'var(--fd-bg-code-subtle)' },
-  person: { tone: 'var(--fd-text-warning)', tint: 'var(--fd-bg-warning-subtle)' },
-  failed: { tone: 'var(--fd-text-error)', tint: 'var(--fd-bg-error-subtle)' },
-  done: { tone: 'var(--fd-bg-page)', tint: 'var(--fd-accent-ready)' },
-};
 
 function needsYou(lifecycle: readonly LifecycleStep[]): boolean {
   return currentStep(lifecycle)?.phase === 'needs_you';
@@ -55,7 +36,6 @@ export class LifecycleRailComponent {
     input.required<readonly LifecycleStep[]>();
   readonly round: InputSignal<number> = input<number>(1);
   readonly orientation: InputSignal<RailOrientation> = input<RailOrientation>('horizontal');
-  readonly density: InputSignal<RailDensity> = input<RailDensity>('full');
   /** The issue just started needing a person: its needs-you node beacons. */
   readonly arriving: InputSignal<boolean> = input<boolean>(false);
   /** When the issue entered its current step (ISO); the vertical rail shows the time since. */
@@ -69,24 +49,18 @@ export class LifecycleRailComponent {
   readonly currentStepExtra: InputSignal<TemplateRef<void> | null> =
     input<TemplateRef<void> | null>(null);
 
-  protected readonly mini: Signal<boolean> = computed(() => this.density() === 'mini');
-
   // Diffs against the lifecycle shown before, so a change plays once and the first render never moves.
-  protected readonly view: Signal<RailView> = linkedSignal({
-    source: () => ({ lifecycle: this.lifecycle(), round: this.round(), mini: this.mini() }),
+  protected readonly steps: Signal<readonly RailStepView[]> = linkedSignal({
+    source: () => ({ lifecycle: this.lifecycle(), round: this.round() }),
     computation: (source, previous) =>
       railView(
         source.lifecycle,
         source.round,
-        source.mini || previous === undefined ? null : previous.source.lifecycle,
+        previous === undefined ? null : previous.source.lifecycle,
       ),
   });
 
   protected readonly vertical: Signal<boolean> = computed(() => this.orientation() === 'vertical');
-
-  protected readonly groups: Signal<readonly RailGroupView[]> = computed(() =>
-    railGroups(this.view()),
-  );
 
   // The vertical rail has no board to tell it an issue arrived in Needs you, so it beacons itself.
   protected readonly needsYouArrived: Signal<boolean> = linkedSignal({
@@ -100,19 +74,13 @@ export class LifecycleRailComponent {
     return enteredAt === null ? null : formatElapsed(this.now() - Date.parse(enteredAt));
   });
 
-  // The node template's context is untyped, so the step is typed here.
-  protected toneOf(step: RailStepView): { readonly tone: string; readonly tint: string } {
+  // The node template's context is untyped, so the step is typed here. Tones are set inline rather
+  // than per tone in the stylesheet, which keeps it inside its style budget.
+  protected toneOf(step: RailStepView): ToneColours {
     return TONES[step.tone];
   }
 
   protected statusText(step: RailStepView): string {
     return stepStatusText(step, this._elapsed());
-  }
-
-  protected waitText(step: RailStepView): string {
-    const elapsed = this._elapsed();
-    return step.status === 'current' && elapsed !== null
-      ? `${step.label} · ${elapsed}`
-      : step.label;
   }
 }

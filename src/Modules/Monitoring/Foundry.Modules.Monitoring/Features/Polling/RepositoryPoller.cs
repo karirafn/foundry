@@ -214,6 +214,7 @@ internal sealed class RepositoryPoller(
     {
         bool changed = await DetectReviewStatusChangesAsync(repository, provider, issueNumber, cancellationToken);
         changed |= await DetectReviewStepClosuresAsync(repository, provider, issueNumber, cancellationToken);
+        changed |= await DetectQueuedRevisionClosuresAsync(repository, provider, issueNumber, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
@@ -709,6 +710,46 @@ internal sealed class RepositoryPoller(
             {
                 repository.RecordIntegrationEvent(
                     new ProviderPullRequestClosed(repository.Id, reviewStepIssue.IssueNumber));
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// For every revision queued or held by open blockers, or only <paramref name="issueNumber"/> when supplied: records a
+    /// pull request closed without merging, which fails the revision before it starts. The issue's own closure is left to
+    /// the listing's close path, which untracks these resting states.
+    /// </summary>
+    private async Task<bool> DetectQueuedRevisionClosuresAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        int? issueNumber,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<QueuedRevisionIssueInfo> queuedRevisions = await issueQueries.GetQueuedRevisionIssuesAsync(
+            repository.Id,
+            cancellationToken);
+
+        bool changed = false;
+
+        foreach (QueuedRevisionIssueInfo queuedRevision in queuedRevisions)
+        {
+            if (issueNumber is { } targetNumber && queuedRevision.IssueNumber != targetNumber)
+            {
+                continue;
+            }
+
+            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
+                repository.Slug,
+                queuedRevision.PullRequestUrl,
+                cancellationToken);
+
+            if (prStatusResult is Result<PullRequestStatus>.Success { Value: { IsClosed: true, IsMerged: false } })
+            {
+                repository.RecordIntegrationEvent(
+                    new ProviderPullRequestClosed(repository.Id, queuedRevision.IssueNumber));
                 changed = true;
             }
         }

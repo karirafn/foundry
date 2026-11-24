@@ -17,11 +17,28 @@ const PUBLISHING: readonly LifecycleStep[] = [
   { step: 'publish', actor: 'code', status: 'current', phase: 'running' },
 ];
 
+const WAITING: readonly LifecycleStep[] = [
+  IMPLEMENTING[0],
+  { step: 'queued', actor: 'code', status: 'current', phase: 'waiting' },
+  { step: 'implement', actor: 'claude', status: 'upcoming', phase: null },
+  { step: 'your_review', actor: 'person', status: 'off', phase: null },
+];
+
+function text(node: Element | null | undefined): string {
+  return (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+const TRIAGING: readonly LifecycleStep[] = [
+  { step: 'triage', actor: 'claude', status: 'current', phase: 'running' },
+  { step: 'queued', actor: 'code', status: 'upcoming', phase: null },
+  { step: 'implement', actor: 'claude', status: 'upcoming', phase: null },
+  { step: 'your_review', actor: 'person', status: 'off', phase: null },
+];
+
 function setup(
   lifecycle: readonly LifecycleStep[],
   inputs: Partial<{
     round: number;
-    density: 'full' | 'mini';
     orientation: 'horizontal' | 'vertical';
     enteredAt: string | null;
     now: number;
@@ -50,7 +67,6 @@ describe('LifecycleRailComponent', () => {
     expect(fixture.nativeElement.querySelector('ol').getAttribute('aria-label')).toBe('Lifecycle');
     expect(steps(fixture).map((li) => li.getAttribute('aria-label'))).toEqual([
       'Triage, by Claude, done',
-      'Queued for implement, by Foundry code, done',
       'Implement, by Claude, current, running',
       'Publish, by Foundry code, upcoming',
     ]);
@@ -63,21 +79,71 @@ describe('LifecycleRailComponent', () => {
     // Assert
     expect(steps(fixture).map((li) => li.getAttribute('aria-current'))).toEqual([
       null,
+      'step',
+      null,
+    ]);
+  });
+
+  it('draws only the node steps, each labelled, with no wait, stage or connector element', () => {
+    // Act
+    const fixture = setup(IMPLEMENTING);
+
+    // Assert
+    const rail = fixture.nativeElement.querySelector('.rail') as HTMLElement;
+    expect(Array.from(rail.children).map((c) => c.className)).toEqual(['rail__steps']);
+    expect(Array.from(rail.querySelectorAll('.rail__steps > *')).map((c) => c.className)).toEqual([
+      'rail__step',
+      'rail__step',
+      'rail__step',
+    ]);
+    expect(
+      Array.from(rail.querySelectorAll('.rail__label')).map((l) => l.textContent?.trim()),
+    ).toEqual(['Triage', 'Implement', 'Publish']);
+    expect(rail.style.getPropertyValue('--nodes')).toBe('3');
+  });
+
+  it('leads a connector into every node but the first', () => {
+    // Act
+    const fixture = setup(IMPLEMENTING);
+
+    // Assert
+    expect(steps(fixture).map((li) => li.getAttribute('data-lead'))).toEqual([
+      null,
+      'full',
+      'none',
+    ]);
+  });
+
+  it('shows a current queue wait on the node after it', () => {
+    // Act
+    const fixture = setup(WAITING);
+
+    // Assert
+    const implement = steps(fixture)[1];
+    expect(implement.getAttribute('aria-label')).toBe('Implement, by Claude, upcoming, queued');
+    expect(implement.getAttribute('aria-current')).toBe('step');
+    expect(implement.getAttribute('data-lead')).toBe('half');
+    expect(implement.querySelector('.rail__node')?.getAttribute('data-ring')).toBe('queued');
+    expect(text(implement.querySelector('.rail__word'))).toBe('queued');
+    expect(steps(fixture).map((li) => li.getAttribute('aria-current'))).toEqual([
       null,
       'step',
       null,
     ]);
   });
 
-  it('labels nodes but not waits', () => {
+  it('pops the queued node once when its wait becomes current', () => {
+    // Arrange
+    const fixture = setup(TRIAGING);
+
     // Act
-    const fixture = setup(IMPLEMENTING);
+    fixture.componentRef.setInput('lifecycle', WAITING);
+    fixture.detectChanges();
 
     // Assert
-    const labels = Array.from(
-      fixture.nativeElement.querySelectorAll('.rail__label'),
-    ) as HTMLElement[];
-    expect(labels.map((l) => l.textContent?.trim())).toEqual(['Triage', 'Implement', 'Publish']);
+    const implement = steps(fixture)[1];
+    expect(implement.querySelector('.rail__node')?.getAttribute('data-motion')).toBe('pop');
+    expect(implement.hasAttribute('data-lead-grow')).toBe(true);
   });
 
   it('shows the round on the Implement node', () => {
@@ -86,16 +152,6 @@ describe('LifecycleRailComponent', () => {
 
     // Assert
     expect(fixture.nativeElement.querySelector('.rail__badge')?.textContent).toBe('×3');
-  });
-
-  it('draws the mini rail with no labels or brackets, hidden from assistive tech', () => {
-    // Act
-    const fixture = setup(IMPLEMENTING, { density: 'mini' });
-
-    // Assert
-    const rail = fixture.nativeElement.querySelector('.rail') as HTMLElement;
-    expect(rail.getAttribute('aria-hidden')).toBe('true');
-    expect(rail.querySelectorAll('.rail__label, .rail__bracket').length).toBe(0);
   });
 
   it('moves nothing on the first render', () => {
@@ -115,38 +171,13 @@ describe('LifecycleRailComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const publish = steps(fixture)[3].querySelector('.rail__node');
+    const publish = steps(fixture)[2].querySelector('.rail__node');
     expect(publish?.getAttribute('data-motion')).toBe('pop');
-  });
-
-  it('never moves the mini rail', () => {
-    // Arrange
-    const fixture = setup(IMPLEMENTING, { density: 'mini' });
-
-    // Act
-    fixture.componentRef.setInput('lifecycle', PUBLISHING);
-    fixture.detectChanges();
-
-    // Assert
-    expect(
-      fixture.nativeElement.querySelectorAll('[data-motion], .rail__connector--grow').length,
-    ).toBe(0);
   });
 });
 
 const ENTERED = '2026-11-24T10:00:00Z';
 const TWELVE_MINUTES_LATER = Date.parse(ENTERED) + 12 * 60_000;
-
-const WAITING: readonly LifecycleStep[] = [
-  IMPLEMENTING[0],
-  { step: 'queued', actor: 'code', status: 'current', phase: 'waiting' },
-  { step: 'implement', actor: 'claude', status: 'upcoming', phase: null },
-  { step: 'your_review', actor: 'person', status: 'off', phase: null },
-];
-
-function text(node: Element | null | undefined): string {
-  return (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
-}
 
 @Component({
   imports: [LifecycleRailComponent],
@@ -175,21 +206,18 @@ describe('LifecycleRailComponent vertical', () => {
     }).nativeElement;
   }
 
-  it('lists the steps under their stages, each stage a labelled list', () => {
+  it('lists the node steps in one flat list', () => {
     // Act
     const el = vertical(IMPLEMENTING);
 
     // Assert
     const root = el.querySelector('ol[aria-label="Lifecycle"]')!;
-    const groups = Array.from(root.querySelectorAll(':scope > li.rail__group'));
-    expect(groups.map((g) => text(g.querySelector('.rail__stage')))).toEqual([
-      'Triage',
-      'Implement',
+    expect(Array.from(root.children).map((c) => c.getAttribute('aria-label'))).toEqual([
+      'Triage, by Claude, done',
+      'Implement, by Claude, current, running',
+      'Publish, by Foundry code, upcoming',
     ]);
-    expect(groups.map((g) => g.querySelector('ol')?.getAttribute('aria-label'))).toEqual([
-      'Triage steps',
-      'Implement steps',
-    ]);
+    expect(root.querySelectorAll('ol').length).toBe(0);
   });
 
   it('names each step, its actor and status for a screen reader, the current one marked', () => {
@@ -200,11 +228,10 @@ describe('LifecycleRailComponent vertical', () => {
     const items = Array.from(el.querySelectorAll('li.rail__step'));
     expect(items.map((li) => li.getAttribute('aria-label'))).toEqual([
       'Triage, by Claude, done',
-      'Queued for implement, by Foundry code, done',
       'Implement, by Claude, current, running',
       'Publish, by Foundry code, upcoming',
     ]);
-    expect(items.map((li) => li.getAttribute('aria-current'))).toEqual([null, null, 'step', null]);
+    expect(items.map((li) => li.getAttribute('aria-current'))).toEqual([null, 'step', null]);
   });
 
   it("shows each step's label, actor and status, with the elapsed time on the current step", () => {
@@ -212,7 +239,7 @@ describe('LifecycleRailComponent vertical', () => {
     const el = vertical(IMPLEMENTING);
 
     // Assert
-    const nodes = Array.from(el.querySelectorAll('li.rail__step:not(.rail__step--wait)'));
+    const nodes = Array.from(el.querySelectorAll('li.rail__step'));
     expect(
       nodes.map((li) => [
         text(li.querySelector('.rail__label')),
@@ -226,23 +253,21 @@ describe('LifecycleRailComponent vertical', () => {
     ]);
   });
 
-  it('labels a wait only while it is current, with its elapsed time', () => {
+  it("shows a current queue wait on the node after it, with the wait's elapsed time", () => {
     // Act
     const el = vertical(WAITING);
 
     // Assert
-    const wait = el.querySelector('li.rail__step--wait')!;
-    expect(text(wait.querySelector('.rail__label'))).toBe('Queued for implement · 12m');
-    expect(wait.querySelector('.rail__label')?.classList.contains('sr-only')).toBe(false);
-  });
-
-  it('keeps a wait that is not current to screen readers only', () => {
-    // Act
-    const el = vertical(IMPLEMENTING);
-
-    // Assert
-    const wait = el.querySelector('li.rail__step--wait')!;
-    expect(wait.querySelector('.rail__label')?.classList.contains('sr-only')).toBe(true);
+    const items = Array.from(el.querySelectorAll('li.rail__step'));
+    expect(items.map((li) => li.getAttribute('aria-label'))).toEqual([
+      'Triage, by Claude, done',
+      'Implement, by Claude, upcoming, queued',
+      'Your review, by you, off for this repository',
+    ]);
+    const queued = el.querySelector('li[aria-current="step"]')!;
+    expect(text(queued.querySelector('.rail__status'))).toBe('Queued · 12m');
+    expect(queued.querySelector('.rail__node')?.getAttribute('data-ring')).toBe('queued');
+    expect(items[0].getAttribute('data-line')).toBe('half');
   });
 
   it('words a step that is off for the repository', () => {
@@ -286,14 +311,6 @@ describe('LifecycleRailComponent vertical', () => {
     expect(el.querySelector('.extra')?.closest('li.rail__step')?.getAttribute('aria-current')).toBe(
       'step',
     );
-  });
-
-  it('draws no horizontal connectors or brackets', () => {
-    // Act
-    const el = vertical(IMPLEMENTING);
-
-    // Assert
-    expect(el.querySelectorAll('.rail__connector, .rail__bracket').length).toBe(0);
   });
 
   it('grows the line into a new current step once, and never on the first render', () => {

@@ -1,0 +1,87 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.bar {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+  height: 10px;
+  min-width: 0;
+}
+
+.bar__segment {
+  background: var(--fd-progress-track);
+  border-radius: 2px;
+  flex: 1 1 0;
+  height: 6px;
+  min-width: 3px;
+  position: relative;
+
+  // The rail's done-connector colour: the working accent would read as "Claude is working".
+  &[data-status='done'] {
+    background: var(--fd-text-tertiary);
+  }
+
+  &[data-status='off'],
+  &[data-status='skipped'] {
+    background: transparent;
+    border: 1px dashed var(--fd-border-control);
+    box-sizing: border-box;
+    opacity: 0.5;
+  }
+
+  &[data-status='current'] {
+    background: var(--tone);
+    height: 10px;
+  }
+
+  // Waiting to start: the step's tone striped over the track, still.
+  &[data-queued] {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--tone) 0 3px,
+      var(--fd-progress-track) 3px 6px
+    );
+    height: 10px;
+  }
+
+  &[data-motion='fill']::after {
+    animation: fd-task-segment-fill var(--fd-motion-glide) var(--fd-ease-glide) both;
+    background: var(--fd-text-tertiary);
+    border-radius: inherit;
+    content: '';
+    inset: 0;
+    position: absolute;
+    transform-origin: left;
+  }
+
+  &[data-motion='settle'] {
+    animation: fd-rail-settle var(--fd-motion-enter) var(--fd-ease-enter);
+  }
+
+  &[data-motion='shake'] {
+    animation: fd-rail-shake var(--fd-motion-shake) ease-in-out;
+  }
+}
+
+@media (forced-colors: active) {
+  .bar__segment {
+    border: 1px solid CanvasText;
+
+    &[data-status='done'],
+    &[data-status='current'],
+    &[data-queued] {
+      background: Highlight;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar *,
+  .bar *::before,
+  .bar *::after {
+    animation: none !important;
+  }
+}

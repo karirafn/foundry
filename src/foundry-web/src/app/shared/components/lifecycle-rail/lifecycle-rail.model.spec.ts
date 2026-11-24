@@ -1,5 +1,5 @@
 import { LifecycleStep } from '../../../features/issues/lifecycle.model';
-import { RailStepView, railGroups, railView, stepStatusText } from './lifecycle-rail.model';
+import { RailStepView, foldWaits, railView, stepStatusText } from './lifecycle-rail.model';
 import { sentenceCase, stepCopy } from './lifecycle-steps';
 
 function step(
@@ -27,6 +27,19 @@ const IMPLEMENTING: readonly LifecycleStep[] = [
   step('done', 'upcoming'),
 ];
 
+const NODES = [
+  'detected',
+  'triage',
+  'implement',
+  'publish',
+  'rebase',
+  'checks',
+  'review',
+  'your_review',
+  'merge',
+  'done',
+];
+
 function withStatus(
   lifecycle: readonly LifecycleStep[],
   token: string,
@@ -35,19 +48,26 @@ function withStatus(
   return lifecycle.map((s) => (s.step === token ? { ...s, ...changes } : s));
 }
 
+// Queued for implement: the wait is current, Implement upcoming.
+const QUEUED: readonly LifecycleStep[] = withStatus(
+  withStatus(IMPLEMENTING, 'implement', { status: 'upcoming', phase: null }),
+  'queued',
+  { status: 'current', phase: 'waiting' },
+);
+
 describe('stepCopy', () => {
   it('labels a known step from the catalogue', () => {
-    expect(stepCopy('your_review', 'triage')).toMatchObject({
-      label: 'Your review',
-      stage: 'merge',
-    });
+    expect(stepCopy('your_review')).toMatchObject({ label: 'Your review', kind: 'node' });
   });
 
-  it('makes an unknown token a node in the previous stage, labelled in sentence case', () => {
-    expect(stepCopy('mark_ready', 'merge')).toEqual({
+  it('keeps the wait labels for the Pipeline phrase', () => {
+    expect(stepCopy('queued')).toMatchObject({ label: 'Queued for implement', kind: 'wait' });
+  });
+
+  it('makes an unknown token a node, labelled in sentence case', () => {
+    expect(stepCopy('mark_ready')).toEqual({
       label: 'Mark ready',
       kind: 'node',
-      stage: 'merge',
       doing: 'Mark ready',
     });
   });
@@ -57,71 +77,138 @@ describe('stepCopy', () => {
   });
 });
 
-describe('railView', () => {
-  it('shows every served step in order', () => {
+describe('foldWaits', () => {
+  it('keeps only the nodes, in served order', () => {
     // Act
-    const view = railView(IMPLEMENTING, 1, null);
+    const nodes = foldWaits(IMPLEMENTING, null);
 
     // Assert
-    expect(view.steps.map((s) => s.step)).toEqual(IMPLEMENTING.map((s) => s.step));
+    expect(nodes.map((n) => n.step.step)).toEqual(NODES);
+    expect(nodes.some((n) => n.queued)).toBe(false);
   });
 
-  it('gives nodes their own column and puts each wait on the connector before the next node', () => {
-    // Act
-    const view = railView(IMPLEMENTING, 1, null);
-
-    // Assert
-    const columns = Object.fromEntries(view.steps.map((s) => [s.step, s.column]));
-    expect(columns).toMatchObject({
-      detected: 1,
-      triage_queued: 2,
-      triage: 3,
-      queued: 4,
-      implement: 5,
-      publish: 7,
-    });
-    expect(view.columns.split(' auto').length).toBe(
-      view.steps.filter((s) => s.kind === 'node').length,
+  it.each([
+    ['triage_queued', 'triage'],
+    ['queued', 'implement'],
+    ['review_queued', 'review'],
+  ])('folds a current %s wait into the %s node after it', (wait, node) => {
+    // Arrange
+    const lifecycle = IMPLEMENTING.map((s) =>
+      s.step === wait
+        ? { ...s, status: 'current' as const, phase: 'waiting' as const }
+        : { ...s, status: 'upcoming' as const, phase: null },
     );
-  });
 
-  it('brackets the steps by stage', () => {
     // Act
-    const view = railView(IMPLEMENTING, 1, null);
+    const nodes = foldWaits(lifecycle, null);
 
     // Assert
-    expect(view.brackets.map((b) => [b.label, b.from, b.to])).toEqual([
-      ['Triage', 1, 4],
-      ['Implement', 4, 12],
-      ['Review', 12, 14],
-      ['Merge', 15, 20],
+    expect(nodes.filter((n) => n.queued).map((n) => [n.step.step, n.step.status])).toEqual([
+      [node, 'upcoming'],
     ]);
   });
 
-  it('dims a stage whose steps are all off', () => {
+  it('drops a current wait with no node after it', () => {
+    // Act
+    const nodes = foldWaits([step('detected', 'done'), step('queued', 'current')], null);
+
+    // Assert
+    expect(nodes.map((n) => [n.step.step, n.queued])).toEqual([['detected', false]]);
+  });
+
+  it('leads into each node but the first, full into a done or current node', () => {
+    // Act
+    const nodes = foldWaits(IMPLEMENTING, null);
+
+    // Assert
+    expect(nodes.slice(0, 4).map((n) => n.lead)).toEqual([null, 'full', 'full', 'none']);
+  });
+
+  it('half-fills the lead into a queued node', () => {
+    // Act
+    const nodes = foldWaits(QUEUED, null);
+
+    // Assert
+    expect(nodes.slice(1, 4).map((n) => n.lead)).toEqual(['full', 'half', 'none']);
+  });
+
+  it('moves nothing on the first render', () => {
+    // Act
+    const nodes = foldWaits(QUEUED, null);
+
+    // Assert
+    expect(nodes.every((n) => n.motion === null && !n.leadGrow)).toBe(true);
+  });
+
+  it('pops the folded node and grows its lead once when the wait becomes current', () => {
     // Arrange
-    const reviewOff = withStatus(
-      withStatus(IMPLEMENTING, 'review_queued', { status: 'off' }),
-      'review',
+    const triaged = withStatus(
+      withStatus(QUEUED, 'queued', { status: 'upcoming', phase: null }),
+      'triage',
       {
-        status: 'off',
+        status: 'current',
+        phase: 'running',
       },
     );
 
     // Act
-    const view = railView(reviewOff, 1, null);
+    const nodes = foldWaits(QUEUED, triaged);
 
     // Assert
-    expect(view.brackets.find((b) => b.stage === 'review')?.dim).toBe(true);
-    expect(view.steps.find((s) => s.step === 'review')?.word).toBe('off');
+    const implement = nodes.find((n) => n.step.step === 'implement');
+    expect(implement).toMatchObject({ queued: true, motion: 'pop', lead: 'half', leadGrow: true });
+    expect(nodes.find((n) => n.step.step === 'triage')?.motion).toBe('settle');
+  });
+
+  it('grows the lead from half to full when the queued node starts', () => {
+    // Act
+    const nodes = foldWaits(IMPLEMENTING, QUEUED);
+
+    // Assert
+    expect(nodes.filter((n) => n.leadGrow).map((n) => n.step.step)).toEqual(['implement']);
+    expect(nodes.find((n) => n.step.step === 'implement')?.motion).toBe('pop');
+  });
+
+  it('moves nothing when the lifecycle did not change', () => {
+    // Act
+    const nodes = foldWaits(QUEUED, QUEUED);
+
+    // Assert
+    expect(nodes.every((n) => n.motion === null && !n.leadGrow)).toBe(true);
+  });
+});
+
+describe('railView', () => {
+  it('shows one step per node, with no waits', () => {
+    // Act
+    const steps = railView(IMPLEMENTING, 1, null);
+
+    // Assert
+    expect(steps.map((s) => s.step)).toEqual(NODES);
   });
 
   it('marks the current step with its actor, status and phase for a screen reader', () => {
     // Act
-    const implement = railView(IMPLEMENTING, 1, null).steps.find((s) => s.step === 'implement');
+    const implement = railView(IMPLEMENTING, 1, null).find((s) => s.step === 'implement');
 
     // Assert
     expect(implement?.ariaLabel).toBe('Implement, by Claude, current, running');
+  });
+
+  it('shows a current wait on the node after it, queued', () => {
+    // Act
+    const implement = railView(QUEUED, 1, null).find((s) => s.step === 'implement');
+
+    // Assert
+    expect(implement).toMatchObject({
+      status: 'upcoming',
+      queued: true,
+      ring: 'queued',
+      tone: 'claude',
+      word: 'queued',
+      lead: 'half',
+      ariaLabel: 'Implement, by Claude, upcoming, queued',
+    });
   });
 
   it.each([
@@ -130,15 +217,23 @@ describe('railView', () => {
     ['upcoming', 'Rebase, by Foundry code, upcoming'],
   ] as const)('reads a %s step as "%s"', (status, label) => {
     // Act
-    const view = railView(withStatus(IMPLEMENTING, 'rebase', { status }), 1, null);
+    const steps = railView(withStatus(IMPLEMENTING, 'rebase', { status }), 1, null);
 
     // Assert
-    expect(view.steps.find((s) => s.step === 'rebase')?.ariaLabel).toBe(label);
+    expect(steps.find((s) => s.step === 'rebase')?.ariaLabel).toBe(label);
+  });
+
+  it('words a step that is off', () => {
+    // Act
+    const steps = railView(withStatus(IMPLEMENTING, 'review', { status: 'off' }), 1, null);
+
+    // Assert
+    expect(steps.find((s) => s.step === 'review')?.word).toBe('off');
   });
 
   it('badges the Implement node with the round past the first', () => {
     // Act
-    const implement = railView(IMPLEMENTING, 2, null).steps.find((s) => s.step === 'implement');
+    const implement = railView(IMPLEMENTING, 2, null).find((s) => s.step === 'implement');
 
     // Assert
     expect(implement?.badge).toBe(2);
@@ -146,24 +241,7 @@ describe('railView', () => {
   });
 
   it('shows no badge in the first round', () => {
-    expect(
-      railView(IMPLEMENTING, 1, null).steps.find((s) => s.step === 'implement')?.badge,
-    ).toBeNull();
-  });
-
-  it('shows no badge on an upcoming Implement node', () => {
-    // Arrange
-    const queued = withStatus(
-      withStatus(IMPLEMENTING, 'implement', { status: 'upcoming', phase: null }),
-      'queued',
-      {
-        status: 'current',
-        phase: 'waiting',
-      },
-    );
-
-    // Act / Assert
-    expect(railView(queued, 2, null).steps.find((s) => s.step === 'implement')?.badge).toBeNull();
+    expect(railView(IMPLEMENTING, 1, null).find((s) => s.step === 'implement')?.badge).toBeNull();
   });
 
   it.each([
@@ -178,10 +256,10 @@ describe('railView', () => {
     'draws a current %s step in phase %s with tone %s and a %s ring',
     (actor, phase, tone, ring) => {
       // Act
-      const view = railView(withStatus(IMPLEMENTING, 'implement', { actor, phase }), 1, null);
+      const steps = railView(withStatus(IMPLEMENTING, 'implement', { actor, phase }), 1, null);
 
       // Assert
-      expect(view.steps.find((s) => s.step === 'implement')).toMatchObject({ tone, ring });
+      expect(steps.find((s) => s.step === 'implement')).toMatchObject({ tone, ring });
     },
   );
 
@@ -194,33 +272,10 @@ describe('railView', () => {
     );
 
     // Act
-    const done = railView(completed, 1, null).steps.find((s) => s.step === 'done');
+    const done = railView(completed, 1, null).find((s) => s.step === 'done');
 
     // Assert
     expect(done).toMatchObject({ tone: 'done', glyph: 'check', ring: null });
-  });
-
-  it('fills a connector whose next step is done or current and half-fills a current wait', () => {
-    // Arrange
-    const queued = withStatus(
-      withStatus(IMPLEMENTING, 'implement', { status: 'upcoming', phase: null }),
-      'queued',
-      {
-        status: 'current',
-        phase: 'waiting',
-      },
-    );
-
-    // Act
-    const view = railView(queued, 1, null);
-
-    // Assert
-    expect(view.connectors.slice(0, 4).map((c) => c.fill)).toEqual([
-      'full',
-      'half',
-      'none',
-      'none',
-    ]);
   });
 
   it('keeps a step it has no copy for, as a node with its served actor and status', () => {
@@ -231,57 +286,43 @@ describe('railView', () => {
     ];
 
     // Act
-    const view = railView(lifecycle, 1, null);
+    const steps = railView(lifecycle, 1, null);
 
     // Assert
-    expect(view.steps.at(-1)).toMatchObject({
+    expect(steps.at(-1)).toMatchObject({
       label: 'Mark ready',
-      kind: 'node',
-      stage: 'implement',
       actor: 'person',
       status: 'upcoming',
     });
   });
 
-  it('moves nothing on the first render', () => {
-    // Act
-    const view = railView(IMPLEMENTING, 1, null);
-
-    // Assert
-    expect(view.steps.every((s) => s.motion === null)).toBe(true);
-    expect(view.connectors.every((c) => !c.grow)).toBe(true);
-  });
-
-  it('pops the new current step, settles the newly done one and grows the connector to it', () => {
+  it('pops the new current step and settles the newly done one', () => {
     // Arrange
     const publishing = withStatus(
       withStatus(IMPLEMENTING, 'implement', { status: 'done', phase: null }),
       'publish',
-      {
-        status: 'current',
-        phase: 'running',
-      },
+      { status: 'current', phase: 'running' },
     );
 
     // Act
-    const view = railView(publishing, 1, IMPLEMENTING);
+    const steps = railView(publishing, 1, IMPLEMENTING);
 
     // Assert
-    expect(view.steps.find((s) => s.step === 'implement')?.motion).toBe('settle');
-    expect(view.steps.find((s) => s.step === 'publish')?.motion).toBe('pop');
-    expect(view.connectors.filter((c) => c.grow).map((c) => c.to)).toEqual([7]);
+    expect(steps.find((s) => s.step === 'implement')?.motion).toBe('settle');
+    expect(steps.find((s) => s.step === 'publish')?.motion).toBe('pop');
+    expect(steps.filter((s) => s.leadGrow).map((s) => s.step)).toEqual(['publish']);
   });
 
   it('shakes a current step that just failed', () => {
     // Act
-    const view = railView(
+    const steps = railView(
       withStatus(IMPLEMENTING, 'implement', { phase: 'failed' }),
       1,
       IMPLEMENTING,
     );
 
     // Assert
-    expect(view.steps.find((s) => s.step === 'implement')?.motion).toBe('shake');
+    expect(steps.find((s) => s.step === 'implement')?.motion).toBe('shake');
   });
 
   it('pops Done when the issue completes', () => {
@@ -293,62 +334,31 @@ describe('railView', () => {
     );
 
     // Act
-    const view = railView(completed, 1, IMPLEMENTING);
+    const steps = railView(completed, 1, IMPLEMENTING);
 
     // Assert
-    expect(view.steps.find((s) => s.step === 'done')?.motion).toBe('pop');
-  });
-
-  it('moves nothing when the lifecycle did not change', () => {
-    // Act
-    const view = railView(IMPLEMENTING, 1, IMPLEMENTING);
-
-    // Assert
-    expect(view.steps.every((s) => s.motion === null)).toBe(true);
-  });
-});
-
-describe('railGroups', () => {
-  it('groups the steps by stage, in order', () => {
-    // Act
-    const groups = railGroups(railView(IMPLEMENTING, 1, null));
-
-    // Assert
-    expect(groups.map((g) => [g.label, g.steps.map((s) => s.step)])).toEqual([
-      ['Triage', ['detected', 'triage_queued', 'triage']],
-      ['Implement', ['queued', 'implement', 'publish', 'rebase', 'checks']],
-      ['Review', ['review_queued', 'review']],
-      ['Merge', ['your_review', 'merge', 'done']],
-    ]);
-  });
-
-  it('marks the stage holding the current step and dims a stage whose steps are all off', () => {
-    // Arrange
-    const lifecycle = IMPLEMENTING.map((s) =>
-      s.step === 'review_queued' || s.step === 'review' ? { ...s, status: 'off' as const } : s,
-    );
-
-    // Act
-    const groups = railGroups(railView(lifecycle, 1, null));
-
-    // Assert
-    expect(groups.map((g) => [g.stage, g.current, g.dim])).toEqual([
-      ['triage', false, false],
-      ['implement', true, false],
-      ['review', false, true],
-      ['merge', false, false],
-    ]);
+    expect(steps.find((s) => s.step === 'done')?.motion).toBe('pop');
   });
 });
 
 describe('vertical line', () => {
-  it("fills the line down to a done or current step and draws none after a stage's last step", () => {
+  it('runs a line down to each next node, filled as that node is reached, none after the last', () => {
     // Act
-    const groups = railGroups(railView(IMPLEMENTING, 1, null));
+    const steps = railView(QUEUED, 1, null);
 
     // Assert
-    expect(groups[0].steps.map((s) => s.line)).toEqual(['full', 'full', null]);
-    expect(groups[1].steps.map((s) => s.line)).toEqual(['full', 'none', 'none', 'none', null]);
+    expect(steps.map((s) => s.line)).toEqual([
+      'full',
+      'half',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+      null,
+    ]);
   });
 
   it('grows the line once when the step below it becomes current', () => {
@@ -360,25 +370,17 @@ describe('vertical line', () => {
     );
 
     // Act
-    const view = railView(publishing, 1, IMPLEMENTING);
+    const steps = railView(publishing, 1, IMPLEMENTING);
 
     // Assert
-    expect(view.steps.filter((s) => s.lineGrow).map((s) => s.step)).toEqual(['implement']);
-  });
-
-  it('grows no line on the first render', () => {
-    // Act
-    const view = railView(IMPLEMENTING, 1, null);
-
-    // Assert
-    expect(view.steps.some((s) => s.lineGrow)).toBe(false);
+    expect(steps.filter((s) => s.lineGrow).map((s) => s.step)).toEqual(['implement']);
   });
 });
 
 describe('actor words', () => {
   it('names who runs each step', () => {
     // Act
-    const view = railView(
+    const steps = railView(
       [
         step('detected', 'done'),
         step('triage', 'done', { actor: 'claude' }),
@@ -389,13 +391,13 @@ describe('actor words', () => {
     );
 
     // Assert
-    expect(view.steps.map((s) => s.actorWord)).toEqual(['Foundry code', 'Claude', 'You']);
+    expect(steps.map((s) => s.actorWord)).toEqual(['Foundry code', 'Claude', 'You']);
   });
 });
 
 describe('stepStatusText', () => {
   function only(lifecycleStep: LifecycleStep): RailStepView {
-    return railView([lifecycleStep], 1, null).steps[0];
+    return railView([lifecycleStep], 1, null)[0];
   }
 
   it.each([
@@ -426,5 +428,14 @@ describe('stepStatusText', () => {
     expect(stepStatusText(only(step('implement', 'current', { phase: 'running' })), null)).toBe(
       'Running',
     );
+  });
+
+  it("reads a queued node with the wait's elapsed time", () => {
+    // Arrange
+    const implement = railView(QUEUED, 1, null).find((s) => s.step === 'implement')!;
+
+    // Act / Assert
+    expect(stepStatusText(implement, '4m')).toBe('Queued · 4m');
+    expect(stepStatusText(implement, null)).toBe('Queued');
   });
 });

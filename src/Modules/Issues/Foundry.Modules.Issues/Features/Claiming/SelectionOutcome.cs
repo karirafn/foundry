@@ -27,7 +27,7 @@ internal abstract record SelectionOutcome
     /// <summary>
     /// Candidates exist but none could be claimed: each was skipped because its repository
     /// dispatch info failed to resolve, it gained an open blocker since the last dependency pass
-    /// (and was transitioned to <c>BlockedIssue</c> or <c>TriageBlockedIssue</c>), its branch already had work and it was
+    /// (and was transitioned to its blocked state), its branch already had work and it was
     /// requeued as a <c>ContinuationQueuedIssue</c>, or its claim-time provider read failed. At least one candidate was
     /// blocked, adopted or unreadable; when every candidate is unresolvable, <see cref="AllCandidatesUnresolvable"/> is
     /// returned instead.

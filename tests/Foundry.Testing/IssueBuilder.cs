@@ -170,6 +170,16 @@ public sealed class IssueBuilder
     public RevisionQueuedIssue RevisionQueued() =>
         Review().Revise(_reviewComments, _transitionedAt, _omittedCommentCount, _newestCommentAt);
 
+    /// <summary>A queued revision held by open <paramref name="blockers"/>.</summary>
+    public RevisionBlockedIssue RevisionBlocked(IReadOnlyList<int> blockers) => RevisionQueued().Block(blockers, _transitionedAt);
+
+    /// <summary>A continuation queued by Retry after an implement run failed continuably.</summary>
+    public ContinuationQueuedIssue ContinuationQueued() => ContinuableFailed().Retry(_transitionedAt);
+
+    /// <summary>A queued continuation held by open <paramref name="blockers"/>.</summary>
+    public ContinuationBlockedIssue ContinuationBlocked(IReadOnlyList<int> blockers) =>
+        ContinuationQueued().Block(blockers, _transitionedAt);
+
     public RevisionInProgressIssue RevisionInProgress() => RevisionQueued().Claim(_workerRunId, _transitionedAt);
 
     public FailedIssue Failed() =>

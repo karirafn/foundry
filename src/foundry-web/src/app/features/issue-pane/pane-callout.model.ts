@@ -356,6 +356,11 @@ function blockerNumbers(src: CalloutSource): string {
   return (src.details?.blockedBy ?? []).map((b) => `#${b.issueNumber}`).join(', ');
 }
 
+function waitingOnBlockers(src: CalloutSource, then: string): string {
+  const numbers = blockerNumbers(src);
+  return numbers ? `Waiting on ${numbers}. ${then}` : `Waiting on its blockers. ${then}`;
+}
+
 // The questions, the post status and the reminder are in the Clarifications section (#757); the callout
 // keeps its headline and the link to the posted question.
 function awaitingInputCallout(src: CalloutSource): Draft {
@@ -745,12 +750,16 @@ function winningCallout(src: CalloutSource): Draft {
       return draft('neutral', 'Queued', positionLine(src));
     case 'continuation_queued':
       return draft('neutral', 'Queued', [...positionLine(src), 'Continues from the issue branch.']);
-    case 'blocked': {
-      const numbers = blockerNumbers(src);
-      return draft('neutral', 'Blocked', [
-        numbers ? `Waiting on ${numbers}. It queues once they close.` : 'Waiting on its blockers. It queues once they close.',
+    case 'blocked':
+      return draft('neutral', 'Blocked', [waitingOnBlockers(src, 'It queues once they close.')]);
+    case 'revision_blocked':
+      return withPrLink(src, draft('neutral', 'Revision blocked', [
+        waitingOnBlockers(src, `The revision runs once they close, or the ${src.pullRequest} closes.`),
+      ]));
+    case 'continuation_blocked':
+      return draft('neutral', 'Continuation blocked', [
+        waitingOnBlockers(src, 'It continues from the issue branch once they close.'),
       ]);
-    }
     case 'triage_blocked': {
       const d = draft('neutral', 'Waiting for blockers', ['Waiting for its blockers to close. Triage runs once they do.']);
       const blockers = s?.blockedBy ?? [];

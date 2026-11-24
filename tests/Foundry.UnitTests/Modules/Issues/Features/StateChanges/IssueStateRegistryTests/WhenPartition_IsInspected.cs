@@ -9,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Issues.Features.StateChanges.IssueStateRegis
 public sealed class WhenPartition_IsInspected
 {
     [Fact]
-    public void Active_ContainsExactly26Names()
+    public void Active_ContainsExactly28Names()
     {
         // Arrange
         // (registry is the system under test)
@@ -18,7 +18,7 @@ public sealed class WhenPartition_IsInspected
         IReadOnlySet<string> active = IssueStateRegistry.Active;
 
         // Assert
-        active.Count.ShouldBe(26);
+        active.Count.ShouldBe(28);
     }
 
     [Fact]

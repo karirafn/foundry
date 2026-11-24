@@ -3,6 +3,8 @@ export type IssueState =
   | 'queued'
   | 'blocked'
   | 'triage_blocked'
+  | 'revision_blocked'
+  | 'continuation_blocked'
   | 'in_progress'
   | 'review'
   | 'rebase_pending'

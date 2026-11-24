@@ -30,6 +30,8 @@ public sealed class TransitionCauseByState
         ("revision_queued (findings)", () => new IssueBuilder().RevisionQueuedFromReviewFindings(), "review_findings"),
         ("revision_queued (checks)", () => new IssueBuilder().ChecksPending().FixChecks([new FailingCheck("ci/build", "failure", null)], DateTimeOffset.UtcNow), "failed_checks"),
         ("continuation_queued", () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow), null),
+        ("revision_blocked", () => new IssueBuilder().RevisionBlocked([2]), "review_feedback"),
+        ("continuation_blocked", () => new IssueBuilder().ContinuationBlocked([2]), null),
         ("in_progress", () => new IssueBuilder().InProgress(), null),
         ("revision_in_progress", () => new IssueBuilder().RevisionInProgress(), "review_feedback"),
         ("rebase_pending (after run)", () => new IssueBuilder().RebasePending(), "after_run"),

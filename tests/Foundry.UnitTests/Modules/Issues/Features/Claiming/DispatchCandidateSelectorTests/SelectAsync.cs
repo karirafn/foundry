@@ -669,7 +669,7 @@ public sealed class SelectAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCandidateIsRevisionQueued_DoesNotReadBlockers()
+    public async Task WhenRevisionCandidateGainedBlocker_HoldsItAsRevisionBlockedAndSelectsNothing()
     {
         // Arrange
         MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
@@ -689,8 +689,15 @@ public sealed class SelectAsync : IAsyncDisposable
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
 
         // Assert
-        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(revision.Id);
-        blockerQueries.RequestedIssueNumbers.ShouldBeEmpty();
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 1,
+            ReadFailed: 0,
+            BranchAdopted: 0));
+        _dbContext.ChangeTracker.Clear();
+        Issue held = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.Id == revision.Id, TestContext.Current.CancellationToken);
+        held.ShouldBeOfType<RevisionBlockedIssue>().BlockedBy.ShouldBe([1]);
     }
 
     private TriageQueuedIssue SeedTriageQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)

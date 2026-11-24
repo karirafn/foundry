@@ -14,28 +14,16 @@
   flex-direction: column;
   gap: var(--fd-spacing-sm);
 
-  &,
-  .rail__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
+  list-style: none;
+  margin: 0;
+  padding: 0;
 
   .rail__step {
     align-items: start;
     column-gap: var(--fd-spacing-md);
-    grid-row: auto;
+    display: grid;
     grid-template: minmax(var(--row), auto) / 22px minmax(0, 1fr) auto;
-    justify-items: stretch;
     position: relative;
-
-    &--wait {
-      --node: 8px;
-      --row: 12px;
-    }
-    &--wait[data-status='current'] {
-      --row: 24px;
-    }
 
     &[data-line]::before,
     &[data-line]::after {
@@ -51,6 +39,9 @@
       background: var(--fd-text-tertiary);
       transform: scaleY(0);
       transform-origin: top;
+    }
+    &[data-line='half']::after {
+      transform: scaleY(0.5);
     }
     &[data-line='full']::after {
       transform: none;
@@ -74,8 +65,7 @@
   }
 
   .rail__text,
-  .rail__status,
-  .rail__step--wait > .rail__label {
+  .rail__status {
     font-size: 0.75rem;
     line-height: 20px;
     padding-top: calc((var(--row) - 20px) / 2);
@@ -92,7 +82,6 @@
     font-size: 0.8125rem;
     margin-right: var(--fd-spacing-sm);
     padding: 0;
-    white-space: normal;
   }
 
   .rail__word {
@@ -101,8 +90,7 @@
   }
 
   .rail__word,
-  .rail__status,
-  .rail__step--wait > .rail__label {
+  .rail__status {
     color: var(--fd-text-secondary);
   }
 
@@ -110,12 +98,7 @@
     white-space: nowrap;
   }
 
-  .rail__step--wait > .rail__label {
-    font-weight: 400;
-    grid-column: 2 / -1;
-  }
-
-  [data-status='current'] > .rail__text > .rail__label {
+  [aria-current='step'] > .rail__text > .rail__label {
     color: var(--fd-text-primary);
     font-weight: 600;
   }
@@ -129,31 +112,6 @@
     grid-column: 2 / -1;
     min-width: 0;
     padding-bottom: var(--fd-spacing-sm);
-  }
-}
-
-.rail__stage {
-  align-items: center;
-  color: var(--fd-text-secondary);
-  display: flex;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  gap: var(--fd-spacing-sm);
-  letter-spacing: 0.07em;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-
-  &::after {
-    border-top: 1px solid var(--fd-border-muted);
-    content: '';
-    flex: 1;
-  }
-
-  .rail__group--current > & {
-    color: var(--fd-text-primary);
-  }
-  .rail__group--dim > & {
-    opacity: 0.5;
   }
 }
 

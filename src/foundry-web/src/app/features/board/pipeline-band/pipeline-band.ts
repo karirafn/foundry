@@ -10,7 +10,7 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { LifecycleRailComponent } from '../../../shared/components/lifecycle-rail/lifecycle-rail';
+import { LifecycleBarComponent } from '../../../shared/components/lifecycle-bar/lifecycle-bar';
 import { stepCopy } from '../../../shared/components/lifecycle-rail/lifecycle-steps';
 import { RUN_KIND_LABELS } from '../../../shared/utils/run-kind';
 import { currentStep } from '../../issues/lifecycle.model';
@@ -25,7 +25,7 @@ export const PIPELINE_PREVIEW = 10;
 /** Every issue waiting for dispatch, as one list in global dispatch order. */
 @Component({
   selector: 'fd-pipeline-band',
-  imports: [BoardBandComponent, BoardRowComponent, LifecycleRailComponent],
+  imports: [BoardBandComponent, BoardRowComponent, LifecycleBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pipeline-band.html',
   styleUrl: './pipeline-band.scss',
@@ -49,12 +49,24 @@ export class PipelineBandComponent {
     return item.slot.kind === 'position' && item.slot.position === 1;
   }
 
+  /** The marker's full text, for its title when the fixed marker column ellipsises it. */
+  protected markerText(item: PipelineItem): string {
+    switch (item.slot.kind) {
+      case 'detected':
+        return 'Detected';
+      case 'ineligible':
+        return 'Repo ineligible';
+      default:
+        return this.phrase(item);
+    }
+  }
+
   /** The row's one status phrase: the step it waits on, and the round past the first. */
   protected phrase(item: PipelineItem): string {
     const current = currentStep(item.issue.lifecycle);
     const step =
       current !== null
-        ? stepCopy(current.step, 'triage').label
+        ? stepCopy(current.step).label
         : item.runKind !== null
           ? `Queued: ${RUN_KIND_LABELS[item.runKind]}`
           : 'Queued';

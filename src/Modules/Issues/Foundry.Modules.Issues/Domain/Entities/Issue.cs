@@ -202,12 +202,15 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// QueuedIssue covers the queued variants (queued, triage_queued, revision_queued, continuation_queued) — any future
     /// queued tier added under QueuedIssue is included by default, which is the correct safe default. review_queued is the
     /// exception: its pull request is open, so like review its provider closure completes it rather than deleting it.
+    /// The blocked states (blocked, triage_blocked, revision_blocked, continuation_blocked) hold no run and rest too.
     /// </summary>
     public bool IsRestingState() =>
         this is DetectedIssue
             or QueuedIssue and not ReviewQueuedIssue
             or BlockedIssue
             or TriageBlockedIssue
+            or RevisionBlockedIssue
+            or ContinuationBlockedIssue
             or FailedIssue
             or TriageFailedIssue
             or ContinuableFailedIssue

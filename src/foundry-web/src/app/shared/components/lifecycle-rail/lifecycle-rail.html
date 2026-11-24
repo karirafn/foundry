@@ -8,41 +8,39 @@
     [attr.data-motion]="step.motion"
     [class.rail__node--beacon]="step.phase === 'needs_you' && step.status === 'current'"
   >
-    @if (step.kind === 'node') {
-      <svg
-        class="rail__glyph"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        focusable="false"
-      >
-        @switch (step.glyph) {
-          @case ('claude') {
-            <path
-              fill="currentColor"
-              stroke="none"
-              d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"
-            />
-          }
-          @case ('code') {
-            <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
-          }
-          @case ('person') {
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 21a8 8 0 0 1 16 0" />
-          }
-          @case ('failed') {
-            <path d="M12 5v9M12 19v.5" />
-          }
-          @case ('check') {
-            <path d="M20 6 9 17l-5-5" />
-          }
+    <svg
+      class="rail__glyph"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      focusable="false"
+    >
+      @switch (step.glyph) {
+        @case ('claude') {
+          <path
+            fill="currentColor"
+            stroke="none"
+            d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"
+          />
         }
-      </svg>
-    }
+        @case ('code') {
+          <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
+        }
+        @case ('person') {
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21a8 8 0 0 1 16 0" />
+        }
+        @case ('failed') {
+          <path d="M12 5v9M12 19v.5" />
+        }
+        @case ('check') {
+          <path d="M20 6 9 17l-5-5" />
+        }
+      }
+    </svg>
     @if (step.badge !== null) {
       <span class="rail__badge">×{{ step.badge }}</span>
     }
@@ -55,99 +53,50 @@
     [class.rail--arriving]="arriving() || needsYouArrived()"
     aria-label="Lifecycle"
   >
-    @for (group of groups(); track group.stage) {
+    @for (step of steps(); track step.step) {
       <li
-        class="rail__group"
-        [class.rail__group--dim]="group.dim"
-        [class.rail__group--current]="group.current"
+        class="rail__step"
+        [class.rail__step--grow]="step.lineGrow"
+        [attr.data-status]="step.status"
+        [attr.data-phase]="step.phase"
+        [attr.data-line]="step.line"
+        [attr.aria-label]="step.ariaLabel"
+        [attr.aria-current]="step.current ? 'step' : null"
       >
-        <span class="rail__stage" aria-hidden="true">{{ group.label }}</span>
-        <ol class="rail__list" [attr.aria-label]="group.label + ' steps'">
-          @for (step of group.steps; track step.step) {
-            <li
-              class="rail__step"
-              [class.rail__step--wait]="step.kind === 'wait'"
-              [class.rail__step--grow]="step.lineGrow"
-              [attr.data-status]="step.status"
-              [attr.data-phase]="step.phase"
-              [attr.data-line]="step.line"
-              [attr.aria-label]="step.ariaLabel"
-              [attr.aria-current]="step.status === 'current' ? 'step' : null"
-            >
-              <ng-container *ngTemplateOutlet="nodeTemplate; context: { $implicit: step }" />
-              @if (step.kind === 'wait') {
-                <span class="rail__label" [class.sr-only]="step.status !== 'current'">{{
-                  waitText(step)
-                }}</span>
-              } @else {
-                <span class="rail__text" aria-hidden="true"
-                  ><span class="rail__label">{{ step.label }}</span>
-                  <span class="rail__word">{{ step.actorWord }}</span></span
-                >
-                <span class="rail__status" aria-hidden="true">{{ statusText(step) }}</span>
-              }
-              @if (step.status === 'current' && currentStepExtra(); as extra) {
-                <div class="rail__extra">
-                  <ng-container *ngTemplateOutlet="extra" />
-                </div>
-              }
-            </li>
-          }
-        </ol>
+        <ng-container *ngTemplateOutlet="nodeTemplate; context: { $implicit: step }" />
+        <span class="rail__text" aria-hidden="true"
+          ><span class="rail__label">{{ step.label }}</span>
+          <span class="rail__word">{{ step.actorWord }}</span></span
+        >
+        <span class="rail__status" aria-hidden="true">{{ statusText(step) }}</span>
+        @if (step.current && currentStepExtra(); as extra) {
+          <div class="rail__extra">
+            <ng-container *ngTemplateOutlet="extra" />
+          </div>
+        }
       </li>
     }
   </ol>
 } @else {
-  <div
-    class="rail"
-    [class.rail--mini]="mini()"
-    [class.rail--arriving]="arriving()"
-    [attr.data-orientation]="orientation()"
-    [style.grid-template-columns]="view().columns"
-    [attr.aria-hidden]="mini() ? 'true' : null"
-  >
-    @if (!mini()) {
-      @for (bracket of view().brackets; track bracket.stage + bracket.from) {
-        <div
-          class="rail__bracket"
-          aria-hidden="true"
-          [class.rail__bracket--dim]="bracket.dim"
-          [class.rail__bracket--current]="bracket.current"
-          [style.grid-column]="bracket.from + ' / ' + bracket.to"
-        >
-          {{ bracket.label }}
-        </div>
-      }
-    }
-    @for (connector of view().connectors; track connector.to) {
-      <div
-        class="rail__connector"
-        aria-hidden="true"
-        [attr.data-fill]="connector.fill"
-        [class.rail__connector--grow]="connector.grow"
-        [style.grid-column]="connector.from + ' / ' + connector.to"
-      ></div>
-    }
-    <ol class="rail__steps" [attr.aria-label]="mini() ? null : 'Lifecycle'">
-      @for (step of view().steps; track step.step) {
+  <div class="rail" [class.rail--arriving]="arriving()" [style.--nodes]="steps().length">
+    <ol class="rail__steps" aria-label="Lifecycle">
+      @for (step of steps(); track step.step) {
         <li
           class="rail__step"
-          [class.rail__step--wait]="step.kind === 'wait'"
           [attr.data-status]="step.status"
           [attr.data-phase]="step.phase"
-          [attr.aria-label]="mini() ? null : step.ariaLabel"
-          [attr.aria-current]="step.status === 'current' ? 'step' : null"
-          [style.grid-column]="step.column"
+          [attr.data-lead]="step.lead"
+          [attr.data-lead-grow]="step.leadGrow ? '' : null"
+          [attr.aria-label]="step.ariaLabel"
+          [attr.aria-current]="step.current ? 'step' : null"
         >
           <ng-container *ngTemplateOutlet="nodeTemplate; context: { $implicit: step }" />
-          @if (!mini() && step.kind === 'node') {
-            <span class="rail__label" aria-hidden="true"
-              >{{ step.label }}
-              @if (step.word !== null) {
-                <span class="rail__word">{{ step.word }}</span>
-              }
-            </span>
-          }
+          <span class="rail__label" aria-hidden="true"
+            >{{ step.label }}
+            @if (step.word !== null) {
+              <span class="rail__word">{{ step.word }}</span>
+            }
+          </span>
         </li>
       }
     </ol>

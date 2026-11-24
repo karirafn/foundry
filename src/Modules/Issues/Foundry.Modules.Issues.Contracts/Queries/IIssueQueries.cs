@@ -30,6 +30,14 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The repository's revisions that wait to start, queued or held by open blockers. The review pass reads only
+    /// whether their pull request closed.
+    /// </summary>
+    Task<IReadOnlyList<QueuedRevisionIssueInfo>> GetQueuedRevisionIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
