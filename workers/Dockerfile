@@ -16,7 +16,7 @@ RUN apt-get update && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/microsoft-debian-bookworm-prod bookworm main" \
         > /etc/apt/sources.list.d/microsoft.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends dotnet-sdk-10.0 && \
+    apt-get install -y --no-install-recommends dotnet-sdk-10.0 dotnet-sdk-11.0 && \
     dotnet tool install --tool-path /usr/local/bin dotnet-ef && \
     csharp_ls_version=$(jq -er '.tools["csharp-ls"].version' /tmp/dotnet-tools.json) && \
     dotnet tool install --tool-path /usr/local/bin csharp-ls --version "$csharp_ls_version" && \
