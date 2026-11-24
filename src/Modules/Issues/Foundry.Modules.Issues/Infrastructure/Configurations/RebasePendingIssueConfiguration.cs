@@ -46,5 +46,11 @@ public sealed class RebasePendingIssueConfiguration : IEntityTypeConfiguration<R
             .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
             .IsUnicode(false)
             .HasColumnName("merge_head_sha");
+
+        // Shares the checks-pending column: the owed checks retry is carried from the rebase into the checks gate.
+        builder.Property(i => i.OwedChecksRetryHeadSha)
+            .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("owed_checks_retry_head_sha");
     }
 }

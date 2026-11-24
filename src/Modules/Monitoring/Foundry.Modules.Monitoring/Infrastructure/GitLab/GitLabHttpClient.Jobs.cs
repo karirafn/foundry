@@ -65,6 +65,36 @@ internal sealed partial class GitLabHttpClient
         return Result<CiJobLog.Available>.Ok(new CiJobLog.Available(tail.Text, tail.Length, scanner.Complete()));
     }
 
+    /// <summary>Retries CI job <paramref name="jobId"/> (<c>POST /projects/:id/jobs/:job_id/retry</c>).</summary>
+    public async Task<Result> RetryJobAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        long jobId,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), $"projects/{encodedPath}/jobs/{jobId}/retry");
+
+        using HttpRequestMessage request = new(HttpMethod.Post, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result.Fail(CiJobRetryErrors.Refused(jobId, (int)response.StatusCode));
+        }
+
+        RecordRestHeadroom(response);
+        return Result.Ok();
+    }
+
     /// <summary>
     /// Classifies a merge request's head pipeline as checks. A failed pipeline's failed jobs that must pass
     /// (<c>allow_failure</c> false) become its failing checks (<c>GET /projects/:id/pipelines/:pipeline_id/jobs</c>).

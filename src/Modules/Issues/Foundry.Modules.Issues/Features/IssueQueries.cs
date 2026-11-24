@@ -185,7 +185,9 @@ internal sealed class IssueQueries(
                 i.IssueNumber,
                 i.PullRequestUrl,
                 i.EnteredChecksPendingAt,
-                i.FeedbackCutoffAt))
+                i.FeedbackCutoffAt,
+                i.OwedChecksRetryHeadSha,
+                i.ChecksRetriedAt))
             .ToListAsync(cancellationToken);
     }
 

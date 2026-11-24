@@ -528,6 +528,14 @@ internal sealed partial class GitLabIssueProvider(
         return Task.FromResult(Result<CiJobLookup>.Ok(lookup));
     }
 
+    public Task<Result> RetryCiJobAsync(
+        RepositorySlug slug,
+        long jobId,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.RetryJobAsync(apiBaseUrl, slug, jobId, token, cancellationToken);
+    }
+
     public Task<Result<CiJobLog.Available>> GetJobLogAsync(
         RepositorySlug slug,
         long jobId,

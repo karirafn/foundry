@@ -46,5 +46,13 @@ public sealed class ChecksPendingIssueConfiguration : IEntityTypeConfiguration<C
         builder.Property(i => i.RebaseConflictAttempts)
             .HasDefaultValue(0)
             .HasColumnName("rebase_conflict_attempts");
+
+        builder.Property(i => i.OwedChecksRetryHeadSha)
+            .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("owed_checks_retry_head_sha");
+
+        builder.Property(i => i.ChecksRetriedAt)
+            .HasColumnName("checks_retried_at");
     }
 }

@@ -795,11 +795,45 @@ internal sealed class RepositoryPoller(
 
             TimeSpan elapsed = now - checksPendingIssue.EnteredChecksPendingAt;
 
+            if (checksPendingIssue.ChecksRetriedAt is not null)
+            {
+                if (checksSuccess.Value is Checks.Pending)
+                {
+                    repository.RecordIntegrationEvent(
+                        new ChecksRetryRestarted(repository.Id, checksPendingIssue.IssueNumber));
+                }
+                else if (checksSuccess.Value is Checks.Red && elapsed < ChecksPendingUpperBound)
+                {
+                    // Until the checks read pending after the retry, a red read may still be the verdict the retry
+                    // answered rather than the retried jobs' own.
+                    continue;
+                }
+            }
+
             string? outcome = ResolveChecksOutcome(checksSuccess.Value, elapsed);
             if (outcome is null)
             {
                 // Issue stays in checks_pending — no event recorded this cycle.
                 continue;
+            }
+
+            string? headSha = prStatusSuccess.Value.HeadSha;
+            if (checksSuccess.Value is Checks.Red { IsInfrastructureFailure: false } owedRed
+                && headSha is not null
+                && string.Equals(checksPendingIssue.OwedChecksRetryHeadSha, headSha, StringComparison.Ordinal))
+            {
+                if (await RetryFailingJobsAsync(provider, repository.Slug, owedRed.FailingChecks, cancellationToken))
+                {
+                    repository.RecordIntegrationEvent(
+                        new ChecksRetried(repository.Id, checksPendingIssue.IssueNumber, headSha, now));
+                    changed = true;
+                    continue;
+                }
+
+                logger.LogInformation(
+                    "The failing CI jobs of repository {RepositoryId} issue {IssueNumber} could not all be retried; its red verdict goes to review.",
+                    repository.Id,
+                    checksPendingIssue.IssueNumber);
             }
 
             IReadOnlyList<FailingCheck> failingChecks = checksSuccess.Value is Checks.Red red
@@ -846,6 +880,55 @@ internal sealed class RepositoryPoller(
     {
         Result<Checks> checksResult = await provider.GetChecksAsync(slug, pullRequestUrl, cancellationToken);
         return checksResult is Result<Checks>.Success { Value: Checks.Green };
+    }
+
+    /// <summary>
+    /// Retries every failing check's CI job, and answers whether all of them were retried. A check left red (a script
+    /// that never ran, a check that is no CI job, a refused retry) keeps the retried verdict red, so a retry is only
+    /// worth its CI time when every check can be retried; each check is resolved before any job is retried.
+    /// </summary>
+    private async Task<bool> RetryFailingJobsAsync(
+        IIssueProvider provider,
+        RepositorySlug slug,
+        IReadOnlyList<FailingCheck> failingChecks,
+        CancellationToken cancellationToken)
+    {
+        if (failingChecks.Count == 0 || failingChecks.Any(check => check.IsInfrastructureFailure))
+        {
+            return false;
+        }
+
+        List<long> jobIds = [];
+        foreach (FailingCheck check in failingChecks)
+        {
+            Result<CiJobLookup> lookup = await provider.ResolveCiJobAsync(slug, check, cancellationToken);
+            if (lookup is not Result<CiJobLookup>.Success { Value: CiJobLookup.Found found })
+            {
+                logger.LogInformation(
+                    "Failing check {CheckName} in {Repository} is not a CI job Foundry can retry.",
+                    check.Name,
+                    slug.FullPath);
+                return false;
+            }
+
+            jobIds.Add(found.JobId);
+        }
+
+        foreach (long jobId in jobIds)
+        {
+            Result retry = await provider.RetryCiJobAsync(slug, jobId, cancellationToken);
+            if (retry is Result.Failure failure)
+            {
+                logger.LogWarning(
+                    "Retrying CI job {JobId} in {Repository} failed: {ErrorCode}.",
+                    jobId,
+                    slug.FullPath,
+                    failure.Error.Code);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsProviderDrivenVerdict(Checks verdict) =>

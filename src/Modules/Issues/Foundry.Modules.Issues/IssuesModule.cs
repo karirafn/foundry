@@ -74,6 +74,8 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderPullRequestHeadMoved, ProviderPullRequestHeadMovedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestChecksPassed, ProviderPullRequestChecksPassedHandler>();
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
+        services.AddIntegrationEventHandler<ChecksRetried, ChecksRetriedHandler>();
+        services.AddIntegrationEventHandler<ChecksRetryRestarted, ChecksRetryRestartedHandler>();
         services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
         services.AddIntegrationEventHandler<MergeResolved, MergeResolvedHandler>();
         services.AddIntegrationEventHandler<MergeQueueChanged, MergeQueueChangedHandler>();

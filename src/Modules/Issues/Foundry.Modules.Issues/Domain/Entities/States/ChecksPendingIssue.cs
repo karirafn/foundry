@@ -67,6 +67,19 @@ public sealed class ChecksPendingIssue : Issue
     /// </summary>
     public ChecksPendingReason Reason { get; private set; } = new ChecksPendingReason.AfterRun();
 
+    /// <summary>
+    /// The head commit a checks retry is owed for: a failed-checks fix run found nothing to push on it, so a red
+    /// verdict on this same commit retries the failing CI jobs once instead of going to review. <see langword="null"/>
+    /// when no retry is owed. Leaving the checks gate drops it.
+    /// </summary>
+    public string? OwedChecksRetryHeadSha { get; private set; }
+
+    /// <summary>
+    /// When Foundry retried the failing CI jobs, while the checks have not been read pending since: a red read until
+    /// then may predate the retried jobs. <see langword="null"/> when no retry waits for its jobs to restart.
+    /// </summary>
+    public DateTimeOffset? ChecksRetriedAt { get; private set; }
+
     internal static ChecksPendingIssue FromRebasePending(
         RebasePendingIssue source,
         RebaseOutcome rebaseOutcome,
@@ -86,7 +99,64 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.Reason = source.Reason is RebasePendingReason.CatchUp
             ? new ChecksPendingReason.CatchUp()
             : new ChecksPendingReason.AfterRun();
+
+        // A rebase moved the head off the commit the retry was owed for; the new head is gated as new commits are.
+        checksPending.OwedChecksRetryHeadSha = rebaseOutcome is RebaseOutcome.Rebased
+            ? null
+            : source.OwedChecksRetryHeadSha;
         return checksPending;
+    }
+
+    /// <summary>
+    /// Foundry retried the failing CI jobs of the red verdict read on <see cref="OwedChecksRetryHeadSha"/>: the
+    /// issue waits on the checks again, its gate clock restarted at <paramref name="retriedAt"/>. The retry is spent,
+    /// so a red verdict on the same commit now goes to review.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No retry is owed for <paramref name="headSha"/>.</exception>
+    public ChecksPendingIssue RecordChecksRetried(string headSha, DateTimeOffset retriedAt)
+    {
+        if (!OwesChecksRetryFor(headSha))
+        {
+            throw new InvalidOperationException($"No checks retry is owed for head '{headSha}'.");
+        }
+
+        ChecksPendingIssue checksPending = new(Id, retriedAt);
+        checksPending.CopySharedPropertiesFrom(this);
+        checksPending.WorkerRunId = WorkerRunId;
+        checksPending.BranchName = BranchName;
+        checksPending.PullRequestUrl = PullRequestUrl;
+        checksPending.EnteredChecksPendingAt = retriedAt;
+        checksPending.FeedbackCutoffAt = FeedbackCutoffAt;
+        checksPending.RebaseConflictAttempts = RebaseConflictAttempts;
+        checksPending.RebaseOutcome = RebaseOutcome;
+        checksPending.Reason = Reason;
+        checksPending.ChecksRetriedAt = retriedAt;
+        AddDomainEvent(new Events.IssueChecksPending(
+            Id,
+            MonitoredRepositoryId,
+            checksPending.IssueNumber,
+            checksPending.EnteredChecksPendingAt));
+        return checksPending;
+    }
+
+    /// <summary>Whether a checks retry is owed for the head commit <paramref name="headSha"/>.</summary>
+    public bool OwesChecksRetryFor(string? headSha) =>
+        OwedChecksRetryHeadSha is not null
+        && string.Equals(OwedChecksRetryHeadSha, headSha, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The checks were read pending after the retry: the retried jobs restarted, so the next red read is their
+    /// verdict. Returns <see langword="false"/> when no retry was waiting for its jobs to restart.
+    /// </summary>
+    public bool RecordChecksRestarted()
+    {
+        if (ChecksRetriedAt is null)
+        {
+            return false;
+        }
+
+        ChecksRetriedAt = null;
+        return true;
     }
 
     /// <summary>
@@ -171,7 +241,7 @@ public sealed class ChecksPendingIssue : Issue
 
         if (checksOutcome is ChecksOutcome.StillFailing stillFailing && CanFixChecks(stillFailing.FailingChecks))
         {
-            return FixChecks(stillFailing.FailingChecks, transitionedAt);
+            return FixChecks(stillFailing.FailingChecks, transitionedAt, headSha);
         }
 
         return ToReview(checksOutcome, headSha, transitionedAt);
@@ -242,9 +312,13 @@ public sealed class ChecksPendingIssue : Issue
 
     /// <summary>
     /// Queues a fix revision for the fixable checks among <paramref name="failingChecks"/>; infrastructure failures
-    /// are left out of the revision.
+    /// are left out of the revision. <paramref name="headSha"/> is the head commit the red verdict was read on, which
+    /// a fix run that pushes nothing owes its checks retry for.
     /// </summary>
-    public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks, DateTimeOffset transitionedAt)
+    public RevisionQueuedIssue FixChecks(
+        IReadOnlyList<FailingCheck> failingChecks,
+        DateTimeOffset transitionedAt,
+        string? headSha = null)
     {
         List<FailingCheck> fixable = [.. failingChecks.Where(IsFixable)];
         if (fixable.Count == 0)
@@ -254,7 +328,7 @@ public sealed class ChecksPendingIssue : Issue
                 nameof(failingChecks));
         }
 
-        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, fixable, transitionedAt);
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, fixable, headSha, transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }

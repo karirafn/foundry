@@ -143,7 +143,9 @@ public sealed class RevisionInProgressIssue : Issue
     // the default branch, so it is rebased all the same (ADR 0087).
     // The semantic distinction is preserved in logs and events without diverging the cutoff logic.
     // They differ in one rule: an unchanged FailedChecks run spends the rest of the checks fix budget, because every
-    // new fix budget follows a push and another fix run on unchanged code would only repeat this one (issue #1140).
+    // new fix budget follows a push and another fix run on unchanged code would only repeat this one. A fix run that
+    // pushed nothing found the failure outside the branch (a flaky test, a runner fault), so it also owes the red
+    // head one retry of its failing CI jobs, which needs no Claude call.
     // Do NOT merge them into one method.
 
     public RebasePendingIssue MarkRebasePending(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
@@ -154,6 +156,7 @@ public sealed class RevisionInProgressIssue : Issue
             new RebasePendingReason.AfterRun(),
             feedbackCutoffAt,
             exhaustChecksFixAttempts: false,
+            owedChecksRetryHeadSha: null,
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -171,6 +174,7 @@ public sealed class RevisionInProgressIssue : Issue
             new RebasePendingReason.AfterRun(),
             feedbackCutoffAt,
             exhaustChecksFixAttempts: Trigger is RevisionTrigger.FailedChecks,
+            owedChecksRetryHeadSha: Trigger is RevisionTrigger.FailedChecks { HeadSha: string headSha } ? headSha : null,
             transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
