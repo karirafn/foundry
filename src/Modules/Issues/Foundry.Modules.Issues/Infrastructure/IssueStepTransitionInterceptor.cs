@@ -9,7 +9,7 @@ namespace Foundry.Modules.Issues.Infrastructure;
 /// <summary>
 /// Adds one <see cref="IssueStepTransition"/> for every <see cref="Issue"/> a save adds, so the row commits or rolls
 /// back with the state it records. Every write path that adds an issue (a transition, a newly detected issue) is
-/// covered without knowing about the log (ADR 0122).
+/// covered without knowing about the log (ADR 0123).
 /// </summary>
 internal sealed class IssueStepTransitionInterceptor : SaveChangesInterceptor
 {

@@ -31,7 +31,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
 
         // Assert
-        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")]);
+        read.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")]);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Serialize(log));
 
         // Assert
-        read.ShouldHaveSingleItem().Questions.ShouldBe([question]);
+        read.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Questions.ShouldBe([question]);
     }
 
     // The shape the clarification log held before questions were structured, as the converter wrote it.
@@ -63,7 +63,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Stored);
 
         // Assert
-        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")]);
+        read.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres.")]);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Stored);
 
         // Assert
-        read.ShouldHaveSingleItem().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", null)]);
+        read.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Questions.ShouldBe([new InputQuestion.Legacy("Which database?", "Two are configured.", null)]);
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Stored);
 
         // Assert
-        read.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres."));
+        read.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres."));
     }
 
     [Fact]
@@ -269,7 +269,7 @@ public sealed class Clarifications
         IReadOnlyList<Clarification> read = Deserialize(Stored);
 
         // Assert
-        read.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+        read.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().ShouldSatisfyAllConditions(
             round => round.IsOpen.ShouldBeTrue(),
             round => round.Input.ShouldBeNull());
     }

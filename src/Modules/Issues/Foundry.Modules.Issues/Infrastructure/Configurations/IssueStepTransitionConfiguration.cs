@@ -31,7 +31,7 @@ public sealed class IssueStepTransitionConfiguration : IEntityTypeConfiguration<
             .HasColumnName("sequence");
 
         // No foreign key to the issues table: every transition deletes the issue row and adds the next state under the
-        // same id, so a cascading key would wipe the log on each transition (ADR 0122).
+        // same id, so a cascading key would wipe the log on each transition (ADR 0123).
         builder.Property(t => t.IssueId)
             .HasConversion(new StronglyTypedIdValueConverter<IssueId>())
             .IsRequired()

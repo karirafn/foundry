@@ -16,6 +16,48 @@
     "questions": {
       "$ref": "#/$defs/questions"
     },
+    "decisions": {
+      "description": "Details you settled yourself instead of asking a person, each with its answer, the ground it rests on and the evidence for it. Only with outcome ready or needs_input.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "decision", "ground", "evidence"],
+        "properties": {
+          "question": {
+            "description": "The question you settled, on one line.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": "^[^\\r\\n]+$"
+          },
+          "decision": {
+            "description": "The answer itself: a value, a table or a rule, never an instruction to edit the issue.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "ground": {
+            "description": "settled_business when an ADR, a domain document, current behaviour or the issue's stated intent settles it; implementation_detail when it is how the code gets there and not important enough to ask.",
+            "type": "string",
+            "enum": ["settled_business", "implementation_detail"]
+          },
+          "evidence": {
+            "description": "file:line references and the facts read from them, one per item; at least one.",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\r\\n]+$"
+            }
+          }
+        }
+      }
+    },
     "blockedBy": {
       "description": "The open issues that must land first, each with the reason the work needs it. Required when outcome is blocked.",
       "type": "array",
@@ -46,5 +88,14 @@
   },
   "then": {
     "required": ["questions"]
+  },
+  "else": {
+    "if": {
+      "properties": { "outcome": { "const": "blocked" } },
+      "required": ["outcome"]
+    },
+    "then": {
+      "not": { "required": ["decisions"] }
+    }
   }
 }

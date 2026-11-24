@@ -85,8 +85,8 @@ public sealed class HandleAsync : IAsyncDisposable
         RevisionQueuedIssue queued = (await ReloadAsync(awaiting)).ShouldBeOfType<RevisionQueuedIssue>();
         queued.ShouldSatisfyAllConditions(
             () => queued.ContinuedWithoutAnswer.ShouldBeTrue(),
-            () => queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.ContinuedWithoutAnswer()),
-            () => queued.Clarifications.ShouldHaveSingleItem().AnsweredAt.ShouldBe(_timeProvider.GetUtcNow()));
+            () => queued.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(ClarificationInput.ContinuedWithoutAnswer()),
+            () => queued.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().AnsweredAt.ShouldBe(_timeProvider.GetUtcNow()));
     }
 
     [Fact]

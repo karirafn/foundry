@@ -68,7 +68,7 @@ public sealed class ProvideInput
         TriageQueuedIssue triageQueued = queued.ShouldBeOfType<TriageQueuedIssue>();
         triageQueued.ShouldSatisfyAllConditions(
             () => triageQueued.OpenClarification.ShouldBeNull(),
-            () => triageQueued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use the v2 API.")),
+            () => triageQueued.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(ClarificationInput.FromComments("Use the v2 API.")),
             () => awaiting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueTriageQueued>());
     }
 
@@ -96,7 +96,7 @@ public sealed class ProvideInput
         QueuedIssue queued = awaiting.ProvideInput(ClarificationInput.FromComments("Use Postgres."), AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
-        Clarification round = queued.Clarifications.ShouldHaveSingleItem();
+        Clarification.Asked round = queued.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>();
         round.ShouldSatisfyAllConditions(
             () => round.Questions.ShouldBe(IssueBuilder.DefaultQuestions),
             () => round.Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")),

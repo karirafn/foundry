@@ -42,3 +42,4 @@ A run whose verdict is `needs_input` moves the issue to `AwaitingInputIssue` (`a
 
 ## Revisions
 - 2026-11-17 — Baselines are recorded when the question is posted rather than at entry, input is stored as typed parts under one quiet-period rule, and the issue body is watched only on issue-thread waits (#1061).
+- 2026-11-24 — A clarification round is `Asked` (questions, optionally decisions) or `Decided` (triage decisions only, never open); a stored round without a kind reads as `Asked` ([ADR 0123](0123-workers-ask-only-about-uncertain-business-logic-and-decide-the-rest.md)).

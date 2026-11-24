@@ -41,3 +41,4 @@ Revision, continuation and rebase-conflict runs never go through triage.
 - 2026-11-12 — Triage moves after the dependency check: a new issue with open blockers waits untriaged and is triaged once they close ([ADR 0102](0102-triage-runs-once-blockers-clear.md)).
 - 2026-11-12 — The triage flow gains a `blocked` route to `TriageBlockedIssue` that links the named blockers in the tracker ([ADR 0103](0103-triage-defers-on-open-dependencies-by-linking-blockers.md)).
 - 2026-11-17 — The dispatch tier order becomes Revision 0, Review 1, Continuation 2, Triage 3, Fresh 4 ([ADR 0113](0113-review-judges-the-verified-head-after-the-checks-gate-and-code-derives-its-outcome.md)).
+- 2026-11-24 — A triage verdict may carry decisions beside `ready` and `needs_input`, never beside `blocked`; a `ready` verdict's decisions are logged as a decided clarification round ([ADR 0123](0123-workers-ask-only-about-uncertain-business-logic-and-decide-the-rest.md)).

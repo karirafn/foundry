@@ -76,7 +76,7 @@ public sealed class AwaitingInputIssue : Issue
     {
         AwaitingInputIssue awaiting = new(source.Id, transitionedAt);
         awaiting.CopySharedPropertiesFrom(source);
-        awaiting.Enter(source.WorkerRunId, resumeTarget, questions, askedAt);
+        awaiting.Enter(source.WorkerRunId, resumeTarget, questions, decisions: [], askedAt);
         return awaiting;
     }
 
@@ -92,6 +92,7 @@ public sealed class AwaitingInputIssue : Issue
             source.WorkerRunId,
             new ResumeTarget.Revision(source.BranchName, source.PullRequestUrl),
             questions,
+            decisions: [],
             askedAt);
         return awaiting;
     }
@@ -103,13 +104,14 @@ public sealed class AwaitingInputIssue : Issue
     internal static AwaitingInputIssue FromTriageInProgress(
         TriageInProgressIssue source,
         TriageVerdict.NeedsInput verdict,
+        IReadOnlyList<TriageDecision> decisions,
         DateTimeOffset transitionedAt)
     {
         AwaitingInputIssue awaiting = new(source.Id, transitionedAt);
         awaiting.CopySharedPropertiesFrom(source);
         awaiting.SetBlockedBy(source.BlockedBy);
         awaiting.RecordTriageVerdict(verdict);
-        awaiting.Enter(source.WorkerRunId, new ResumeTarget.Retriage(), verdict.Questions, verdict.DecidedAt);
+        awaiting.Enter(source.WorkerRunId, new ResumeTarget.Retriage(), verdict.Questions, decisions, verdict.DecidedAt);
         return awaiting;
     }
 
@@ -117,13 +119,14 @@ public sealed class AwaitingInputIssue : Issue
         WorkerRunId workerRunId,
         ResumeTarget resumeTarget,
         IReadOnlyList<InputQuestion> questions,
+        IReadOnlyList<TriageDecision> decisions,
         DateTimeOffset askedAt)
     {
         WorkerRunId = workerRunId;
         ResumeTarget = resumeTarget;
         QuestionPost = new QuestionPost.Pending();
         Reminder = new QuestionReminder.Unsent();
-        AskClarification(questions, askedAt);
+        AskClarification(questions, decisions, askedAt);
     }
 
     /// <summary>Records the posted question comment; a question already posted keeps its first comment.</summary>
