@@ -106,7 +106,6 @@ describe('lifecycle row layout', () => {
       const labels = [...el.querySelectorAll('.rail__label')];
       expect(labels).toHaveLength(10);
       expect(labels.every(visible)).toBe(true);
-      expect([...el.querySelectorAll('.rail__bracket')].every(visible)).toBe(true);
       expect(rail.getBoundingClientRect().right).toBeLessThanOrEqual(
         row.getBoundingClientRect().right,
       );
@@ -129,7 +128,7 @@ describe('lifecycle row layout', () => {
     }
   });
 
-  it('drops labels and brackets on a phone, so the dots fit at 360px', async () => {
+  it('drops labels on a phone, so the dots fit at 360px', async () => {
     // Arrange
     await page.viewport(360, 800);
 
@@ -139,7 +138,7 @@ describe('lifecycle row layout', () => {
     // Assert
     const row = el.querySelector<HTMLElement>('.lifecycle-row')!;
     const rail = el.querySelector<HTMLElement>('.rail')!;
-    expect([...el.querySelectorAll('.rail__label, .rail__bracket')].some(visible)).toBe(false);
+    expect([...el.querySelectorAll('.rail__label')].some(visible)).toBe(false);
     expect(rail.getBoundingClientRect().right).toBeLessThanOrEqual(
       row.getBoundingClientRect().right,
     );

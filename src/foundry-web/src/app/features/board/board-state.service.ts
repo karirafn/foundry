@@ -124,7 +124,7 @@ function stepChange(before: IssueSummary, after: IssueSummary): string | null {
   }
   const phase = now.phase !== null && now.phase !== 'running' ? `, ${PHASE_WORDS[now.phase]}` : '';
   const round = roundChanged ? `, round ${after.round}` : '';
-  return `${stepCopy(now.step, 'triage').label}${phase}${round}`;
+  return `${stepCopy(now.step).label}${phase}${round}`;
 }
 
 // A skipped transition rejects its promises with AbortError; that is expected, anything else is not.

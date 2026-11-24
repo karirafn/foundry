@@ -106,7 +106,7 @@ describe('pane lifecycle layout', () => {
     const host = await render(width);
 
     // Assert
-    const rows = Array.from(host.querySelectorAll('li.rail__step:not(.rail__step--wait)'));
+    const rows = Array.from(host.querySelectorAll('li.rail__step'));
     const misplaced = rows.filter((li) => {
       const label = box(li.querySelector('.rail__label'));
       return box(li.querySelector('.rail__status')).top >= label.bottom;
