@@ -49,38 +49,38 @@ public sealed class Placement
         ["completed"] = () => new IssueBuilder().Completed(),
     };
 
-    private static readonly IReadOnlyList<(string State, IssueStage Stage, bool NeedsAction, bool AwaitsDispatch, bool WaitsOnBlockers, IssueCodeStep? CodeStep)> Expected =
+    private static readonly IReadOnlyList<(string State, IssueStage Stage, bool NeedsAction, bool AwaitsDispatch, bool WaitsOnBlockers)> Expected =
     [
-        ("detected", IssueStage.Triage, false, true, false, null),
-        ("triage_queued", IssueStage.Triage, false, true, false, null),
-        ("triage_blocked", IssueStage.Triage, false, true, true, null),
-        ("triage_in_progress", IssueStage.Triage, false, false, false, null),
-        ("triage_failed", IssueStage.Triage, true, false, false, null),
-        ("queued", IssueStage.Implement, false, true, false, null),
-        ("blocked", IssueStage.Implement, false, true, true, null),
-        ("revision_queued", IssueStage.Implement, false, true, false, null),
-        ("continuation_queued", IssueStage.Implement, false, true, false, null),
-        ("in_progress", IssueStage.Implement, false, false, false, null),
-        ("revision_in_progress", IssueStage.Implement, false, false, false, null),
-        ("rebase_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Rebasing),
-        ("checks_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Checks),
-        ("merge_pending", IssueStage.Merge, false, false, false, IssueCodeStep.Merging),
-        ("failed", IssueStage.Implement, true, false, false, null),
-        ("continuable_failed", IssueStage.Implement, true, false, false, null),
-        ("revision_failed", IssueStage.Implement, true, false, false, null),
-        ("unchanged", IssueStage.Implement, true, false, false, null),
-        ("publish_failed", IssueStage.Implement, true, false, false, null),
-        ("publish_blocked", IssueStage.Implement, true, false, false, null),
-        ("branch_diverged", IssueStage.Implement, true, false, false, null),
-        ("review_queued", IssueStage.Review, false, true, false, null),
-        ("review_in_progress", IssueStage.Review, false, false, false, null),
-        ("review_failed", IssueStage.Review, false, false, false, null),
-        ("awaiting_input (retriage)", IssueStage.Triage, true, false, false, null),
-        ("awaiting_input (revision)", IssueStage.Implement, true, false, false, null),
-        ("awaiting_input (continuation)", IssueStage.Implement, true, false, false, null),
-        ("awaiting_input (fresh)", IssueStage.Implement, true, false, false, null),
-        ("review", IssueStage.Merge, true, false, false, null),
-        ("completed", IssueStage.Done, false, false, false, null),
+        ("detected", IssueStage.Triage, false, true, false),
+        ("triage_queued", IssueStage.Triage, false, true, false),
+        ("triage_blocked", IssueStage.Triage, false, true, true),
+        ("triage_in_progress", IssueStage.Triage, false, false, false),
+        ("triage_failed", IssueStage.Triage, true, false, false),
+        ("queued", IssueStage.Implement, false, true, false),
+        ("blocked", IssueStage.Implement, false, true, true),
+        ("revision_queued", IssueStage.Implement, false, true, false),
+        ("continuation_queued", IssueStage.Implement, false, true, false),
+        ("in_progress", IssueStage.Implement, false, false, false),
+        ("revision_in_progress", IssueStage.Implement, false, false, false),
+        ("rebase_pending", IssueStage.Implement, false, false, false),
+        ("checks_pending", IssueStage.Implement, false, false, false),
+        ("merge_pending", IssueStage.Merge, false, false, false),
+        ("failed", IssueStage.Implement, true, false, false),
+        ("continuable_failed", IssueStage.Implement, true, false, false),
+        ("revision_failed", IssueStage.Implement, true, false, false),
+        ("unchanged", IssueStage.Implement, true, false, false),
+        ("publish_failed", IssueStage.Implement, true, false, false),
+        ("publish_blocked", IssueStage.Implement, true, false, false),
+        ("branch_diverged", IssueStage.Implement, true, false, false),
+        ("review_queued", IssueStage.Review, false, true, false),
+        ("review_in_progress", IssueStage.Review, false, false, false),
+        ("review_failed", IssueStage.Review, false, false, false),
+        ("awaiting_input (retriage)", IssueStage.Triage, true, false, false),
+        ("awaiting_input (revision)", IssueStage.Implement, true, false, false),
+        ("awaiting_input (continuation)", IssueStage.Implement, true, false, false),
+        ("awaiting_input (fresh)", IssueStage.Implement, true, false, false),
+        ("review", IssueStage.Merge, true, false, false),
+        ("completed", IssueStage.Done, false, false, false),
     ];
 
     public static TheoryData<string, IssueStage> Stages => new(Expected.Select(e => (e.State, e.Stage)));
@@ -90,8 +90,6 @@ public sealed class Placement
     public static TheoryData<string, bool> AwaitsDispatches => new(Expected.Select(e => (e.State, e.AwaitsDispatch)));
 
     public static TheoryData<string, bool> WaitsOnBlockersByState => new(Expected.Select(e => (e.State, e.WaitsOnBlockers)));
-
-    public static TheoryData<string, IssueCodeStep?> CodeSteps => new(Expected.Select(e => (e.State, e.CodeStep)));
 
     [Theory]
     [MemberData(nameof(Stages))]
@@ -147,20 +145,6 @@ public sealed class Placement
 
         // Assert
         actual.ShouldBe(waitsOnBlockers);
-    }
-
-    [Theory]
-    [MemberData(nameof(CodeSteps))]
-    public void WhenInState_DeclaresItsCodeStep(string state, IssueCodeStep? codeStep)
-    {
-        // Arrange
-        Issue issue = States[state]();
-
-        // Act
-        IssueCodeStep? actual = issue.CodeStep;
-
-        // Assert
-        actual.ShouldBe(codeStep);
     }
 
     [Fact]

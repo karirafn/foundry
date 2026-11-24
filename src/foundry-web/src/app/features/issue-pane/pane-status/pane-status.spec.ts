@@ -38,7 +38,6 @@ function issue(state: IssueDetail['state'], details: Partial<IssueStateDetails> 
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -66,13 +65,16 @@ function summary(overrides: Partial<IssueSummary> = {}): IssueSummary {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     round: 1,
     ...overrides,
   };
+}
+
+function currentAt(step: string, phase: LifecycleStep['phase'], actor: LifecycleStep['actor'] = 'code'): LifecycleStep[] {
+  return [{ step, actor, status: 'current', phase }];
 }
 
 function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
@@ -235,7 +237,7 @@ describe('PaneStatusComponent', () => {
 
   it('leads with the stage, the state badge and the step chip', () => {
     // Act
-    const { el } = setup(issue('checks_pending'), { summary: summary({ state: 'checks_pending', codeStep: 'checks' }) });
+    const { el } = setup(issue('checks_pending'), { summary: summary({ state: 'checks_pending', lifecycle: currentAt('checks', 'running') }) });
 
     // Assert
     const line = el.querySelector('.pane-status__line');
@@ -247,7 +249,7 @@ describe('PaneStatusComponent', () => {
   it('shows a still waiting chip and the catch-up badge while waiting to catch up', () => {
     // Act
     const { el } = setup(issue('merge_pending'), {
-      summary: summary({ state: 'merge_pending', codeStep: 'catch_up_waiting' }),
+      summary: summary({ state: 'merge_pending', lifecycle: currentAt('merge', 'waiting') }),
     });
 
     // Assert
@@ -255,6 +257,19 @@ describe('PaneStatusComponent', () => {
     expect(text(line?.querySelector('fd-step-chip'))).toBe('Waiting to catch up');
     expect(line?.querySelector('.step-chip--waiting')).not.toBeNull();
     expect(text(line?.querySelector('fd-state-badge span'))).toBe('CATCH-UP QUEUED');
+  });
+
+  it('shows a Preparing chip and keeps the state badge while a run starts', () => {
+    // Act
+    const { el } = setup(issue('in_progress'), {
+      summary: summary({ state: 'in_progress', lifecycle: currentAt('implement', 'preparing', 'claude') }),
+    });
+
+    // Assert
+    const line = el.querySelector('.pane-status__line');
+    expect(text(line?.querySelector('fd-step-chip'))).toBe('Preparing…');
+    expect(line?.querySelector('.step-chip--warning, .step-chip--waiting')).toBeNull();
+    expect(text(line?.querySelector('fd-state-badge span'))).toBe('IN PROGRESS');
   });
 
   it('shows MERGING when opened without a board summary', () => {

@@ -37,7 +37,6 @@ public sealed class AdapterHandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);
@@ -76,7 +75,6 @@ public sealed class AdapterHandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);

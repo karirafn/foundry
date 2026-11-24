@@ -16,7 +16,6 @@ function issue(current: LifecycleStep | null): IssueSummary {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: 'fresh',
     repositoryId: 'r',
     enteredStateAt: '2026-01-01T00:00:00Z',

@@ -24,8 +24,6 @@ public sealed class MergePendingIssue : Issue
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => IssueCodeStep.Merging;
-
     public override string? TransitionCause => ChecksOutcome.Discriminator;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Merge;

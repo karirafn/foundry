@@ -5,12 +5,9 @@ namespace Foundry.Modules.Issues.Contracts;
 /// (ADR 0100), and <see langword="null"/> otherwise; it is set only for <c>in_progress</c> and
 /// <c>revision_in_progress</c>.
 /// <para>
-/// <paramref name="Stage"/>, <paramref name="NeedsAction"/>, <paramref name="AwaitsDispatch"/> and
-/// <paramref name="CodeStep"/> place the issue on the board (#851): the server decides, the dashboard renders.
-/// <paramref name="Stage"/> is one of <see cref="TriageStage"/>, <see cref="ImplementStage"/>, <see cref="ReviewStage"/>,
-/// <see cref="MergeStage"/> or <see cref="DoneStage"/>; <paramref name="CodeStep"/> is one of
-/// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/>,
-/// <see cref="ChecksStep"/>, <see cref="MergingStep"/> or <see cref="CatchUpWaitingStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
+/// <paramref name="Stage"/>, <paramref name="NeedsAction"/> and <paramref name="AwaitsDispatch"/> place the issue on
+/// the board: the server decides, the dashboard renders. <paramref name="Stage"/> is one of <see cref="TriageStage"/>,
+/// <see cref="ImplementStage"/>, <see cref="ReviewStage"/>, <see cref="MergeStage"/> or <see cref="DoneStage"/>.
 /// </para>
 /// <para>
 /// <paramref name="RunKind"/> is the kind of worker run the issue runs next (#1059): one of <see cref="TriageRunKind"/>,
@@ -36,7 +33,8 @@ namespace Foundry.Modules.Issues.Contracts;
 /// </para>
 /// <para>
 /// <paramref name="Lifecycle"/> is the issue's whole lifecycle path, every step in order: the server decides which
-/// steps are off or skipped, and the dashboard only renders it.
+/// steps are off or skipped, and the dashboard only renders it. Its current entry is the issue's current step, the
+/// one source for what the issue is doing now.
 /// </para>
 /// <para>
 /// <paramref name="QuestionPostStatus"/> is <see cref="QuestionPostPending"/>, <see cref="QuestionPostPosted"/> or
@@ -58,7 +56,6 @@ public sealed record IssueSummary(
     string Stage,
     bool NeedsAction,
     bool AwaitsDispatch,
-    string? CodeStep,
     Guid RepositoryId,
     bool WaitsOnBlockers,
     DateTimeOffset EnteredStateAt,
@@ -101,17 +98,4 @@ public sealed record IssueSummary(
     public const string InputResumeRunKind = "input_resume";
     public const string ReviewRunKind = "review";
     public const string FindingsFixRunKind = "findings_fix";
-
-    public const string PublishingStep = "publishing";
-    public const string PublishRetryingStep = "publish_retrying";
-    public const string RebasingStep = "rebasing";
-    public const string ChecksStep = "checks";
-
-    /// <summary>Foundry is merging the pull request it opened, after its checks passed (ADR 0105).</summary>
-    public const string MergingStep = "merging";
-
-    /// <summary>
-    /// The issue is merge-pending while its catch-up queue entry waits for its turn to rebase (ADR 0111): no merge runs.
-    /// </summary>
-    public const string CatchUpWaitingStep = "catch_up_waiting";
 }

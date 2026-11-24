@@ -24,8 +24,6 @@ public sealed class TriageBlockedIssue : Issue
 
     public override bool WaitsOnBlockers => true;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => null;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.TriageQueued;

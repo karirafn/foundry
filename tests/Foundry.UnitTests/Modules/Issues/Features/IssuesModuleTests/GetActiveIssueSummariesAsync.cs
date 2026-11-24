@@ -247,7 +247,7 @@ public sealed class GetActiveIssueSummariesAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAMergePendingIssueWaitsToCatchUp_ItsCodeStepIsCatchUpWaiting()
+    public async Task WhenAMergePendingIssueWaitsToCatchUp_ItsMergeStepIsWaiting()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -262,8 +262,9 @@ public sealed class GetActiveIssueSummariesAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.OrderBy(s => s.IssueNumber).Select(s => (s.IssueNumber, s.CodeStep)).ShouldBe(
-            [(41, IssueSummary.MergingStep), (42, IssueSummary.CatchUpWaitingStep)]);
+        result.OrderBy(s => s.IssueNumber)
+            .Select(s => (s.IssueNumber, s.Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus).Phase))
+            .ShouldBe([(41, "running"), (42, "waiting")]);
     }
 
     [Fact]

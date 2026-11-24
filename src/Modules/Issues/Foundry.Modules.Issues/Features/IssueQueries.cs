@@ -511,7 +511,6 @@ internal sealed class IssueQueries(
             Stage: StageName(issue.Stage),
             NeedsAction: issue.NeedsAction,
             AwaitsDispatch: issue.AwaitsDispatch,
-            CodeStep: CodeStepName(issue.CodeStep, publishPhase, waitsToCatchUp),
             RepositoryId: issue.MonitoredRepositoryId.Value,
             WaitsOnBlockers: issue.WaitsOnBlockers,
             EnteredStateAt: issue.EnteredStateAt,
@@ -606,21 +605,6 @@ internal sealed class IssueQueries(
             RunKind.FindingsFix => IssueSummary.FindingsFixRunKind,
             null => null,
             _ => throw new InvalidOperationException($"Unknown run kind: {runKind}"),
-        };
-
-    // Publishing is a phase of the run, so a working issue's step comes from its run rather than its state. A
-    // merge-pending issue waiting in the catch-up queue runs no merge, so its step comes from its queue entry.
-    private static string? CodeStepName(IssueCodeStep? codeStep, string? publishPhase, bool waitsToCatchUp) =>
-        (codeStep, publishPhase) switch
-        {
-            (IssueCodeStep.Rebasing, _) => IssueSummary.RebasingStep,
-            (IssueCodeStep.Checks, _) => IssueSummary.ChecksStep,
-            (IssueCodeStep.Merging, _) when waitsToCatchUp => IssueSummary.CatchUpWaitingStep,
-            (IssueCodeStep.Merging, _) => IssueSummary.MergingStep,
-            (null, IssueSummary.PublishingPhase) => IssueSummary.PublishingStep,
-            (null, IssueSummary.RetryingPhase) => IssueSummary.PublishRetryingStep,
-            (null, _) => null,
-            _ => throw new InvalidOperationException($"Unknown code step: {codeStep}"),
         };
 
     private static string? GetFailureCategory(Issue issue) =>

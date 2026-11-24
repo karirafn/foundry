@@ -38,7 +38,6 @@ function item(id: string, issueNumber: number, overrides: Record<string, unknown
     stage: 'implement',
     needsAction: false,
     awaitsDispatch: false,
-    codeStep: null,
     runKind: 'fresh',
     waitsOnBlockers: false,
     repositoryId: 'repo-1',
@@ -565,7 +564,6 @@ describe('BoardPageComponent', () => {
         item('m', 4, {
           state: 'merge_pending',
           stage: 'merge',
-          codeStep: 'catch_up_waiting',
           lifecycle: [{ step: 'merge', actor: 'code', status: 'current', phase: 'waiting' }],
         }),
       ]);
@@ -831,7 +829,6 @@ describe('BoardPageComponent', () => {
       const { el } = await loaded([
         item('s', 3, {
           state: 'checks_pending',
-          codeStep: 'checks',
           lifecycle: [{ step: 'checks', actor: 'code', status: 'current', phase: 'running' }],
         }),
       ]);

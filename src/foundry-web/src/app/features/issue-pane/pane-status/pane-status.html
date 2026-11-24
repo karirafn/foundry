@@ -16,7 +16,7 @@
       [state]="v.detail.state"
       [failureClassification]="summary()?.failureClassification"
       [publishPhase]="summary()?.publishPhase ?? null"
-      [codeStep]="summary()?.codeStep ?? null"
+      [currentStep]="currentStep()"
       [revisionTriggerKind]="v.detail.stateDetails?.revisionTriggerKind"
     />
     @if (stepChip(); as chip) {

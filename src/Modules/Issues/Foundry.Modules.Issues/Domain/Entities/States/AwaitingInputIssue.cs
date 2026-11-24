@@ -56,8 +56,6 @@ public sealed class AwaitingInputIssue : Issue
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => null;
-
     // The step is the one the answer resumes, as the stage is.
     public override string? TransitionCause => null;
 

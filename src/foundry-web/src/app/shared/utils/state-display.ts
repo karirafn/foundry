@@ -1,7 +1,7 @@
 import { IssueState, WORKING_STATES } from './issue-state';
 import { getFailureCategoryDisplay } from './failure-category';
 import type { RevisionTriggerKind } from './revision-trigger-kind';
-import type { CodeStep } from '../../features/issues/issue.model';
+import type { LifecycleStep } from '../../features/issues/lifecycle.model';
 
 export const STATE_LABELS: Record<IssueState, string> = {
   detected: 'DETECTED',
@@ -115,8 +115,8 @@ export interface StateDisplayOptions {
   readonly revisionTriggerKind?: RevisionTriggerKind | null;
   /** Set while Foundry publishes a working run's commits, or retries a failed publish. */
   readonly publishPhase?: 'publishing' | 'retrying' | null;
-  /** Required so no caller can forget it and silently show MERGING for a catch-up wait. */
-  readonly codeStep: CodeStep | null;
+  /** The current entry of the issue's lifecycle. Required so no caller can forget it and silently show MERGING for a catch-up wait. */
+  readonly currentStep: LifecycleStep | null;
 }
 
 type RevisionState = Extract<IssueState, 'revision_queued' | 'revision_in_progress' | 'revision_failed'>;
@@ -180,7 +180,7 @@ export function resolveStateDisplay(state: IssueState, options: StateDisplayOpti
     return publish;
   }
 
-  const catchUp = catchUpDisplayFor(state, options.codeStep);
+  const catchUp = catchUpDisplayFor(state, options.currentStep);
   if (catchUp !== null) {
     return catchUp;
   }
@@ -201,8 +201,9 @@ export function resolveStateDisplay(state: IssueState, options: StateDisplayOpti
   return { label: STATE_LABELS[state], ariaLabel: STATE_ARIA_LABELS[state], cssClass: STATE_CSS_CLASSES[state] };
 }
 
-function catchUpDisplayFor(state: IssueState, codeStep: CodeStep | null): StateDisplay | null {
-  if (state !== 'merge_pending' || codeStep !== 'catch_up_waiting') {
+// A merge-pending issue whose Merge step waits is in the catch-up queue (ADR 0111): no merge runs.
+function catchUpDisplayFor(state: IssueState, current: LifecycleStep | null): StateDisplay | null {
+  if (state !== 'merge_pending' || current?.step !== 'merge' || current.phase !== 'waiting') {
     return null;
   }
   return { label: 'CATCH-UP QUEUED', ariaLabel: 'waiting to catch up', cssClass: 'badge--catch-up-waiting' };
