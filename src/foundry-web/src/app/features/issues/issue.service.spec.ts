@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { CODE_STEPS, IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
+import { IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
 import { vi } from 'vitest';
 import { Observable } from 'rxjs';
 import type { components } from '../../api/schema';
@@ -28,7 +28,6 @@ const mockSummary: IssueSummary = {
   needsAction: false,
   awaitsDispatch: true,
   waitsOnBlockers: false,
-  codeStep: null,
   runKind: null,
   repositoryId: 'repo-1',
   enteredStateAt: '2026-01-01T00:00:00Z',
@@ -137,42 +136,6 @@ describe('IssueService', () => {
     const [first, second] = service.issues();
     expect(first.publishPhase).toBe('retrying');
     expect(second.publishPhase).toBeNull();
-  });
-
-  it.each(CODE_STEPS)('should carry the known code step %s through loadIssues', (step) => {
-    // Arrange
-    const wire = { ...mockSummary, state: 'merge_pending', codeStep: step };
-
-    // Act
-    service.loadIssues();
-    httpMock.expectOne('/api/issues').flush({ items: [wire], nextCursor: null });
-
-    // Assert
-    expect(service.issues()[0].codeStep).toBe(step);
-  });
-
-  it('should carry a catch-up wait through loadIssues as catch_up_waiting', () => {
-    // Arrange
-    const wire = { ...mockSummary, state: 'merge_pending', codeStep: 'catch_up_waiting' };
-
-    // Act
-    service.loadIssues();
-    httpMock.expectOne('/api/issues').flush({ items: [wire], nextCursor: null });
-
-    // Assert
-    expect(service.issues()[0].codeStep).toBe('catch_up_waiting');
-  });
-
-  it('should map an unknown code step to null on loadIssues', () => {
-    // Arrange
-    const wire = { ...mockSummary, state: 'merge_pending', codeStep: 'not_a_step' };
-
-    // Act
-    service.loadIssues();
-    httpMock.expectOne('/api/issues').flush({ items: [wire], nextCursor: null });
-
-    // Assert
-    expect(service.issues()[0].codeStep).toBeNull();
   });
 
   // Cycle 2: loadIssues with repositoryId appends query param
@@ -1052,7 +1015,6 @@ describe('IssueService (band transitions)', () => {
     needsAction: false,
     awaitsDispatch: true,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -1071,7 +1033,6 @@ describe('IssueService (band transitions)', () => {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -1239,7 +1200,6 @@ describe('IssueService (resolved paging)', () => {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -1648,7 +1608,6 @@ describe('IssueService (dispatch-order queue grouping)', () => {
     needsAction: false,
     awaitsDispatch: true,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -1859,7 +1818,6 @@ describe('IssueService (queue-order reconcile)', () => {
     needsAction: false,
     awaitsDispatch: true,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -1879,7 +1837,6 @@ describe('IssueService (queue-order reconcile)', () => {
     needsAction: false,
     awaitsDispatch: true,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -2499,7 +2456,6 @@ describe('IssueService (nextUpAnnouncement)', () => {
     needsAction: false,
     awaitsDispatch: true,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -2744,7 +2700,6 @@ describe('IssueService board placement (#851)', () => {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: 'checks',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
     round: 1,
@@ -2772,23 +2727,7 @@ describe('IssueService board placement (#851)', () => {
       stage: 'implement',
       needsAction: false,
       awaitsDispatch: false,
-      codeStep: 'checks',
     });
-  });
-
-  it('maps the merging code step so the board shows Foundry merging', () => {
-    // Arrange
-    const { svc, http } = setup();
-
-    // Act
-    svc.loadIssues();
-    http.expectOne('/api/issues').flush({
-      items: [{ ...placedItem, state: 'merge_pending', codeStep: 'merging' }],
-      nextCursor: null,
-    });
-
-    // Assert
-    expect(svc.issues()[0].codeStep).toBe('merging');
   });
 
   it('maps the checks outcome so the board can tell red checks from a ready pull request', () => {
@@ -2798,7 +2737,7 @@ describe('IssueService board placement (#851)', () => {
     // Act
     svc.loadIssues();
     http.expectOne('/api/issues').flush({
-      items: [{ ...placedItem, state: 'review', stage: 'merge', codeStep: null, checksOutcome: 'still_failing' }],
+      items: [{ ...placedItem, state: 'review', stage: 'merge', checksOutcome: 'still_failing' }],
       nextCursor: null,
     });
 
@@ -2978,18 +2917,6 @@ describe('IssueService board placement (#851)', () => {
     );
   });
 
-  it('narrows an unknown code step to null', () => {
-    // Arrange
-    const { svc, http } = setup();
-
-    // Act
-    svc.loadIssues();
-    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, codeStep: 'deploying' }], nextCursor: null });
-
-    // Assert
-    expect(svc.issues()[0].codeStep).toBeNull();
-  });
-
   it('passes a known run kind through from the issues response', () => {
     // Arrange
     const { svc, http } = setup();
@@ -2997,7 +2924,7 @@ describe('IssueService board placement (#851)', () => {
     // Act
     svc.loadIssues();
     http.expectOne('/api/issues').flush({
-      items: [{ ...placedItem, state: 'revision_queued', codeStep: null, runKind: 'checks_fix' }],
+      items: [{ ...placedItem, state: 'revision_queued', runKind: 'checks_fix' }],
       nextCursor: null,
     });
 
@@ -3056,10 +2983,10 @@ describe('IssueService board placement (#851)', () => {
     http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
 
     // Act
-    callbacks['IssueUpdated']({ ...placedItem, codeStep: 'deploying' } as unknown as IssueSummary);
+    callbacks['IssueUpdated']({ ...placedItem, stage: 'shipping' } as unknown as IssueSummary);
 
     // Assert
-    expect(svc.issues()[0]).toMatchObject({ stage: 'implement', codeStep: null });
+    expect(svc.issues()[0]).toMatchObject({ stage: null, needsAction: false });
   });
 
   it('narrows the question post status of an IssueUpdated payload', () => {

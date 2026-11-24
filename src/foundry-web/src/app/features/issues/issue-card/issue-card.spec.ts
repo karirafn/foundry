@@ -49,7 +49,6 @@ const mockIssue: IssueSummary = {
   needsAction: false,
   awaitsDispatch: false,
   waitsOnBlockers: false,
-  codeStep: null,
   runKind: null,
   repositoryId: 'repo-1',
   enteredStateAt: '2026-01-01T00:00:00Z',
@@ -400,7 +399,11 @@ describe('IssueCardComponent', () => {
 
   it('should announce a catch-up wait in aria-label, matching its badge', () => {
     // Arrange
-    const issue: IssueSummary = { ...mockIssue, state: 'merge_pending', codeStep: 'catch_up_waiting' };
+    const issue: IssueSummary = {
+      ...mockIssue,
+      state: 'merge_pending',
+      lifecycle: [{ step: 'merge', actor: 'code', status: 'current', phase: 'waiting' }],
+    };
 
     // Act
     const fixture = createComponent(issue);

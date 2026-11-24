@@ -45,7 +45,6 @@ public sealed class HandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);
@@ -79,7 +78,6 @@ public sealed class HandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);
@@ -113,7 +111,6 @@ public sealed class HandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: false,
-            CodeStep: "publishing",
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow,

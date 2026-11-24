@@ -33,7 +33,6 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -821,7 +820,7 @@ describe('BoardStateService', () => {
     load(h, [
       buildIssue({ id: 'n', needsAction: true, state: 'failed' }),
       buildIssue({ id: 'w' }),
-      buildIssue({ id: 's', state: 'checks_pending', codeStep: 'checks' }),
+      buildIssue({ id: 's', state: 'checks_pending' }),
       buildIssue({ id: 'p', state: 'queued', awaitsDispatch: true, runKind: 'fresh' }),
       buildIssue({
         id: 'b',

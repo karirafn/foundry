@@ -26,7 +26,6 @@ public sealed class BroadcastAsync
             Stage: "triage",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);

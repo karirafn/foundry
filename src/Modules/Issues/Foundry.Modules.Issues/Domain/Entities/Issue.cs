@@ -171,9 +171,6 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public abstract bool WaitsOnBlockers { get; }
 
-    /// <summary>The step Foundry's own code is running for the issue, or <see langword="null"/> when none is.</summary>
-    public abstract IssueCodeStep? CodeStep { get; }
-
     /// <summary>
     /// Why the issue entered this state, as a wire token: a failure's category, a revision's or publish's trigger, a
     /// pending or diverged state's reason, or the checks, merge or review outcome that led here. <see langword="null"/>

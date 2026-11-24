@@ -22,8 +22,6 @@ public sealed class PublishFailedIssue : Issue
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => Trigger?.Discriminator;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Publish;

@@ -45,7 +45,7 @@ public sealed class ResolveVerdict
             () => mergePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
             () => mergePending.RebaseOutcome.ShouldBe(rebaseOutcome),
             () => mergePending.EnteredMergePendingAt.ShouldBe(now),
-            () => mergePending.CodeStep.ShouldBe(IssueCodeStep.Merging),
+            () => mergePending.LifecycleStep.ShouldBe(IssueLifecycleStep.Merge),
             () => mergePending.NeedsAction.ShouldBeFalse());
     }
 

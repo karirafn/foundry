@@ -25,18 +25,6 @@ export type PublishPhase = 'publishing' | 'retrying';
  */
 export type IssueStage = 'triage' | 'implement' | 'review' | 'merge' | 'done';
 
-export const CODE_STEPS = [
-  'publishing',
-  'publish_retrying',
-  'rebasing',
-  'checks',
-  'merging',
-  'catch_up_waiting',
-] as const;
-
-/** The step Foundry's own code runs for the issue, with no worker involved. */
-export type CodeStep = (typeof CODE_STEPS)[number];
-
 export interface IssueSummary {
   id: string;
   issueNumber: number;
@@ -78,7 +66,6 @@ export interface IssueSummary {
   awaitsDispatch: boolean;
   /** True while the issue waits for its open blockers to close (#892). */
   waitsOnBlockers: boolean;
-  codeStep: CodeStep | null;
   /**
    * The kind of run that runs (or runs next) for the issue; null when the server sent a kind this
    * dashboard does not know.

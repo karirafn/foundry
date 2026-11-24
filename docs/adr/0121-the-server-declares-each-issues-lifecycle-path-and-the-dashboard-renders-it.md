@@ -22,4 +22,7 @@ A client renders a step it does not know as a generic node from the served actor
 
 Adding a state or phase means placing it in `lifecycle[]` on the server; the dashboard needs copy for it but no rule.
 The stage token rename and the client's narrowing must land together.
-`codeStep` duplicates the current step until its readers move to `lifecycle[]`.
+The current entry of `lifecycle[]` is the only served source for the issue's current step: the summary carries no `codeStep`, and step text (the step chip, the catch-up badge) is read from that entry.
+
+## Revisions
+- 2026-11-24 — `codeStep` removed; every reader takes the current step from `lifecycle[]` (#1245)

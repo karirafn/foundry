@@ -14,8 +14,6 @@ public sealed class BlockedIssue : Issue
 
     public override bool WaitsOnBlockers => true;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => null;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Queued;

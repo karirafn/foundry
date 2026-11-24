@@ -24,8 +24,6 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => ChecksOutcome.Discriminator;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Review;

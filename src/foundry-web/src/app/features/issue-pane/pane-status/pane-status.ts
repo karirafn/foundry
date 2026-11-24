@@ -18,12 +18,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
-import { StepChipComponent, StepChipTone } from '../../../shared/components/step-chip/step-chip';
+import { StepChipComponent } from '../../../shared/components/step-chip/step-chip';
+import { StepChipView, stepChipFor } from '../../../shared/components/step-chip/step-chip.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
-import { CODE_STEP_LABELS, STAGE_LABELS, codeStepTone } from '../../board/board.model';
+import { STAGE_LABELS } from '../../board/board.model';
 import { currentStepLabel } from '../../board/lifecycle-row/lifecycle-row.model';
 import { IssueDetail, IssueSummary } from '../../issues/issue.model';
-import { LifecycleStep } from '../../issues/lifecycle.model';
+import { LifecycleStep, currentStep } from '../../issues/lifecycle.model';
 import { SecretFindingsComponent } from '../../issues/secret-findings/secret-findings';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { PaneActionsComponent } from '../pane-actions/pane-actions';
@@ -85,10 +86,11 @@ export class PaneStatusComponent {
     return stage === null ? null : STAGE_LABELS[stage];
   });
 
-  protected readonly stepChip: Signal<{ label: string; tone: StepChipTone } | null> = computed(() => {
-    const step = this.summary()?.codeStep ?? null;
-    return step === null ? null : { label: CODE_STEP_LABELS[step], tone: codeStepTone(step) };
-  });
+  protected readonly currentStep: Signal<LifecycleStep | null> = computed(() =>
+    currentStep(this.summary()?.lifecycle),
+  );
+
+  protected readonly stepChip: Signal<StepChipView | null> = computed(() => stepChipFor(this.currentStep()));
 
   /** The served lifecycle path; null on a deep link before the board's summary lands, or when empty. */
   protected readonly lifecycle: Signal<readonly LifecycleStep[] | null> = computed(() => {

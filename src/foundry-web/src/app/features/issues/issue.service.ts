@@ -3,8 +3,6 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Observable, Subscription, catchError, map, of, tap } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import {
-  CODE_STEPS,
-  CodeStep,
   IssueDetail,
   IssueStage,
   IssueState,
@@ -113,16 +111,11 @@ const ISSUE_STAGES: ReadonlySet<string> = new Set<IssueStage>([
   'merge',
   'done',
 ]);
-const KNOWN_CODE_STEPS: ReadonlySet<string> = new Set<string>(CODE_STEPS);
 
 // Narrows the wire value to a known stage; a stage this dashboard doesn't know reads as null, and
 // the board leaves that card out rather than guess its column.
 function toIssueStage(value: string | null | undefined): IssueStage | null {
   return value != null && ISSUE_STAGES.has(value) ? (value as IssueStage) : null;
-}
-
-function toCodeStep(value: string | null | undefined): CodeStep | null {
-  return value != null && KNOWN_CODE_STEPS.has(value) ? (value as CodeStep) : null;
 }
 
 const RUN_KINDS: ReadonlySet<string> = new Set<string>(Object.keys(RUN_KIND_LABELS));
@@ -138,11 +131,10 @@ interface WirePlacement {
   needsAction?: boolean | null;
   awaitsDispatch?: boolean | null;
   waitsOnBlockers?: boolean | null;
-  codeStep?: string | null;
   runKind?: string | null;
 }
 
-type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'codeStep' | 'runKind'>;
+type Placement = Pick<IssueSummary, 'stage' | 'needsAction' | 'awaitsDispatch' | 'waitsOnBlockers' | 'runKind'>;
 
 function toPlacement(wire: WirePlacement): Placement {
   return {
@@ -150,7 +142,6 @@ function toPlacement(wire: WirePlacement): Placement {
     needsAction: wire.needsAction === true,
     awaitsDispatch: wire.awaitsDispatch === true,
     waitsOnBlockers: wire.waitsOnBlockers === true,
-    codeStep: toCodeStep(wire.codeStep),
     runKind: toRunKind(wire.runKind),
   };
 }

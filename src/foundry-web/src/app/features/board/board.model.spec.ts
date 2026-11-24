@@ -2,13 +2,11 @@ import { IssueSummary } from '../issues/issue.model';
 import type { NeedsItem } from './board.model';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import {
-  CODE_STEP_LABELS,
   STAGE_LABELS,
   STAGE_ORDER,
   TRIGGER_LABEL,
   bandFor,
   buildBoardBands,
-  codeStepTone,
   isRunning,
   needsReason,
   repoName,
@@ -29,7 +27,6 @@ function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: 'fresh',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
@@ -110,13 +107,13 @@ describe('bandFor', () => {
   it('puts a publishing run with the steps, not the workers', () => {
     expect(
       bandFor(
-        buildIssue({ state: 'in_progress', publishPhase: 'publishing', codeStep: 'publishing' }),
+        buildIssue({ state: 'in_progress', publishPhase: 'publishing' }),
       ),
     ).toBe('steps');
   });
 
   it('puts an issue with a code step with the steps', () => {
-    expect(bandFor(buildIssue({ state: 'checks_pending', codeStep: 'checks' }))).toBe('steps');
+    expect(bandFor(buildIssue({ state: 'checks_pending' }))).toBe('steps');
   });
 
   it('puts an issue waiting on blockers in Blocked even though it awaits dispatch', () => {
@@ -769,35 +766,6 @@ describe('needsReason', () => {
     ['branch_diverged', 'Branch diverged', 'warning'],
   ] as const)('reads %s as %s', (state, label, tone) => {
     expect(needsReason(buildIssue({ state, needsAction: true }))).toEqual({ label, tone });
-  });
-});
-
-describe('code steps', () => {
-  it('labels every code step', () => {
-    expect(CODE_STEP_LABELS).toEqual({
-      publishing: 'Publishing…',
-      publish_retrying: 'Retrying publish…',
-      rebasing: 'Rebasing…',
-      checks: 'Checks running…',
-      merging: 'Merging…',
-      catch_up_waiting: 'Waiting to catch up',
-    });
-  });
-
-  it('reads a publish retry in the warning tone', () => {
-    expect(codeStepTone('publish_retrying')).toBe('warning');
-  });
-
-  it('reads other steps in the working tone', () => {
-    expect(codeStepTone('checks')).toBe('working');
-  });
-
-  it('reads merging in the working tone', () => {
-    expect(codeStepTone('merging')).toBe('working');
-  });
-
-  it('reads a catch-up wait in the still waiting tone', () => {
-    expect(codeStepTone('catch_up_waiting')).toBe('waiting');
   });
 });
 

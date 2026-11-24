@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { StateBadgeComponent } from './state-badge';
 import { IssueState } from '../../utils/issue-state';
 import { RevisionTriggerKind } from '../../utils/revision-trigger-kind';
-import { CodeStep } from '../../../features/issues/issue.model';
+import { LifecycleStep } from '../../../features/issues/lifecycle.model';
 
 function createComponent(state: IssueState, failureClassification?: string, revisionTriggerKind?: RevisionTriggerKind | null) {
   TestBed.configureTestingModule({
@@ -10,7 +10,7 @@ function createComponent(state: IssueState, failureClassification?: string, revi
   });
   const fixture = TestBed.createComponent(StateBadgeComponent);
   fixture.componentRef.setInput('state', state);
-  fixture.componentRef.setInput('codeStep', null);
+  fixture.componentRef.setInput('currentStep', null);
   if (failureClassification !== undefined) {
     fixture.componentRef.setInput('failureClassification', failureClassification);
   }
@@ -525,7 +525,7 @@ describe('StateBadgeComponent', () => {
     TestBed.configureTestingModule({ imports: [StateBadgeComponent] });
     const fixture = TestBed.createComponent(StateBadgeComponent);
     fixture.componentRef.setInput('state', state);
-    fixture.componentRef.setInput('codeStep', null);
+    fixture.componentRef.setInput('currentStep', null);
     fixture.componentRef.setInput('publishPhase', publishPhase);
     fixture.detectChanges();
     return (fixture.nativeElement as HTMLElement).querySelector('span');
@@ -580,18 +580,19 @@ describe('StateBadgeComponent', () => {
     expect(span?.textContent?.trim()).toBe('IN PROGRESS');
   });
 
-  function createWithCodeStep(state: IssueState, codeStep: CodeStep | null) {
+  function createOnMerge(state: IssueState, phase: LifecycleStep['phase']) {
+    const currentStep: LifecycleStep = { step: 'merge', actor: 'code', status: 'current', phase };
     TestBed.configureTestingModule({ imports: [StateBadgeComponent] });
     const fixture = TestBed.createComponent(StateBadgeComponent);
     fixture.componentRef.setInput('state', state);
-    fixture.componentRef.setInput('codeStep', codeStep);
+    fixture.componentRef.setInput('currentStep', currentStep);
     fixture.detectChanges();
     return (fixture.nativeElement as HTMLElement).querySelector('span');
   }
 
   it('should display "CATCH-UP QUEUED" with badge--catch-up-waiting while waiting to catch up', () => {
     // Arrange / Act
-    const span = createWithCodeStep('merge_pending', 'catch_up_waiting');
+    const span = createOnMerge('merge_pending', 'waiting');
 
     // Assert
     expect(span?.textContent?.trim()).toBe('CATCH-UP QUEUED');
@@ -601,7 +602,7 @@ describe('StateBadgeComponent', () => {
 
   it('should display "MERGING" for merge_pending while merging', () => {
     // Arrange / Act
-    const span = createWithCodeStep('merge_pending', 'merging');
+    const span = createOnMerge('merge_pending', 'running');
 
     // Assert
     expect(span?.textContent?.trim()).toBe('MERGING');

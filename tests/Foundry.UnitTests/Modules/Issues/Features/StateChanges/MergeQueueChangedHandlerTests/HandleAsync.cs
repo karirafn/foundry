@@ -95,7 +95,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenANamedIssueWaitsToCatchUp_ItsBroadcastCarriesTheCatchUpWaitingStep()
+    public async Task WhenANamedIssueWaitsToCatchUp_ItsBroadcastShowsTheMergeStepWaiting()
     {
         // Arrange
         await SeedMergePendingAsync(RepositoryId, 41);
@@ -105,7 +105,9 @@ public sealed class HandleAsync : IAsyncDisposable
         await _sut.HandleAsync(new MergeQueueChanged(RepositoryId, [41]), TestContext.Current.CancellationToken);
 
         // Assert
-        _broadcaster.Summaries.ShouldHaveSingleItem().CodeStep.ShouldBe(IssueSummary.CatchUpWaitingStep);
+        IssueSummary summary = _broadcaster.Summaries.ShouldHaveSingleItem();
+        summary.Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus)
+            .ShouldBe(new LifecycleStepInfo("merge", "code", "current", "waiting"));
     }
 
     private sealed class CapturingIssueBroadcaster : IIssueBroadcaster

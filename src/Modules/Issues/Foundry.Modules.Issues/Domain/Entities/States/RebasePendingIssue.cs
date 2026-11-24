@@ -23,8 +23,6 @@ public sealed class RebasePendingIssue : Issue
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => IssueCodeStep.Rebasing;
-
     public override string? TransitionCause => Reason.Discriminator;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Rebase;

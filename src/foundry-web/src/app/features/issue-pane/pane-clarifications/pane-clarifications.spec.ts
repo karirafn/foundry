@@ -41,7 +41,6 @@ function detail(
     needsAction: false,
     awaitsDispatch: false,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: null,
     repositoryId: 'repo-1',
     enteredStateAt: ASKED_AT,

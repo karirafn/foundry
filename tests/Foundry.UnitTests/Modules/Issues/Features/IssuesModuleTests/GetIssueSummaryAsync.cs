@@ -210,8 +210,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.State.ShouldBe("in_progress"),
-            () => summary.PublishPhase.ShouldBeNull(),
-            () => summary.CodeStep.ShouldBeNull());
+            () => summary.PublishPhase.ShouldBeNull());
     }
 
     [Fact]
@@ -269,8 +268,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.Stage.ShouldBe("triage"),
             () => summary.NeedsAction.ShouldBeFalse(),
-            () => summary.AwaitsDispatch.ShouldBeTrue(),
-            () => summary.CodeStep.ShouldBeNull());
+            () => summary.AwaitsDispatch.ShouldBeTrue());
     }
 
     [Fact]
@@ -376,10 +374,10 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     }
 
     [Theory]
-    [InlineData("rebase_pending", "rebasing")]
+    [InlineData("rebase_pending", "rebase")]
     [InlineData("checks_pending", "checks")]
-    [InlineData("merge_pending", "merging")]
-    public async Task WhenStateRunsACodeStep_SummaryCarriesTheCodeStep(string state, string expectedCodeStep)
+    [InlineData("merge_pending", "merge")]
+    public async Task WhenFoundryCodeRunsTheState_SummaryCurrentStepIsThatStepRunning(string state, string expectedStep)
     {
         // Arrange
         Issue issue = BuildState(new IssueBuilder(), state);
@@ -391,15 +389,16 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldNotBeNull().CodeStep.ShouldBe(expectedCodeStep);
+        result.ShouldNotBeNull().Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus)
+            .ShouldBe(new LifecycleStepInfo(expectedStep, "code", "current", "running"));
     }
 
     [Theory]
-    [InlineData(WorkerRunPhase.Publishing, "publishing")]
-    [InlineData(WorkerRunPhase.Retrying, "publish_retrying")]
-    public async Task WhenRunIsPublishing_SummaryCodeStepIsThePublishStep(
+    [InlineData(WorkerRunPhase.Publishing, "running")]
+    [InlineData(WorkerRunPhase.Retrying, "retrying")]
+    public async Task WhenRunIsPublishing_SummaryCurrentStepIsPublish(
         WorkerRunPhase phase,
-        string expectedCodeStep)
+        string expectedPhase)
     {
         // Arrange
         InProgressIssue inProgress = new IssueBuilder().InProgress();
@@ -411,11 +410,12 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary? result = await _sut.GetIssueSummaryAsync(inProgress.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldNotBeNull().CodeStep.ShouldBe(expectedCodeStep);
+        result.ShouldNotBeNull().Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus)
+            .ShouldBe(new LifecycleStepInfo("publish", "code", "current", expectedPhase));
     }
 
     [Fact]
-    public async Task WhenInProgressRunIsNotPublishing_SummaryHasNoCodeStep()
+    public async Task WhenInProgressRunIsNotPublishing_SummaryCurrentStepIsImplement()
     {
         // Arrange
         InProgressIssue inProgress = new IssueBuilder().InProgress();
@@ -426,7 +426,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary? result = await _sut.GetIssueSummaryAsync(inProgress.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldNotBeNull().CodeStep.ShouldBeNull();
+        result.ShouldNotBeNull().Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus).Step.ShouldBe("implement");
     }
 
     [Fact]
@@ -896,7 +896,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         };
 
     [Fact]
-    public async Task WhenMergePendingAndWaitingToCatchUp_CodeStepIsCatchUpWaiting()
+    public async Task WhenMergePendingAndWaitingToCatchUp_MergeStepIsWaiting()
     {
         // Arrange
         MergePendingIssue issue = new IssueBuilder().MergePending();
@@ -909,11 +909,12 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldNotBeNull().CodeStep.ShouldBe(IssueSummary.CatchUpWaitingStep);
+        result.ShouldNotBeNull().Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus)
+            .ShouldBe(new LifecycleStepInfo("merge", "code", "current", "waiting"));
     }
 
     [Fact]
-    public async Task WhenMergePendingAndNotWaiting_CodeStepIsMerging()
+    public async Task WhenMergePendingAndNotWaiting_MergeStepIsRunning()
     {
         // Arrange
         MergePendingIssue issue = new IssueBuilder().MergePending();
@@ -925,7 +926,8 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldNotBeNull().CodeStep.ShouldBe(IssueSummary.MergingStep);
+        result.ShouldNotBeNull().Lifecycle.ShouldNotBeNull().Single(l => l.Status == LifecycleStepInfo.CurrentStatus)
+            .ShouldBe(new LifecycleStepInfo("merge", "code", "current", "running"));
         _mergeQueue.WaitingReads.ShouldHaveSingleItem().ShouldBe([issue.MonitoredRepositoryId]);
     }
 

@@ -32,7 +32,6 @@ public sealed class BroadcastAsync
             Stage: "triage",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);
@@ -67,7 +66,6 @@ public sealed class BroadcastAsync
             Stage: "merge",
             NeedsAction: true,
             AwaitsDispatch: false,
-            CodeStep: null,
             RepositoryId: Guid.NewGuid(),
             WaitsOnBlockers: false,
             EnteredStateAt: DateTimeOffset.UtcNow);
@@ -80,8 +78,7 @@ public sealed class BroadcastAsync
         sent.ShouldSatisfyAllConditions(
             () => sent.Stage.ShouldBe("merge"),
             () => sent.NeedsAction.ShouldBeTrue(),
-            () => sent.AwaitsDispatch.ShouldBeFalse(),
-            () => sent.CodeStep.ShouldBeNull());
+            () => sent.AwaitsDispatch.ShouldBeFalse());
     }
 
     private sealed class SpyHubContext : IHubContext<IssueHub>

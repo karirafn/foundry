@@ -15,8 +15,6 @@ public sealed class DetectedIssue : Issue
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => null;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Detected;

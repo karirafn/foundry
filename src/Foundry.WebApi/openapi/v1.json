@@ -4724,7 +4724,6 @@
           "stage",
           "needsAction",
           "awaitsDispatch",
-          "codeStep",
           "repositoryId",
           "waitsOnBlockers",
           "enteredStateAt"
@@ -4789,12 +4788,6 @@
           },
           "awaitsDispatch": {
             "type": "boolean"
-          },
-          "codeStep": {
-            "type": [
-              "null",
-              "string"
-            ]
           },
           "repositoryId": {
             "type": "string",

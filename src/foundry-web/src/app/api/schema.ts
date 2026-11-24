@@ -1436,7 +1436,6 @@ export interface components {
             stage: string;
             needsAction: boolean;
             awaitsDispatch: boolean;
-            codeStep: null | string;
             /** Format: uuid */
             repositoryId: string;
             waitsOnBlockers: boolean;

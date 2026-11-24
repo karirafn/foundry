@@ -23,8 +23,6 @@ public sealed class ReviewQueuedIssue : QueuedIssue, IReviewStepState
 
     public override bool WaitsOnBlockers => false;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => ChecksOutcome.Discriminator;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.ReviewQueued;

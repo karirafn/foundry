@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES, PublishPhase, QUEUED_TIER_STATES } from '../issue.model';
+import { LifecycleStep, currentStep } from '../lifecycle.model';
 import { cardAccentFor, resolveStateDisplay } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
@@ -157,7 +158,7 @@ function isUntracked(tokens: TokenTotal): boolean {
               [state]="issue().state"
               [failureClassification]="issue().failureClassification"
               [publishPhase]="_publishPhase()"
-              [codeStep]="issue().codeStep"
+              [currentStep]="_currentStep()"
               [revisionTriggerKind]="issue().revisionTriggerKind"
             />
             @if (_checksOutcomeDisplay(); as outcome) {
@@ -406,6 +407,8 @@ export class IssueCardComponent {
     return [accentClass, hasGutter].filter(Boolean).join(' ');
   });
 
+  protected readonly _currentStep = computed((): LifecycleStep | null => currentStep(this.issue().lifecycle));
+
   /**
    * The run's publish phase, set only on a working issue. While it is set the agent has exited, so
    * the agent and activity lines are hidden: lastActivityAt stays in the hub map and the silence
@@ -504,7 +507,7 @@ export class IssueCardComponent {
     const stateLabel = resolveStateDisplay(issue.state, {
       failureClassification: issue.failureClassification,
       revisionTriggerKind: issue.revisionTriggerKind,
-      codeStep: issue.codeStep,
+      currentStep: this._currentStep(),
     }).ariaLabel;
     const nextUp = this.isNextUp() ? 'Next up. ' : '';
     const queuePositionPart = this._buildQueuePositionAriaClause();

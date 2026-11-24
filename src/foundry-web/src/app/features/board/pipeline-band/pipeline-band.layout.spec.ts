@@ -39,7 +39,6 @@ function row(index: number): ItemView<PipelineItem> {
     needsAction: false,
     awaitsDispatch: true,
     waitsOnBlockers: false,
-    codeStep: null,
     runKind: 'checks_fix',
     repositoryId: 'repo-1',
     enteredStateAt: '2026-01-01T00:00:00Z',
