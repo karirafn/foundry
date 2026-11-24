@@ -1,6 +1,10 @@
+import { WritableSignal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { AgentActivity, AgentTaskItem } from '../../../core/models/agent-activity.model';
+import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { IssueDetail, IssueStateDetails, IssueSummary } from '../../issues/issue.model';
+import { LifecycleStep } from '../../issues/lifecycle.model';
 import { IssueService } from '../../issues/issue.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerRunService } from '../../workers/worker-run.service';
@@ -103,7 +107,52 @@ function run(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
   };
 }
 
-function setup(detail: IssueDetail | null, options: { run?: WorkerRunDetail | null; summary?: IssueSummary | null; error?: string | null } = {}) {
+const IMPLEMENTING: readonly LifecycleStep[] = [
+  { step: 'triage', actor: 'claude', status: 'done', phase: null },
+  { step: 'implement', actor: 'claude', status: 'current', phase: 'running' },
+  { step: 'publish', actor: 'code', status: 'upcoming', phase: null },
+  { step: 'your_review', actor: 'person', status: 'upcoming', phase: null },
+];
+
+const PUBLISHING: readonly LifecycleStep[] = [
+  IMPLEMENTING[0],
+  { step: 'implement', actor: 'claude', status: 'done', phase: null },
+  { step: 'publish', actor: 'code', status: 'current', phase: 'running' },
+  IMPLEMENTING[3],
+];
+
+const TASKS: readonly AgentTaskItem[] = [
+  { id: '1', subject: 'Read the criteria', activeForm: null, status: 'completed' },
+  { id: '2', subject: 'Write failing tests', activeForm: 'Writing failing tests', status: 'in_progress' },
+  { id: '3', subject: 'Run the suite', activeForm: null, status: 'pending' },
+];
+
+function agentActivity(tasks: readonly AgentTaskItem[] = TASKS): AgentActivity {
+  return {
+    workerRunId: 'run-1',
+    issueId: 'abc',
+    role: 'implement',
+    lastEventAt: null,
+    tasks,
+    currentTask: tasks.find((t) => t.status === 'in_progress') ?? null,
+    completedTaskCount: tasks.filter((t) => t.status === 'completed').length,
+    subagents: [],
+    inFlightTool: null,
+    tokens: { inputTokens: 0, outputTokens: null },
+    backgroundTasks: [],
+  };
+}
+
+function setup(
+  detail: IssueDetail | null,
+  options: {
+    run?: WorkerRunDetail | null;
+    summary?: IssueSummary | null;
+    error?: string | null;
+    activity?: AgentActivity | null;
+  } = {},
+) {
+  const activity: WritableSignal<AgentActivity | null> = signal(options.activity ?? null);
   const service = {
     retryIssue: vi.fn(() => of<string | null>(null)),
     retryIssueFresh: vi.fn(() => of<string | null>(null)),
@@ -115,6 +164,12 @@ function setup(detail: IssueDetail | null, options: { run?: WorkerRunDetail | nu
     imports: [PaneStatusComponent],
     providers: [
       { provide: IssueService, useValue: service },
+      {
+        provide: WorkerSignalRService,
+        useValue: {
+          agentActivityForIssue: (id: string) => (activity()?.issueId === id ? activity() : null),
+        },
+      },
       {
         provide: WorkerRunService,
         useValue: {
@@ -143,7 +198,7 @@ function setup(detail: IssueDetail | null, options: { run?: WorkerRunDetail | nu
   const callouts = () => el.querySelectorAll('.pane-callout');
   const callout = () => el.querySelector('.pane-callout') as HTMLElement;
   const announcement = () => el.querySelector('[role="status"]')?.textContent?.trim() ?? '';
-  return { fixture, el, service, retries, render, callouts, callout, announcement };
+  return { fixture, el, service, retries, render, callouts, callout, announcement, activity };
 }
 
 function text(node: Element | null | undefined): string {
@@ -437,6 +492,211 @@ describe('PaneStatusComponent', () => {
 
       // Assert
       expect(document.activeElement?.classList.contains('pane-callout__title')).toBe(false);
+    });
+  });
+
+  describe('lifecycle', () => {
+    const enteredTwelveMinutesAgo = () => new Date(Date.now() - 12 * 60_000 - 5_000).toISOString();
+
+    function implementing(overrides: Partial<IssueSummary> = {}): IssueSummary {
+      return summary({ lifecycle: IMPLEMENTING, enteredStateAt: enteredTwelveMinutesAgo(), ...overrides });
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows the vertical rail between the status line and the callout', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Assert
+      const section = el.querySelector('fd-pane-lifecycle section')!;
+      expect(text(section.querySelector('h3'))).toBe('Lifecycle');
+      const order = Array.from(el.querySelectorAll('.pane-status__line, fd-pane-lifecycle, .pane-callout'));
+      expect(order.map((n) => n.localName === 'fd-pane-lifecycle' ? 'rail' : n.className.split(' ')[0])).toEqual([
+        'pane-status__line',
+        'rail',
+        'pane-callout',
+      ]);
+      expect(section.querySelector('fd-lifecycle-rail ol[aria-label="Lifecycle"]')).not.toBeNull();
+    });
+
+    it("shows the current step's status with the time since the issue entered it", () => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Assert
+      expect(text(el.querySelector('li[aria-current="step"] .rail__status'))).toBe('Running · 12m');
+    });
+
+    it('ticks the elapsed time while a step is current', async () => {
+      // Arrange
+      vi.useFakeTimers({ now: Date.parse('2026-11-24T10:12:05Z'), toFake: ['Date', 'setInterval', 'clearInterval'] });
+      const { render, el } = setup(issue('in_progress'), {
+        summary: implementing({ enteredStateAt: '2026-11-24T10:00:00Z' }),
+      });
+
+      // Act
+      vi.advanceTimersByTime(60_000);
+      await render();
+
+      // Assert
+      expect(text(el.querySelector('li[aria-current="step"] .rail__status'))).toBe('Running · 13m');
+    });
+
+    it('shows a Round pill past the first round', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: implementing({ round: 2 }) });
+
+      // Assert
+      expect(text(el.querySelector('.pane-lifecycle__round'))).toBe('Round 2');
+    });
+
+    it('shows no Round pill in the first round', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Assert
+      expect(el.querySelector('.pane-lifecycle__round')).toBeNull();
+    });
+
+    it.each([
+      ['no summary', null],
+      ['an empty lifecycle', summary({ lifecycle: [] })],
+      ['no lifecycle', summary()],
+    ])('shows no rail with %s', (_, value) => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: value });
+
+      // Assert
+      expect(el.querySelector('fd-pane-lifecycle')).toBeNull();
+      expect(el.querySelector('.pane-callout')).not.toBeNull();
+    });
+
+    it('shows no rail when the detail failed to load', () => {
+      // Act
+      const { el } = setup(null, { summary: implementing(), error: 'Failed to load issue details' });
+
+      // Assert
+      expect(el.querySelector('fd-pane-lifecycle')).toBeNull();
+    });
+
+    it("nests the agent's tasks under the running Claude step, expanded behind a toggle", () => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: implementing(), activity: agentActivity() });
+
+      // Assert
+      const current = el.querySelector('li[aria-current="step"]')!;
+      const toggle = current.querySelector<HTMLButtonElement>('button.pane-lifecycle__toggle')!;
+      expect(text(toggle)).toBe('Tasks, task 2 of 3');
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      const list = el.querySelector(`[id="${toggle.getAttribute('aria-controls')}"]`) as HTMLElement;
+      expect(current.contains(list)).toBe(true);
+      expect(list.closest('[hidden]')).toBeNull();
+      expect(Array.from(list.querySelectorAll('li')).map((li) => li.getAttribute('data-state'))).toEqual([
+        'done',
+        'current',
+        'upcoming',
+      ]);
+    });
+
+    it('collapses the task list when the toggle is pressed, keeping focus on it', async () => {
+      // Arrange
+      const { el, render } = setup(issue('in_progress'), { summary: implementing(), activity: agentActivity() });
+      const toggle = el.querySelector<HTMLButtonElement>('button.pane-lifecycle__toggle')!;
+      toggle.focus();
+
+      // Act
+      toggle.click();
+      await render();
+
+      // Assert
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(el.querySelector('fd-task-list')?.hasAttribute('hidden')).toBe(true);
+      expect(document.activeElement).toBe(toggle);
+    });
+
+    it('shows no tasks once the Claude step is done', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), {
+        summary: implementing({ lifecycle: PUBLISHING }),
+        activity: agentActivity(),
+      });
+
+      // Assert
+      expect(el.querySelector('.pane-lifecycle__toggle, fd-task-list')).toBeNull();
+    });
+
+    it('shows no toggle for a run with no task list', () => {
+      // Act
+      const { el } = setup(issue('in_progress'), { summary: implementing(), activity: agentActivity([]) });
+
+      // Assert
+      expect(el.querySelector('.pane-lifecycle__toggle')).toBeNull();
+    });
+
+    it('moves focus to the callout title when the step ends while the toggle has focus', async () => {
+      // Arrange
+      const { fixture, el, render } = setup(issue('in_progress'), {
+        summary: implementing(),
+        activity: agentActivity(),
+      });
+      el.querySelector<HTMLButtonElement>('button.pane-lifecycle__toggle')!.focus();
+
+      // Act
+      fixture.componentRef.setInput('summary', implementing({ lifecycle: PUBLISHING }));
+      await render();
+      await render();
+
+      // Assert
+      expect(el.querySelector('.pane-lifecycle__toggle')).toBeNull();
+      expect(document.activeElement?.classList.contains('pane-callout__title')).toBe(true);
+    });
+
+    it('announces nothing about the lifecycle on the first render', () => {
+      // Act
+      const { announcement } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Assert
+      expect(announcement()).toBe('');
+    });
+
+    it('announces the new step when the current step changes', async () => {
+      // Arrange
+      const { fixture, render, announcement } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Act
+      fixture.componentRef.setInput('summary', implementing({ lifecycle: PUBLISHING }));
+      await render();
+
+      // Assert
+      expect(announcement()).toBe('Step: Publish');
+    });
+
+    it('announces the round when it changes', async () => {
+      // Arrange
+      const { fixture, render, announcement } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Act
+      fixture.componentRef.setInput('summary', implementing({ round: 2 }));
+      await render();
+
+      // Assert
+      expect(announcement()).toBe('Round 2');
+    });
+
+    it('announces the callout, step and round together when all change at once', async () => {
+      // Arrange
+      const { fixture, render, announcement } = setup(issue('in_progress'), { summary: implementing() });
+
+      // Act
+      fixture.componentRef.setInput('detail', issue('review'));
+      fixture.componentRef.setInput('summary', implementing({ lifecycle: PUBLISHING, round: 2 }));
+      await render();
+
+      // Assert
+      expect(announcement()).toBe('Status: PR ready for review. Step: Publish. Round 2');
     });
   });
 });

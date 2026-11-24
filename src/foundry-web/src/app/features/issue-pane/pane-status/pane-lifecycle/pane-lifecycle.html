@@ -1,0 +1,45 @@
+<section class="pane-lifecycle" [attr.aria-labelledby]="headingId">
+  <div class="pane-lifecycle__head">
+    <h3 class="pane-lifecycle__heading" [id]="headingId">Lifecycle</h3>
+    @if (round() > 1) {
+      <span class="pane-lifecycle__round">Round {{ round() }}</span>
+    }
+  </div>
+  <fd-lifecycle-rail
+    orientation="vertical"
+    [lifecycle]="lifecycle()"
+    [round]="round()"
+    [enteredAt]="enteredAt()"
+    [now]="now()"
+    [currentStepExtra]="hasTasks() ? tasksTemplate : null"
+  />
+</section>
+
+<ng-template #tasksTemplate>
+  <button
+    type="button"
+    class="pane-lifecycle__toggle"
+    [attr.aria-expanded]="expanded()"
+    [attr.aria-controls]="listId"
+    (click)="toggle()"
+  >
+    Tasks, {{ progress() }}
+    <svg
+      class="pane-lifecycle__chevron"
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  </button>
+  <!-- Stays mounted while collapsed, so aria-controls always names an element. -->
+  <fd-task-list [items]="tasks()" [listId]="listId" [hidden]="!expanded()" />
+</ng-template>

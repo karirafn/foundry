@@ -198,6 +198,13 @@
   }
 }
 
+// The vertical rail's line, top down.
+@keyframes fd-rail-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
 @keyframes fd-rail-shake {
   0%,
   100% {

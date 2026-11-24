@@ -1,0 +1,69 @@
+@use '../../../../../styles/controls' as *;
+@use '../../../../../styles/pane' as *;
+
+:host {
+  display: block;
+  margin-bottom: var(--fd-spacing-md);
+}
+
+.pane-lifecycle__head {
+  align-items: baseline;
+  display: flex;
+  gap: var(--fd-spacing-sm);
+  justify-content: space-between;
+}
+
+.pane-lifecycle__heading {
+  @include pane-section-heading;
+}
+
+.pane-lifecycle__round {
+  background: var(--fd-bg-working-subtle);
+  border-radius: 9999px;
+  color: var(--fd-accent-working);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 1px 8px;
+}
+
+.pane-lifecycle__toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  gap: 2px;
+  margin-bottom: var(--fd-spacing-xs);
+  min-height: 32px;
+  padding: 0 var(--fd-spacing-sm);
+
+  &:hover {
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+.pane-lifecycle__chevron {
+  transition: transform 160ms ease;
+
+  [aria-expanded='true'] > & {
+    transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
