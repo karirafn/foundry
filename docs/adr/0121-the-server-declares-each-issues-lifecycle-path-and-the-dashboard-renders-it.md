@@ -22,14 +22,8 @@ A client renders a step it does not know as a generic node from the served actor
 
 Adding a state or phase means placing it in `lifecycle[]` on the server; the dashboard needs copy for it but no rule.
 The stage token rename and the client's narrowing must land together.
-<<<<<<< HEAD
 The current entry of `lifecycle[]` is the only served source for the issue's current step: the summary carries no `codeStep`, and step text (the step chip, the catch-up badge) is read from that entry.
 
 ## Revisions
 - 2026-11-24 — `codeStep` removed; every reader takes the current step from `lifecycle[]` (#1245)
-=======
-`codeStep` duplicates the current step until its readers move to `lifecycle[]`.
-
-## Revisions
 - 2026-11-24 — the rail no longer draws stage brackets or queue-wait dots; a current wait folds into the next node (#1262)
->>>>>>> f35447cb (feat(foundry-web): the lifecycle rail drops stage labels and wait dots, centres its labels and aligns across cards)
