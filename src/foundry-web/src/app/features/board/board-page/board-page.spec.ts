@@ -440,7 +440,9 @@ describe('BoardPageComponent', () => {
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
       expect(text(link)).toBe('Open MR ↗');
-      expect(link.getAttribute('aria-label')).toBe('Open MR for issue #7 (opens GitLab in a new tab)');
+      expect(link.getAttribute('aria-label')).toBe(
+        'Open MR for issue #7 (opens GitLab in a new tab)',
+      );
     });
 
     it('opens a pull request Foundry did not merge from its row button', async () => {
@@ -983,7 +985,7 @@ describe('BoardPageComponent', () => {
       );
     });
 
-    it('shows a static mini rail and one status phrase on a pipeline row', async () => {
+    it('shows a lifecycle bar and one status phrase on a pipeline row', async () => {
       // Act
       const { el } = await loaded([
         item('r', 1030, {
@@ -1002,10 +1004,14 @@ describe('BoardPageComponent', () => {
       // Assert
       const row = el.querySelector('ol[aria-label="Pipeline in dispatch order"] fd-board-row')!;
       expect(text(row.querySelector('.board-row__lead'))).toBe('Position #1 next');
-      expect(row.querySelector('fd-lifecycle-rail .rail')?.getAttribute('aria-hidden')).toBe(
-        'true',
-      );
+      expect(
+        row.querySelector('.board-row__bar fd-lifecycle-bar')?.getAttribute('aria-hidden'),
+      ).toBe('true');
+      expect(row.querySelector('fd-lifecycle-rail')).toBeNull();
       expect(text(row.querySelector('.board-row__marker'))).toBe('Queued for implement · round 2');
+      expect(row.querySelector('.board-row__marker [title]')?.getAttribute('title')).toBe(
+        'Queued for implement · round 2',
+      );
     });
 
     it('is hidden with no rows', async () => {

@@ -303,3 +303,17 @@ export function stepStatusText(step: RailStepView, elapsed: string | null): stri
       : sentenceCase(PHASE_WORDS[step.phase]);
   return elapsed === null ? phase : `${phase} · ${elapsed}`;
 }
+
+/** A tone's colour, and the tint behind a node of that tone. */
+export interface ToneColours {
+  readonly tone: string;
+  readonly tint: string;
+}
+
+export const TONES: Readonly<Record<NodeTone, ToneColours>> = {
+  claude: { tone: 'var(--fd-accent-working)', tint: 'var(--fd-bg-working-subtle)' },
+  code: { tone: 'var(--fd-text-link)', tint: 'var(--fd-bg-code-subtle)' },
+  person: { tone: 'var(--fd-text-warning)', tint: 'var(--fd-bg-warning-subtle)' },
+  failed: { tone: 'var(--fd-text-error)', tint: 'var(--fd-bg-error-subtle)' },
+  done: { tone: 'var(--fd-bg-page)', tint: 'var(--fd-accent-ready)' },
+};

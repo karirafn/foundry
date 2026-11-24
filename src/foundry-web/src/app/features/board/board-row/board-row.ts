@@ -14,7 +14,8 @@ import { IssueRefComponent } from '../issue-ref/issue-ref';
 
 /**
  * A compact one-line issue row: a projected `[rowLead]` (position, or run kind), the repository and
- * number, the title as the row's one button, an optional `[rowRail]`, and a projected `[rowMarker]`.
+ * number, the title as the row's one button, an optional `[rowBar]` holding the lifecycle bar, and a
+ * projected `[rowMarker]`.
  * Used by the Pipeline and Blocked rows.
  */
 @Component({
@@ -35,8 +36,11 @@ export class BoardRowComponent {
   readonly next: InputSignal<boolean> = input<boolean>(false);
   readonly phase: InputSignal<CardPhase> = input<CardPhase>('live');
   readonly moved: InputSignal<boolean> = input<boolean>(false);
-  /** The row carries a projected `[rowRail]` (the Pipeline's mini lifecycle rail) and one lead column. */
-  readonly rail: InputSignal<boolean> = input<boolean>(false);
+  /**
+   * The row carries a projected `[rowBar]` holding the lifecycle bar, in the fixed bar template that
+   * lines bars up across rows, with one lead column.
+   */
+  readonly bar: InputSignal<boolean> = input<boolean>(false);
   /** Emits the row's button, so focus can return to it when the pane closes. */
   readonly open: OutputEmitterRef<HTMLElement> = output<HTMLElement>();
 

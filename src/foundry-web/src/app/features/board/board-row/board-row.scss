@@ -39,8 +39,9 @@
     color: var(--fd-text-success);
   }
 
-  &--rail {
-    grid-template-columns: 5rem 6.5rem minmax(0, 1fr) 11rem auto;
+  // Fixed widths, so bars and markers line up across every row that has a bar.
+  &--bar {
+    grid-template-columns: var(--fd-row-lead, 5rem) 6.5rem minmax(0, 1fr) 11rem 12rem;
   }
 
   @media (any-pointer: coarse) {
@@ -60,11 +61,11 @@
   font-size: 0.8125rem;
 }
 
-.board-row--rail .board-row__lead {
+.board-row--bar .board-row__lead {
   grid-column: 1;
 }
 
-.board-row__rail {
+.board-row__bar {
   min-width: 0;
 }
 
@@ -101,6 +102,14 @@
   white-space: nowrap;
 }
 
+.board-row--bar .board-row__marker {
+  justify-self: stretch;
+  min-width: 0;
+  overflow: hidden;
+  text-align: end;
+  text-overflow: ellipsis;
+}
+
 .board-row__completed {
   color: var(--fd-text-success);
   font-weight: 600;
@@ -133,17 +142,42 @@
   .board-row__marker {
     grid-area: marker;
   }
+}
 
-  .board-row--rail {
+// Below the rail breakpoint the five columns squeeze the title, so a row with a bar stacks a band
+// earlier than the others; it comes after the compact rules so it wins below both.
+@media (width < $rail-breakpoint) {
+  .board-row--bar {
     grid-template-areas:
       'lead repo marker'
       'title title title'
-      'rail rail rail';
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
+      'bar bar bar';
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+    padding-block: var(--fd-spacing-sm);
+    row-gap: 2px;
 
-  .board-row__rail {
-    grid-area: rail;
+    .board-row__lead {
+      display: flex;
+      gap: var(--fd-spacing-sm);
+      grid-area: lead;
+    }
+
+    .board-row__repo {
+      grid-area: repo;
+    }
+
+    .board-row__title {
+      grid-area: title;
+    }
+
+    .board-row__marker {
+      grid-area: marker;
+    }
+
+    .board-row__bar {
+      grid-area: bar;
+      margin-top: 2px;
+    }
   }
 }
 
