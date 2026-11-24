@@ -39,7 +39,6 @@ function setup(
   lifecycle: readonly LifecycleStep[],
   inputs: Partial<{
     round: number;
-    density: 'full' | 'mini';
     orientation: 'horizontal' | 'vertical';
     enteredAt: string | null;
     now: number;
@@ -155,16 +154,6 @@ describe('LifecycleRailComponent', () => {
     expect(fixture.nativeElement.querySelector('.rail__badge')?.textContent).toBe('×3');
   });
 
-  it('draws the mini rail with no labels or brackets, hidden from assistive tech', () => {
-    // Act
-    const fixture = setup(IMPLEMENTING, { density: 'mini' });
-
-    // Assert
-    const rail = fixture.nativeElement.querySelector('.rail') as HTMLElement;
-    expect(rail.getAttribute('aria-hidden')).toBe('true');
-    expect(rail.querySelectorAll('.rail__label').length).toBe(0);
-  });
-
   it('moves nothing on the first render', () => {
     // Act
     const fixture = setup(IMPLEMENTING);
@@ -184,20 +173,6 @@ describe('LifecycleRailComponent', () => {
     // Assert
     const publish = steps(fixture)[2].querySelector('.rail__node');
     expect(publish?.getAttribute('data-motion')).toBe('pop');
-  });
-
-  it('never moves the mini rail', () => {
-    // Arrange
-    const fixture = setup(IMPLEMENTING, { density: 'mini' });
-
-    // Act
-    fixture.componentRef.setInput('lifecycle', PUBLISHING);
-    fixture.detectChanges();
-
-    // Assert
-    expect(fixture.nativeElement.querySelectorAll('[data-motion], [data-lead-grow]').length).toBe(
-      0,
-    );
   });
 });
 

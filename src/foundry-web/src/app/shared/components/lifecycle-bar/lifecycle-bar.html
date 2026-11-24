@@ -1,0 +1,12 @@
+<div class="bar" [class.bar--arriving]="arriving()">
+  @for (segment of segments(); track segment.step) {
+    <span
+      class="bar__segment"
+      [attr.data-status]="segment.status"
+      [attr.data-phase]="segment.phase"
+      [attr.data-queued]="segment.queued ? '' : null"
+      [attr.data-motion]="segment.motion"
+      [style.--tone]="segment.tone"
+    ></span>
+  }
+</div>

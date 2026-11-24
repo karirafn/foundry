@@ -78,14 +78,8 @@
     }
   </ol>
 } @else {
-  <div
-    class="rail"
-    [class.rail--mini]="mini()"
-    [class.rail--arriving]="arriving()"
-    [style.--nodes]="steps().length"
-    [attr.aria-hidden]="mini() ? 'true' : null"
-  >
-    <ol class="rail__steps" [attr.aria-label]="mini() ? null : 'Lifecycle'">
+  <div class="rail" [class.rail--arriving]="arriving()" [style.--nodes]="steps().length">
+    <ol class="rail__steps" aria-label="Lifecycle">
       @for (step of steps(); track step.step) {
         <li
           class="rail__step"
@@ -93,18 +87,16 @@
           [attr.data-phase]="step.phase"
           [attr.data-lead]="step.lead"
           [attr.data-lead-grow]="step.leadGrow ? '' : null"
-          [attr.aria-label]="mini() ? null : step.ariaLabel"
+          [attr.aria-label]="step.ariaLabel"
           [attr.aria-current]="step.current ? 'step' : null"
         >
           <ng-container *ngTemplateOutlet="nodeTemplate; context: { $implicit: step }" />
-          @if (!mini()) {
-            <span class="rail__label" aria-hidden="true"
-              >{{ step.label }}
-              @if (step.word !== null) {
-                <span class="rail__word">{{ step.word }}</span>
-              }
-            </span>
-          }
+          <span class="rail__label" aria-hidden="true"
+            >{{ step.label }}
+            @if (step.word !== null) {
+              <span class="rail__word">{{ step.word }}</span>
+            }
+          </span>
         </li>
       }
     </ol>

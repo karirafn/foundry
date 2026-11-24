@@ -10,11 +10,6 @@
   --glyph: 14px;
 }
 
-.rail--mini {
-  --node: 14px;
-  --glyph: 8px;
-}
-
 // Equal columns, so a node sits at the same x on every rail of the same width.
 .rail__steps {
   display: grid;
@@ -189,7 +184,7 @@
 }
 
 @media (width < $rail-breakpoint) {
-  .rail:not(.rail--mini) {
+  .rail {
     --node: 22px;
     --glyph: 11px;
   }

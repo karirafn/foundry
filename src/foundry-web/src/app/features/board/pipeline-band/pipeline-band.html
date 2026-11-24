@@ -34,7 +34,7 @@
           [next]="isNext(item)"
           [phase]="item.phase"
           [moved]="item.moved"
-          [rail]="true"
+          [bar]="true"
           (open)="open.emit({ id: item.issue.id, invoker: $event })"
         >
           <span
@@ -51,14 +51,13 @@
             }
           </span>
           @if (item.issue.lifecycle; as lifecycle) {
-            <fd-lifecycle-rail
-              rowRail
-              density="mini"
-              [lifecycle]="lifecycle"
-              [round]="item.issue.round"
-            />
+            <fd-lifecycle-bar rowBar [lifecycle]="lifecycle" />
           }
-          <span rowMarker [class.pipeline-band__ineligible]="item.slot.kind === 'ineligible'">
+          <span
+            rowMarker
+            [class.pipeline-band__ineligible]="item.slot.kind === 'ineligible'"
+            [attr.title]="markerText(item)"
+          >
             @switch (item.slot.kind) {
               @case ('detected') {
                 Detected<span class="sr-only">, no position yet</span>
