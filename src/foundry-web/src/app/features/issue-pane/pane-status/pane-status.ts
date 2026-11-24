@@ -39,7 +39,8 @@ interface StatusView {
 
 /**
  * Layer 2 of the issue pane: the stage, state badge and step chip, the lifecycle, then the one
- * callout chosen by `buildCallout` with its actions. It waits for the detail, showing skeleton bars until it lands.
+ * callout chosen by `buildCallout` with its actions. It waits for the detail, showing skeleton bars
+ * until it lands.
  */
 @Component({
   selector: 'fd-pane-status',
