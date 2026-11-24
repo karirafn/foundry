@@ -21,6 +21,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => Trigger.Discriminator;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Queued;
 
     public override RunKind? RunKind => RevisionRunKind.Of(Trigger);

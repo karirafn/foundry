@@ -38,6 +38,7 @@ internal sealed class ProviderIssueUntrackedHandler(
             return;
         }
 
+        await db.RemoveLogsOfAsync([issue.Id], cancellationToken);
         db.Set<Issue>().Remove(issue);
         await db.SaveChangesAsync(cancellationToken);
     }

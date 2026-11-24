@@ -19,6 +19,8 @@ public sealed class FailedIssue : Issue, IAutoRetryableFailedState
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => FailureCategory.Value;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Implement;
 
     public override RunKind? RunKind => null;

@@ -59,6 +59,8 @@ public sealed class AwaitingInputIssue : Issue
     public override IssueCodeStep? CodeStep => null;
 
     // The step is the one the answer resumes, as the stage is.
+    public override string? TransitionCause => null;
+
     public override IssueLifecycleStep LifecycleStep =>
         ResumeTarget is ResumeTarget.Retriage ? IssueLifecycleStep.Triage : IssueLifecycleStep.Implement;
 

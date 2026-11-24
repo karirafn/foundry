@@ -243,6 +243,51 @@ namespace Foundry.WebApi.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.IssueStepTransition", b =>
+                {
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<string>("Cause")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cause");
+
+                    b.Property<string>("EnteredAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entered_at");
+
+                    b.Property<Guid>("IssueId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("issue_id");
+
+                    b.Property<string>("LifecycleStep")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("lifecycle_step");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("round");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("state");
+
+                    b.HasKey("Sequence");
+
+                    b.HasIndex("IssueId")
+                        .HasDatabaseName("ix_issue_step_transitions_issue_id");
+
+                    b.ToTable("issue_step_transitions", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.Credential", b =>
                 {
                     b.Property<Guid>("Id")

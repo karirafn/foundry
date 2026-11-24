@@ -542,29 +542,10 @@ internal sealed class IssueQueries(
 
     private static LifecycleStepInfo ToStepInfo(LifecyclePathStep step) =>
         new(
-            LifecycleStepName(step.Step),
+            IssueLifecycleStepTokens.ToToken(step.Step),
             LifecycleActorName(step.Actor),
             LifecycleStatusName(step.Status),
             step.Phase is { } phase ? LifecyclePhaseName(phase) : null);
-
-    private static string LifecycleStepName(IssueLifecycleStep step) =>
-        step switch
-        {
-            IssueLifecycleStep.Detected => LifecycleStepInfo.DetectedStep,
-            IssueLifecycleStep.TriageQueued => LifecycleStepInfo.TriageQueuedStep,
-            IssueLifecycleStep.Triage => LifecycleStepInfo.TriageStep,
-            IssueLifecycleStep.Queued => LifecycleStepInfo.QueuedStep,
-            IssueLifecycleStep.Implement => LifecycleStepInfo.ImplementStep,
-            IssueLifecycleStep.Publish => LifecycleStepInfo.PublishStep,
-            IssueLifecycleStep.Rebase => LifecycleStepInfo.RebaseStep,
-            IssueLifecycleStep.Checks => LifecycleStepInfo.ChecksStep,
-            IssueLifecycleStep.ReviewQueued => LifecycleStepInfo.ReviewQueuedStep,
-            IssueLifecycleStep.Review => LifecycleStepInfo.ReviewStep,
-            IssueLifecycleStep.YourReview => LifecycleStepInfo.YourReviewStep,
-            IssueLifecycleStep.Merge => LifecycleStepInfo.MergeStep,
-            IssueLifecycleStep.Done => LifecycleStepInfo.DoneStep,
-            _ => throw new InvalidOperationException($"Unknown lifecycle step: {step}"),
-        };
 
     private static string LifecycleActorName(LifecycleActor actor) =>
         actor switch

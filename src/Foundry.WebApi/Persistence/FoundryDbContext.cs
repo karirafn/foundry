@@ -1,4 +1,5 @@
 using Foundry.Modules.Credentials.Infrastructure.Configurations;
+using Foundry.Modules.Issues.Infrastructure;
 using Foundry.Modules.Issues.Infrastructure.Configurations;
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
 using Foundry.Modules.Settings.Infrastructure.Configurations;
@@ -38,6 +39,10 @@ public sealed class FoundryDbContext(
     {
         base.OnConfiguring(optionsBuilder);
         optionsBuilder.ReplaceService<IModelCacheKeyFactory, FoundryDbContextModelCacheKeyFactory>();
+
+        // Registered on the context itself rather than by the host, so no context a caller builds can add an issue
+        // without its step transition row.
+        optionsBuilder.AddInterceptors(IssueStepTransitionInterceptor.Instance);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -27,6 +27,8 @@ public sealed class TriageFailedIssue : Issue, IAutoRetryableFailedState
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => FailureCategory.Value;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Triage;
 
     public override RunKind? RunKind => null;
