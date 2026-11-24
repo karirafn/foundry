@@ -22,8 +22,6 @@ public sealed class RevisionBlockedIssue : Issue
 
     public override bool WaitsOnBlockers => true;
 
-    public override IssueCodeStep? CodeStep => null;
-
     public override string? TransitionCause => Trigger.Discriminator;
 
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Queued;

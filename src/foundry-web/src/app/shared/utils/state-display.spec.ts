@@ -432,7 +432,7 @@ describe('revision_blocked and continuation_blocked display', () => {
   for (const c of cases) {
     it(`should give ${c.state} its label, aria label and badge class`, () => {
       // Arrange / Act
-      const display = resolveStateDisplay(c.state, { codeStep: null });
+      const display = resolveStateDisplay(c.state, { currentStep: null });
 
       // Assert
       expect(display).toEqual({ label: c.label, ariaLabel: c.aria, cssClass: c.cssClass });
@@ -454,7 +454,7 @@ describe('revision_blocked and continuation_blocked display', () => {
 
   it('should keep the blocked revision label when a revision trigger kind is present', () => {
     // Arrange / Act
-    const display = resolveStateDisplay('revision_blocked', { codeStep: null, revisionTriggerKind: 'failed_checks' });
+    const display = resolveStateDisplay('revision_blocked', { currentStep: null, revisionTriggerKind: 'failed_checks' });
 
     // Assert
     expect(display.label).toBe('REVISION BLOCKED');
