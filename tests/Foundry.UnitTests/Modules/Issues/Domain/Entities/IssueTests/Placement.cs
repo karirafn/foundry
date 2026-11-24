@@ -26,6 +26,8 @@ public sealed class Placement
         ["blocked"] = () => new IssueBuilder().WithBlockedBy([2]).TriageFailed().SkipTriage(DateTimeOffset.UtcNow),
         ["revision_queued"] = () => new IssueBuilder().RevisionQueued(),
         ["continuation_queued"] = () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow),
+        ["revision_blocked"] = () => new IssueBuilder().RevisionBlocked([2]),
+        ["continuation_blocked"] = () => new IssueBuilder().ContinuationBlocked([2]),
         ["in_progress"] = () => new IssueBuilder().InProgress(),
         ["revision_in_progress"] = () => new IssueBuilder().RevisionInProgress(),
         ["rebase_pending"] = () => new IssueBuilder().RebasePending(),
@@ -51,6 +53,7 @@ public sealed class Placement
 
     private static readonly IReadOnlyList<(string State, IssueStage Stage, bool NeedsAction, bool AwaitsDispatch, bool WaitsOnBlockers)> Expected =
     [
+<<<<<<< HEAD
         ("detected", IssueStage.Triage, false, true, false),
         ("triage_queued", IssueStage.Triage, false, true, false),
         ("triage_blocked", IssueStage.Triage, false, true, true),
@@ -81,6 +84,40 @@ public sealed class Placement
         ("awaiting_input (fresh)", IssueStage.Implement, true, false, false),
         ("review", IssueStage.Merge, true, false, false),
         ("completed", IssueStage.Done, false, false, false),
+=======
+        ("detected", IssueStage.Triage, false, true, false, null),
+        ("triage_queued", IssueStage.Triage, false, true, false, null),
+        ("triage_blocked", IssueStage.Triage, false, true, true, null),
+        ("triage_in_progress", IssueStage.Triage, false, false, false, null),
+        ("triage_failed", IssueStage.Triage, true, false, false, null),
+        ("queued", IssueStage.Implement, false, true, false, null),
+        ("blocked", IssueStage.Implement, false, true, true, null),
+        ("revision_queued", IssueStage.Implement, false, true, false, null),
+        ("continuation_queued", IssueStage.Implement, false, true, false, null),
+        ("revision_blocked", IssueStage.Implement, false, true, true, null),
+        ("continuation_blocked", IssueStage.Implement, false, true, true, null),
+        ("in_progress", IssueStage.Implement, false, false, false, null),
+        ("revision_in_progress", IssueStage.Implement, false, false, false, null),
+        ("rebase_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Rebasing),
+        ("checks_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Checks),
+        ("merge_pending", IssueStage.Merge, false, false, false, IssueCodeStep.Merging),
+        ("failed", IssueStage.Implement, true, false, false, null),
+        ("continuable_failed", IssueStage.Implement, true, false, false, null),
+        ("revision_failed", IssueStage.Implement, true, false, false, null),
+        ("unchanged", IssueStage.Implement, true, false, false, null),
+        ("publish_failed", IssueStage.Implement, true, false, false, null),
+        ("publish_blocked", IssueStage.Implement, true, false, false, null),
+        ("branch_diverged", IssueStage.Implement, true, false, false, null),
+        ("review_queued", IssueStage.Review, false, true, false, null),
+        ("review_in_progress", IssueStage.Review, false, false, false, null),
+        ("review_failed", IssueStage.Review, false, false, false, null),
+        ("awaiting_input (retriage)", IssueStage.Triage, true, false, false, null),
+        ("awaiting_input (revision)", IssueStage.Implement, true, false, false, null),
+        ("awaiting_input (continuation)", IssueStage.Implement, true, false, false, null),
+        ("awaiting_input (fresh)", IssueStage.Implement, true, false, false, null),
+        ("review", IssueStage.Merge, true, false, false, null),
+        ("completed", IssueStage.Done, false, false, false, null),
+>>>>>>> 348cfbc4 (feat(issues): open blockers hold revisions and continuations, and a closed pull request fails a held revision)
     ];
 
     public static TheoryData<string, IssueStage> Stages => new(Expected.Select(e => (e.State, e.Stage)));

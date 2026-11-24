@@ -63,11 +63,11 @@ internal sealed class IssueQueries(
     {
         // EF Core cannot translate a C# instance method call into SQL, so the type-pattern
         // Where clause is kept explicit here. Only the concrete states that ProcessIssueDependenciesHandler
-        // acts on are included: TriageBlockedIssue and BlockedIssue so their closing blockers release them (ADR 0102),
-        // the other triage states so their blockers are current when a ready verdict
-        // sends the issue through the dependency check (ADR 0097) — FreshQueuedIssue is used
-        // explicitly (never the QueuedIssue base type) because RevisionQueuedIssue and
-        // ContinuationQueuedIssue both derive from QueuedIssue but are not acted on.
+        // acts on are included: the queued and blocked pairs for fresh work, triage, revisions and continuations, so
+        // an issue with open blockers starts no run and its closing blockers release it (ADR 0102), and the other
+        // triage states so their blockers are current when a ready verdict sends the issue through the dependency
+        // check (ADR 0097). Concrete queued types are named (never the QueuedIssue base type) because a queued review
+        // also derives from QueuedIssue and is not gated.
         List<int> numbers = await db.Set<Issue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
@@ -78,7 +78,11 @@ internal sealed class IssueQueries(
                 i is TriageFailedIssue ||
                 i is FreshQueuedIssue ||
                 i is BlockedIssue ||
-                i is TriageBlockedIssue)
+                i is TriageBlockedIssue ||
+                i is RevisionQueuedIssue ||
+                i is RevisionBlockedIssue ||
+                i is ContinuationQueuedIssue ||
+                i is ContinuationBlockedIssue)
             .Select(i => i.IssueNumber)
             .ToListAsync(cancellationToken);
 
@@ -104,6 +108,8 @@ internal sealed class IssueQueries(
                 (i is QueuedIssue && !(i is ReviewQueuedIssue)) ||
                 i is BlockedIssue ||
                 i is TriageBlockedIssue ||
+                i is RevisionBlockedIssue ||
+                i is ContinuationBlockedIssue ||
                 i is FailedIssue ||
                 i is TriageFailedIssue ||
                 i is ContinuableFailedIssue ||
@@ -172,6 +178,26 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
 
         return [.. queued, .. inProgress, .. failed];
+    }
+
+    public async Task<IReadOnlyList<QueuedRevisionIssueInfo>> GetQueuedRevisionIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        // Each state maps pull_request_url on its own type, so the two are read separately.
+        List<QueuedRevisionIssueInfo> queued = await db.Set<RevisionQueuedIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new QueuedRevisionIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .ToListAsync(cancellationToken);
+
+        List<QueuedRevisionIssueInfo> blocked = await db.Set<RevisionBlockedIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new QueuedRevisionIssueInfo(i.IssueNumber, i.PullRequestUrl))
+            .ToListAsync(cancellationToken);
+
+        return [.. queued, .. blocked];
     }
 
     public async Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
@@ -624,6 +650,7 @@ internal sealed class IssueQueries(
             RevisionQueuedIssue revisionQueued => revisionQueued.Trigger.Discriminator,
             RevisionInProgressIssue revisionInProgress => revisionInProgress.Trigger.Discriminator,
             RevisionFailedIssue revisionFailed => revisionFailed.Trigger.Discriminator,
+            RevisionBlockedIssue revisionBlocked => revisionBlocked.Trigger.Discriminator,
             _ => null,
         };
 
@@ -842,6 +869,8 @@ internal sealed class IssueQueries(
             ReviewQueuedIssue => "review_queued",
             ReviewInProgressIssue => "review_in_progress",
             ReviewFailedIssue => "review_failed",
+            RevisionBlockedIssue => "revision_blocked",
+            ContinuationBlockedIssue => "continuation_blocked",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -984,6 +1013,29 @@ internal sealed class IssueQueries(
                 BlockedBy: BlockersOf(triageBlocked),
                 TransientRetry: null),
 
+            RevisionBlockedIssue revisionBlocked => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: revisionBlocked.BranchName,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: BlockersOf(revisionBlocked),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionBlocked.Trigger.Discriminator,
+                ChecksFixAttempts: revisionBlocked.ChecksFixAttempts,
+                RebaseConflictAttempts: revisionBlocked.RebaseConflictAttempts),
+
+            ContinuationBlockedIssue continuationBlocked => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: continuationBlocked.BranchName,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: BlockersOf(continuationBlocked),
+                TransientRetry: null),
+
             InProgressIssue inProgress => new IssueStateDetails(
                 WorkerRunId: inProgress.WorkerRunId.Value,
                 BranchName: null,
@@ -1087,7 +1139,7 @@ internal sealed class IssueQueries(
                 RebaseConflictAttempts: revisionFailed.RebaseConflictAttempts),
 
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
-                WorkerRunId: continuableFailed.WorkerRunId.Value,
+                WorkerRunId: continuableFailed.WorkerRunId?.Value,
                 BranchName: continuableFailed.BranchName,
                 FeedbackCutoffAt: null,
                 FailureReason: continuableFailed.FailureReason,

@@ -602,6 +602,39 @@ public sealed class PollAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().Any().ShouldBe(expectClosed);
     }
 
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public async Task WhenAQueuedOrHeldRevisionsPullRequestIsRead_RaisesProviderPullRequestClosedOnlyWhenClosedUnmerged(
+        bool isClosed,
+        bool isMerged,
+        bool expectClosed)
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/98";
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            queuedRevisions: [new QueuedRevisionIssueInfo(43, prUrl)]);
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: isClosed, IsMerged: isMerged, HeadSha: null, IsDraft: false)),
+        };
+        StubIssueProvider provider = new([], pullRequestStatusResults: prStatusResults);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        await sut.PollAsync(repository, provider, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>()
+            .Select(closed => closed.IssueNumber)
+            .ShouldBe(expectClosed ? [43] : []);
+    }
+
     [Fact]
     public async Task WhenReviewIssueIsOpenAndPullRequestIsOpen_RaisesNoReviewStatusEvents()
     {
@@ -2553,6 +2586,7 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlySet<int> _unpublishedRunNumbers;
         private readonly IReadOnlySet<int> _dispatchCandidateNumbers;
         private readonly IReadOnlyList<ReviewStepIssueInfo> _reviewStepIssues;
+        private readonly IReadOnlyList<QueuedRevisionIssueInfo> _queuedRevisions;
 
         public StubIssueQueries()
             : this(new HashSet<int>(), new Dictionary<int, IssueSnapshot>())
@@ -2571,9 +2605,11 @@ public sealed class PollAsync : IAsyncDisposable
             IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
             IReadOnlySet<int>? untrackableNumbers = null,
             IReadOnlySet<int>? unpublishedRunNumbers = null,
-            IReadOnlyList<ReviewStepIssueInfo>? reviewStepIssues = null)
+            IReadOnlyList<ReviewStepIssueInfo>? reviewStepIssues = null,
+            IReadOnlyList<QueuedRevisionIssueInfo>? queuedRevisions = null)
         {
             _reviewStepIssues = reviewStepIssues ?? [];
+            _queuedRevisions = queuedRevisions ?? [];
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _dispatchCandidateNumbers = dispatchCandidateNumbers ?? new HashSet<int>();
@@ -2606,6 +2642,11 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
             Task.FromResult(_reviewStepIssues);
+
+
+        public Task<IReadOnlyList<QueuedRevisionIssueInfo>> GetQueuedRevisionIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+
+            Task.FromResult(_queuedRevisions);
 
         public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
             MonitoredRepositoryId repositoryId,

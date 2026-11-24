@@ -1428,7 +1428,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCandidateIsRevisionQueued_ClaimsWithoutReadingBlockers()
+    public async Task WhenRevisionCandidateHasOpenBlocker_HoldsItAndClaimsNothing()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -1450,9 +1450,8 @@ public sealed class HandleAsync : IAsyncDisposable
         await sut.HandleAsync(new WorkerCapacityAvailable(WorkerRunId.New()), TestContext.Current.CancellationToken);
 
         // Assert
-        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldHaveSingleItem()
-            .Dispatch.IssueId.ShouldBe(revision.Id);
-        blockerQueries.RequestedIssueNumbers.ShouldBeEmpty();
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldBeEmpty();
+        blockerQueries.RequestedIssueNumbers.ShouldBe([5]);
     }
 
     private sealed class ThrowingIntegrationEventDispatcher : IIntegrationEventDispatcher

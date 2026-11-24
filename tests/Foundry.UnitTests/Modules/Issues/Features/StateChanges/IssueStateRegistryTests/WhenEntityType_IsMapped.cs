@@ -14,6 +14,8 @@ public sealed class WhenEntityType_IsMapped
     [InlineData("queued", typeof(FreshQueuedIssue))]
     [InlineData("blocked", typeof(BlockedIssue))]
     [InlineData("triage_blocked", typeof(TriageBlockedIssue))]
+    [InlineData("revision_blocked", typeof(RevisionBlockedIssue))]
+    [InlineData("continuation_blocked", typeof(ContinuationBlockedIssue))]
     [InlineData("in_progress", typeof(InProgressIssue))]
     [InlineData("review", typeof(ReviewIssue))]
     [InlineData("failed", typeof(FailedIssue))]

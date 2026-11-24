@@ -62,12 +62,19 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_revision_failed_fields",
                 "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+            // No worker_run_id: a queued or held revision whose pull request closed fails before any run starts.
             t.HasCheckConstraint(
                 "ck_issues_continuable_failed_fields",
-                "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+                "state <> 'continuable_failed' OR (branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
             t.HasCheckConstraint(
                 "ck_issues_continuation_queued_branch_name",
                 "state <> 'continuation_queued' OR branch_name IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_revision_blocked_fields",
+                "state <> 'revision_blocked' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_continuation_blocked_branch_name",
+                "state <> 'continuation_blocked' OR branch_name IS NOT NULL");
             t.HasCheckConstraint(
                 "ck_issues_checks_pending_fields",
                 "state <> 'checks_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_checks_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
@@ -285,6 +292,8 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<ReviewQueuedIssue>("review_queued")
             .HasValue<ReviewInProgressIssue>("review_in_progress")
             .HasValue<ReviewFailedIssue>("review_failed")
+            .HasValue<RevisionBlockedIssue>("revision_blocked")
+            .HasValue<ContinuationBlockedIssue>("continuation_blocked")
             .IsComplete(true);
 
         builder.Property<string>("state")

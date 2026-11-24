@@ -14,7 +14,7 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// <summary>
 /// Selects the best <see cref="DispatchCandidate"/> from all claimable issues across eligible
 /// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
-/// memoization. Each <see cref="FreshQueuedIssue"/> and <see cref="TriageQueuedIssue"/> candidate is re-checked by
+/// memoization. Each fresh, triage, revision and continuation candidate is re-checked by
 /// <see cref="ClaimTimeRecheck"/> before it is selected; a candidate that gained a blocker, or a Fresh candidate whose
 /// branch already had work and was requeued as a Continuation, has left the queue, so the capacity-aware order is
 /// re-walked without it. Repositories on a paused provider host
@@ -133,12 +133,13 @@ internal sealed class DispatchCandidateSelector(
                 }
 
                 // Claim-time blocker re-check: the recorded BlockedBy may predate a blocker added
-                // on the provider (GitLab sends no webhook for issue links), so re-read it live for
-                // fresh work and for triage, which waits for open blockers to close (ADR 0102) — this also covers an
-                // issue created with blockers before its first dependency pass. Revisions and continuations run on an
-                // existing branch/PR and are not re-gated. A fresh candidate whose branch already has work is requeued
-                // as a continuation on it.
-                if (candidate is FreshQueuedIssue or TriageQueuedIssue)
+                // on the provider (GitLab sends no webhook for issue links), so re-read it live. An issue with open
+                // blockers starts no run (ADR 0102): fresh work, triage, and revisions and continuations on an existing
+                // branch or pull request whatever their trigger, so every path into those queues meets this gate. It
+                // also covers an issue created with blockers before its first dependency pass. A queued review is not
+                // gated: the code-owned pipeline is never interrupted by a blocker. A fresh candidate whose branch
+                // already has work is requeued as a continuation on it, which the next pass re-checks.
+                if (candidate is FreshQueuedIssue or TriageQueuedIssue or RevisionQueuedIssue or ContinuationQueuedIssue)
                 {
                     ClaimTimeRecheckOutcome check = await claimTimeRecheck.CheckAsync(candidate, cancellationToken);
 
