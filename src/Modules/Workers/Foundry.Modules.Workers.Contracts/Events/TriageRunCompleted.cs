@@ -50,9 +50,36 @@ public abstract record TriageResult
     {
     }
 
-    public sealed record Ready(TriageKind Kind) : TriageResult;
+    /// <summary>The most decisions one verdict may carry, as the verdict schema caps them.</summary>
+    public const int MaxDecisions = 20;
 
-    public sealed record NeedsInput(TriageKind Kind, IReadOnlyList<InputQuestion> Questions) : TriageResult;
+    /// <param name="Decisions">The details triage settled itself (ADR 0123); empty when it settled none.</param>
+    public sealed record Ready(TriageKind Kind, IReadOnlyList<TriageDecision> Decisions) : TriageResult
+    {
+        // An outbox row written before decisions existed carries none.
+        public IReadOnlyList<TriageDecision> Decisions { get; init; } = Decisions ?? [];
+
+        public bool Equals(Ready? other) =>
+            other is not null && Kind == other.Kind && Decisions.SequenceEqual(other.Decisions);
+
+        public override int GetHashCode() => HashCode.Combine(Kind, Decisions.Count);
+    }
+
+    /// <param name="Decisions">The details triage settled itself beside its questions (ADR 0123); empty when none.</param>
+    public sealed record NeedsInput(TriageKind Kind, IReadOnlyList<InputQuestion> Questions, IReadOnlyList<TriageDecision> Decisions)
+        : TriageResult
+    {
+        // An outbox row written before decisions existed carries none.
+        public IReadOnlyList<TriageDecision> Decisions { get; init; } = Decisions ?? [];
+
+        public bool Equals(NeedsInput? other) =>
+            other is not null
+            && Kind == other.Kind
+            && Questions.SequenceEqual(other.Questions)
+            && Decisions.SequenceEqual(other.Decisions);
+
+        public override int GetHashCode() => HashCode.Combine(Kind, Questions.Count, Decisions.Count);
+    }
 
     public sealed record Blocked(TriageKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageResult
     {

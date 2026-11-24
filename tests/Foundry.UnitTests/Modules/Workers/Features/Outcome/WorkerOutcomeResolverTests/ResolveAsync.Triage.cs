@@ -66,7 +66,31 @@ public sealed partial class ResolveAsync
 
         // Assert
         outcome.ShouldBeOfType<WorkerOutcome.TriageCompleted>()
-            .Verdict.ShouldBe(new TriageVerdict.Ready(TriageIssueKind.Bug));
+            .Verdict.ShouldBe(new TriageVerdict.Ready(TriageIssueKind.Bug, []));
+    }
+
+    [Theory]
+    [InlineData("""{"question":"Which cap?","decision":" ","ground":"settled_business","evidence":["src/Retry.cs:8"]}""")]
+    [InlineData("""{"question":"Which cap?","decision":"Three.","ground":"unknown","evidence":["src/Retry.cs:8"]}""")]
+    [InlineData("""{"question":"Which cap?","decision":"Three.","ground":"settled_business","evidence":[]}""")]
+    public async Task WhenATriageDecisionIsInvalid_FailsTheRunAsAnInvalidVerdict(string decision)
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildTriageResolver();
+        string output =
+            $$$"""{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"ready","kind":"bug","decisions":[{{{decision}}}]}}""";
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateTriageRun(),
+            Exited(0),
+            output,
+            verdict: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Failure>().FailureReason
+            .ShouldBe(new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.InvalidDetail));
     }
 
     [Fact]

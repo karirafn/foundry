@@ -7,6 +7,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -32,6 +33,10 @@ internal static class AwaitingInputJsonConversion
     private const string ContinuedWithoutAnswerKind = "continuedWithoutAnswer";
     private const string UnsentKind = "unsent";
     private const string SentKind = "sent";
+    private const string AskedKind = "asked";
+    private const string DecidedKind = "decided";
+    private const string SettledBusinessGround = "settled_business";
+    private const string ImplementationDetailGround = "implementation_detail";
 
     public static ValueConverter<ResumeTarget, string> ResumeTargetConverter { get; } = new(
         target => SerializeResumeTarget(target),
@@ -173,22 +178,73 @@ internal static class AwaitingInputJsonConversion
     }
 
     private static string SerializeClarifications(IReadOnlyList<Clarification> log) =>
-        JsonSerializer.Serialize(
-            log.Select(round => new ClarificationDto(
-                InputQuestionJson.ToNode(round.Questions),
-                round.Input is { } input ? SerializeInput(input) : null,
-                round.AskedAt,
-                round.AnsweredAt)).ToList(),
-            (JsonSerializerOptions?)null);
+        JsonSerializer.Serialize(log.Select(SerializeClarification).ToList(), (JsonSerializerOptions?)null);
 
+    private static ClarificationDto SerializeClarification(Clarification round) => round switch
+    {
+        Clarification.Asked asked => new ClarificationDto(
+            AskedKind,
+            InputQuestionJson.ToNode(asked.Questions),
+            asked.Input is { } input ? SerializeInput(input) : null,
+            asked.AskedAt,
+            asked.AnsweredAt,
+            SerializeDecisions(asked.Decisions),
+            DecidedAt: null),
+        Clarification.Decided decided => new ClarificationDto(
+            DecidedKind,
+            Questions: null,
+            Input: null,
+            AskedAt: null,
+            AnsweredAt: null,
+            SerializeDecisions(decided.Decisions),
+            decided.DecidedAt),
+        _ => throw new UnreachableException($"Unknown Clarification variant: {round.GetType().Name}"),
+    };
+
+    // A round stored before rounds had kinds carries none and is an asked round with no decisions.
     private static List<Clarification> DeserializeClarifications(string json) =>
         (JsonSerializer.Deserialize<List<ClarificationDto>>(json, (JsonSerializerOptions?)null) ?? [])
-            .Select(dto => new Clarification(
-                InputQuestionJson.FromNode(dto.Questions),
-                DeserializeInput(dto.Input),
-                dto.AskedAt,
-                dto.AnsweredAt))
+            .Select(dto => dto.Kind switch
+            {
+                null or AskedKind => (Clarification)new Clarification.Asked(
+                    InputQuestionJson.FromNode(dto.Questions),
+                    DeserializeInput(dto.Input),
+                    Required(dto.AskedAt),
+                    dto.AnsweredAt,
+                    DeserializeDecisions(dto.Decisions)),
+                DecidedKind => new Clarification.Decided(DeserializeDecisions(dto.Decisions), Required(dto.DecidedAt)),
+                _ => throw new UnreachableException($"Unknown Clarification kind: '{dto.Kind}'"),
+            })
             .ToList();
+
+    private static List<TriageDecisionDto>? SerializeDecisions(IReadOnlyList<TriageDecision> decisions) =>
+        decisions.Count == 0
+            ? null
+            : [.. decisions.Select(decision => new TriageDecisionDto(
+                decision.Question,
+                decision.Decision,
+                GroundTokenOf(decision.Ground),
+                decision.Evidence))];
+
+    private static List<TriageDecision> DeserializeDecisions(IReadOnlyList<TriageDecisionDto>? stored) =>
+        [.. (stored ?? []).Select(dto =>
+            TriageDecision.Create(dto.Question, dto.Decision, GroundOf(dto.Ground), dto.Evidence).Match(
+                decision => decision,
+                error => throw new UnreachableException($"A stored triage decision is invalid: {error.Message}")))];
+
+    private static string GroundTokenOf(TriageDecisionGround ground) => ground switch
+    {
+        TriageDecisionGround.SettledBusiness => SettledBusinessGround,
+        TriageDecisionGround.ImplementationDetail => ImplementationDetailGround,
+        _ => throw new UnreachableException($"Unknown TriageDecisionGround: {ground}"),
+    };
+
+    private static TriageDecisionGround GroundOf(string token) => token switch
+    {
+        SettledBusinessGround => TriageDecisionGround.SettledBusiness,
+        ImplementationDetailGround => TriageDecisionGround.ImplementationDetail,
+        _ => throw new UnreachableException($"Unknown triage decision ground: '{token}'"),
+    };
 
     private static JsonElement SerializeInput(ClarificationInput input) =>
         JsonSerializer.SerializeToElement(
@@ -254,10 +310,20 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("attempts")] int? Attempts);
 
     private sealed record ClarificationDto(
-        [property: JsonPropertyName("questions")] JsonNode Questions,
+        [property: JsonPropertyName("kind")] string? Kind,
+        [property: JsonPropertyName("questions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonNode? Questions,
         [property: JsonPropertyName("input")] JsonElement? Input,
-        [property: JsonPropertyName("askedAt")] DateTimeOffset AskedAt,
-        [property: JsonPropertyName("answeredAt")] DateTimeOffset? AnsweredAt);
+        [property: JsonPropertyName("askedAt"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? AskedAt,
+        [property: JsonPropertyName("answeredAt")] DateTimeOffset? AnsweredAt,
+        [property: JsonPropertyName("decisions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<TriageDecisionDto>? Decisions,
+        [property: JsonPropertyName("decidedAt"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DecidedAt);
+
+    private sealed record TriageDecisionDto(
+        [property: JsonPropertyName("question")] string Question,
+        [property: JsonPropertyName("decision")] string Decision,
+        [property: JsonPropertyName("ground")] string Ground,
+        [property: JsonPropertyName("evidence")] IReadOnlyList<string> Evidence);
 
     // A part writes its kind and only the fields it has: one without a payload is its kind alone, and a branch recreated
     // while waiting has no from-SHA.

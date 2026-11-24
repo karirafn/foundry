@@ -226,7 +226,8 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
         WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
             new TriageVerdict.NeedsInput(
                 TriageIssueKind.Refactor,
-                [StructuredQuestionBuilder.Build(question: "Which module?")]),
+                [StructuredQuestionBuilder.Build(question: "Which module?")],
+                []),
             ContainerOutput: null,
             Summary: null);
 
@@ -242,6 +243,30 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
             () => ((TriageResult.NeedsInput)completed.Result).Questions.ShouldBe([StructuredQuestionBuilder.Build(question: "Which module?")]),
             () => dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldBeEmpty(),
             () => orchestrator.StopAndRemoveCalls.ShouldBe([ContainerId]));
+    }
+
+    [Fact]
+    public async Task WhenATriageRunCompletesWithDecisions_PublishesThemOnTheResult()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        RecordingOrchestrator orchestrator = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, orchestrator, dispatcher);
+        TriageDecision decision = TriageDecisionBuilder.Build();
+        WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
+            new TriageVerdict.Ready(TriageIssueKind.Feature, [decision]),
+            ContainerOutput: null,
+            Summary: null);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem()
+            .Result.ShouldBeOfType<TriageResult.Ready>().Decisions.ShouldBe([decision]);
     }
 
     [Fact]

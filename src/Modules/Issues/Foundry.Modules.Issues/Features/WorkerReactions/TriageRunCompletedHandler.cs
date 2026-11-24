@@ -15,11 +15,12 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Issues.Features.WorkerReactions;
 
 /// <summary>
-/// Moves a triaged issue on by its verdict (ADR 0097): <c>ready</c> through the dependency check to the queue or
-/// blocked, <c>needs_input</c> to awaiting input with a re-triage resume target, <c>blocked</c> to waiting untriaged
-/// on the blockers it names, or to failure (<c>blocker_cycle</c>) when a named blocker would close a dependency cycle
-/// through the stored edges of other issues. Replay-safe: an issue no longer in triage with this run (a redelivery,
-/// or the issue moved on) is left as it is.
+/// Moves a triaged issue on by its verdict (ADR 0097): <c>ready</c>, after recording its decisions as a decided
+/// clarification round (ADR 0123), through the dependency check to the queue or blocked; <c>needs_input</c> to
+/// awaiting input with a re-triage resume target, its decisions on the round it opens; <c>blocked</c> to waiting
+/// untriaged on the blockers it names, or to failure (<c>blocker_cycle</c>) when a named blocker would close a
+/// dependency cycle through the stored edges of other issues. Replay-safe: an issue no longer in triage with this run
+/// (a redelivery, or the issue moved on) is left as it is.
 /// </summary>
 [IntegrationEventHandlerIdentity("Issues.TriageRunCompleted")]
 internal sealed class TriageRunCompletedHandler(
@@ -51,9 +52,11 @@ internal sealed class TriageRunCompletedHandler(
         {
             TriageResult.Ready ready => triaging.MarkReady(
                 new TriageVerdict.Ready(ToIssueKind(ready.Kind), @event.DecidedAt),
+                ready.Decisions,
                 now),
             TriageResult.NeedsInput needsInput => triaging.MarkNeedsInput(
                 new TriageVerdict.NeedsInput(ToIssueKind(needsInput.Kind), needsInput.Questions, @event.DecidedAt),
+                needsInput.Decisions,
                 now),
             TriageResult.Blocked blocked => await RouteBlockedAsync(triaging, blocked, @event.DecidedAt, now, cancellationToken),
             _ => throw new UnreachableException($"Unhandled triage result: {@event.Result.GetType().Name}"),

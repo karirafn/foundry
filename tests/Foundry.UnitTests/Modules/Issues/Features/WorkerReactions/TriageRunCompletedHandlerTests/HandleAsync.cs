@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -103,7 +104,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug), DecidedAt),
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug, []), DecidedAt),
             CancellationToken.None);
 
         // Assert
@@ -126,7 +127,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Feature), DecidedAt),
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Feature, []), DecidedAt),
             CancellationToken.None);
 
         // Assert
@@ -146,7 +147,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new TriageRunCompleted(
                 triaging.Id.Value,
                 workerRunId,
-                new TriageResult.NeedsInput(TriageKind.Feature, questions),
+                new TriageResult.NeedsInput(TriageKind.Feature, questions, []),
                 DecidedAt),
             CancellationToken.None);
 
@@ -157,6 +158,89 @@ public sealed class HandleAsync : IAsyncDisposable
             () => awaiting.Questions.ShouldBe(questions),
             () => awaiting.TriageVerdict.ShouldBeOfType<TriageVerdict.NeedsInput>().Questions.ShouldBe(questions),
             () => _dispatcher.DispatchedEvents.OfType<IssueAwaitingInput>().ShouldHaveSingleItem());
+    }
+
+    [Fact]
+    public async Task WhenReadyWithDecisions_TheQueuedIssueLogsThemAsADecidedRound()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+        TriageDecision decision = TriageDecisionBuilder.Build();
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug, [decision]), DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        FreshQueuedIssue queued = (await ReloadAsync(triaging)).ShouldBeOfType<FreshQueuedIssue>();
+        queued.ShouldSatisfyAllConditions(
+            () => queued.Clarifications.ShouldBe([Clarification.Decide([decision], DecidedAt)]),
+            () => queued.OpenClarification.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenReadyWithDecisionsAndOpenBlockers_TheBlockedIssueLogsTheDecidedRound()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithWorkerRunId(workerRunId)
+            .WithBlockedBy([5])
+            .TriageInProgress());
+        TriageDecision decision = TriageDecisionBuilder.Build();
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Feature, [decision]), DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        (await ReloadAsync(triaging)).ShouldBeOfType<BlockedIssue>()
+            .Clarifications.ShouldBe([Clarification.Decide([decision], DecidedAt)]);
+    }
+
+    [Fact]
+    public async Task WhenReadyWithoutDecisions_TheLogStaysEmpty()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug, []), DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        (await ReloadAsync(triaging)).Clarifications.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenNeedsInputWithDecisions_TheOpenRoundCarriesThem()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+        IReadOnlyList<InputQuestion> questions = [StructuredQuestionBuilder.Build()];
+        TriageDecision decision = TriageDecisionBuilder.Build(ground: TriageDecisionGround.ImplementationDetail);
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.NeedsInput(TriageKind.Feature, questions, [decision]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        AwaitingInputIssue awaiting = (await ReloadAsync(triaging)).ShouldBeOfType<AwaitingInputIssue>();
+        awaiting.ShouldSatisfyAllConditions(
+            () => awaiting.Clarifications.ShouldHaveSingleItem(),
+            () => awaiting.OpenClarification.ShouldNotBeNull().Questions.ShouldBe(questions),
+            () => awaiting.OpenClarification!.Decisions.ShouldBe([decision]));
     }
 
     [Fact]
@@ -390,7 +474,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new TriageRunCompleted(queued.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug), DecidedAt),
+            new TriageRunCompleted(queued.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug, []), DecidedAt),
             CancellationToken.None);
 
         // Assert
@@ -409,7 +493,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(
-            new TriageRunCompleted(triaging.Id.Value, WorkerRunId.New(), new TriageResult.Ready(TriageKind.Bug), DecidedAt),
+            new TriageRunCompleted(triaging.Id.Value, WorkerRunId.New(), new TriageResult.Ready(TriageKind.Bug, []), DecidedAt),
             CancellationToken.None);
 
         // Assert

@@ -78,7 +78,7 @@ public sealed class HandleAsync : IAsyncDisposable
         RevisionQueuedIssue queued = (await LoadAsync()).ShouldBeOfType<RevisionQueuedIssue>();
         queued.ShouldSatisfyAllConditions(
             () => queued.Trigger.ShouldBeOfType<RevisionTrigger.InputProvided>(),
-            () => queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")));
+            () => queued.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(ClarificationInput.FromComments("Use Postgres.")));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         TriageQueuedIssue queued = (await LoadAsync()).ShouldBeOfType<TriageQueuedIssue>();
-        queued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(edited);
+        queued.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(edited);
     }
 
     [Fact]

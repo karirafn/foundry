@@ -153,11 +153,11 @@ public sealed class IssueBuilder
 
     /// <summary>A queued issue triage judged ready as <paramref name="kind"/>.</summary>
     public FreshQueuedIssue FreshQueuedFromTriage(IssueKind kind) =>
-        (FreshQueuedIssue)TriageInProgress().MarkReady(new TriageVerdict.Ready(kind, _runStartedAt), _transitionedAt);
+        (FreshQueuedIssue)TriageInProgress().MarkReady(new TriageVerdict.Ready(kind, _runStartedAt), [], _transitionedAt);
 
     /// <summary>A triage run that asked the <see cref="DefaultQuestions"/>: resumes as a re-triage.</summary>
     public AwaitingInputIssue AwaitingInputFromTriage(IssueKind kind) =>
-        TriageInProgress().MarkNeedsInput(new TriageVerdict.NeedsInput(kind, DefaultQuestions, _runStartedAt), _transitionedAt);
+        TriageInProgress().MarkNeedsInput(new TriageVerdict.NeedsInput(kind, DefaultQuestions, _runStartedAt), [], _transitionedAt);
 
     /// <summary>A triage run that named the blockers of <paramref name="verdict"/>: waits untriaged on them.</summary>
     public TriageBlockedIssue TriageBlockedFromTriage(TriageVerdict.Blocked verdict) =>

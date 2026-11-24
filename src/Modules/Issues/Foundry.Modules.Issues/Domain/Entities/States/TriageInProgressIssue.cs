@@ -50,22 +50,33 @@ public sealed class TriageInProgressIssue : Issue
     }
 
     /// <summary>
-    /// Triage judged the issue ready: it records the verdict and goes through the dependency check, queued when it has
-    /// no open blockers and blocked otherwise.
+    /// Triage judged the issue ready: it records the verdict and any <paramref name="decisions"/> it made as a decided
+    /// clarification round (ADR 0123), then goes through the dependency check, queued when it has no open blockers and
+    /// blocked otherwise.
     /// </summary>
-    public Issue MarkReady(TriageVerdict.Ready verdict, DateTimeOffset transitionedAt)
+    public Issue MarkReady(TriageVerdict.Ready verdict, IReadOnlyList<TriageDecision> decisions, DateTimeOffset transitionedAt)
     {
         ArgumentNullException.ThrowIfNull(verdict);
+        ArgumentNullException.ThrowIfNull(decisions);
+
+        RecordDecisions(decisions, verdict.DecidedAt);
 
         return ReleaseThroughDependencyCheck(verdict, transitionedAt);
     }
 
-    /// <summary>Triage needs answers first: it records the verdict and waits for input, then triages again.</summary>
-    public AwaitingInputIssue MarkNeedsInput(TriageVerdict.NeedsInput verdict, DateTimeOffset transitionedAt)
+    /// <summary>
+    /// Triage needs answers first: it records the verdict, opens a round with its questions and the
+    /// <paramref name="decisions"/> it made beside them (ADR 0123), and waits for input, then triages again.
+    /// </summary>
+    public AwaitingInputIssue MarkNeedsInput(
+        TriageVerdict.NeedsInput verdict,
+        IReadOnlyList<TriageDecision> decisions,
+        DateTimeOffset transitionedAt)
     {
         ArgumentNullException.ThrowIfNull(verdict);
+        ArgumentNullException.ThrowIfNull(decisions);
 
-        AwaitingInputIssue awaiting = AwaitingInputIssue.FromTriageInProgress(this, verdict, transitionedAt);
+        AwaitingInputIssue awaiting = AwaitingInputIssue.FromTriageInProgress(this, verdict, decisions, transitionedAt);
         AddDomainEvent(new Events.IssueAwaitingInput(Id, MonitoredRepositoryId, IssueNumber));
         return awaiting;
     }

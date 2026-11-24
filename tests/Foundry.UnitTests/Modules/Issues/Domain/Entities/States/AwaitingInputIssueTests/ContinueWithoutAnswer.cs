@@ -79,7 +79,7 @@ public sealed class ContinueWithoutAnswer
         Issue next = awaiting.ContinueWithoutAnswer(Now);
 
         // Assert
-        Clarification round = next.Clarifications.ShouldHaveSingleItem();
+        Clarification.Asked round = next.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>();
         round.ShouldSatisfyAllConditions(
             () => round.Input.ShouldBe(Unanswered),
             () => round.AnsweredAt.ShouldBe(Now),
@@ -96,7 +96,7 @@ public sealed class ContinueWithoutAnswer
         Issue next = awaiting.ContinueWithoutAnswer(Now);
 
         // Assert
-        next.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(Unanswered);
+        next.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(Unanswered);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class ContinueWithoutAnswer
         Issue next = awaiting.ContinueWithoutAnswer(Now);
 
         // Assert
-        next.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(Unanswered);
+        next.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(Unanswered);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class ContinueWithoutAnswer
         // Assert
         FreshQueuedIssue fresh = next.ShouldBeOfType<FreshQueuedIssue>();
         fresh.ShouldSatisfyAllConditions(
-            () => fresh.Clarifications.ShouldHaveSingleItem().Input.ShouldBe(Unanswered),
+            () => fresh.Clarifications.ShouldHaveSingleItem().ShouldBeOfType<Clarification.Asked>().Input.ShouldBe(Unanswered),
             () => fresh.Context.ContinuedWithoutAnswer.ShouldBeFalse(),
             () => awaiting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>());
     }

@@ -749,7 +749,7 @@ internal sealed class IssueQueries(
     }
 
     private static List<ClarificationDetails> BuildClarificationDetails(Issue issue) =>
-        [.. issue.Clarifications.Select(round => new ClarificationDetails(
+        [.. issue.Clarifications.OfType<Clarification.Asked>().Select(round => new ClarificationDetails(
             round.Questions,
             round.Input is null ? null : [.. round.Input.Parts.Select(part => BuildInputPartDetails(issue.Url, part))],
             round.AskedAt,

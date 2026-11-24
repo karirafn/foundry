@@ -312,7 +312,8 @@ public sealed class RepositoryRoles
         // Assert
         schema.ShouldSatisfyAllConditions(
             () => outcomes.ShouldBe([TriageVerdict.ReadyToken, TriageVerdict.NeedsInputToken, TriageVerdict.BlockedToken]),
-            () => schema.ContainsKey("else").ShouldBeFalse(),
+            () => schema["else"]!["if"]!["properties"]![TriageVerdict.OutcomeProperty]!["const"]!.GetValue<string>().ShouldBe(TriageVerdict.BlockedToken),
+            () => schema["else"]!["then"]!["not"]!["required"]!.AsArray().Select(node => node!.GetValue<string>()).ShouldBe([TriageVerdict.DecisionsProperty]),
             () => schema["then"]!.AsObject().Select(pair => pair.Key).ShouldBe(["required"]),
             () => blockedBy["type"]!.GetValue<string>().ShouldBe("array"),
             () => blockedBy["minItems"]!.GetValue<int>().ShouldBe(1),
@@ -328,15 +329,51 @@ public sealed class RepositoryRoles
             () => conditionallyRequired.ShouldBe([TriageVerdict.QuestionsProperty]),
             () => schema["properties"]![TriageVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
             () => schema["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(
-                [TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty, TriageVerdict.QuestionsProperty, TriageVerdict.BlockedByProperty],
+                [TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty, TriageVerdict.QuestionsProperty, TriageVerdict.DecisionsProperty, TriageVerdict.BlockedByProperty],
                 ignoreOrder: true),
             () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
+    }
+
+    [Fact]
+    public void TheTriageVerdictSchema_DecisionsMatchTheTypedDecision()
+    {
+        // Arrange
+        JsonObject schema = ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Triage.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+        // Act
+        JsonNode decisions = schema["properties"]![TriageVerdict.DecisionsProperty]!;
+        JsonNode item = decisions["items"]!;
+        JsonNode properties = item["properties"]!;
+
+        // Assert
+        decisions.ShouldSatisfyAllConditions(
+            () => decisions["type"]!.GetValue<string>().ShouldBe("array"),
+            () => decisions["maxItems"]!.GetValue<int>().ShouldBe(TriageResult.MaxDecisions),
+            () => item["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
+            () => item["required"]!.AsArray().Select(node => node!.GetValue<string>()).ShouldBe(
+                [
+                    VerdictDecisionsReader.QuestionProperty,
+                    VerdictDecisionsReader.DecisionProperty,
+                    VerdictDecisionsReader.GroundProperty,
+                    VerdictDecisionsReader.EvidenceProperty,
+                ],
+                ignoreOrder: true),
+            () => properties[VerdictDecisionsReader.QuestionProperty]!["maxLength"]!.GetValue<int>().ShouldBe(TriageDecision.QuestionMaxLength),
+            () => properties[VerdictDecisionsReader.QuestionProperty]!["pattern"]!.GetValue<string>().ShouldBe("^[^\\r\\n]+$"),
+            () => properties[VerdictDecisionsReader.DecisionProperty]!["maxLength"]!.GetValue<int>().ShouldBe(TriageDecision.DecisionMaxLength),
+            () => properties[VerdictDecisionsReader.GroundProperty]!["enum"]!.AsArray().Select(node => node!.GetValue<string>())
+                .ShouldBe(VerdictDecisionsReader.GroundTokens.Keys, ignoreOrder: true),
+            () => properties[VerdictDecisionsReader.EvidenceProperty]!["minItems"]!.GetValue<int>().ShouldBe(1),
+            () => properties[VerdictDecisionsReader.EvidenceProperty]!["maxItems"]!.GetValue<int>().ShouldBe(TriageDecision.MaxEvidence),
+            () => properties[VerdictDecisionsReader.EvidenceProperty]!["items"]!["maxLength"]!.GetValue<int>().ShouldBe(TriageDecision.EvidenceMaxLength),
+            () => properties[VerdictDecisionsReader.EvidenceProperty]!["items"]!["pattern"]!.GetValue<string>().ShouldBe("^[^\\r\\n]+$"));
     }
 
     [Theory]
     [InlineData("""{"outcome":"ready","kind":"documentation"}""", RunVerdictStatus.Done)]
     [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""", RunVerdictStatus.NeedsInput)]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"The retry policy lands there."}]}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"ready","kind":"feature","decisions":[{"question":"Which retry cap?","decision":"Three attempts.","ground":"settled_business","evidence":["src/Retry.cs:8 caps at three"]}]}""", RunVerdictStatus.Done)]
     public void ASampleMatchingTheTriageVerdictSchema_ParsesWithTheTriageVerdictParser(string sample, RunVerdictStatus expected)
     {
         // Act

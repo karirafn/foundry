@@ -17,8 +17,9 @@ internal enum TriageIssueKind
 /// <summary>
 /// The triage role's typed verdict, mirroring <c>workers/roles/triage/verdict.schema.json</c>:
 /// <c>{"outcome": "ready" | "needs_input" | "blocked", "kind": "feature" | "bug" | "refactor" | "documentation", "questions": [...], "blockedBy": [{"issue": 15, "reason": "..."}]}</c>,
-/// with <c>kind</c> always required, <c>questions</c> required for <c>needs_input</c>, and <c>blockedBy</c> required
-/// for <c>blocked</c>. A malformed <c>questions</c> or <c>blockedBy</c> breaks the verdict under any outcome.
+/// with <c>kind</c> always required, <c>questions</c> required for <c>needs_input</c>, <c>blockedBy</c> required
+/// for <c>blocked</c>, and <c>decisions</c> (ADR 0123) optional for <c>ready</c> and <c>needs_input</c> and refused for
+/// <c>blocked</c>. A malformed <c>questions</c>, <c>blockedBy</c> or <c>decisions</c> breaks the verdict under any outcome.
 /// </summary>
 internal abstract record TriageVerdict(TriageIssueKind Kind)
 {
@@ -26,6 +27,7 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
     internal const string KindProperty = "kind";
     internal const string QuestionsProperty = "questions";
     internal const string BlockedByProperty = "blockedBy";
+    internal const string DecisionsProperty = "decisions";
     internal const string BlockedToken = "blocked";
     internal const string ReadyToken = "ready";
     internal const string NeedsInputToken = "needs_input";
@@ -40,11 +42,29 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
             ["documentation"] = TriageIssueKind.Documentation,
         };
 
-    /// <summary>The issue can be implemented as written.</summary>
-    internal sealed record Ready(TriageIssueKind Kind) : TriageVerdict(Kind);
+    /// <summary>The issue can be implemented as written, with the details triage settled itself.</summary>
+    internal sealed record Ready(TriageIssueKind Kind, IReadOnlyList<TriageDecision> Decisions) : TriageVerdict(Kind)
+    {
+        public bool Equals(Ready? other) =>
+            other is not null && Kind == other.Kind && Decisions.SequenceEqual(other.Decisions);
+
+        public override int GetHashCode() => HashCode.Combine(Kind, Decisions.Count);
+    }
 
     /// <summary>The issue cannot be implemented without answers from a person.</summary>
-    internal sealed record NeedsInput(TriageIssueKind Kind, IReadOnlyList<InputQuestion> Questions) : TriageVerdict(Kind);
+    internal sealed record NeedsInput(
+        TriageIssueKind Kind,
+        IReadOnlyList<InputQuestion> Questions,
+        IReadOnlyList<TriageDecision> Decisions) : TriageVerdict(Kind)
+    {
+        public bool Equals(NeedsInput? other) =>
+            other is not null
+            && Kind == other.Kind
+            && Questions.SequenceEqual(other.Questions)
+            && Decisions.SequenceEqual(other.Decisions);
+
+        public override int GetHashCode() => HashCode.Combine(Kind, Questions.Count, Decisions.Count);
+    }
 
     /// <summary>The issue cannot start until the open issues it depends on close.</summary>
     internal sealed record Blocked(TriageIssueKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageVerdict(Kind)
@@ -117,7 +137,7 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
 
         foreach (KeyValuePair<string, JsonNode?> property in output)
         {
-            if (property.Key is not (OutcomeProperty or KindProperty or QuestionsProperty or BlockedByProperty))
+            if (property.Key is not (OutcomeProperty or KindProperty or QuestionsProperty or BlockedByProperty or DecisionsProperty))
             {
                 return null;
             }
@@ -153,11 +173,24 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
             blockers = readBlockers;
         }
 
+        IReadOnlyList<TriageDecision> decisions = [];
+        bool carriesDecisions = output.ContainsKey(DecisionsProperty);
+
+        if (carriesDecisions)
+        {
+            if (VerdictDecisionsReader.TryRead(output[DecisionsProperty]) is not { } readDecisions)
+            {
+                return null;
+            }
+
+            decisions = readDecisions;
+        }
+
         return VerdictQuestionsReader.ReadString(output[OutcomeProperty]) switch
         {
-            ReadyToken => new Ready(kind),
-            NeedsInputToken when questions.Count > 0 => new NeedsInput(kind, questions),
-            BlockedToken when blockers.Count > 0 => new Blocked(kind, blockers),
+            ReadyToken => new Ready(kind, decisions),
+            NeedsInputToken when questions.Count > 0 => new NeedsInput(kind, questions, decisions),
+            BlockedToken when blockers.Count > 0 && !carriesDecisions => new Blocked(kind, blockers),
             _ => null,
         };
     }

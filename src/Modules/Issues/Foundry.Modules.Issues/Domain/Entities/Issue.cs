@@ -143,8 +143,8 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public LatestReview? LatestReview { get; private set; }
 
     /// <summary>The round still waiting for input, or <see langword="null"/> when every round is answered.</summary>
-    public Clarification? OpenClarification =>
-        Clarifications.Count > 0 && Clarifications[^1].IsOpen ? Clarifications[^1] : null;
+    public Clarification.Asked? OpenClarification =>
+        Clarifications.Count > 0 && Clarifications[^1] is Clarification.Asked { IsOpen: true } open ? open : null;
 
     /// <summary>
     /// The URL of the pull request this issue carries, or <c>null</c> when the current state has none.
@@ -375,16 +375,32 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         return blocked;
     }
 
-    private protected void AskClarification(IReadOnlyList<InputQuestion> questions, DateTimeOffset askedAt)
+    private protected void AskClarification(
+        IReadOnlyList<InputQuestion> questions,
+        IReadOnlyList<TriageDecision> decisions,
+        DateTimeOffset askedAt)
     {
         // A round left open when its issue moved on without input (closed, or its pull request closed) stays open in
         // the log; the new round is appended after it.
-        Clarifications = [.. Clarifications, Clarification.Ask(questions, askedAt)];
+        Clarifications = [.. Clarifications, Clarification.Ask(questions, decisions, askedAt)];
+    }
+
+    /// <summary>Records the details triage settled itself without asking (ADR 0123); none records nothing.</summary>
+    private protected void RecordDecisions(IReadOnlyList<TriageDecision> decisions, DateTimeOffset decidedAt)
+    {
+        ArgumentNullException.ThrowIfNull(decisions);
+
+        if (decisions.Count == 0)
+        {
+            return;
+        }
+
+        Clarifications = [.. Clarifications, Clarification.Decide(decisions, decidedAt)];
     }
 
     private protected void AnswerClarification(ClarificationInput input, DateTimeOffset answeredAt)
     {
-        Clarification open = OpenClarification
+        Clarification.Asked open = OpenClarification
             ?? throw new InvalidOperationException("No clarification round is open.");
 
         Clarifications = [.. Clarifications.Take(Clarifications.Count - 1), open.Answer(input, answeredAt)];

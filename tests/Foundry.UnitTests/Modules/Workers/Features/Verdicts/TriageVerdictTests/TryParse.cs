@@ -26,7 +26,7 @@ public sealed class TryParse
         TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"{{kindToken}}"}"""));
 
         // Assert
-        verdict.ShouldBe(new TriageVerdict.Ready(Enum.Parse<TriageIssueKind>(expected)));
+        verdict.ShouldBe(new TriageVerdict.Ready(Enum.Parse<TriageIssueKind>(expected), []));
     }
 
     [Fact]
