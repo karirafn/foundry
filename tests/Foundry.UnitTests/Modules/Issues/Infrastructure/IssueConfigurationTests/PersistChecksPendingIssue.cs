@@ -1,7 +1,9 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -149,5 +151,63 @@ public sealed class PersistChecksPendingIssue : IAsyncDisposable
 
         // Assert
         result.ShouldBeOfType<ChecksPendingIssue>().Reason.ShouldBe(new ChecksPendingReason.ChecksRerun());
+    }
+
+    [Fact]
+    public async Task WhenAChecksRetryIsOwed_TheRetryHeadIsPersisted()
+    {
+        // Arrange
+        const string redHead = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
+        IReadOnlyList<FailingCheck> failing = [new FailingCheck("ci/build", "failure", null)];
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithIssueNumber(46)
+            .WithLabels([])
+            .ChecksPending()
+            .FixChecks(failing, DateTimeOffset.UtcNow, redHead)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
+            .MarkUnchangedRebasePending(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
+
+        _dbContext.Set<Issue>().Add(checksPending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([checksPending.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<ChecksPendingIssue>().OwedChecksRetryHeadSha.ShouldBe(redHead);
+    }
+
+    [Fact]
+    public async Task WhenTheChecksWereRetried_TheRetryTimeIsPersisted()
+    {
+        // Arrange
+        const string redHead = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
+        DateTimeOffset retriedAt = new(2026, 11, 24, 12, 0, 0, TimeSpan.Zero);
+        IReadOnlyList<FailingCheck> failing = [new FailingCheck("ci/build", "failure", null)];
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithIssueNumber(47)
+            .WithLabels([])
+            .ChecksPending()
+            .FixChecks(failing, DateTimeOffset.UtcNow, redHead)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
+            .MarkUnchangedRebasePending(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow)
+            .RecordChecksRetried(redHead, retriedAt);
+
+        _dbContext.Set<Issue>().Add(checksPending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([checksPending.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<ChecksPendingIssue>().ChecksRetriedAt.ShouldBe(retriedAt);
     }
 }

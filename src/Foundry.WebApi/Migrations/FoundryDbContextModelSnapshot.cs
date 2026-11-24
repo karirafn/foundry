@@ -1553,6 +1553,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
+                    b.Property<DateTimeOffset?>("ChecksRetriedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("checks_retried_at");
+
                     b.Property<DateTimeOffset>("EnteredChecksPendingAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("entered_checks_pending_at");
@@ -1561,6 +1565,13 @@ namespace Foundry.WebApi.Migrations
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("feedback_cutoff_at");
+
+                    b.Property<string>("OwedChecksRetryHeadSha")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("owed_checks_retry_head_sha");
 
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()
@@ -2369,6 +2380,13 @@ namespace Foundry.WebApi.Migrations
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("feedback_cutoff_at");
+
+                    b.Property<string>("OwedChecksRetryHeadSha")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("owed_checks_retry_head_sha");
 
                     b.Property<string>("PullRequestUrl")
                         .IsRequired()

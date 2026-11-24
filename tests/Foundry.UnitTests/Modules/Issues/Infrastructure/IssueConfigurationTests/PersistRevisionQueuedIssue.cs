@@ -167,6 +167,32 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRevisionQueuedFromFailedChecks_TheRedHeadSurvivesRoundTrip()
+    {
+        // Arrange
+        const string redHead = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
+        IReadOnlyList<FailingCheck> failingChecks = [new FailingCheck("ci/build", "failure", null)];
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithIssueNumber(71)
+            .WithLabels([])
+            .ChecksPending()
+            .FixChecks(failingChecks, DateTimeOffset.UtcNow, redHead);
+
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([revisionQueued.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<RevisionQueuedIssue>().Trigger
+            .ShouldBeOfType<RevisionTrigger.FailedChecks>().HeadSha.ShouldBe(redHead);
+    }
+
+    [Fact]
     public async Task WhenReviewIssueTransitioned_FeedbackCutoffAtIsPersisted()
     {
         // Arrange

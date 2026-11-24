@@ -47,7 +47,10 @@ public abstract record RevisionTrigger
         public override string Discriminator => "review_findings";
     }
 
-    public sealed record FailedChecks(IReadOnlyList<FailingCheck> FailingChecks) : RevisionTrigger
+    /// <param name="FailingChecks">The failing checks the fix run addresses.</param>
+    /// <param name="HeadSha">The head commit the red verdict was read on (ADR 0106), or <see langword="null"/> when
+    /// it was unknown or the trigger was stored before the head was recorded.</param>
+    public sealed record FailedChecks(IReadOnlyList<FailingCheck> FailingChecks, string? HeadSha = null) : RevisionTrigger
     {
         public override string Discriminator => "failed_checks";
     }

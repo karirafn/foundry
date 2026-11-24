@@ -77,6 +77,12 @@ public sealed class RebasePendingIssue : Issue
     /// </summary>
     public string? CatchUpHeadSha { get; private set; }
 
+    /// <summary>
+    /// The head commit a checks retry is owed for, carried to the checks gate: a failed-checks fix run found nothing
+    /// to push on it. <see langword="null"/> when no retry is owed.
+    /// </summary>
+    public string? OwedChecksRetryHeadSha { get; private set; }
+
     internal static RebasePendingIssue FromInProgress(
         InProgressIssue source,
         string branchName,
@@ -103,6 +109,7 @@ public sealed class RebasePendingIssue : Issue
         RebasePendingReason.AfterRun reason,
         DateTimeOffset feedbackCutoffAt,
         bool exhaustChecksFixAttempts,
+        string? owedChecksRetryHeadSha,
         DateTimeOffset transitionedAt)
     {
         RebasePendingIssue rebasePending = new(source.Id, transitionedAt);
@@ -119,6 +126,7 @@ public sealed class RebasePendingIssue : Issue
             rebasePending.ExhaustChecksFixAttempts();
         }
 
+        rebasePending.OwedChecksRetryHeadSha = owedChecksRetryHeadSha;
         return rebasePending;
     }
 

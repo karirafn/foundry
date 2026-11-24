@@ -45,7 +45,10 @@ internal static class RevisionTriggerJsonConversion
                 null,
                 null,
                 null,
-                [.. fc.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
+                [.. fc.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))])
+            {
+                HeadSha = fc.HeadSha,
+            },
             RevisionTrigger.RebaseConflict => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             RevisionTrigger.InputProvided => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{trigger.Discriminator}'"),
@@ -76,7 +79,8 @@ internal static class RevisionTriggerJsonConversion
                 dto.TestsAssessment ?? throw new UnreachableException("A review_findings trigger was stored without its tests assessment."),
                 dto.TestsReason ?? string.Empty),
             "failed_checks" => new RevisionTrigger.FailedChecks(
-                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))]),
+                [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl, c.IsInfrastructureFailure))],
+                dto.HeadSha),
             "rebase_conflict" => new RevisionTrigger.RebaseConflict(),
             "input_provided" => new RevisionTrigger.InputProvided(),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{dto.Discriminator}'"),
@@ -96,7 +100,8 @@ internal static class RevisionTriggerJsonConversion
                 && findingsA.Findings.SequenceEqual(findingsB.Findings)
                 && findingsA.UnmetCriteria.SequenceEqual(findingsB.UnmetCriteria),
             (RevisionTrigger.FailedChecks fcA, RevisionTrigger.FailedChecks fcB) =>
-                fcA.FailingChecks.SequenceEqual(fcB.FailingChecks),
+                fcA.HeadSha == fcB.HeadSha
+                && fcA.FailingChecks.SequenceEqual(fcB.FailingChecks),
             (RevisionTrigger.RebaseConflict, RevisionTrigger.RebaseConflict) => true,
             (RevisionTrigger.InputProvided, RevisionTrigger.InputProvided) => true,
             _ => false,
@@ -126,6 +131,11 @@ internal static class RevisionTriggerJsonConversion
         [JsonPropertyName("testsReason")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? TestsReason { get; init; }
+
+        // Written only for a failed_checks trigger whose red verdict named its head.
+        [JsonPropertyName("headSha")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? HeadSha { get; init; }
     }
 
     private sealed record ReviewCommentDto(

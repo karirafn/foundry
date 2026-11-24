@@ -143,13 +143,14 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromChecksPendingFix(
         ChecksPendingIssue source,
         IReadOnlyList<FailingCheck> failingChecks,
+        string? headSha,
         DateTimeOffset transitionedAt)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
-        revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks);
+        revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks, headSha);
         revisionQueued.RecordChecksFix();
         revisionQueued.StartRound();
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
