@@ -495,6 +495,29 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         result.ShouldBe([4], ignoreOrder: true);
     }
 
+    [Fact]
+    public async Task WhenRevisionOrContinuationIsHeldByBlockers_ReturnsBothNumbers()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        Seed(new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(5).RevisionBlocked([99]));
+        Seed(new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(6).ContinuationBlocked([99]));
+
+        // Act
+        IReadOnlySet<int> result = await _sut.GetUntrackableIssueNumbersAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBe([5, 6], ignoreOrder: true);
+    }
+
+    private void Seed(Issue issue)
+    {
+        _dbContext.Set<Issue>().Add(issue);
+        _dbContext.SaveChanges();
+    }
+
     private TriageBlockedIssue SeedTriageBlockedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
         TriageBlockedIssue blocked = new IssueBuilder()
@@ -531,6 +554,8 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         SeedUnchangedIssue(repositoryId, issueNumber: 112);
         SeedCompletedIssue(repositoryId, issueNumber: 113);
         SeedTriageBlockedIssue(repositoryId, issueNumber: 114);
+        Seed(new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(115).RevisionBlocked([99]));
+        Seed(new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(116).ContinuationBlocked([99]));
 
         // Act
         IReadOnlySet<int> queryResult = await _sut.GetUntrackableIssueNumbersAsync(

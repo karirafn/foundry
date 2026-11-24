@@ -389,7 +389,7 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 The dashboard shows each issue in one of four display groups. They come from the placement the server declares ([Issue Stage](#issue-stage), [Needs action](#needs-action), [Awaits dispatch](#awaits-dispatch)), not from a frontend list of states:
 
 - **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs you band, first on the page, as a row whose [lifecycle rail](#lifecycle-step) shows where it stopped.
-- **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `review_queued`). It sits in the board's Pipeline band in global dispatch order, or in the Blocked band when it [Waits on blockers](#waits-on-blockers).
+- **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `revision_blocked`, `continuation_queued`, `continuation_blocked`, `review_queued`). It sits in the board's Pipeline band in global dispatch order, or in the Blocked band when it [Waits on blockers](#waits-on-blockers).
 - **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, `review_in_progress`), a review run waits for its automatic retry (`review_failed`), or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`, `merge_pending`). It sits in the board's In progress band as a row with its [lifecycle rail](#lifecycle-step); a row whose Claude step runs also shows the worker's live activity. A `review_failed` issue has no worker or step, so the board shows it in Needs you as a warning row ("Review failed") until its automatic retry queues the review again.
 - **Resolved** — stage Done (`completed`). It leaves the board and is listed on Resolved history (`/issues`), newest first, next to the run statistics.
 
@@ -411,11 +411,11 @@ True when the issue progresses only after a person acts (`Issue.NeedsAction`). A
 
 ### Awaits dispatch
 
-True when the issue is waiting for a worker run to be dispatched — queued, or detected or blocked before it can be queued (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `review_queued`). An awaiting-dispatch issue sits in the board's Pipeline band, one list in global dispatch order across stages, unless it [Waits on blockers](#waits-on-blockers): then it sits in the Blocked band.
+True when the issue is waiting for a worker run to be dispatched — queued, or detected or blocked before it can be queued (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `revision_blocked`, `continuation_queued`, `continuation_blocked`, `review_queued`). An awaiting-dispatch issue sits in the board's Pipeline band, one list in global dispatch order across stages, unless it [Waits on blockers](#waits-on-blockers): then it sits in the Blocked band.
 
 ### Waits on blockers
 
-True when the issue waits for its open blockers to close before it can move on: `blocked` (triaged or skipped triage, then found blocked) and `triage_blocked` (waiting untriaged). Declared by each state type (`Issue.WaitsOnBlockers`), so a new state cannot compile without one; every other state is false. Both blocked states also [Await dispatch](#awaits-dispatch); a client placing an issue gives Waits on blockers precedence. Served on `IssueSummary.WaitsOnBlockers`.
+True when the issue waits for its open blockers to close before it can move on: `blocked` (triaged or skipped triage, then found blocked), `triage_blocked` (waiting untriaged), and `revision_blocked` and `continuation_blocked` (a queued revision or continuation held by open blockers). Declared by each state type (`Issue.WaitsOnBlockers`), so a new state cannot compile without one; every other state is false. Every blocked state also [Await dispatch](#awaits-dispatch); a client placing an issue gives Waits on blockers precedence. Served on `IssueSummary.WaitsOnBlockers`.
 
 ### Entered state at
 
@@ -700,8 +700,8 @@ The kind of worker run an issue is running, or will run when it's next dispatche
 
 - `detected`, `triage_queued`, `triage_blocked` → `Triage`.
 - `queued`, `blocked` → `Fresh`.
-- `continuation_queued` → `Continuation`.
-- `revision_queued` → `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`, by its trigger.
+- `continuation_queued`, `continuation_blocked` → `Continuation`.
+- `revision_queued`, `revision_blocked` → `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`, by its trigger.
 - `triage_in_progress` → `Triage`.
 - `in_progress` → `Fresh` or `Continuation`, by its origin (see [In-Progress Issue](#in-progress-issue), #1060).
 - `revision_in_progress` → `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`, by its trigger.
@@ -959,14 +959,13 @@ A directed "blocked by" relationship between two issues within the same reposito
 Stored as a collection of blocking issue numbers on the Issue aggregate — the blocking issue may or may not be tracked by Foundry.
 Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose dependencies via structured APIs.
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
-Because the poll can lag behind the provider (GitLab sends no webhook when an issue link is created), and a new issue is queued for triage on creation before its first dependency pass, Foundry also re-reads a `FreshQueuedIssue`'s or `TriageQueuedIssue`'s open blockers live from the provider immediately before claiming it, so an issue with an open blocker is never dispatched regardless of webhook delivery.
-A claim-time hit is applied exactly as the poll path applies detected dependencies — the issue transitions to `BlockedIssue` (or `TriageBlockedIssue` for a triage candidate) and the next candidate in dispatch order is tried within the same capacity event; when every candidate is blocked or unreadable, the claim is skipped and the capacity reservation is released.
+Because the poll can lag behind the provider (GitLab sends no webhook when an issue link is created), and a new issue is queued for triage on creation before its first dependency pass, Foundry also re-reads the open blockers of every `FreshQueuedIssue`, `TriageQueuedIssue`, `RevisionQueuedIssue` and `ContinuationQueuedIssue` live from the provider immediately before claiming it, so an issue with an open blocker starts no run regardless of webhook delivery ([ADR 0124](docs/adr/0124-open-blockers-hold-every-implement-run.md)).
+A claim-time hit is applied exactly as the poll path applies detected dependencies — the issue transitions to its blocked state (`BlockedIssue`, `TriageBlockedIssue`, `RevisionBlockedIssue` or `ContinuationBlockedIssue`) and the next candidate in dispatch order is tried within the same capacity event; when every candidate is blocked or unreadable, the claim is skipped and the capacity reservation is released.
 A failed claim-time read skips the candidate for that dispatch without changing its state; the next dispatch tick retries it.
-`RevisionQueuedIssue` and `ContinuationQueuedIssue` are not re-checked — they run on an existing branch or pull request.
-A blocker added after an issue is claimed is not detected; add blockers before applying the trigger label.
+Revisions are re-checked whatever their [Revision Trigger](#revision-trigger), and continuations whatever queued them (Retry, an answered question, a branch adopted at claim time), so every path into those queues meets the gate. A `ReviewQueuedIssue` is not re-checked, and a blocker never interrupts a run in progress or the code-owned steps (rebase, checks, review, merge): the dependency pass only records it there, and it applies when the issue next enters `RevisionQueued` or `ContinuationQueued`.
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
-A cycle does not exempt an issue from blocking: a `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, an untriaged one to `TriageBlockedIssue`, and the event is still raised. A running or failed triage, or an issue awaiting input, only records its blockers; they decide where a ready verdict sends it.
+A cycle does not exempt an issue from blocking: a `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, an untriaged one to `TriageBlockedIssue`, a queued revision or continuation to `RevisionBlockedIssue` or `ContinuationBlockedIssue`, and the event is still raised. A running or failed triage, or an issue awaiting input, only records its blockers; they decide where a ready verdict sends it.
 The cycle is resolved by breaking it in the provider, after which the dependency pass unblocks the issue.
 A blocker is *resolved* when it is closed in the provider — the provider client filters out closed blockers at the anti-corruption boundary so domain logic never sees them.
 The provider client also scopes "blocked by" links to the same repository or project at this boundary — GitHub by `repository.full_name`, GitLab by the linked issue's numeric `project_id` — so cross-project and cross-repository links never reach domain logic.
@@ -981,7 +980,7 @@ When a blocker's state is missing or unrecognized, it is treated as still blocki
 
 ## Blocked Issue
 
-A lifecycle state for a triaged issue that has unresolved dependencies (an untriaged one waits as a [TriageBlockedIssue](#triageblockedissue)).
+A lifecycle state for a triaged issue that has unresolved dependencies (an untriaged one waits as a [TriageBlockedIssue](#triageblockedissue)); a queued revision or continuation with open blockers waits as a [Revision Blocked Issue](#revision-blocked-issue) or a [Continuation Blocked Issue](#continuation-blocked-issue).
 A triaged issue (a ready verdict or Skip triage) with open blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`. Its [Run Kind](#run-kind) is `Fresh`.
 A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue` — whether the blockers are found by the dependency pass or by the claim-time re-check (see Issue Dependency).
 A `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
@@ -1103,13 +1102,20 @@ Carries `BranchName`, `PullRequestUrl` and `Trigger` (a [`RevisionTrigger`](#rev
 Created by `Revise()` on `ReviewIssue`, `ChecksPendingIssue` and `MergePendingIssue` when actionable review feedback is detected, by a review that requested changes from `ReviewInProgressIssue` (a findings fix), by a checks fix from `ChecksPendingIssue`, by a rebase conflict from `RebasePendingIssue`, by an answer from `AwaitingInputIssue`, and by a retry from `RevisionFailedIssue`.
 Claimed with priority over regular `FreshQueuedIssue` to minimize open issue count.
 Its [Run Kind](#run-kind) follows its trigger: `ReviewFix`, `ChecksFix`, `ConflictFix`, `InputResume` or `FindingsFix`.
-Transitions: `Claim()` → `RevisionInProgressIssue`.
+Transitions: `Claim()` → `RevisionInProgressIssue`; `Block()` → `RevisionBlockedIssue` when the dependency pass or the claim-time re-check finds open blockers; `Fail()` → `ContinuableFailedIssue` (`PrClosed`) when its pull request closes without merging before the revision starts. The review pass reads the pull request of every queued or held revision for that closure, as it does for the review step.
 
 ## In-Progress Issue
 
 `in_progress`: an issue whose implement worker is running (`InProgressIssue`). Carries `WorkerRunId` and its **origin** (`ImplementRunOrigin`, column `implement_run_origin`): `Fresh` when claimed from `FreshQueuedIssue`, `Continuation` when claimed from `ContinuationQueuedIssue` (#1060). The origin is a required argument of every factory, so no path can leave it unset, and it decides the state's [Run Kind](#run-kind): `Fresh` or `Continuation`.
 `PublishBlockedIssue` and `PublishFailedIssue` keep the origin of the implement run they hold (`null` when they hold a revision, which carries its trigger instead), so Confirm false positives and Retry publish return to `in_progress` with the origin it had. Rows that existed before the column were backfilled as `Fresh`: no stored record shows whether a run in flight then was a continuation, and the tag corrects itself when that run finishes.
 Transitions: `MarkRebasePending()`, `MarkAwaitingInput()`, `MarkUnchanged()`, `MarkCompleted()`, `MarkFailed()`, `MarkContinuableFailed()`, `MarkPublishFailed()`, `MarkPublishBlocked()`, `MarkBranchDiverged()`.
+
+## Revision Blocked Issue
+
+`revision_blocked`: a queued revision whose issue has open blockers ([ADR 0124](docs/adr/0124-open-blockers-hold-every-implement-run.md)). It carries everything the `RevisionQueuedIssue` carried (`BranchName`, `PullRequestUrl`, `Trigger`, `PriorFeedbackCutoffAt`, `RebaseConflictAttempts`, Continued without answer) and its blockers, so unblocking loses nothing. Not a [Queued Issue](#queued-issue): never a dispatch candidate, holds no worker slot. [Waits on blockers](#waits-on-blockers). Its [Run Kind](#run-kind) follows its trigger.
+
+- **Ways in** — `RevisionQueuedIssue.Block()`, raising `IssueRevisionBlocked`.
+- **Ways out** — `Unblock()` → `RevisionQueuedIssue` (only), raising `IssueRevisionQueued`, when its blockers close or are unlinked; `Fail()` → `ContinuableFailedIssue` (`PrClosed`, no `WorkerRunId`) when its pull request closes without merging. A closed pull request wins over blockers clearing in the same poll. Hard-deleted on untrack. No operator actions.
 
 ## Revision In-Progress Issue
 
@@ -1141,7 +1147,7 @@ Transitions: `FailedIssue.Retry()` → `FreshQueuedIssue` (fresh run, no branch 
 ## Continuable Failed Issue
 
 A lifecycle state for an issue whose worker run failed but left recoverable work on a pushed branch.
-Carries `WorkerRunId`, `BranchName`, `FailureReason`, `FailureCategory`, and `FailedAt` — all non-nullable.
+Carries `BranchName`, `FailureReason`, `FailureCategory`, and `FailedAt` — all non-nullable — and `WorkerRunId`, the run whose work failed, which is absent only when a queued or held revision's pull request closed before any run started.
 Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.Fail()` (PR was closed without merge), absent when created from `InProgressIssue` (no PR existed).
 Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `GetBranchCommitSummaryAsync` against the provider after the container exits; commit count > 0 is the branch-has-commits boolean.
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
@@ -1154,7 +1160,14 @@ A lifecycle state for an issue queued for continuation from an existing branch w
 Carries `BranchName` and `FailureReason` — both non-nullable. `FailureReason` is copied from the originating `ContinuableFailedIssue` and truncated to 500 characters by the aggregate.
 Created from `ContinuableFailedIssue.Retry()`.
 Its [Run Kind](#run-kind) is `Continuation`.
-Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant with origin `Continuation`; the continuation context lives in the dispatch payload).
+Transitions: `Claim()` → `InProgressIssue` (reuses the existing in-progress variant with origin `Continuation`; the continuation context lives in the dispatch payload); `Block()` → `ContinuationBlockedIssue` when the dependency pass or the claim-time re-check finds open blockers.
+
+## Continuation Blocked Issue
+
+`continuation_blocked`: a queued continuation whose issue has open blockers ([ADR 0124](docs/adr/0124-open-blockers-hold-every-implement-run.md)). It carries the `BranchName`, `FailureReason` and Continued without answer of the `ContinuationQueuedIssue` and its blockers. Not a [Queued Issue](#queued-issue). [Waits on blockers](#waits-on-blockers). [Run Kind](#run-kind) `Continuation`. It carries no pull request, so a closed pull request does not move it.
+
+- **Ways in** — `ContinuationQueuedIssue.Block()`, raising `IssueContinuationBlocked`.
+- **Ways out** — `Unblock()` → `ContinuationQueuedIssue` (only), raising `IssueContinuationQueued`. Hard-deleted on untrack. No operator actions.
 
 ## Continuation Context
 
@@ -1298,7 +1311,7 @@ The provider clients stop paginating at a fixed page cap and return `IssueListin
 An incomplete listing cannot distinguish an issue closed on the provider from one that simply fell outside the fetched window, so the untrack pass is skipped entirely and the repository enters **untrack suppression**, logged once on entry rather than every cycle.
 Detection, detail-change, dependency, and review passes all continue normally and the poll still succeeds — only deletion is withheld.
 Suppression clears automatically on the first later cycle whose listing is complete; no operator action is involved.
-The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states (`Issue.IsRestingState()`): `detected`, `triage_queued`, `queued`, `revision_queued`, `continuation_queued`, `blocked`, `triage_blocked`, `failed`, `triage_failed`, `continuable_failed`, `revision_failed`, `branch_diverged`, and `unchanged`.
+The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states (`Issue.IsRestingState()`): `detected`, `triage_queued`, `queued`, `revision_queued`, `continuation_queued`, `blocked`, `triage_blocked`, `revision_blocked`, `continuation_blocked`, `failed`, `triage_failed`, `continuable_failed`, `revision_failed`, `branch_diverged`, and `unchanged`.
 `completed` is preserved — completion wins over provider closure.
 `triage_in_progress`, `in_progress`, and `revision_in_progress` are preserved — a live worker is running. Untracking never stops a worker; stopping one is an explicit user action (see Run Cancellation).
 `review`, `checks_pending`, `rebase_pending`, `merge_pending`, `awaiting_input`, `publish_failed`, and `publish_blocked` are preserved — each asks the provider whether the issue is closed (`ProviderIssueClosed`) and completes when it is.

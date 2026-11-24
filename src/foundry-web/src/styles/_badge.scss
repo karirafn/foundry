@@ -27,6 +27,8 @@ $badge-state-backgrounds: (
   revision-failed: var(--fd-state-failed),
   triage-queued: var(--fd-state-queued),
   triage-blocked: var(--fd-state-blocked),
+  revision-blocked: var(--fd-state-blocked),
+  continuation-blocked: var(--fd-state-blocked),
   triage-in-progress: var(--fd-state-in-progress),
   triage-failed: var(--fd-state-failed),
   usage-limited: var(--fd-state-usage-limited),

@@ -200,6 +200,40 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
+    internal static RevisionQueuedIssue FromRevisionBlocked(RevisionBlockedIssue source, DateTimeOffset transitionedAt)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
+        revisionQueued.CopySharedPropertiesFrom(source);
+        revisionQueued.SetBlockedBy(source.BlockedBy);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.Trigger = source.Trigger;
+        revisionQueued.PriorFeedbackCutoffAt = source.PriorFeedbackCutoffAt;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        revisionQueued.ContinuedWithoutAnswer = source.ContinuedWithoutAnswer;
+        return revisionQueued;
+    }
+
+    /// <summary>Open <paramref name="blockers"/> hold the revision until they close: it starts no run meanwhile.</summary>
+    public RevisionBlockedIssue Block(IReadOnlyList<int> blockers, DateTimeOffset transitionedAt)
+    {
+        RevisionBlockedIssue blocked = RevisionBlockedIssue.FromRevisionQueued(this, blockers, transitionedAt);
+        AddDomainEvent(new Events.IssueRevisionBlocked(Id, MonitoredRepositoryId));
+        return blocked;
+    }
+
+    /// <summary>The pull request the queued revision would revise was closed without merging.</summary>
+    public ContinuableFailedIssue Fail(string failureReason, FailureCategory failureCategory, DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromRevisionQueued(
+            this,
+            failureReason,
+            failureCategory,
+            failedAt);
+        AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
+        return failed;
+    }
+
     public override RevisionInProgressIssue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
         RevisionInProgressIssue revisionInProgress = RevisionInProgressIssue.FromRevisionQueued(

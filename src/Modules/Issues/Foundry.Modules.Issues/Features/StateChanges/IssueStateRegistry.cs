@@ -17,6 +17,8 @@ internal static class IssueStateRegistry
         ["queued"] = typeof(FreshQueuedIssue),
         ["blocked"] = typeof(BlockedIssue),
         ["triage_blocked"] = typeof(TriageBlockedIssue),
+        ["revision_blocked"] = typeof(RevisionBlockedIssue),
+        ["continuation_blocked"] = typeof(ContinuationBlockedIssue),
         ["in_progress"] = typeof(InProgressIssue),
         ["review"] = typeof(ReviewIssue),
         ["unchanged"] = typeof(UnchangedIssue),

@@ -199,6 +199,12 @@ internal sealed class WorkerCapacityAvailableHandler(
             return true;
         }
 
+        if (await dbContext.Set<TriageBlockedIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
         if (await dbContext.Set<PublishFailedIssue>()
                 .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
         {

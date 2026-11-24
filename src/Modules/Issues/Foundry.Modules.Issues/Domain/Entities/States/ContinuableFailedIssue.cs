@@ -32,7 +32,11 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
     {
     }
 
-    public WorkerRunId WorkerRunId { get; private set; }
+    /// <summary>
+    /// The run whose work failed; <see langword="null"/> when no run had started, as for a queued or held revision whose
+    /// pull request closed.
+    /// </summary>
+    public WorkerRunId? WorkerRunId { get; private set; }
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -195,6 +199,38 @@ public sealed class ContinuableFailedIssue : Issue, IAutoRetryableFailedState
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
+    internal static ContinuableFailedIssue FromRevisionQueued(
+        RevisionQueuedIssue source,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt) =>
+        BeforeAnyRun(source, source.BranchName, source.PullRequestUrl, failureReason, failureCategory, failedAt);
+
+    internal static ContinuableFailedIssue FromRevisionBlocked(
+        RevisionBlockedIssue source,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt) =>
+        BeforeAnyRun(source, source.BranchName, source.PullRequestUrl, failureReason, failureCategory, failedAt);
+
+    private static ContinuableFailedIssue BeforeAnyRun(
+        Issue source,
+        string branchName,
+        string pullRequestUrl,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = new(source.Id, failedAt);
+        failed.CopySharedPropertiesFrom(source);
+        failed.BranchName = branchName;
+        failed.PullRequestUrl = pullRequestUrl;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;

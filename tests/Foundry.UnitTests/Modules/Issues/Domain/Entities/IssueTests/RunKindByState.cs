@@ -38,6 +38,8 @@ public sealed class RunKindByState
             .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
             .ProvideInput(ClarificationInput.FromComments("Use SQLite."), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
         ["continuation_queued"] = () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow),
+        ["revision_blocked"] = () => new IssueBuilder().RevisionBlocked([2]),
+        ["continuation_blocked"] = () => new IssueBuilder().ContinuationBlocked([2]),
         ["in_progress (fresh)"] = () => new IssueBuilder().InProgress(),
         ["in_progress (continuation)"] = () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow)
             .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
@@ -86,6 +88,8 @@ public sealed class RunKindByState
         ("revision_queued (review findings)", RunKind.FindingsFix),
         ("revision_queued (input provided)", RunKind.InputResume),
         ("continuation_queued", RunKind.Continuation),
+        ("revision_blocked", RunKind.ReviewFix),
+        ("continuation_blocked", RunKind.Continuation),
         ("in_progress (fresh)", RunKind.Fresh),
         ("in_progress (continuation)", RunKind.Continuation),
         ("revision_in_progress (review feedback)", RunKind.ReviewFix),

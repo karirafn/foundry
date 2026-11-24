@@ -12,7 +12,8 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// <summary>
 /// Re-checks a queued candidate against the provider just before it is claimed. The recorded BlockedBy may predate a
 /// blocker added on the provider (GitLab sends no webhook for issue links), so the open blockers are re-read live; a
-/// candidate that gained one is transitioned to <see cref="BlockedIssue"/> or <see cref="TriageBlockedIssue"/>.
+/// candidate that gained one is transitioned to its blocked state (<see cref="BlockedIssue"/>, <see cref="TriageBlockedIssue"/>,
+/// <see cref="RevisionBlockedIssue"/> or <see cref="ContinuationBlockedIssue"/>).
 /// A <see cref="FreshQueuedIssue"/> is also checked for existing work: Foundry's choice between Fresh and Continuation
 /// comes from its own records, which can be lost while the issue's branch survives on the provider. When that branch
 /// carries commits the default branch lacks, the candidate is adopted as a <see cref="ContinuationQueuedIssue"/> on it,
@@ -63,7 +64,7 @@ internal sealed class ClaimTimeRecheck(
             return ClaimTimeRecheckOutcome.Clear;
         }
 
-        // Transition to BlockedIssue or TriageBlockedIssue (committed) so the issue is not re-selected on the next tick
+        // Transition to the candidate's blocked state (committed) so the issue is not re-selected on the next tick
         // or on redelivery of this capacity event.
         await dependencyApplier.ApplyAsync(candidate, blockersSuccess.Value, cancellationToken);
         logger.LogInformation(

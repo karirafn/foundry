@@ -477,6 +477,11 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         public Task<IReadOnlyList<ReviewStepIssueInfo>> GetReviewStepIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ReviewStepIssueInfo>>([]);
 
+
+        public Task<IReadOnlyList<QueuedRevisionIssueInfo>> GetQueuedRevisionIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+
+            Task.FromResult<IReadOnlyList<QueuedRevisionIssueInfo>>([]);
+
         public Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

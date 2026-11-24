@@ -85,9 +85,23 @@ internal sealed class ProviderPullRequestClosedHandler(
                 break;
             }
 
+            case RevisionQueuedIssue revisionQueuedIssue:
+            {
+                ContinuableFailedIssue failed = revisionQueuedIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(revisionQueuedIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case RevisionBlockedIssue revisionBlockedIssue:
+            {
+                ContinuableFailedIssue failed = revisionBlockedIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(revisionBlockedIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             default:
                 logger.LogWarning(
-                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not in review, a review step, checks pending, rebase pending, merge pending or awaiting input on a pull request (state: {State}); ignoring.",
+                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not in review, a review step, a queued or held revision, checks pending, rebase pending, merge pending or awaiting input on a pull request (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

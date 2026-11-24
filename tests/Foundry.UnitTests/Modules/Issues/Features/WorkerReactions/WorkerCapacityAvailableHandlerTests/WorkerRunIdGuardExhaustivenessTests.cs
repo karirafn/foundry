@@ -56,6 +56,7 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
         typeof(AwaitingInputIssue),
         typeof(TriageInProgressIssue),
         typeof(TriageFailedIssue),
+        typeof(TriageBlockedIssue),
         typeof(PublishFailedIssue),
         typeof(PublishBlockedIssue),
         typeof(BranchDivergedIssue),
@@ -103,7 +104,9 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
             .Where(t => t.IsClass)
             .Where(t => !t.IsAbstract)
             .Where(t => issueBase.IsAssignableFrom(t))
-            .Where(t => t.GetProperty(nameof(WorkerRunId), workerRunIdType) is not null)
+            .Where(t => t.GetProperty(nameof(WorkerRunId)) is { } property
+                && (property.PropertyType == workerRunIdType
+                    || Nullable.GetUnderlyingType(property.PropertyType) == workerRunIdType))
             .ToHashSet();
 
         // Act / Assert — the guarded set must be identical to the reflected run-carrying set.
