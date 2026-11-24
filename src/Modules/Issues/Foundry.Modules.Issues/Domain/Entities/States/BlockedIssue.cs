@@ -16,6 +16,8 @@ public sealed class BlockedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => null;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Queued;
 
     public override RunKind? RunKind => ValueObjects.RunKind.Fresh;

@@ -24,6 +24,8 @@ public sealed class PublishFailedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => Trigger?.Discriminator;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Publish;
 
     public override RunKind? RunKind => null;

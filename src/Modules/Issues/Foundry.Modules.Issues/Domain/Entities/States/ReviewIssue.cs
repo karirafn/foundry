@@ -18,6 +18,9 @@ public sealed class ReviewIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    // The newest outcome explains why the issue reached review: a review runs after the merge, the merge after the checks.
+    public override string? TransitionCause => ReviewOutcome?.Discriminator ?? MergeOutcome?.Discriminator ?? ChecksOutcome.Discriminator;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.YourReview;
 
     public override RunKind? RunKind => null;

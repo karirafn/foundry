@@ -26,6 +26,8 @@ public sealed class MergePendingIssue : Issue
 
     public override IssueCodeStep? CodeStep => IssueCodeStep.Merging;
 
+    public override string? TransitionCause => ChecksOutcome.Discriminator;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Merge;
 
     public override RunKind? RunKind => null;

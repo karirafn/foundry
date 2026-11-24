@@ -24,6 +24,8 @@ public sealed class BranchDivergedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => BranchDivergenceReasonTokens.ToToken(DivergenceReason);
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.Publish;
 
     public override RunKind? RunKind => null;

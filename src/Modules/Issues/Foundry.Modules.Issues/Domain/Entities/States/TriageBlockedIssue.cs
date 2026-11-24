@@ -26,6 +26,8 @@ public sealed class TriageBlockedIssue : Issue
 
     public override IssueCodeStep? CodeStep => null;
 
+    public override string? TransitionCause => null;
+
     public override IssueLifecycleStep LifecycleStep => IssueLifecycleStep.TriageQueued;
 
     public override RunKind? RunKind => ValueObjects.RunKind.Triage;

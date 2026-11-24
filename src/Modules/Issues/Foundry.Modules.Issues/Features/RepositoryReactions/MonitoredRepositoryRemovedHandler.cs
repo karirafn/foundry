@@ -48,6 +48,7 @@ internal sealed class MonitoredRepositoryRemovedHandler(
             return;
         }
 
+        await db.RemoveLogsOfAsync([.. deletable.Select(issue => issue.Id)], cancellationToken);
         db.Set<Issue>().RemoveRange(deletable);
         await db.SaveChangesAsync(cancellationToken);
     }

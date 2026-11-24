@@ -175,6 +175,13 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public abstract IssueCodeStep? CodeStep { get; }
 
     /// <summary>
+    /// Why the issue entered this state, as a wire token: a failure's category, a revision's or publish's trigger, a
+    /// pending or diverged state's reason, or the checks, merge or review outcome that led here. <see langword="null"/>
+    /// for plain progress. Recorded on the issue's step transition log.
+    /// </summary>
+    public abstract string? TransitionCause { get; }
+
+    /// <summary>
     /// The issue's current step on its lifecycle path. A working issue whose run publishes sits on
     /// <see cref="IssueLifecycleStep.Publish"/> instead, read from the run by <see cref="IssueLifecyclePath"/>.
     /// </summary>

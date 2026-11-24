@@ -30,6 +30,7 @@ public static class IssuesModule
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IIssueQueries, IssueQueries>();
+        services.AddScoped<IssueStepTransitionQueries>();
         services.AddScoped<ITriageFailedIssueQueries, TriageFailedIssueQueries>();
         services.AddScoped<IRepositoryRemovalBlockers, RepositoryRemovalBlockers>();
         services.AddScoped<InFlightWorkerCountQuery>();
