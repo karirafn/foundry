@@ -11,18 +11,10 @@ import {
 import { NgTemplateOutlet } from '@angular/common';
 import { LifecycleStep, currentStep } from '../../../features/issues/lifecycle.model';
 import { formatElapsed } from '../../utils/agent-activity-format';
-import {
-  NodeTone,
-  RailGroupView,
-  RailStepView,
-  RailView,
-  railGroups,
-  railView,
-  stepStatusText,
-} from './lifecycle-rail.model';
+import { NodeTone, RailStepView, railView, stepStatusText } from './lifecycle-rail.model';
 
 export type RailOrientation = 'horizontal' | 'vertical';
-/** `full` labels every step under stage brackets; `mini` is dots only, static and hidden from assistive tech. */
+/** `full` labels every node; `mini` is dots only, static and hidden from assistive tech. */
 export type RailDensity = 'full' | 'mini';
 
 // Set inline rather than per tone in the stylesheet, which keeps it inside its style budget.
@@ -72,7 +64,7 @@ export class LifecycleRailComponent {
   protected readonly mini: Signal<boolean> = computed(() => this.density() === 'mini');
 
   // Diffs against the lifecycle shown before, so a change plays once and the first render never moves.
-  protected readonly view: Signal<RailView> = linkedSignal({
+  protected readonly steps: Signal<readonly RailStepView[]> = linkedSignal({
     source: () => ({ lifecycle: this.lifecycle(), round: this.round(), mini: this.mini() }),
     computation: (source, previous) =>
       railView(
@@ -83,10 +75,6 @@ export class LifecycleRailComponent {
   });
 
   protected readonly vertical: Signal<boolean> = computed(() => this.orientation() === 'vertical');
-
-  protected readonly groups: Signal<readonly RailGroupView[]> = computed(() =>
-    railGroups(this.view()),
-  );
 
   // The vertical rail has no board to tell it an issue arrived in Needs you, so it beacons itself.
   protected readonly needsYouArrived: Signal<boolean> = linkedSignal({
@@ -107,12 +95,5 @@ export class LifecycleRailComponent {
 
   protected statusText(step: RailStepView): string {
     return stepStatusText(step, this._elapsed());
-  }
-
-  protected waitText(step: RailStepView): string {
-    const elapsed = this._elapsed();
-    return step.status === 'current' && elapsed !== null
-      ? `${step.label} · ${elapsed}`
-      : step.label;
   }
 }
