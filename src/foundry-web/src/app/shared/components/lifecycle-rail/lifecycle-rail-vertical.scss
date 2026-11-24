@@ -1,0 +1,166 @@
+// The vertical orientation, in its own stylesheet so each stays inside the component style budget.
+:host([data-orientation='vertical']) {
+  container-type: inline-size;
+}
+
+// One step per row: node, label and actor, status. The line runs from a node down to the next one.
+.rail--vertical {
+  --node: 22px;
+  --glyph: 11px;
+  --row: 28px;
+
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+
+  &,
+  .rail__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .rail__step {
+    align-items: start;
+    column-gap: var(--fd-spacing-md);
+    grid-row: auto;
+    grid-template: minmax(var(--row), auto) / 22px minmax(0, 1fr) auto;
+    justify-items: stretch;
+    position: relative;
+
+    &--wait {
+      --node: 8px;
+      --row: 12px;
+    }
+    &--wait[data-status='current'] {
+      --row: 24px;
+    }
+
+    &[data-line]::before,
+    &[data-line]::after {
+      background: var(--fd-progress-track);
+      bottom: -4px;
+      content: '';
+      left: 10px;
+      position: absolute;
+      top: calc((var(--row) + var(--node)) / 2);
+      width: 2px;
+    }
+    &[data-line]::after {
+      background: var(--fd-text-tertiary);
+      transform: scaleY(0);
+      transform-origin: top;
+    }
+    &[data-line='full']::after {
+      transform: none;
+    }
+    &--grow::after {
+      animation: fd-rail-grow-y var(--fd-motion-glide) var(--fd-ease-glide);
+    }
+  }
+
+  .rail__node {
+    justify-self: center;
+    margin-top: calc((var(--row) - var(--node)) / 2);
+    z-index: 1;
+  }
+
+  [data-phase='running'] > [data-ring='arc']::after {
+    animation: fd-rail-spin var(--fd-motion-arc) linear infinite;
+  }
+  [data-phase='running'] > [data-ring='dashed']::after {
+    animation: fd-rail-spin var(--fd-motion-ring) linear infinite;
+  }
+
+  .rail__text,
+  .rail__status,
+  .rail__step--wait > .rail__label {
+    font-size: 0.75rem;
+    line-height: 20px;
+    padding-top: calc((var(--row) - 20px) / 2);
+  }
+
+  .rail__text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  // Shown at every width: the narrow-viewport rule hiding labels is the horizontal rail's.
+  .rail__label {
+    display: inline;
+    font-size: 0.8125rem;
+    margin-right: var(--fd-spacing-sm);
+    padding: 0;
+    white-space: normal;
+  }
+
+  .rail__word {
+    display: inline;
+    font-size: inherit;
+  }
+
+  .rail__word,
+  .rail__status,
+  .rail__step--wait > .rail__label {
+    color: var(--fd-text-secondary);
+  }
+
+  .rail__status {
+    white-space: nowrap;
+  }
+
+  .rail__step--wait > .rail__label {
+    font-weight: 400;
+    grid-column: 2 / -1;
+  }
+
+  [data-status='current'] > .rail__text > .rail__label {
+    color: var(--fd-text-primary);
+    font-weight: 600;
+  }
+
+  [data-status='off'] > :not(.rail__node),
+  [data-status='skipped'] > :not(.rail__node) {
+    opacity: 0.5;
+  }
+
+  .rail__extra {
+    grid-column: 2 / -1;
+    min-width: 0;
+    padding-bottom: var(--fd-spacing-sm);
+  }
+}
+
+.rail__stage {
+  align-items: center;
+  color: var(--fd-text-secondary);
+  display: flex;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  gap: var(--fd-spacing-sm);
+  letter-spacing: 0.07em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+
+  &::after {
+    border-top: 1px solid var(--fd-border-muted);
+    content: '';
+    flex: 1;
+  }
+
+  .rail__group--current > & {
+    color: var(--fd-text-primary);
+  }
+  .rail__group--dim > & {
+    opacity: 0.5;
+  }
+}
+
+// Under 26rem the status drops under the label.
+@container (width < 26rem) {
+  .rail--vertical .rail__status {
+    grid-column: 2;
+    padding-top: 0;
+  }
+}

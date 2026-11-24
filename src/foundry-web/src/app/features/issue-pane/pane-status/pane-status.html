@@ -1,4 +1,4 @@
-<!-- Always mounted, and filled only when the callout title changes: the visible callout holds buttons,
+<!-- Always mounted, and filled only when the callout title, current step or round changes: the visible callout holds buttons,
      so an atomic live region around it would replay them. -->
 <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</span>
 
@@ -23,6 +23,16 @@
       <fd-step-chip [label]="chip.label" [tone]="chip.tone" />
     }
   </div>
+
+  @if (lifecycle(); as lifecycle) {
+    <fd-pane-lifecycle
+      [issueId]="v.detail.id"
+      [lifecycle]="lifecycle"
+      [round]="summary()?.round ?? 1"
+      [enteredAt]="summary()?.enteredStateAt ?? null"
+      (focusLost)="focusTitle()"
+    />
+  }
 
   @let c = v.callout;
   <div class="pane-callout" [class]="'pane-callout--' + c.tone">

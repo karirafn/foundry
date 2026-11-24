@@ -21,10 +21,13 @@ import { StateBadgeComponent } from '../../../shared/components/state-badge/stat
 import { StepChipComponent, StepChipTone } from '../../../shared/components/step-chip/step-chip';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { CODE_STEP_LABELS, STAGE_LABELS, codeStepTone } from '../../board/board.model';
+import { currentStepLabel } from '../../board/lifecycle-row/lifecycle-row.model';
 import { IssueDetail, IssueSummary } from '../../issues/issue.model';
+import { LifecycleStep } from '../../issues/lifecycle.model';
 import { SecretFindingsComponent } from '../../issues/secret-findings/secret-findings';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { PaneActionsComponent } from '../pane-actions/pane-actions';
+import { PaneLifecycleComponent } from './pane-lifecycle/pane-lifecycle';
 import { PaneAction, PaneCallout, buildCallout } from '../pane-callout.model';
 
 let nextId = 0;
@@ -35,12 +38,19 @@ interface StatusView {
 }
 
 /**
- * Layer 2 of the issue pane: the stage, state badge and step chip, then the one callout chosen by
- * `buildCallout` with its actions. It waits for the detail, showing skeleton bars until it lands.
+ * Layer 2 of the issue pane: the stage, state badge and step chip, the lifecycle, then the one
+ * callout chosen by `buildCallout` with its actions. It waits for the detail, showing skeleton bars until it lands.
  */
 @Component({
   selector: 'fd-pane-status',
-  imports: [StateBadgeComponent, StepChipComponent, SafeHrefPipe, SecretFindingsComponent, PaneActionsComponent],
+  imports: [
+    StateBadgeComponent,
+    StepChipComponent,
+    SafeHrefPipe,
+    SecretFindingsComponent,
+    PaneActionsComponent,
+    PaneLifecycleComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pane-status.html',
   styleUrl: './pane-status.scss',
@@ -79,10 +89,20 @@ export class PaneStatusComponent {
     return step === null ? null : { label: CODE_STEP_LABELS[step], tone: codeStepTone(step) };
   });
 
+  /** The served lifecycle path; null on a deep link before the board's summary lands, or when empty. */
+  protected readonly lifecycle: Signal<readonly LifecycleStep[] | null> = computed(() => {
+    const lifecycle = this.summary()?.lifecycle ?? [];
+    return lifecycle.length > 0 ? lifecycle : null;
+  });
+
   private readonly _announcement: WritableSignal<string> = signal('');
   protected readonly announcement: Signal<string> = this._announcement.asReadonly();
 
   private readonly _title: Signal<string | null> = computed(() => this.view()?.callout.title ?? null);
+  private readonly _stepLabel: Signal<string | null> = computed(() =>
+    currentStepLabel(this.summary()?.lifecycle),
+  );
+  private readonly _round: Signal<number | null> = computed(() => this.summary()?.round ?? null);
   private readonly _calloutTitle: Signal<ElementRef<HTMLElement> | undefined> =
     viewChild<ElementRef<HTMLElement>>('calloutTitle');
   private readonly _injector = inject(Injector);
@@ -92,15 +112,30 @@ export class PaneStatusComponent {
 
   constructor() {
     let previousTitle: string | null = null;
+    let previousStep: string | null = null;
+    let previousRound: number | null = null;
+    // One message for all three, so a change to several at once is announced whole. The first value
+    // of each is not a change; the pane heading already announced the issue.
     effect(() => {
       const title = this._title();
-      // The first callout of the issue is not a change; the pane heading already announced it.
+      const step = this._stepLabel();
+      const round = this._round();
+      const changes: string[] = [];
       if (title !== null && previousTitle !== null && title !== previousTitle) {
-        this._announcement.set(`Status: ${title}`);
+        changes.push(`Status: ${title}`);
       }
-      if (title !== null) {
-        previousTitle = title;
+      if (step !== null && previousStep !== null && step !== previousStep) {
+        changes.push(`Step: ${step}`);
       }
+      if (round !== null && previousRound !== null && round !== previousRound) {
+        changes.push(`Round ${round}`);
+      }
+      if (changes.length > 0) {
+        this._announcement.set(changes.join('. '));
+      }
+      previousTitle = title ?? previousTitle;
+      previousStep = step ?? previousStep;
+      previousRound = round ?? previousRound;
     });
 
     effect(() => {
@@ -127,6 +162,10 @@ export class PaneStatusComponent {
       return;
     }
     this._focusAfterDetail = view.detail;
+  }
+
+  protected focusTitle(): void {
+    this._focusTitle();
   }
 
   private _focusTitle(): void {

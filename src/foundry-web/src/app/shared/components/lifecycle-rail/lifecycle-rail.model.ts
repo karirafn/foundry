@@ -4,7 +4,7 @@ import {
   LifecycleStatus,
   LifecycleStep,
 } from '../../../features/issues/lifecycle.model';
-import { RAIL_STAGE_LABELS, RailStage, stepCopy } from './lifecycle-steps';
+import { RAIL_STAGE_LABELS, RailStage, sentenceCase, stepCopy } from './lifecycle-steps';
 
 /** How a node is drawn: its colour, from the actor, or from a failure or the finished issue. */
 export type NodeTone = LifecycleActor | 'failed' | 'done';
@@ -21,6 +21,8 @@ export interface RailStepView {
   readonly kind: 'node' | 'wait';
   readonly stage: RailStage;
   readonly actor: LifecycleActor;
+  /** Who runs the step, as the vertical rail shows it: "Claude", "Foundry code", "You". */
+  readonly actorWord: string;
   readonly status: LifecycleStatus;
   readonly phase: LifecyclePhase | null;
   /** The step's grid column, 1-based. */
@@ -34,6 +36,9 @@ export interface RailStepView {
   readonly badge: number | null;
   readonly motion: NodeMotion;
   readonly ariaLabel: string;
+  /** The vertical rail's line down to the next step in the same stage; null after a stage's last step. */
+  readonly line: ConnectorFill | null;
+  readonly lineGrow: boolean;
 }
 
 export interface RailConnectorView {
@@ -55,6 +60,16 @@ export interface RailBracketView {
   readonly current: boolean;
 }
 
+/** A stage of the vertical rail: its label and its steps, in order. */
+export interface RailGroupView {
+  readonly stage: RailStage;
+  readonly label: string;
+  /** Every step in the stage is off or skipped. */
+  readonly dim: boolean;
+  readonly current: boolean;
+  readonly steps: readonly RailStepView[];
+}
+
 export interface RailView {
   /** The `grid-template-columns` value: `auto` per node, a stretching track per connector. */
   readonly columns: string;
@@ -67,6 +82,19 @@ const ACTOR_WORDS: Readonly<Record<LifecycleActor, string>> = {
   claude: 'Claude',
   code: 'Foundry code',
   person: 'you',
+};
+
+const ACTOR_NAMES: Readonly<Record<LifecycleActor, string>> = {
+  claude: 'Claude',
+  code: 'Foundry code',
+  person: 'You',
+};
+
+const STATUS_TEXT: Readonly<Record<Exclude<LifecycleStatus, 'current'>, string>> = {
+  done: 'Done',
+  upcoming: 'Upcoming',
+  off: 'Off for this repository',
+  skipped: 'Skipped',
 };
 
 const STATUS_WORDS: Readonly<Record<LifecycleStatus, string>> = {
@@ -226,12 +254,17 @@ export function railView(
         : null;
     const phase =
       step.status === 'current' && step.phase !== null ? `, ${PHASE_WORDS[step.phase]}` : '';
+    const next = lifecycle[i + 1] as LifecycleStep | undefined;
+    const line =
+      next === undefined || copies[i + 1].stage !== copy.stage ? null : fillOf(next, false);
+    const prior = previous === null || next === undefined ? undefined : before.get(next.step);
     return {
       step: step.step,
       label: copy.label,
       kind: copy.kind,
       stage: copy.stage,
       actor: step.actor,
+      actorWord: ACTOR_NAMES[step.actor],
       status: step.status,
       phase: step.phase,
       column: columnOf[i],
@@ -241,6 +274,8 @@ export function railView(
       word: word(step),
       badge,
       motion: previous === null ? null : motion(step, before.get(step.step)),
+      line,
+      lineGrow: prior !== undefined && line === 'full' && fillOf(prior, false) !== 'full',
       ariaLabel: `${copy.label}${badge === null ? '' : `, ×${badge}`}, by ${ACTOR_WORDS[step.actor]}, ${STATUS_WORDS[step.status]}${phase}`,
     };
   });
@@ -290,4 +325,27 @@ export function railView(
     connectors,
     brackets,
   };
+}
+
+/** The vertical rail's stages, each holding its steps. */
+export function railGroups(view: RailView): readonly RailGroupView[] {
+  return view.brackets.map((bracket) => ({
+    stage: bracket.stage,
+    label: bracket.label,
+    dim: bracket.dim,
+    current: bracket.current,
+    steps: view.steps.filter((s) => s.column >= bracket.from && s.column < bracket.to),
+  }));
+}
+
+/**
+ * A step's status as the vertical rail words it: "Done", "Upcoming", or for the current step its
+ * phase and `elapsed` ("Running · 12m"). A null `elapsed` (start unknown) leaves the time out.
+ */
+export function stepStatusText(step: RailStepView, elapsed: string | null): string {
+  if (step.status !== 'current') {
+    return STATUS_TEXT[step.status];
+  }
+  const phase = step.phase === null ? 'In progress' : sentenceCase(PHASE_WORDS[step.phase]);
+  return elapsed === null ? phase : `${phase} · ${elapsed}`;
 }

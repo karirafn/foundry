@@ -1,5 +1,5 @@
 import { LifecycleStep } from '../../../features/issues/lifecycle.model';
-import { railView } from './lifecycle-rail.model';
+import { RailStepView, railGroups, railView, stepStatusText } from './lifecycle-rail.model';
 import { sentenceCase, stepCopy } from './lifecycle-steps';
 
 function step(
@@ -305,5 +305,126 @@ describe('railView', () => {
 
     // Assert
     expect(view.steps.every((s) => s.motion === null)).toBe(true);
+  });
+});
+
+describe('railGroups', () => {
+  it('groups the steps by stage, in order', () => {
+    // Act
+    const groups = railGroups(railView(IMPLEMENTING, 1, null));
+
+    // Assert
+    expect(groups.map((g) => [g.label, g.steps.map((s) => s.step)])).toEqual([
+      ['Triage', ['detected', 'triage_queued', 'triage']],
+      ['Implement', ['queued', 'implement', 'publish', 'rebase', 'checks']],
+      ['Review', ['review_queued', 'review']],
+      ['Merge', ['your_review', 'merge', 'done']],
+    ]);
+  });
+
+  it('marks the stage holding the current step and dims a stage whose steps are all off', () => {
+    // Arrange
+    const lifecycle = IMPLEMENTING.map((s) =>
+      s.step === 'review_queued' || s.step === 'review' ? { ...s, status: 'off' as const } : s,
+    );
+
+    // Act
+    const groups = railGroups(railView(lifecycle, 1, null));
+
+    // Assert
+    expect(groups.map((g) => [g.stage, g.current, g.dim])).toEqual([
+      ['triage', false, false],
+      ['implement', true, false],
+      ['review', false, true],
+      ['merge', false, false],
+    ]);
+  });
+});
+
+describe('vertical line', () => {
+  it("fills the line down to a done or current step and draws none after a stage's last step", () => {
+    // Act
+    const groups = railGroups(railView(IMPLEMENTING, 1, null));
+
+    // Assert
+    expect(groups[0].steps.map((s) => s.line)).toEqual(['full', 'full', null]);
+    expect(groups[1].steps.map((s) => s.line)).toEqual(['full', 'none', 'none', 'none', null]);
+  });
+
+  it('grows the line once when the step below it becomes current', () => {
+    // Arrange
+    const publishing = withStatus(
+      withStatus(IMPLEMENTING, 'implement', { status: 'done', phase: null }),
+      'publish',
+      { status: 'current', phase: 'running' },
+    );
+
+    // Act
+    const view = railView(publishing, 1, IMPLEMENTING);
+
+    // Assert
+    expect(view.steps.filter((s) => s.lineGrow).map((s) => s.step)).toEqual(['implement']);
+  });
+
+  it('grows no line on the first render', () => {
+    // Act
+    const view = railView(IMPLEMENTING, 1, null);
+
+    // Assert
+    expect(view.steps.some((s) => s.lineGrow)).toBe(false);
+  });
+});
+
+describe('actor words', () => {
+  it('names who runs each step', () => {
+    // Act
+    const view = railView(
+      [
+        step('detected', 'done'),
+        step('triage', 'done', { actor: 'claude' }),
+        step('your_review', 'upcoming', { actor: 'person' }),
+      ],
+      1,
+      null,
+    );
+
+    // Assert
+    expect(view.steps.map((s) => s.actorWord)).toEqual(['Foundry code', 'Claude', 'You']);
+  });
+});
+
+describe('stepStatusText', () => {
+  function only(lifecycleStep: LifecycleStep): RailStepView {
+    return railView([lifecycleStep], 1, null).steps[0];
+  }
+
+  it.each([
+    ['done', 'Done'],
+    ['upcoming', 'Upcoming'],
+    ['off', 'Off for this repository'],
+    ['skipped', 'Skipped'],
+  ] as const)('reads a %s step as "%s" with no elapsed time', (status, text) => {
+    expect(stepStatusText(only(step('publish', status)), '12m')).toBe(text);
+  });
+
+  it.each([
+    ['running', 'Running · 12m'],
+    ['preparing', 'Preparing · 12m'],
+    ['retrying', 'Retrying · 12m'],
+    ['needs_you', 'Needs you · 12m'],
+    ['failed', 'Failed · 12m'],
+    ['waiting', 'Waiting · 12m'],
+  ] as const)('reads the current step in its %s phase as "%s"', (phase, text) => {
+    expect(stepStatusText(only(step('implement', 'current', { phase })), '12m')).toBe(text);
+  });
+
+  it('reads a current step with no phase as in progress', () => {
+    expect(stepStatusText(only(step('implement', 'current')), '5m')).toBe('In progress · 5m');
+  });
+
+  it("leaves the elapsed time out when the step's start is unknown", () => {
+    expect(stepStatusText(only(step('implement', 'current', { phase: 'running' })), null)).toBe(
+      'Running',
+    );
   });
 });
