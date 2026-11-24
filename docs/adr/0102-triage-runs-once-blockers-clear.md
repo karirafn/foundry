@@ -27,3 +27,6 @@ A new issue with open blockers waits untriaged, and is triaged once its blockers
 
 - Waiting for answers now happens after the blocker closes instead of alongside it, so a blocked under-specified issue reaches implementation later. ADR 0097 rejected "triage just before the first Fresh claim" for this reason. This decision accepts that delay in exchange for a judgment made against the code as it actually is.
 - `TriageBlockedIssue` must be added to `IssueStateRegistry`, the EF discriminators, the issue queries and the dashboard, as ADR 0097's Consequences list for every new state. It holds no worker slot.
+
+## Revisions
+- 2026-11-24 — Revisions and continuations are gated by open blockers too, each with its own blocked state ([ADR 0123](0123-open-blockers-hold-every-implement-run.md))

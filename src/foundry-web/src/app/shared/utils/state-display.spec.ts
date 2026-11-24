@@ -1,5 +1,5 @@
 import { STATE_ARIA_LABELS, STATE_CSS_CLASSES, STATE_LABELS, cardAccentFor, resolveStateDisplay } from './state-display';
-import { RETRIAGEABLE_STATES, RETRYABLE_STATES, WORKING_STATES } from './issue-state';
+import { REVISION_STATES, RETRIAGEABLE_STATES, RETRYABLE_STATES, WORKING_STATES } from './issue-state';
 import type { IssueState } from './issue-state';
 import type { RevisionTriggerKind } from './revision-trigger-kind';
 import type { LifecycleStep } from '../../features/issues/lifecycle.model';
@@ -415,5 +415,48 @@ describe('triage_blocked display (ADR 0102)', () => {
     expect(WORKING_STATES.has('triage_blocked')).toBe(false);
     expect(RETRYABLE_STATES.has('triage_blocked')).toBe(false);
     expect(RETRIAGEABLE_STATES.has('triage_blocked')).toBe(false);
+  });
+});
+
+describe('revision_blocked and continuation_blocked display', () => {
+  const cases: { state: IssueState; label: string; aria: string; cssClass: string }[] = [
+    { state: 'revision_blocked', label: 'REVISION BLOCKED', aria: 'revision blocked', cssClass: 'badge--revision-blocked' },
+    {
+      state: 'continuation_blocked',
+      label: 'CONTINUATION BLOCKED',
+      aria: 'continuation blocked',
+      cssClass: 'badge--continuation-blocked',
+    },
+  ];
+
+  for (const c of cases) {
+    it(`should give ${c.state} its label, aria label and badge class`, () => {
+      // Arrange / Act
+      const display = resolveStateDisplay(c.state, { codeStep: null });
+
+      // Assert
+      expect(display).toEqual({ label: c.label, ariaLabel: c.aria, cssClass: c.cssClass });
+    });
+
+    it(`should give ${c.state} no card accent`, () => {
+      // Arrange / Act / Assert
+      expect(cardAccentFor(c.state)).toBeNull();
+    });
+
+    it(`should leave ${c.state} out of the working, retryable, revision and re-triage sets`, () => {
+      // Arrange / Act / Assert
+      expect(WORKING_STATES.has(c.state)).toBe(false);
+      expect(RETRYABLE_STATES.has(c.state)).toBe(false);
+      expect(REVISION_STATES.has(c.state)).toBe(false);
+      expect(RETRIAGEABLE_STATES.has(c.state)).toBe(false);
+    });
+  }
+
+  it('should keep the blocked revision label when a revision trigger kind is present', () => {
+    // Arrange / Act
+    const display = resolveStateDisplay('revision_blocked', { codeStep: null, revisionTriggerKind: 'failed_checks' });
+
+    // Assert
+    expect(display.label).toBe('REVISION BLOCKED');
   });
 });

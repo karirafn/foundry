@@ -586,6 +586,23 @@ describe('buildFacts', () => {
     ]);
   });
 
+  it.each(['revision_blocked', 'continuation_blocked'] as const)(
+    'shows the branch and each blocker of a %s issue, and no not-triaged row',
+    (state) => {
+      // Act
+      const facts = buildFacts(
+        issue(state, { stateDetails: details({ branchName: 'feat/42-held', blockedBy: [{ issueNumber: 12, reason: null }] }) }),
+        null,
+        null,
+      );
+
+      // Assert
+      expect(keyed(facts, 'Branch')).toMatchObject({ type: 'text', value: 'feat/42-held', mono: true });
+      expect(fact(facts, 'blockers')?.blockers).toEqual([{ number: '#12', reason: null }]);
+      expect(fact(facts, 'triage')).toBeUndefined();
+    },
+  );
+
   it('shows no Blocked by row for an empty blocker list', () => {
     // Act
     const facts = buildFacts(issue('blocked', { stateDetails: details({ blockedBy: [] }) }), null, null);

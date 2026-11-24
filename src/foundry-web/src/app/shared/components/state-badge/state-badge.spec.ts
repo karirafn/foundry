@@ -492,6 +492,8 @@ describe('StateBadgeComponent', () => {
     { state: 'triage_in_progress', label: 'TRIAGING', aria: 'State: triaging', cssClass: 'badge--triage-in-progress' },
     { state: 'triage_failed', label: 'TRIAGE FAILED', aria: 'State: triage failed', cssClass: 'badge--triage-failed' },
     { state: 'triage_blocked', label: 'TRIAGE BLOCKED', aria: 'State: triage blocked', cssClass: 'badge--triage-blocked' },
+    { state: 'revision_blocked', label: 'REVISION BLOCKED', aria: 'State: revision blocked', cssClass: 'badge--revision-blocked' },
+    { state: 'continuation_blocked', label: 'CONTINUATION BLOCKED', aria: 'State: continuation blocked', cssClass: 'badge--continuation-blocked' },
   ];
 
   for (const c of triageCases) {

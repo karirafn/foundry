@@ -1,6 +1,7 @@
 import { IssueDetail, IssueStateDetails, IssueSummary } from '../issues/issue.model';
 import { WorkerRunDetail } from '../workers/worker-run.model';
 import { buildCallout } from './pane-callout.model';
+import { ACTIVE_STATES, RESOLVED_STATES } from '../issues/issue-lifecycle.model';
 
 // A medium date as DatePipe renders it, in whatever time zone the test runs in.
 const MEDIUM_DATE = /[A-Z][a-z]{2} \d{1,2}, 2026, \d{1,2}:\d{2}:\d{2}\s[AP]M/;
@@ -1002,6 +1003,74 @@ describe('buildCallout', () => {
         ],
       });
       expect(callout.actions).toEqual([]);
+    });
+  });
+
+  describe('held revisions and continuations', () => {
+    it('shows a blocked revision naming its blockers, linking its pull request, with no actions', () => {
+      // Act
+      const callout = buildCallout(
+        detail('revision_blocked', { blockedBy: [{ issueNumber: 12, reason: null }, { issueNumber: 15, reason: null }] }),
+        null,
+        summary({ state: 'revision_blocked', pullRequestUrl: 'https://github.com/acme/api/pull/7' }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('neutral');
+      expect(callout.title).toBe('Revision blocked');
+      expect(callout.lines).toEqual([
+        'Waiting on #12, #15. The revision runs once they close, or the pull request closes.',
+      ]);
+      expect(callout.links).toEqual([
+        { label: 'View PR', href: 'https://github.com/acme/api/pull/7', ariaLabel: 'View pull request for issue #42' },
+      ]);
+      expect(callout.actions).toEqual([]);
+    });
+
+    it('shows a blocked revision whose blockers are not listed as waiting on its blockers', () => {
+      // Act
+      const callout = buildCallout(detail('revision_blocked', { blockedBy: [] }), null, null, null);
+
+      // Assert
+      expect(callout.lines).toEqual([
+        'Waiting on its blockers. The revision runs once they close, or the pull request closes.',
+      ]);
+    });
+
+    it('shows a blocked continuation naming its blockers, with no pull request link and no actions', () => {
+      // Act
+      const callout = buildCallout(
+        detail('continuation_blocked', { blockedBy: [{ issueNumber: 12, reason: null }] }),
+        null,
+        summary({ state: 'continuation_blocked', pullRequestUrl: null }),
+        null,
+      );
+
+      // Assert
+      expect(callout.tone).toBe('neutral');
+      expect(callout.title).toBe('Continuation blocked');
+      expect(callout.lines).toEqual(['Waiting on #12. It continues from the issue branch once they close.']);
+      expect(callout.links).toEqual([]);
+      expect(callout.actions).toEqual([]);
+    });
+
+    it('shows a blocked continuation whose blockers are not listed as waiting on its blockers', () => {
+      // Act
+      const callout = buildCallout(detail('continuation_blocked', { blockedBy: [] }), null, null, null);
+
+      // Assert
+      expect(callout.lines).toEqual(['Waiting on its blockers. It continues from the issue branch once they close.']);
+    });
+  });
+
+  describe('every known state', () => {
+    it.each([...ACTIVE_STATES, ...RESOLVED_STATES])('gives %s its own callout rather than the raw state name', (state) => {
+      // Act
+      const callout = buildCallout(detail(state), null, null, null);
+
+      // Assert
+      expect(callout.title).not.toBe(state);
     });
   });
 
