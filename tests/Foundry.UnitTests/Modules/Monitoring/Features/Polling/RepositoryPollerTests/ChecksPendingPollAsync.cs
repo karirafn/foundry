@@ -99,6 +99,249 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             FeedbackCutoffAt: feedbackCutoffAt ?? Now.AddDays(7));
     }
 
+    // --- Owed checks retry: a fix run that pushed nothing retries the red head's failing CI jobs once ---
+
+    private const string RedHead = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
+    private const string MovedHead = "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b";
+
+    private static readonly FailingCheck BuildCheck = new("build", "failure", "https://github.com/owner/repo/actions/runs/1/job/11");
+    private static readonly FailingCheck TestCheck = new("test", "failure", "https://github.com/owner/repo/actions/runs/1/job/12");
+
+    private static ChecksPendingIssueInfo OwingRetry(DateTimeOffset? checksRetriedAt = null) =>
+        BuildChecksPendingIssue() with { OwedChecksRetryHeadSha = RedHead, ChecksRetriedAt = checksRetriedAt };
+
+    private static StubIssueProvider RetryProvider(
+        ChecksPendingIssueInfo issue,
+        Checks checks,
+        string headSha = RedHead,
+        IReadOnlyDictionary<string, long>? jobIds = null,
+        IReadOnlyDictionary<long, Result>? retryResults = null) =>
+        new(
+            checksResults: new Dictionary<string, Result<Checks>> { [issue.PullRequestUrl] = Result<Checks>.Ok(checks) },
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
+                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: headSha, IsDraft: false)),
+            },
+            ciJobIdsByCheckName: jobIds ?? new Dictionary<string, long> { ["build"] = 11, ["test"] = 12 },
+            retryResults: retryResults);
+
+    [Fact]
+    public async Task WhenRetryIsOwedAndRedOnItsHead_RetriesEveryFailingJob()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = OwingRetry();
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([BuildCheck, TestCheck]));
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+
+        // Assert
+        provider.RetriedJobIds.ShouldBe([11L, 12L]);
+    }
+
+    [Fact]
+    public async Task WhenEveryFailingJobIsRetried_RecordsChecksRetriedInsteadOfAVerdict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = OwingRetry();
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([BuildCheck, TestCheck]));
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        ChecksRetried retried = _dispatcher.DispatchedEvents.OfType<ChecksRetried>().ShouldHaveSingleItem();
+        retried.ShouldSatisfyAllConditions(
+            () => retried.IssueNumber.ShouldBe(42),
+            () => retried.HeadSha.ShouldBe(RedHead),
+            () => retried.RetriedAt.ShouldBe(Now),
+            () => _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenAFailingCheckIsNotACiJob_RetriesNothingAndResolvesTheVerdict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = OwingRetry();
+        StubIssueProvider provider = RetryProvider(
+            issue,
+            new Checks.Red([BuildCheck, TestCheck]),
+            jobIds: new Dictionary<string, long> { ["build"] = 11 });
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        provider.ShouldSatisfyAllConditions(
+            () => provider.RetriedJobIds.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<ChecksRetried>().ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+                .Outcome.ShouldBe("still_failing"));
+    }
+
+    [Fact]
+    public async Task WhenTheProviderRefusesARetry_ResolvesTheVerdict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = OwingRetry();
+        StubIssueProvider provider = RetryProvider(
+            issue,
+            new Checks.Red([BuildCheck]),
+            retryResults: new Dictionary<long, Result> { [11] = Result.Fail(CiJobRetryErrors.Refused(11, 403)) });
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        provider.ShouldSatisfyAllConditions(
+            () => _dispatcher.DispatchedEvents.OfType<ChecksRetried>().ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+                .Outcome.ShouldBe("still_failing"));
+    }
+
+    [Fact]
+    public async Task WhenAFailingCheckNeverRanItsScript_RetriesNothing()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = OwingRetry();
+        FailingCheck runnerFault = BuildCheck with { IsInfrastructureFailure = true };
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([runnerFault, TestCheck]));
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        provider.ShouldSatisfyAllConditions(
+            () => provider.RetriedJobIds.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem());
+    }
+
+    [Fact]
+    public async Task WhenTheHeadMovedOffTheOwedHead_RetriesNothingAndResolvesTheVerdict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = OwingRetry();
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([BuildCheck]), headSha: MovedHead);
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        provider.ShouldSatisfyAllConditions(
+            () => provider.RetriedJobIds.ShouldBeEmpty(),
+            () => _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+                .HeadSha.ShouldBe(MovedHead));
+    }
+
+    [Fact]
+    public async Task WhenNoRetryIsOwed_RetriesNothing()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([BuildCheck]));
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+
+        // Assert
+        provider.RetriedJobIds.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenRetriedChecksReadRedBeforeReadingPending_StaysInTheGate()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue() with { ChecksRetriedAt = EnteredAt };
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([BuildCheck]));
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenRetriedChecksStillReadRedAtTheUpperBound_ResolvesTheVerdict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue() with { ChecksRetriedAt = EnteredAt };
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Red([BuildCheck]));
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(
+            repository,
+            provider,
+            issueNumber: null,
+            EnteredAt + RepositoryPoller.ChecksPendingUpperBound,
+            CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+            .Outcome.ShouldBe("still_failing");
+    }
+
+    [Fact]
+    public async Task WhenRetriedChecksReadPending_RecordsThatTheyRestarted()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue() with { ChecksRetriedAt = EnteredAt };
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Pending());
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ChecksRetryRestarted>().ShouldHaveSingleItem().IssueNumber.ShouldBe(42);
+    }
+
+    [Fact]
+    public async Task WhenRetriedChecksReadGreen_ResolvesPassed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue() with { ChecksRetriedAt = EnteredAt };
+        StubIssueProvider provider = RetryProvider(issue, new Checks.Green());
+        RepositoryPoller sut = BuildPoller(new StubChecksPendingIssueQueries([issue]));
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldHaveSingleItem()
+            .Outcome.ShouldBe("passed");
+    }
+
     // --- Rebase-pending guard (ADR 0087) ---
 
     [Fact]
@@ -883,9 +1126,32 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
     private sealed class StubIssueProvider(
         IReadOnlyDictionary<string, Result<Checks>>? checksResults = null,
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
-        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null) : IIssueProvider
+        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
+        IReadOnlyDictionary<string, long>? ciJobIdsByCheckName = null,
+        IReadOnlyDictionary<long, Result>? retryResults = null) : IIssueProvider
     {
         public List<string> MarkReadyCalls { get; } = [];
+
+        public List<long> RetriedJobIds { get; } = [];
+
+        public Task<Result<CiJobLookup>> ResolveCiJobAsync(
+            RepositorySlug slug,
+            FailingCheck check,
+            CancellationToken cancellationToken)
+        {
+            CiJobLookup lookup = ciJobIdsByCheckName is not null
+                && ciJobIdsByCheckName.TryGetValue(check.Name, out long jobId)
+                    ? new CiJobLookup.Found(jobId)
+                    : new CiJobLookup.NotACiJob();
+            return Task.FromResult(Result<CiJobLookup>.Ok(lookup));
+        }
+
+        public Task<Result> RetryCiJobAsync(RepositorySlug slug, long jobId, CancellationToken cancellationToken)
+        {
+            RetriedJobIds.Add(jobId);
+            return Task.FromResult(
+                retryResults is not null && retryResults.TryGetValue(jobId, out Result? result) ? result : Result.Ok());
+        }
 
         public Task<Result> MarkPullRequestReadyAsync(
             RepositorySlug slug,

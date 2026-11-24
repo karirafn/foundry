@@ -398,6 +398,19 @@ internal interface IIssueProvider
         => Task.FromResult(Result<CiJobLog.Available>.Fail(JobLogErrors.NotSupported()));
 
     /// <summary>
+    /// Retries the CI job <paramref name="jobId"/> on the commit it ran on. Any answer other than a success fails
+    /// with <see cref="CiJobRetryErrors.RefusedCode"/>, whether the token lacks permission, the job is gone, or the
+    /// provider is rate limiting.
+    /// </summary>
+    /// <remarks>Providers without job retries keep this default, which fails with
+    /// <see cref="CiJobRetryErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result> RetryCiJobAsync(
+        RepositorySlug slug,
+        long jobId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result.Fail(CiJobRetryErrors.NotSupported()));
+
+    /// <summary>
     /// Reads the pull request branch head and how far it is behind its base branch, for the post-run rebase
     /// (ADR 0087). A <c>Result</c> failure is transient and retried; a permanent refusal is
     /// <see cref="PullRequestRebaseState.Refused"/>.
