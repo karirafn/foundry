@@ -241,6 +241,22 @@ jobs:
           done
           echo "PASS: $output"
 
+      - name: Image contract check — net10.0 and net11.0 console projects build and run
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        # Run in the probe shape; the projects live under /tmp, the scratch volume of the read-only root
+        run: |
+          for tfm in net10.0 net11.0; do
+            docker run --rm --user node --read-only --cap-drop ALL -v /home/node -v /tmp --workdir /tmp \
+              --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env DOTNET_NOLOGO=1 --env TFM="$tfm" \
+              --entrypoint bash foundry-worker:ci -c '
+                set -e
+                dotnet new console -f "$TFM" -o "/tmp/probe-$TFM" --no-restore
+                dotnet run --project "/tmp/probe-$TFM"
+              ' \
+              || { echo "FAIL: a $tfm console project did not build and run in foundry-worker:ci"; exit 1; }
+            echo "PASS: a $tfm console project builds and runs"
+          done
+
       - name: Image contract check — csharp-ls matches workers/.config/dotnet-tools.json, plugin baked, rq-cli absent
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |

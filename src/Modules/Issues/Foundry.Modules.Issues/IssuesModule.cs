@@ -89,6 +89,8 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueQueued>(services);
         AddIssueStateChangedHandler<IssueBlocked>(services);
         AddIssueStateChangedHandler<IssueTriageBlocked>(services);
+        AddIssueStateChangedHandler<IssueRevisionBlocked>(services);
+        AddIssueStateChangedHandler<IssueContinuationBlocked>(services);
         AddIssueStateChangedHandler<IssueCompleted>(services);
         AddIssueStateChangedHandler<IssueFailed>(services);
         AddIssueStateChangedHandler<IssueInReview>(services);

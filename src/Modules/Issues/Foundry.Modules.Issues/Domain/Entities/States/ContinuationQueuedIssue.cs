@@ -111,6 +111,27 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         return queued;
     }
 
+    internal static ContinuationQueuedIssue FromContinuationBlocked(
+        ContinuationBlockedIssue source,
+        DateTimeOffset transitionedAt)
+    {
+        ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
+        queued.CopySharedPropertiesFrom(source);
+        queued.SetBlockedBy(source.BlockedBy);
+        queued.BranchName = source.BranchName;
+        queued.FailureReason = source.FailureReason;
+        queued.ContinuedWithoutAnswer = source.ContinuedWithoutAnswer;
+        return queued;
+    }
+
+    /// <summary>Open <paramref name="blockers"/> hold the continuation until they close: it starts no run meanwhile.</summary>
+    public ContinuationBlockedIssue Block(IReadOnlyList<int> blockers, DateTimeOffset transitionedAt)
+    {
+        ContinuationBlockedIssue blocked = ContinuationBlockedIssue.FromContinuationQueued(this, blockers, transitionedAt);
+        AddDomainEvent(new Events.IssueContinuationBlocked(Id, MonitoredRepositoryId));
+        return blocked;
+    }
+
     public override InProgressIssue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
         InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId, claimedAt);

@@ -13,11 +13,13 @@ namespace Foundry.Modules.Issues.Features.Dependencies;
 /// <summary>
 /// Applies an issue's detected open blockers: records <see cref="Issue.BlockedBy"/>, detects
 /// cycles over the committed dependency graph augmented with the new edges, and performs the
-/// <see cref="FreshQueuedIssue"/>/<see cref="BlockedIssue"/> and <see cref="TriageQueuedIssue"/>/<see cref="TriageBlockedIssue"/>
-/// state transitions, sending a <see cref="DetectedIssue"/> to whichever of the triage pair fits (ADR 0102). The other
-/// triage states only record their blockers, which decide where a ready verdict sends the issue. Shared by the
-/// poll-path dependency pass and the claim-time blocker re-check so
-/// both enforce the same rule: an issue with open blockers is never queued, for triage or for implementation.
+/// <see cref="FreshQueuedIssue"/>/<see cref="BlockedIssue"/>, <see cref="TriageQueuedIssue"/>/<see cref="TriageBlockedIssue"/>,
+/// <see cref="RevisionQueuedIssue"/>/<see cref="RevisionBlockedIssue"/> and
+/// <see cref="ContinuationQueuedIssue"/>/<see cref="ContinuationBlockedIssue"/> state transitions, sending a
+/// <see cref="DetectedIssue"/> to whichever of the triage pair fits (ADR 0102). The other triage states only record
+/// their blockers, which decide where a ready verdict sends the issue. Shared by the poll-path dependency pass and the
+/// claim-time blocker re-check so both enforce the same rule: an issue with open blockers starts no run, neither
+/// triage nor any implement run.
 /// </summary>
 internal sealed class IssueDependencyApplier(
     DbContext db,
@@ -102,9 +104,37 @@ internal sealed class IssueDependencyApplier(
                 break;
             }
 
+            case RevisionQueuedIssue revisionQueued when issue.BlockedBy.Count > 0:
+            {
+                RevisionBlockedIssue revisionBlocked = revisionQueued.Block(issue.BlockedBy, now);
+                await db.TransitionAsync(revisionQueued, revisionBlocked, dispatcher, cancellationToken);
+                break;
+            }
+
+            case RevisionBlockedIssue revisionBlocked when issue.BlockedBy.Count == 0:
+            {
+                RevisionQueuedIssue revisionQueued = revisionBlocked.Unblock(now);
+                await db.TransitionAsync(revisionBlocked, revisionQueued, dispatcher, cancellationToken);
+                break;
+            }
+
+            case ContinuationQueuedIssue continuationQueued when issue.BlockedBy.Count > 0:
+            {
+                ContinuationBlockedIssue continuationBlocked = continuationQueued.Block(issue.BlockedBy, now);
+                await db.TransitionAsync(continuationQueued, continuationBlocked, dispatcher, cancellationToken);
+                break;
+            }
+
+            case ContinuationBlockedIssue continuationBlocked when issue.BlockedBy.Count == 0:
+            {
+                ContinuationQueuedIssue continuationQueued = continuationBlocked.Unblock(now);
+                await db.TransitionAsync(continuationBlocked, continuationQueued, dispatcher, cancellationToken);
+                break;
+            }
+
             // A blocked issue with blockers still open stays blocked; a queued issue with none stays queued; any
-            // other state (a running or failed triage, an issue awaiting input) only records BlockedBy, which decides
-            // where a ready verdict sends it. Persist explicitly.
+            // other state (a running or failed triage, an issue awaiting input, a run in progress or the code-owned
+            // pipeline, which a blocker never interrupts) only records BlockedBy. Persist explicitly.
             default:
                 await db.SaveChangesAsync(cancellationToken);
                 break;

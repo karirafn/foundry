@@ -691,4 +691,116 @@ public sealed class HandleAsync : IAsyncDisposable
         issue.ShouldBeOfType<AwaitingInputIssue>().BlockedBy.ShouldBe([43]);
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task WhenRevisionQueuedIssueHasBlockers_HoldsItAsRevisionBlocked()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 50).WithBranchName("feat/50-x").RevisionQueued());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 50, [51]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 50);
+        issue.ShouldBeOfType<RevisionBlockedIssue>().BlockedBy.ShouldBe([51]);
+        _dispatcher.DispatchedEvents.OfType<IssueRevisionBlocked>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenRevisionBlockedIssueHasNoMoreBlockers_RequeuesTheRevision()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 52).RevisionBlocked([53]));
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 52, []), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 52);
+        issue.ShouldBeOfType<RevisionQueuedIssue>().BlockedBy.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueRevisionQueued>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenRevisionBlockedIssueStillHasBlockers_StaysAndRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 54).RevisionBlocked([55]));
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 54, [56]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 54);
+        issue.ShouldBeOfType<RevisionBlockedIssue>().BlockedBy.ShouldBe([56]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenContinuationQueuedIssueHasBlockers_HoldsItAsContinuationBlocked()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 57).WithBranchName("feat/57-x").ContinuationQueued());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 57, [58]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 57);
+        issue.ShouldBeOfType<ContinuationBlockedIssue>().BlockedBy.ShouldBe([58]);
+        _dispatcher.DispatchedEvents.OfType<IssueContinuationBlocked>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenContinuationBlockedIssueHasNoMoreBlockers_RequeuesTheContinuation()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 59).WithBranchName("feat/59-x").ContinuationBlocked([60]));
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 59, []), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 59);
+        issue.ShouldBeOfType<ContinuationQueuedIssue>().BranchName.ShouldBe("feat/59-x");
+        _dispatcher.DispatchedEvents.OfType<IssueContinuationQueued>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenRevisionInProgressIssueHasBlockers_OnlyRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 61).RevisionInProgress());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 61, [62]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 61);
+        issue.ShouldBeOfType<RevisionInProgressIssue>().BlockedBy.ShouldBe([62]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingIssueHasBlockers_OnlyRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 63).ChecksPending());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 63, [64]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 63);
+        issue.ShouldBeOfType<ChecksPendingIssue>().BlockedBy.ShouldBe([64]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
 }

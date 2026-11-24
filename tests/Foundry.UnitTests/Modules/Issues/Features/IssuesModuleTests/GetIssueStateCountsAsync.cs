@@ -142,7 +142,7 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAllKnownStatesRequested_AllTwentySevenStatesAreKeys()
+    public async Task WhenAllKnownStatesRequested_AllTwentyNineStatesAreKeys()
     {
         // Arrange — no seeded data; all counts should be zero
 
@@ -156,7 +156,7 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
             .Concat(IssueStateRegistry.Resolved)
             .ToHashSet();
 
-        result.Counts.Count.ShouldBe(27);
+        result.Counts.Count.ShouldBe(29);
         foreach (string state in allKnownStates)
         {
             result.Counts.ShouldContainKey(state);

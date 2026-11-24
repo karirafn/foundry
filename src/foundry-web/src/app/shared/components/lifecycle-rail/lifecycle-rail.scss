@@ -6,90 +6,59 @@
 }
 
 .rail {
-  --fd-rail-gap: 14px;
   --node: 30px;
   --glyph: 14px;
-
-  align-items: center;
-  display: grid;
-  grid-template-rows: auto var(--node) auto;
 }
 
 .rail--mini {
-  --fd-rail-gap: 3px;
   --node: 14px;
   --glyph: 8px;
 }
 
-.rail__bracket {
-  align-self: end;
-  margin-right: 4px;
-  border-top: 1px solid var(--fd-border-muted);
-  color: var(--fd-text-secondary);
-  font-size: 0.625rem;
-  font-weight: 600;
-  grid-row: 1;
-  letter-spacing: 0.06em;
-  padding-bottom: 4px;
-  text-transform: uppercase;
-  white-space: nowrap;
-
-  &--current {
-    color: var(--fd-text-primary);
-  }
-
-  &--dim {
-    opacity: 0.5;
-  }
-}
-
-.rail__connector {
-  background: var(--fd-progress-track);
-  grid-row: 2;
-  height: 2px;
-  position: relative;
-
-  &::after {
-    background: var(--fd-text-tertiary);
-    content: '';
-    inset: 0;
-    position: absolute;
-    transform: scaleX(0);
-    transform-origin: left;
-  }
-
-  &[data-fill='half']::after {
-    transform: scaleX(0.5);
-  }
-
-  &[data-fill='full']::after {
-    transform: none;
-  }
-
-  &--grow::after {
-    animation: fd-rail-grow var(--fd-motion-glide) var(--fd-ease-glide);
-  }
-}
-
+// Equal columns, so a node sits at the same x on every rail of the same width.
 .rail__steps {
   display: grid;
-  grid-column: 1 / -1;
-  grid-row: 2 / 4;
-  grid-template-columns: subgrid;
-  grid-template-rows: subgrid;
+  grid-template-columns: repeat(var(--nodes), minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
-}
 
-.rail__step {
-  display: grid;
-  grid-row: 1 / -1;
-  grid-template-rows: subgrid;
-  justify-items: start;
-
-  &--wait {
+  > .rail__step {
+    display: grid;
+    grid-template-rows: var(--node) auto;
     justify-items: center;
+    min-width: 0;
+    position: relative;
+    row-gap: 4px;
+  }
+
+  // The connector into a node runs from the previous column's centre to this one's, behind both nodes.
+  > [data-lead]::before,
+  > [data-lead]::after {
+    content: '';
+    height: 2px;
+    left: -50%;
+    position: absolute;
+    top: calc(var(--node) / 2 - 1px);
+    width: 100%;
+    z-index: 0;
+  }
+  > [data-lead]::before {
+    background: var(--fd-progress-track);
+  }
+  > [data-lead]::after {
+    background: var(--fd-text-tertiary);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  > [data-lead='half']::after {
+    transform: scaleX(0.5);
+  }
+  > [data-lead='full']::after {
+    transform: none;
+  }
+  > [data-lead-grow]::after {
+    animation: fd-rail-grow var(--fd-motion-glide) var(--fd-ease-glide);
   }
 }
 
@@ -104,6 +73,7 @@
   justify-content: center;
   position: relative;
   width: var(--node);
+  z-index: 1;
 
   [data-status='done'] > &,
   [data-status='current'] > & {
@@ -120,17 +90,11 @@
     opacity: 0.5;
   }
 
-  .rail__step--wait > & {
-    background: var(--fd-border-default);
-    border: 0;
-    height: 8px;
-    width: 8px;
-  }
-  .rail__step--wait[data-status='done'] > & {
-    background: var(--fd-text-tertiary);
-  }
-  .rail__step--wait[data-status='current'] > & {
-    background: var(--tone);
+  // The node a current queue wait folded into: its actor's colours, under a still dashed ring.
+  &[data-ring='queued'] {
+    background: linear-gradient(var(--tint), var(--tint)), var(--fd-bg-card);
+    border-color: transparent;
+    color: var(--tone);
   }
 
   &[data-ring]::after,
@@ -144,7 +108,8 @@
   &[data-ring='arc']::after {
     border-color: var(--tone) transparent transparent;
   }
-  &[data-ring='dashed']::after {
+  &[data-ring='dashed']::after,
+  &[data-ring='queued']::after {
     border-style: dashed;
     border-width: 1.5px;
   }
@@ -201,10 +166,12 @@
 .rail__label {
   color: var(--fd-text-secondary);
   font-size: 0.6875rem;
-  padding: 4px 6px 0 0;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  padding: 4px 2px 0;
+  text-align: center;
+  text-wrap: balance;
 
-  [data-status='current'] > & {
+  [aria-current='step'] > & {
     color: var(--fd-text-primary);
     font-weight: 600;
   }
@@ -215,18 +182,18 @@
 }
 
 .rail__word {
+  color: var(--fd-text-secondary);
   display: block;
   font-size: 0.625rem;
+  font-weight: 400;
 }
 
 @media (width < $rail-breakpoint) {
   .rail:not(.rail--mini) {
-    --fd-rail-gap: 5px;
     --node: 22px;
     --glyph: 11px;
   }
 
-  .rail__bracket,
   .rail__label {
     display: none;
   }

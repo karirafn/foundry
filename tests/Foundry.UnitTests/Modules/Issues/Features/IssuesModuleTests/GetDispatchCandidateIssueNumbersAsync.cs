@@ -114,6 +114,12 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
         return completed;
     }
 
+    private void Seed(Issue issue)
+    {
+        _dbContext.Set<Issue>().Add(issue);
+        _dbContext.SaveChanges();
+    }
+
     private RevisionQueuedIssue SeedRevisionQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
         RevisionQueuedIssue revisionQueued = new IssueBuilder()
@@ -235,7 +241,7 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRevisionQueuedIssueExists_DoesNotReturnItsNumber()
+    public async Task WhenRevisionQueuedIssueExists_ReturnsItsNumber()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -247,11 +253,11 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeEmpty();
+        result.ShouldBe([6]);
     }
 
     [Fact]
-    public async Task WhenContinuationQueuedIssueExists_DoesNotReturnItsNumber()
+    public async Task WhenContinuationQueuedIssueExists_ReturnsItsNumber()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -263,7 +269,7 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeEmpty();
+        result.ShouldBe([8]);
     }
 
     [Fact]
@@ -285,7 +291,7 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBe([1, 2, 3], ignoreOrder: true);
+        result.ShouldBe([1, 2, 3, 6, 7], ignoreOrder: true);
     }
 
     [Fact]
@@ -304,6 +310,38 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBe([10], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task WhenRevisionBlockedIssueExists_ReturnsItsNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        Seed(new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(11).RevisionBlocked([2]));
+
+        // Act
+        IReadOnlySet<int> result = await _sut.GetDispatchCandidateIssueNumbersAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBe([11]);
+    }
+
+    [Fact]
+    public async Task WhenContinuationBlockedIssueExists_ReturnsItsNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        Seed(new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(12).ContinuationBlocked([2]));
+
+        // Act
+        IReadOnlySet<int> result = await _sut.GetDispatchCandidateIssueNumbersAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBe([12]);
     }
 
     [Fact]

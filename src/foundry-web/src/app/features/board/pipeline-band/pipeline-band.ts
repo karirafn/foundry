@@ -54,7 +54,7 @@ export class PipelineBandComponent {
     const current = currentStep(item.issue.lifecycle);
     const step =
       current !== null
-        ? stepCopy(current.step, 'triage').label
+        ? stepCopy(current.step).label
         : item.runKind !== null
           ? `Queued: ${RUN_KIND_LABELS[item.runKind]}`
           : 'Queued';

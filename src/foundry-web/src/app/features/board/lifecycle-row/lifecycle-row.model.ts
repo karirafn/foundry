@@ -18,7 +18,7 @@ export type RowStatus =
 /** The current step's label, or null with no lifecycle. */
 export function currentStepLabel(lifecycle: readonly LifecycleStep[] | undefined): string | null {
   const current = currentStep(lifecycle);
-  return current === null ? null : stepCopy(current.step, 'triage').label;
+  return current === null ? null : stepCopy(current.step).label;
 }
 
 export function rowStatus(item: LifecycleRowItem, phase: CardPhase): RowStatus {
@@ -33,7 +33,7 @@ export function rowStatus(item: LifecycleRowItem, phase: CardPhase): RowStatus {
     return { kind: 'step', text: 'Foundry is preparing the workspace', clock: 'running' };
   }
   if (current?.phase === 'retrying') {
-    const label = stepCopy(current.step, 'triage').label.toLowerCase();
+    const label = stepCopy(current.step).label.toLowerCase();
     return { kind: 'step', text: `Retrying ${label}`, clock: 'running' };
   }
   if (item.band === 'workers' && (current === null || current.actor === 'claude')) {
@@ -42,7 +42,7 @@ export function rowStatus(item: LifecycleRowItem, phase: CardPhase): RowStatus {
   if (current === null) {
     return { kind: 'step', text: 'In progress', clock: 'running' };
   }
-  const copy = stepCopy(current.step, 'triage');
+  const copy = stepCopy(current.step);
   return current.phase === 'waiting'
     ? { kind: 'step', text: copy.label, clock: 'waiting' }
     : { kind: 'step', text: copy.doing, clock: 'running' };

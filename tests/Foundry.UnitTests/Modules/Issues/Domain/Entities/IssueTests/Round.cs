@@ -56,6 +56,7 @@ public sealed class Round
         ["FromRebaseConflict"] = true,
         ["FromRevisionFailed"] = false,
         ["FromAwaitingInput"] = false,
+        ["FromRevisionBlocked"] = false,
     };
 
     public static TheoryData<string> Factories => [.. StartsRoundByFactory.Keys];
@@ -229,6 +230,11 @@ public sealed class Round
             {
                 RebasePendingIssue rebasePending = Builder().RebasePending();
                 return (rebasePending, () => rebasePending.ResolveConflict(Now));
+            }
+            case "FromRevisionBlocked":
+            {
+                RevisionBlockedIssue blocked = Builder().RevisionBlocked([2]);
+                return (blocked, () => blocked.Unblock(Now));
             }
             case "FromRevisionFailed":
             {
