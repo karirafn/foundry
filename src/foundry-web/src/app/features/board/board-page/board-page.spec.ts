@@ -406,7 +406,7 @@ describe('BoardPageComponent', () => {
       expect(text(card.querySelector('time'))).toBe('waiting 12m');
     });
 
-    it('opens the pane from its one button and offers no state-changing control', async () => {
+    it('opens the pane from its title and offers one action after it', async () => {
       // Act
       const { el } = await loaded([
         item('n', 42, { title: 'Add retry', state: 'failed', needsAction: true }),
@@ -415,13 +415,15 @@ describe('BoardPageComponent', () => {
       // Assert
       const card = el.querySelector('fd-lifecycle-row')!;
       const buttons = card.querySelectorAll('button:not([hidden])');
-      expect(buttons).toHaveLength(1);
+      expect(buttons).toHaveLength(2);
       expect(buttons[0].getAttribute('aria-label')).toBe('Add retry, #42');
       expect(buttons[0].getAttribute('aria-haspopup')).toBe('dialog');
+      expect(buttons[1].getAttribute('aria-label')).toBe('Retry issue #42');
+      expect(buttons[1].hasAttribute('aria-haspopup')).toBe(false);
       expect(card.querySelector('a')).toBeNull();
     });
 
-    it('links a ready pull request for review in a new tab', async () => {
+    it('opens a ready pull request in a new tab from its row button', async () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
@@ -438,10 +440,11 @@ describe('BoardPageComponent', () => {
       expect(link.getAttribute('href')).toBe('https://gitlab.com/acme/api/-/merge_requests/3');
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-      expect(text(link)).toBe('Review MR ↗ (opens GitLab in a new tab)');
+      expect(text(link)).toBe('Open MR ↗');
+      expect(link.getAttribute('aria-label')).toBe('Open MR for issue #7 (opens GitLab in a new tab)');
     });
 
-    it('keeps the review link on a pull request Foundry did not merge', async () => {
+    it('opens a pull request Foundry did not merge from its row button', async () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
@@ -458,7 +461,7 @@ describe('BoardPageComponent', () => {
       // Assert
       const link = el.querySelector<HTMLAnchorElement>('fd-lifecycle-row a')!;
       expect(link.getAttribute('href')).toBe('https://github.com/acme/api/pull/3');
-      expect(text(link)).toBe('Review PR ↗ (opens GitHub in a new tab)');
+      expect(text(link)).toBe('Open PR ↗');
     });
 
     it('keeps the review link and explains a review that did not finish', async () => {

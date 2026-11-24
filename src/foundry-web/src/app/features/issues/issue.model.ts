@@ -95,6 +95,10 @@ export interface IssueSummary {
    * none. Tokens stay as served, so a step this dashboard does not know yet is kept.
    */
   lifecycle?: readonly LifecycleStep[];
+  /** Whether an awaiting-input issue's questions reached the provider; null for any other state. */
+  questionPostStatus?: QuestionPostStatus | null;
+  /** The posted question comment; null until posted, or when the provider's URL form is unknown. */
+  questionCommentUrl?: string | null;
 }
 
 export interface EligibilityViolation {

@@ -526,8 +526,19 @@ internal sealed class IssueQueries(
             ReviewOutcome: reviewOutcome?.Discriminator,
             ReviewSkippedReason: (reviewOutcome as ReviewOutcome.Skipped)?.Reason,
             Round: issue.Round,
-            Lifecycle: lifecycle.Select(ToStepInfo).ToList());
+            Lifecycle: lifecycle.Select(ToStepInfo).ToList(),
+            QuestionPostStatus: QuestionPostStatusName(issue),
+            QuestionCommentUrl: ((issue as AwaitingInputIssue)?.QuestionPost as QuestionPost.Posted)?.CommentUrl);
     }
+
+    private static string? QuestionPostStatusName(Issue issue) =>
+        (issue as AwaitingInputIssue)?.QuestionPost switch
+        {
+            null => null,
+            QuestionPost.Posted => IssueSummary.QuestionPostPosted,
+            QuestionPost.Failed => IssueSummary.QuestionPostFailed,
+            _ => IssueSummary.QuestionPostPending,
+        };
 
     private static LifecycleStepInfo ToStepInfo(LifecyclePathStep step) =>
         new(

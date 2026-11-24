@@ -781,7 +781,67 @@ describe('IssueService', () => {
     return result;
   }
 
+  function openPane(id: string): void {
+    service.selectIssue(id);
+    httpMock.expectOne(`/api/issues/${id}`).flush({ ...mockSummary, id });
+  }
+
+  it("should fetch an issue's detail without changing the pane's", () => {
+    // Arrange
+    openPane('def456');
+    const result: { value: unknown } = { value: undefined };
+
+    // Act
+    service.fetchDetail('abc123').subscribe((v) => (result.value = v));
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary, id: 'abc123' });
+
+    // Assert
+    expect(result.value).toMatchObject({ id: 'abc123' });
+    expect(service.issueDetail()?.id).toBe('def456');
+  });
+
+  it('should fetch null when the detail cannot be loaded', () => {
+    // Arrange
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result: { value: unknown } = { value: undefined };
+
+    // Act
+    service.fetchDetail('abc123').subscribe((v) => (result.value = v));
+    httpMock.expectOne('/api/issues/abc123').flush('Boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(result.value).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('should not reload the detail after retryIssue succeeds when the pane is closed', () => {
+    // Arrange
+    outcome(service.retryIssue('abc123'));
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+
+    // Assert
+    httpMock.expectNone('/api/issues/abc123');
+  });
+
+  it("should keep the open pane's detail when retryIssue succeeds on another issue", () => {
+    // Arrange
+    openPane('def456');
+    outcome(service.retryIssue('abc123'));
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry').flush({});
+
+    // Assert
+    httpMock.expectNone('/api/issues/abc123');
+    expect(service.issueDetail()?.id).toBe('def456');
+  });
+
   it('should POST to /api/issues/{id}/retry when retryIssue is subscribed', () => {
+    // Arrange
+    openPane('abc123');
+
     // Act
     const result = outcome(service.retryIssue('abc123'));
 
@@ -803,6 +863,7 @@ describe('IssueService', () => {
 
   it('should reload issue detail after retryIssue succeeds', () => {
     // Arrange
+    openPane('abc123');
     outcome(service.retryIssue('abc123'));
     httpMock.expectOne('/api/issues/abc123/retry').flush({});
 
@@ -832,6 +893,9 @@ describe('IssueService', () => {
   });
 
   it('should POST to /api/issues/{id}/retry-fresh and reload detail when retryIssueFresh is subscribed', () => {
+    // Arrange
+    openPane('abc123');
+
     // Act
     const result = outcome(service.retryIssueFresh('abc123'));
 
@@ -2615,6 +2679,8 @@ describe('IssueService (triage actions)', () => {
     describe(c.action, () => {
       it(`POSTs to /api/issues/{id}/${c.path}, emits null and reloads the detail on success`, () => {
         // Arrange
+        service.selectIssue('abc123');
+        httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
         let result: string | null | undefined;
         c.call(service, 'abc123').subscribe((v) => (result = v));
 
@@ -2853,6 +2919,39 @@ describe('IssueService board placement (#851)', () => {
     expect(svc.issues()[0].lifecycle).toBeUndefined();
   });
 
+  it('maps the question post status and comment URL of an awaiting-input issue', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const commentUrl = 'https://github.com/owner/repo/issues/7#issuecomment-9';
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [{ ...placedItem, state: 'awaiting_input', questionPostStatus: 'posted', questionCommentUrl: commentUrl }],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0].questionPostStatus).toBe('posted');
+    expect(svc.issues()[0].questionCommentUrl).toBe(commentUrl);
+  });
+
+  it.each([[undefined], [null], ['queued']])('reads a question post status of %j as none', (questionPostStatus) => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [{ ...placedItem, state: 'awaiting_input', questionPostStatus, questionCommentUrl: null }],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0].questionPostStatus).toBeNull();
+    expect(svc.issues()[0].questionCommentUrl).toBeNull();
+  });
+
   it('maps a skipped review and its reason so the board can show it', () => {
     // Arrange
     const { svc, http } = setup();
@@ -2961,6 +3060,23 @@ describe('IssueService board placement (#851)', () => {
 
     // Assert
     expect(svc.issues()[0]).toMatchObject({ stage: 'implement', codeStep: null });
+  });
+
+  it('narrows the question post status of an IssueUpdated payload', () => {
+    // Arrange
+    const { svc, http, callbacks } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    callbacks['IssueUpdated']({
+      ...placedItem,
+      state: 'awaiting_input',
+      questionPostStatus: 'queued',
+    } as unknown as IssueSummary);
+
+    // Assert
+    expect(svc.issues()[0].questionPostStatus).toBeNull();
   });
 
   it('maps the repository id, blocker wait and state entry time from the issues response (#892)', () => {

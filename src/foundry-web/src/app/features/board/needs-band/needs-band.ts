@@ -12,12 +12,13 @@ import { BoardBandComponent } from '../board-band/board-band';
 import { ItemView } from '../board-state.service';
 import { CardOpened, NeedsItem, RepoAlert, countWords } from '../board.model';
 import { LifecycleRowComponent } from '../lifecycle-row/lifecycle-row';
+import { RowActionComponent } from '../lifecycle-row/row-action/row-action';
 import { RepoAlertComponent } from './repo-alert/repo-alert';
 
 /** The first band: repositories that hold issues, then every issue that needs a person. The page hides it when empty. */
 @Component({
   selector: 'fd-needs-band',
-  imports: [BoardBandComponent, LifecycleRowComponent, RepoAlertComponent],
+  imports: [BoardBandComponent, LifecycleRowComponent, RepoAlertComponent, RowActionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './needs-band.html',
   styleUrl: './needs-band.scss',

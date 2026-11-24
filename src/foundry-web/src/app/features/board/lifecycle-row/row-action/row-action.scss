@@ -1,0 +1,54 @@
+@use '../../../../../styles/breakpoints' as *;
+@use '../../../../../styles/controls' as *;
+
+// Its parts join the row's status line as flex items: the control at the line's end, the error on
+// its own line under it.
+:host {
+  display: contents;
+}
+
+// Above the title's stretched overlay, so a click here never reaches the title button.
+.row-action {
+  display: inline-flex;
+  margin-inline-start: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.row-action__btn {
+  @include action-button(nowrap);
+  @include action-button-primary;
+
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+  justify-content: center;
+  text-decoration: none;
+  transition: background 150ms ease;
+
+  &[aria-disabled='true'] {
+    cursor: not-allowed;
+    filter: none;
+    opacity: 0.6;
+  }
+}
+
+.row-action__error {
+  color: var(--fd-text-error);
+  flex-basis: 100%;
+  font-size: 0.8125rem;
+
+  &:empty {
+    display: none;
+  }
+}
+
+@media (width < $rail-breakpoint) {
+  .row-action {
+    flex-basis: 100%;
+  }
+
+  .row-action__btn {
+    width: 100%;
+  }
+}

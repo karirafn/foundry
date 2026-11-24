@@ -24,3 +24,27 @@ export function providerTerminology(providerType: string): ProviderTerminology {
     ? { pullRequest: 'Merge request', prAbbrev: 'MR' }
     : { pullRequest: 'Pull request', prAbbrev: 'PR' };
 }
+
+const GITHUB_PULL_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+$/;
+const GITLAB_MERGE_REQUEST_PATH = /^\/.+\/-\/merge_requests\/\d+$/;
+
+/**
+ * The page of a pull request's CI: `<pr>/checks` on GitHub, `<mr>/pipelines` on GitLab, read from
+ * the URL's own form; the pull request URL itself when it is of neither form.
+ */
+export function checksUrl(pullRequestUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(pullRequestUrl);
+  } catch {
+    return pullRequestUrl;
+  }
+  const path = url.pathname.replace(/\/+$/, '');
+  if (GITHUB_PULL_PATH.test(path)) {
+    return `${url.origin}${path}/checks`;
+  }
+  if (GITLAB_MERGE_REQUEST_PATH.test(path)) {
+    return `${url.origin}${path}/pipelines`;
+  }
+  return pullRequestUrl;
+}

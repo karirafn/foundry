@@ -1,5 +1,5 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of, switchMap } from 'rxjs';
 import { ConfirmDialogService } from '../../shared/components/confirm-dialog/confirm-dialog.service';
 import { WorkerRunService } from '../workers/worker-run.service';
 import { actionConfirmation, actionSuccessMessage } from './issue-action-copy';
@@ -16,7 +16,8 @@ export type IssueActionRequest =
   | { readonly kind: 'retry_post' }
   | { readonly kind: 'retry_review' }
   | { readonly kind: 'stop_worker'; readonly workerRunId: string; readonly triageRun: boolean }
-  | { readonly kind: 'retry_publish'; readonly workerRunId: string; readonly branchName: string | null }
+  // A null run id is read from the issue's detail once confirmed: a board row holds no run.
+  | { readonly kind: 'retry_publish'; readonly workerRunId: string | null; readonly branchName: string | null }
   | { readonly kind: 'discard_run'; readonly workerRunId: string; readonly providerType: string }
   | { readonly kind: 'confirm_false_positives'; readonly workerRunId: string; readonly publishBlockedAt: string };
 
@@ -47,6 +48,10 @@ interface IssueActionEntry {
   readonly failure: Signal<IssueActionFailure | null>;
   readonly success: Signal<IssueActionSuccess | null>;
 }
+
+// The messages WorkerRunService.requestPublishRetry gives for the same outcomes.
+const PUBLISH_RETRY_ERROR = 'Failed to retry publish.';
+const PUBLISH_RETRY_GONE = 'This run is no longer waiting to publish.';
 
 const IDLE: IssueActionState = { pending: null, failure: null, success: null };
 
@@ -142,12 +147,28 @@ export class IssueActionsService {
       case 'stop_worker':
         return this._workerRunService.requestCancel(action.workerRunId);
       case 'retry_publish':
-        return this._workerRunService.requestPublishRetry(action.workerRunId);
+        return action.workerRunId === null
+          ? this._retryPublishOfDetail(issueId)
+          : this._workerRunService.requestPublishRetry(action.workerRunId);
       case 'discard_run':
         return this._workerRunService.requestDiscard(action.workerRunId);
       case 'confirm_false_positives':
         return this._workerRunService.requestConfirmFalsePositives(action.workerRunId, action.publishBlockedAt);
     }
+  }
+
+  private _retryPublishOfDetail(issueId: string): Observable<string | null> {
+    return this._issueService.fetchDetail(issueId).pipe(
+      switchMap((detail) => {
+        if (detail === null) {
+          return of(PUBLISH_RETRY_ERROR);
+        }
+        const workerRunId = detail.stateDetails?.workerRunId;
+        return workerRunId
+          ? this._workerRunService.requestPublishRetry(workerRunId)
+          : of(PUBLISH_RETRY_GONE);
+      }),
+    );
   }
 
   private _patch(issueId: string, change: Partial<IssueActionState>): void {

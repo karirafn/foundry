@@ -1,4 +1,4 @@
-import { providerDisplayName, providerLabel, providerTerminology } from './provider.util';
+import { checksUrl, providerDisplayName, providerLabel, providerTerminology } from './provider.util';
 
 describe('providerLabel', () => {
   it('should return GH for GitHub', () => {
@@ -168,5 +168,42 @@ describe('providerDisplayName', () => {
 
     // Assert
     expect(result).toBe('Bitbucket');
+  });
+});
+
+describe('checksUrl', () => {
+  it.each([
+    ['https://github.com/acme/repo/pull/42', 'https://github.com/acme/repo/pull/42/checks'],
+    ['https://github.com/acme/repo/pull/42/', 'https://github.com/acme/repo/pull/42/checks'],
+    ['https://ghe.example.com/acme/repo/pull/7', 'https://ghe.example.com/acme/repo/pull/7/checks'],
+  ])('opens the checks tab of the GitHub pull request %s', (pullRequestUrl, expected) => {
+    // Act
+    const result = checksUrl(pullRequestUrl);
+
+    // Assert
+    expect(result).toBe(expected);
+  });
+
+  it.each([
+    ['https://gitlab.com/group/project/-/merge_requests/5', 'https://gitlab.com/group/project/-/merge_requests/5/pipelines'],
+    ['https://gitlab.example.com/a/b/c/-/merge_requests/12', 'https://gitlab.example.com/a/b/c/-/merge_requests/12/pipelines'],
+  ])('opens the pipelines tab of the GitLab merge request %s', (pullRequestUrl, expected) => {
+    // Act
+    const result = checksUrl(pullRequestUrl);
+
+    // Assert
+    expect(result).toBe(expected);
+  });
+
+  it.each([
+    ['https://github.com/acme/repo/issues/42'],
+    ['https://example.com/review/42'],
+    ['not a url'],
+  ])('falls back to the pull request URL %s when it is of neither form', (pullRequestUrl) => {
+    // Act
+    const result = checksUrl(pullRequestUrl);
+
+    // Assert
+    expect(result).toBe(pullRequestUrl);
   });
 });

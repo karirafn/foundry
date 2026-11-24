@@ -1,0 +1,48 @@
+@let s = spec();
+@if (s !== null) {
+  @switch (s.kind) {
+    @case ('link') {
+      @if (s.href | safeHref; as href) {
+        <span class="row-action">
+          <a
+            class="row-action__btn"
+            [href]="href"
+            target="_blank"
+            rel="noopener noreferrer"
+            [attr.aria-label]="ariaLabel()"
+            >{{ s.label }} <span aria-hidden="true">↗</span></a
+          >
+        </span>
+      }
+    }
+    @case ('action') {
+      <span class="row-action">
+        <button
+          type="button"
+          class="row-action__btn"
+          [attr.aria-label]="ariaLabel()"
+          [attr.aria-disabled]="busy() ? 'true' : null"
+          [attr.aria-busy]="pending() ? 'true' : null"
+          (click)="run(s.action)"
+        >
+          {{ pending() ? s.pendingLabel : s.label }}
+        </button>
+      </span>
+    }
+    @case ('open') {
+      <span class="row-action">
+        <button
+          #review
+          type="button"
+          class="row-action__btn"
+          aria-haspopup="dialog"
+          [attr.aria-label]="ariaLabel()"
+          (click)="open.emit(review)"
+        >
+          {{ s.label }}
+        </button>
+      </span>
+    }
+  }
+  <span class="row-action__error" role="alert">{{ error() ?? '' }}</span>
+}

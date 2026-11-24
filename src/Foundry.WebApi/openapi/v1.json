@@ -4896,6 +4896,18 @@
             "items": {
               "$ref": "#/components/schemas/LifecycleStepInfo"
             }
+          },
+          "questionPostStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "questionCommentUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
