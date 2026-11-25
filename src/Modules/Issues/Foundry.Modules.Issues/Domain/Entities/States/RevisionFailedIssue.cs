@@ -125,4 +125,18 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }
+
+    /// <summary>
+    /// The issue's spec was rewritten since its last triage (ADR 0125): it goes back to triage holding its branch and
+    /// pull request, so a ready verdict resumes the work on them.
+    /// </summary>
+    public TriageQueuedIssue RetriageRewrittenSpec(DateTimeOffset transitionedAt)
+    {
+        TriageQueuedIssue queued = TriageQueuedIssue.HoldingOpenWork(
+            this,
+            OpenWork.Of(BranchName, PullRequestUrl),
+            transitionedAt);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+        return queued;
+    }
 }

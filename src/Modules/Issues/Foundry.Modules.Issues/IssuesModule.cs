@@ -32,6 +32,7 @@ public static class IssuesModule
         services.AddScoped<IIssueQueries, IssueQueries>();
         services.AddScoped<IssueStepTransitionQueries>();
         services.AddScoped<ITriageFailedIssueQueries, TriageFailedIssueQueries>();
+        services.AddScoped<ISpecWatchedIssueQueries, SpecWatchedIssueQueries>();
         services.AddScoped<IRepositoryRemovalBlockers, RepositoryRemovalBlockers>();
         services.AddScoped<InFlightWorkerCountQuery>();
         services.AddScoped<FreshBranchAdopter>();
@@ -81,6 +82,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<MergeQueueChanged, MergeQueueChangedHandler>();
         services.AddIntegrationEventHandler<AwaitingInputArrived, AwaitingInputArrivedHandler>();
         services.AddIntegrationEventHandler<TriageFailedIssueEdited, TriageFailedIssueEditedHandler>();
+        services.AddIntegrationEventHandler<IssueSpecRewritten, IssueSpecRewrittenHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();
         services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredHandler>();

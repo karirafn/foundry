@@ -95,6 +95,30 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         return queued;
     }
 
+    /// <summary>
+    /// Triage released an issue whose open work is a branch without a pull request, with no open blockers: the work
+    /// continues on <paramref name="branchName"/>, never a fresh run on a recomputed branch. No run failed, so there is
+    /// no failure reason.
+    /// </summary>
+    internal static ContinuationQueuedIssue FromTriage(
+        Issue source,
+        TriageVerdict.Ready? verdict,
+        string branchName,
+        DateTimeOffset transitionedAt)
+    {
+        ContinuationQueuedIssue queued = new(source.Id, transitionedAt);
+        queued.CopySharedPropertiesFrom(source);
+        if (verdict is not null)
+        {
+            queued.RecordTriageVerdict(verdict);
+        }
+
+        queued.ReleaseOpenWork();
+        queued.BranchName = branchName;
+        queued.FailureReason = string.Empty;
+        return queued;
+    }
+
     internal static ContinuationQueuedIssue FromAwaitingInput(
         AwaitingInputIssue source,
         ResumeTarget.Continuation target,
@@ -137,5 +161,16 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId, claimedAt);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
         return inProgress;
+    }
+
+    /// <summary>
+    /// The issue's spec was rewritten since its last triage (ADR 0125): it goes back to triage holding its branch, so
+    /// a ready verdict continues the work on it.
+    /// </summary>
+    public TriageQueuedIssue RetriageRewrittenSpec(DateTimeOffset transitionedAt)
+    {
+        TriageQueuedIssue queued = TriageQueuedIssue.HoldingOpenWork(this, OpenWork.OnBranch(BranchName), transitionedAt);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 }

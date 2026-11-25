@@ -201,7 +201,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     }
 
     /// <summary>
-    /// Triage released an issue that holds <paramref name="openWork"/> with no open blockers: the work resumes as a
+    /// Triage released an issue that holds open work with a pull request with no open blockers: the work resumes as a
     /// <see cref="RevisionTrigger.SpecChanged"/> revision on its branch and pull request, never a fresh run on a
     /// recomputed branch. The revision consumes no review comments, so it carries no feedback cutoff and the next review
     /// cutoff anchors to its run's start.
@@ -209,7 +209,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromTriage(
         Issue source,
         TriageVerdict.Ready? verdict,
-        OpenWork openWork,
+        string branchName,
+        string pullRequestUrl,
         DateTimeOffset transitionedAt)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
@@ -220,8 +221,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         }
 
         revisionQueued.ReleaseOpenWork();
-        revisionQueued.BranchName = openWork.BranchName;
-        revisionQueued.PullRequestUrl = openWork.PullRequestUrl;
+        revisionQueued.BranchName = branchName;
+        revisionQueued.PullRequestUrl = pullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.SpecChanged();
         revisionQueued.StartRound();
         revisionQueued.ResetReviewFixAttempts();
@@ -272,5 +273,19 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             claimedAt);
         AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));
         return revisionInProgress;
+    }
+
+    /// <summary>
+    /// The issue's spec was rewritten since its last triage (ADR 0125): it goes back to triage holding its branch and
+    /// pull request, so a ready verdict resumes the work on them.
+    /// </summary>
+    public TriageQueuedIssue RetriageRewrittenSpec(DateTimeOffset transitionedAt)
+    {
+        TriageQueuedIssue queued = TriageQueuedIssue.HoldingOpenWork(
+            this,
+            OpenWork.Of(BranchName, PullRequestUrl),
+            transitionedAt);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 }

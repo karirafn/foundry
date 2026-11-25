@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Merge;
 using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Rebase;
+using Foundry.Modules.Monitoring.Features.SpecRewrite;
 using Foundry.Modules.Monitoring.Features.TriageFailed;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
@@ -221,6 +222,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         MergeStep? mergeStep = scope.ServiceProvider.GetService<MergeStep>();
         AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
         TriageFailedEditStep? triageFailedEditStep = scope.ServiceProvider.GetService<TriageFailedEditStep>();
+        SpecRewriteStep? specRewriteStep = scope.ServiceProvider.GetService<SpecRewriteStep>();
 
         int pollIntervalSeconds = await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
         TimeSpan pollInterval = TimeSpan.FromSeconds(pollIntervalSeconds);
@@ -312,6 +314,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             if (triageFailedEditStep is not null)
             {
                 await triageFailedEditStep.RunAsync(repo, resolvedProvider.Provider, now, cancellationToken);
+            }
+
+            // The scheduled poll alone watches the spec of issues with open work for a rewrite (ADR 0125), for the same
+            // reason: a rewrite there is not urgent.
+            if (specRewriteStep is not null)
+            {
+                await specRewriteStep.RunAsync(repo, resolvedProvider.Provider, now, cancellationToken);
             }
 
             if (pollResult is Result<PollChanges>.Failure pollFailure)

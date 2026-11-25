@@ -64,19 +64,21 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public SpecHash? TriagedSpecHash { get; private set; }
 
-    // The two persisted halves of OpenWork: both set, or both null.
+    // The two persisted halves of OpenWork: the branch is set whenever there is open work, the pull request only when
+    // the work has one.
     private string? _openWorkBranchName;
     private string? _openWorkPullRequestUrl;
 
     /// <summary>
-    /// The branch and pull request the issue already has while it is back in triage, or <see langword="null"/> when it
-    /// has none. Carried through every transition with the shared properties; a ready verdict resumes it as a
-    /// <see cref="RevisionTrigger.SpecChanged"/> revision on that branch and consumes it.
+    /// The branch, and the pull request when there is one, the issue already has while it is back in triage, or
+    /// <see langword="null"/> when it has none. Carried through every transition with the shared properties; a ready
+    /// verdict resumes it on that branch (a <see cref="RevisionTrigger.SpecChanged"/> revision with a pull request, a
+    /// continuation without one) and consumes it.
     /// </summary>
     public OpenWork? OpenWork =>
-        _openWorkBranchName is { } branchName && _openWorkPullRequestUrl is { } pullRequestUrl
-            ? OpenWork.Of(branchName, pullRequestUrl)
-            : null;
+        _openWorkBranchName is not { } branchName ? null
+        : _openWorkPullRequestUrl is { } pullRequestUrl ? OpenWork.Of(branchName, pullRequestUrl)
+        : OpenWork.OnBranch(branchName);
 
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
@@ -416,9 +418,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     /// <summary>
     /// Leaves triage through the dependency check (ADR 0097): queued when the issue has no open blockers, blocked
-    /// otherwise, so an issue with open blockers is never queued. An issue holding <see cref="OpenWork"/> resumes it as
-    /// a <see cref="RevisionTrigger.SpecChanged"/> revision on its branch instead of a fresh run, so the branch name is
-    /// never recomputed and no second pull request opens. A ready <paramref name="verdict"/> is recorded on the next
+    /// otherwise, so an issue with open blockers is never queued. An issue holding <see cref="OpenWork"/> resumes it on
+    /// its branch instead of a fresh run (a <see cref="RevisionTrigger.SpecChanged"/> revision with a pull request, a
+    /// continuation without one), so the branch name is never recomputed and no second branch or pull request opens. A ready <paramref name="verdict"/> is recorded on the next
     /// state; skipping triage records none.
     /// </summary>
     private protected Issue ReleaseThroughDependencyCheck(TriageVerdict.Ready? verdict, DateTimeOffset transitionedAt)
@@ -442,15 +444,44 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     private Issue ResumeOpenWork(TriageVerdict.Ready? verdict, OpenWork openWork, DateTimeOffset transitionedAt)
     {
+        if (openWork.PullRequestUrl is not { } pullRequestUrl)
+        {
+            return ResumeContinuation(verdict, openWork.BranchName, transitionedAt);
+        }
+
         if (BlockedBy.Count == 0)
         {
-            RevisionQueuedIssue queued = RevisionQueuedIssue.FromTriage(this, verdict, openWork, transitionedAt);
+            RevisionQueuedIssue queued = RevisionQueuedIssue.FromTriage(
+                this,
+                verdict,
+                openWork.BranchName,
+                pullRequestUrl,
+                transitionedAt);
             AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
             return queued;
         }
 
-        RevisionBlockedIssue blocked = RevisionBlockedIssue.FromTriage(this, verdict, openWork, transitionedAt);
+        RevisionBlockedIssue blocked = RevisionBlockedIssue.FromTriage(
+            this,
+            verdict,
+            openWork.BranchName,
+            pullRequestUrl,
+            transitionedAt);
         AddDomainEvent(new Events.IssueRevisionBlocked(Id, MonitoredRepositoryId));
+        return blocked;
+    }
+
+    private Issue ResumeContinuation(TriageVerdict.Ready? verdict, string branchName, DateTimeOffset transitionedAt)
+    {
+        if (BlockedBy.Count == 0)
+        {
+            ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromTriage(this, verdict, branchName, transitionedAt);
+            AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
+            return queued;
+        }
+
+        ContinuationBlockedIssue blocked = ContinuationBlockedIssue.FromTriage(this, verdict, branchName, transitionedAt);
+        AddDomainEvent(new Events.IssueContinuationBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }
 
