@@ -10,7 +10,7 @@ namespace Foundry.Modules.Workers.Features.ImageBuild;
 
 /// <summary>
 /// Requests a scheduled rebuild once the last successful build is <see cref="RebuildAge"/> old, so a new SDK release
-/// reaches workers without a redeploy (ADR 0125). The age comes from the persisted last build time, so a host restart
+/// reaches workers without a redeploy (ADR 0126). The age comes from the persisted last build time, so a host restart
 /// neither skips nor doubles a rebuild.
 /// </summary>
 internal sealed class WorkerImageRebuildScheduler(

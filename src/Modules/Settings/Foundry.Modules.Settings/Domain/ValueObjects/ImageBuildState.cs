@@ -14,7 +14,7 @@ internal abstract record ImageBuildState
         int Attempt) : ImageBuildState;
 
     /// <summary>
-    /// A scheduled rebuild failed while the previous verified image stays usable, so dispatch continues (ADR 0125).
+    /// A scheduled rebuild failed while the previous verified image stays usable, so dispatch continues (ADR 0126).
     /// </summary>
     internal sealed record ScheduledRebuildFailed(
         string? ErrorTail,
