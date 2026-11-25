@@ -193,6 +193,7 @@ describe('SetupWizardComponent', () => {
 
     it('should open at Webhooks when an account exists but the settings could not be loaded', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, activeLabel } = setup({ accounts: [account('account-7')], settings: null });
 
       // Act
@@ -200,6 +201,9 @@ describe('SetupWizardComponent', () => {
 
       // Assert
       expect(activeLabel()).toBe('Webhooks');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, url: '/api/settings' })
+      );
     });
 
     it('should open at Repositories with the first account when an account and URL exist', () => {

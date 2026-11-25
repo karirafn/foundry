@@ -79,6 +79,7 @@ describe('RateBudgetService', () => {
     vi.useFakeTimers();
     try {
       const { svc, http } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Seed a successful initial response
       const firstReq = http.expectOne('/api/rate-budget');
@@ -95,6 +96,10 @@ describe('RateBudgetService', () => {
 
       // Assert — prior successful snapshot is retained (catchError keeps the old value)
       expect(svc.snapshot()).toBe(snapshotAfterSuccess);
+      expect(consoleError).toHaveBeenCalledWith(
+        '[RateBudgetService] Failed to fetch rate budget snapshot',
+        expect.objectContaining({ status: 500 }),
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -103,6 +108,7 @@ describe('RateBudgetService', () => {
   it('should map null snapshot when initial fetch fails', () => {
     // Arrange
     const { svc, http } = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act — initial request fails
     const req = http.expectOne('/api/rate-budget');
@@ -110,6 +116,10 @@ describe('RateBudgetService', () => {
 
     // Assert — snapshot stays null, service does not throw
     expect(svc.snapshot()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[RateBudgetService] Failed to fetch rate budget snapshot',
+      expect.objectContaining({ status: 500 }),
+    );
   });
 
   it('should expose snapshot with correct health values', () => {

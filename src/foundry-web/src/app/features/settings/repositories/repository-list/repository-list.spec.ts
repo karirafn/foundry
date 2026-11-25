@@ -552,6 +552,7 @@ describe('RepositoryListComponent', () => {
 
   it('should show error in a warning line when re-check fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
     const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
     recheckBtn.click();
@@ -567,6 +568,7 @@ describe('RepositoryListComponent', () => {
     expect(errorLine).toBeTruthy();
     expect(errorLine?.textContent).toContain('Re-check failed');
     expect(errorLine?.getAttribute('role')).toBe('alert');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck` }));
   });
 
   it('should clear the warning lines when re-check returns eligible', () => {
@@ -648,6 +650,7 @@ describe('RepositoryListComponent', () => {
 
   it('should announce "slug: Re-check failed" when recheck errors', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
     const recheckBtn = el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement;
     recheckBtn.click();
@@ -661,6 +664,7 @@ describe('RepositoryListComponent', () => {
     // Assert
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Re-check failed`);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck` }));
   });
 
   it('should announce the new position in the live region after a move succeeds', () => {
@@ -714,6 +718,7 @@ describe('RepositoryListComponent', () => {
 
   it('should display a visible move error message when the PATCH fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO, MOCK_REPO_2], reordering: true });
 
     // Act
@@ -729,6 +734,7 @@ describe('RepositoryListComponent', () => {
     const moveError = el.querySelector('.repository-list__move-error');
     expect(moveError).toBeTruthy();
     expect(moveError?.textContent).toContain('reorder');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/repositories/${MOCK_REPO.id}/position` }));
   });
 
   it('should restore focus to a control within the moved item after a successful move-down', async () => {
@@ -976,6 +982,7 @@ describe('RepositoryListComponent', () => {
 
     it('should show an alert when the request fails', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { el, fixture, httpMock } = setup({ repositories: [BRANCH_RULES_REPO] });
       (el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).click();
 
@@ -988,6 +995,7 @@ describe('RepositoryListComponent', () => {
       expect(errorLine?.textContent).toContain('Applying branch rules failed');
       expect(errorLine?.getAttribute('role')).toBe('alert');
       expect((el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).disabled).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: APPLY_URL }));
     });
   });
 

@@ -217,6 +217,7 @@ describe('SettingsLayoutComponent', () => {
 
   it('should show error state when loadSettings fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
 
@@ -229,10 +230,12 @@ describe('SettingsLayoutComponent', () => {
     const errorEl = el.querySelector('.settings-layout__load-error');
     expect(errorEl).toBeTruthy();
     expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
   });
 
   it('should render a retry button in the error state', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     flushSettingsError(httpMock);
@@ -245,10 +248,12 @@ describe('SettingsLayoutComponent', () => {
     // Assert
     expect(retryBtn).toBeTruthy();
     expect(retryBtn.textContent?.trim()).toBe('Retry');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
   });
 
   it('should call loadSettings when retry button is clicked', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     flushSettingsError(httpMock);
@@ -261,6 +266,7 @@ describe('SettingsLayoutComponent', () => {
 
     // Assert — retry triggers both endpoints again
     flushSettings(httpMock);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
   });
 
   it('should not render sidebar or router-outlet while loading', () => {
@@ -280,6 +286,7 @@ describe('SettingsLayoutComponent', () => {
 
   it('should not render sidebar or router-outlet when in error state', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
 
@@ -291,6 +298,7 @@ describe('SettingsLayoutComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.settings-layout__sidebar')).toBeFalsy();
     expect(el.querySelector('router-outlet')).toBeFalsy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
   });
 
   it('should render sidebar and router-outlet after settings load', () => {

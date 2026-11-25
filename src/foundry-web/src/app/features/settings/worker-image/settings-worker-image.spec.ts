@@ -412,6 +412,8 @@ describe('SettingsWorkerImageComponent', () => {
       flushSettings(httpMock);
       fixture.detectChanges();
 
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
       // Make dirty and attempt save
       service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
       httpMock.expectOne('/api/settings/worker-image').flush('Error', { status: 500, statusText: 'Server Error' });
@@ -425,6 +427,9 @@ describe('SettingsWorkerImageComponent', () => {
       expect(errorEl).toBeTruthy();
       expect(errorEl?.getAttribute('role')).toBe('alert');
       expect(errorEl?.textContent).toContain('Failed to save worker image settings');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, url: '/api/settings/worker-image' })
+      );
     });
 
     describe('image tag validation', () => {
@@ -544,6 +549,7 @@ describe('SettingsWorkerImageComponent', () => {
       fixture.detectChanges();
       flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'err' });
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act
       service.retryImageBuild();
@@ -554,6 +560,9 @@ describe('SettingsWorkerImageComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
       const errorEl = el.querySelector('#image-flags-error');
       expect(errorEl?.textContent).toContain('Failed to save worker image settings');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, url: '/api/settings/worker-image/retry' })
+      );
     });
 
     it('should have aria-label="Retry image build now" on the Retry button', () => {
@@ -1065,6 +1074,7 @@ describe('SettingsWorkerImageComponent', () => {
       fixture.detectChanges();
       flushSettings(httpMock);
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act
       service.updateNestedDocker(true);
@@ -1077,6 +1087,9 @@ describe('SettingsWorkerImageComponent', () => {
       expect(errorEl.getAttribute('role')).toBe('alert');
       expect(errorEl.textContent).toContain('Failed to save the nested Docker setting');
       expect(el.querySelector('#image-flags-error')?.textContent?.trim()).toBe('');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, url: NESTED_DOCKER_URL })
+      );
     });
 
     it('should keep the switch usable while the image builds and when building is off', () => {

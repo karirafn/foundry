@@ -98,6 +98,7 @@ describe('SettingsDispatchComponent', () => {
 
   it('should show error message when save limits fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, service } = setupSettingsPage(SettingsDispatchComponent);
     fixture.detectChanges();
     flushSettings(httpMock);
@@ -117,6 +118,7 @@ describe('SettingsDispatchComponent', () => {
     expect(errorEl).toBeTruthy();
     expect(errorEl?.getAttribute('role')).toBe('alert');
     expect(errorEl?.textContent).toContain('Failed to save worker limits');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/limits' }));
   });
 
   it('should disable the Save button while limits are saving', () => {
@@ -253,6 +255,7 @@ describe('SettingsDispatchComponent', () => {
 
   it('should conditionally bind aria-describedby on the autoResume checkbox based on dispatch error presence', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, service } = setupSettingsPage(SettingsDispatchComponent);
     fixture.detectChanges();
     flushSettings(httpMock);
@@ -272,6 +275,7 @@ describe('SettingsDispatchComponent', () => {
 
     // Assert — aria-describedby is bound to dispatch-error when error is present
     expect(checkbox.getAttribute('aria-describedby')).toBe('dispatch-error');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/dispatch' }));
   });
 
   it('should initialize probeIntervalMinutes input from loaded settings', () => {
@@ -407,6 +411,7 @@ describe('SettingsDispatchComponent', () => {
 
   it('should show error message when dispatch save fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, service } = setupSettingsPage(SettingsDispatchComponent);
     fixture.detectChanges();
     flushSettings(httpMock);
@@ -426,6 +431,7 @@ describe('SettingsDispatchComponent', () => {
     expect(errorEl).toBeTruthy();
     expect(errorEl?.getAttribute('role')).toBe('alert');
     expect(errorEl?.textContent).toContain('Failed to save dispatch settings');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/dispatch' }));
   });
 
   // ---------------------------------------------------------------------------
@@ -690,6 +696,7 @@ describe('SettingsDispatchComponent', () => {
 
   it('should show an unreachable error under the URL field, mark it invalid and focus it', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
     component._webhookUrlValue.set('https://new.example.com');
     fixture.detectChanges();
@@ -710,10 +717,12 @@ describe('SettingsDispatchComponent', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true');
     expect(input.getAttribute('aria-describedby')).toBe('webhook-url-hint webhook-url-error webhook-url-verify-error');
     expect(document.activeElement).toBe(input);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
   });
 
   it('should key a server validation error to the URL field', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, el, saveBtn, component } = setupWebhooks();
     component._webhookUrlValue.set('https://localhost');
     fixture.detectChanges();
@@ -729,10 +738,12 @@ describe('SettingsDispatchComponent', () => {
     // Assert
     expect(el.querySelector('#webhook-url-verify-error')?.textContent).toBe('Bad URL from server');
     expect(el.querySelector('#webhooks-error')?.textContent?.trim()).toBe('');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
   });
 
   it('should hide a server URL error once the URL is edited', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
     component._webhookUrlValue.set('https://new.example.com');
     fixture.detectChanges();
@@ -747,10 +758,12 @@ describe('SettingsDispatchComponent', () => {
     // Assert
     expect(el.querySelector('#webhook-url-verify-error')?.textContent).toBe('');
     expect(el.querySelector('#webhookPublicBaseUrl')?.getAttribute('aria-invalid')).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
   });
 
   it('should show an error not keyed to a field in the general error', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, el, saveBtn, component } = setupWebhooks({ webhookPublicBaseUrl: STORED_URL });
     component._webhookUrlValue.set('https://new.example.com');
     fixture.detectChanges();
@@ -766,6 +779,7 @@ describe('SettingsDispatchComponent', () => {
     // Assert
     expect(el.querySelector('#webhooks-error')?.textContent?.trim()).toBe('Settings not found');
     expect(el.querySelector('#webhook-url-verify-error')?.textContent).toBe('');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/settings/webhooks' }));
   });
 
   it('should report hasUnsavedChanges() as true when the backstop interval differs from saved value', () => {
@@ -838,6 +852,7 @@ describe('SettingsDispatchComponent', () => {
 
   it('should show the server error when the save fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, el, saveBtn } = setupQuestions();
 
     // Act
@@ -850,6 +865,7 @@ describe('SettingsDispatchComponent', () => {
 
     // Assert
     expect(el.querySelector('#awaiting-input-error')?.textContent).toContain('Bad delay from server');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/awaiting-input' }));
   });
 
   it('should report hasUnsavedChanges() as true when the reminder delay differs from saved value', () => {

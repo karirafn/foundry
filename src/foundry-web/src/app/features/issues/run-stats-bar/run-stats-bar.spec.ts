@@ -273,6 +273,7 @@ describe('RunStatsBarComponent', () => {
   // Cycle 5: error state renders inline error
   it('should render inline error when service has error', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, service } = setup();
     service.fetch();
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush('error', {
@@ -288,10 +289,12 @@ describe('RunStatsBarComponent', () => {
     const errorEl = el.querySelector('.run-stats-bar__error');
     expect(errorEl).toBeTruthy();
     expect(errorEl?.getAttribute('role')).toBe('alert');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('/api/workers/run-totals') }));
   });
 
   it('should render retry button in error state', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, service } = setup();
     service.fetch();
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush('error', {
@@ -304,10 +307,12 @@ describe('RunStatsBarComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const retryBtn = el.querySelector('.run-stats-bar__retry');
     expect(retryBtn).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('/api/workers/run-totals') }));
   });
 
   it('should call service.fetch when retry button is clicked', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock, service } = setup();
     service.fetch();
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush('error', {
@@ -326,6 +331,7 @@ describe('RunStatsBarComponent', () => {
     // Assert — a second HTTP request was made
     const req = httpMock.expectOne((r) => r.url === '/api/workers/run-totals');
     req.flush(mockTotals);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('/api/workers/run-totals') }));
   });
 
   // Cycle 6: scope toggle renders

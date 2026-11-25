@@ -192,6 +192,7 @@ describe('SettingsPackageSourcesComponent', () => {
     it('keeps the form open with field errors on a 400', async () => {
       const ctx = setup();
       await openForm(ctx);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       fillAndSave(ctx);
       ctx.httpMock.expectOne(CREDENTIAL_API).flush(
@@ -202,11 +203,15 @@ describe('SettingsPackageSourcesComponent', () => {
 
       expect(text(ctx.el.querySelector('#pscf-username-error'))).toBe('Username must be 255 characters or fewer.');
       expect(document.activeElement).toBe(ctx.el.querySelector('#pscf-username'));
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400, url: CREDENTIAL_API }),
+      );
     });
 
     it('clears the server error once its field is edited', async () => {
       const ctx = setup();
       await openForm(ctx);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       fillAndSave(ctx);
       ctx.httpMock.expectOne(CREDENTIAL_API).flush(
         { errors: { username: ['bad'] } },
@@ -220,6 +225,9 @@ describe('SettingsPackageSourcesComponent', () => {
       await settle(ctx);
 
       expect(text(ctx.el.querySelector('#pscf-username-error'))).toBe('');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400, url: CREDENTIAL_API }),
+      );
     });
   });
 
@@ -263,6 +271,7 @@ describe('SettingsPackageSourcesComponent', () => {
     it('shows an alert below the list when removal fails', async () => {
       const ctx = setup();
       const dialog = await askToRemove(ctx);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       (dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
       await settle(ctx);
@@ -272,6 +281,9 @@ describe('SettingsPackageSourcesComponent', () => {
       const alert = ctx.el.querySelector('.package-sources-settings__remove-error');
       expect(alert?.getAttribute('role')).toBe('alert');
       expect(text(alert)).toBe('Failed to remove credential');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, url: CREDENTIAL_API }),
+      );
     });
 
     it('makes no request when the confirmation is dismissed', async () => {

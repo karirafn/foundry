@@ -58,12 +58,14 @@ describe('PackageSourceService', () => {
 
     it('sets the load error and resolves failed when the request fails', async () => {
       const { service, httpMock } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       const loaded = service.load();
       httpMock.expectOne(API).flush(null, { status: 500, statusText: 'Server Error' });
 
       expect(await loaded).toBe('failed');
       expect(service.loadError()).toBe('Failed to load package sources');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: API }));
     });
   });
 
@@ -116,6 +118,7 @@ describe('PackageSourceService', () => {
 
     it('maps a 400 ValidationProblemDetails to field errors', async () => {
       const { service, httpMock } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       await loadWith(service, httpMock);
 
       service.saveCredential(makeSource().id, { username: 'u', token: 't' });
@@ -130,10 +133,12 @@ describe('PackageSourceService', () => {
       });
       expect(service.saveError()).toBeNull();
       expect(service.saveSuccess()).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: CREDENTIAL_API }));
     });
 
     it('reports any other failure as the save error', async () => {
       const { service, httpMock } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       await loadWith(service, httpMock);
 
       service.saveCredential(makeSource().id, { username: 'u', token: 't' });
@@ -141,20 +146,24 @@ describe('PackageSourceService', () => {
 
       expect(service.saveError()).toBe('Failed to save credential');
       expect(service.fieldErrors()).toEqual({});
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: CREDENTIAL_API }));
     });
 
     it('uses the problem detail as the save error when there is one', async () => {
       const { service, httpMock } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       await loadWith(service, httpMock);
 
       service.saveCredential(makeSource().id, { username: 'u', token: 't' });
       httpMock.expectOne(CREDENTIAL_API).flush({ detail: 'Package source not found.' }, { status: 404, statusText: 'Not Found' });
 
       expect(service.saveError()).toBe('Package source not found.');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: CREDENTIAL_API }));
     });
 
     it('clears one field error when that field is edited', async () => {
       const { service, httpMock } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       await loadWith(service, httpMock);
       service.saveCredential(makeSource().id, { username: 'u', token: 't' });
       httpMock.expectOne(CREDENTIAL_API).flush(
@@ -165,6 +174,7 @@ describe('PackageSourceService', () => {
       service.clearFieldError('username');
 
       expect(service.fieldErrors()).toEqual({ token: 'bad' });
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: CREDENTIAL_API }));
     });
   });
 
@@ -270,6 +280,7 @@ describe('PackageSourceService', () => {
 
     it('sets the remove error and resolves false on failure', async () => {
       const { service, httpMock } = setup();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       await loadWith(service, httpMock);
 
       const removed = service.removeCredential(makeSource().id);
@@ -278,6 +289,7 @@ describe('PackageSourceService', () => {
       expect(await removed).toBe(false);
       expect(service.removeError()).toBe('Failed to remove credential');
       expect(service.pendingChecks().size).toBe(0);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: CREDENTIAL_API }));
     });
   });
 });

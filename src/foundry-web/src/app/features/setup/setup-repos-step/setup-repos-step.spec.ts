@@ -377,6 +377,7 @@ describe('SetupReposStepComponent', () => {
   // Cycle 10: shows error message when load fails
   it('should display an error message when loading repositories fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
 
     // Act
@@ -391,6 +392,7 @@ describe('SetupReposStepComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.setup-repos-step__load-error')).toBeTruthy();
     expect(el.querySelector('.setup-repos-step__load-error')?.textContent?.trim()).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories/available-repositories` }));
   });
 
   // Cycle 11: shows progress indicator during creation
@@ -427,6 +429,7 @@ describe('SetupReposStepComponent', () => {
   // Cycle 12: shows save error message when creation fails
   it('should show an error message when creating repositories fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
@@ -451,11 +454,13 @@ describe('SetupReposStepComponent', () => {
 
     // Assert
     expect(el.querySelector('.setup-repos-step__save-error')?.textContent?.trim()).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   // Cycle 13: error message includes partial success count when some repos fail
   it('should include a count of successful repositories in the error message on partial failure', () => {
     // Arrange — select both writable repos; repo-gamma (index 2) is disabled so its change is ignored
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
@@ -487,6 +492,7 @@ describe('SetupReposStepComponent', () => {
     // Assert
     const errorText = el.querySelector('.setup-repos-step__save-error')?.textContent?.trim() ?? '';
     expect(errorText).toContain('1 of 2');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   // Cycle 14: non-writable repos render disabled with reason
@@ -891,6 +897,7 @@ describe('SetupReposStepComponent', () => {
   // Cycle 16: error strings are truncated to 200 characters
   it('should truncate long server error strings to at most 200 characters in the error detail', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`).flush({ hasClaims: false, repositories: AVAILABLE_REPOS });
@@ -920,6 +927,7 @@ describe('SetupReposStepComponent', () => {
     expect(errorText).toBeTruthy();
     // The error should not contain more than 200 A's (the raw error is truncated)
     expect((errorText.match(/A+/)?.[0] ?? '').length).toBeLessThanOrEqual(200);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
   describe('apply branch rules and per-row outcomes', () => {
     function selectAlphaAndBeta() {
@@ -1081,6 +1089,7 @@ describe('SetupReposStepComponent', () => {
 
     it('should continue the batch after a create request fails and show the error on that row only', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, el, httpMock } = selectAlphaAndBeta();
 
       // Act
@@ -1102,6 +1111,7 @@ describe('SetupReposStepComponent', () => {
       expect(row1.querySelector('fd-repository-add-outcome')).toBeFalsy();
       expect(row2.querySelector('fd-repository-add-outcome')).toBeTruthy();
       expect(el.querySelector('.setup-repos-step__save-error')?.textContent).toContain('1 of 2');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
     });
 
     it('should not reveal any outcome before the response arrives', () => {

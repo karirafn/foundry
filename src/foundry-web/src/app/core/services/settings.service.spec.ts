@@ -213,7 +213,7 @@ describe('SettingsService', () => {
   // Cycle 4: loadSettings sets loadError on failure
   it('should set loadError when loadSettings fails', () => {
     // Arrange
-    // (service initialized by test setup)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadSettings();
@@ -227,11 +227,12 @@ describe('SettingsService', () => {
     // Assert
     expect(service.loadError()).not.toBeNull();
     expect(service.loading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
   });
 
   it('should set loadError to a fixed user-facing string when loadSettings fails', () => {
     // Arrange
-    // (service initialized by test setup)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadSettings();
@@ -244,6 +245,7 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.loadError()).toBe('Failed to load settings');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
   });
 
   // Cycle 5: loadSettings maps OAuth mode — maps oAuthStatus straight through
@@ -333,6 +335,9 @@ describe('SettingsService', () => {
 
   it('should set saveError when updateAuthMode fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateAuthMode('api_key', 'my-api-key');
     httpMock.expectOne('/api/credentials/auth').flush('Bad Request', {
       status: 400,
@@ -343,10 +348,14 @@ describe('SettingsService', () => {
     expect(service.saveError()).not.toBeNull();
     expect(service.saving()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/credentials/auth' }));
   });
 
   it('should set saveError to a fixed user-facing string when updateAuthMode fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateAuthMode('api_key', 'my-api-key');
     httpMock.expectOne('/api/credentials/auth').flush('Bad Request', {
       status: 400,
@@ -355,6 +364,7 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.saveError()).toBe('Failed to save settings');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/credentials/auth' }));
   });
 
   // Cycle 7: updateAuthMode without apiKey (oauth mode)
@@ -492,6 +502,9 @@ describe('SettingsService', () => {
   // Cycle 12: updateWorkerLimits sets error signal on failure
   it('should set saveLimitsError when updateWorkerLimits fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateWorkerLimits(3, 120);
     httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
       status: 400,
@@ -502,10 +515,14 @@ describe('SettingsService', () => {
     expect(service.saveLimitsError()).not.toBeNull();
     expect(service.savingLimits()).toBe(false);
     expect(service.saveLimitsSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/limits' }));
   });
 
   it('should set saveLimitsError to a fixed user-facing string when updateWorkerLimits fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateWorkerLimits(3, 120);
     httpMock.expectOne('/api/settings/limits').flush('Bad Request', {
       status: 400,
@@ -514,11 +531,13 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.saveLimitsError()).toBe('Failed to save worker limits');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/limits' }));
   });
 
   // Cycle 13: signal state transitions for limits
   it('should clear saveLimitsError and saveLimitsSuccess when updateWorkerLimits is called', () => {
     // Arrange — put signals into dirty state
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.updateWorkerLimits(1, 60);
     httpMock.expectOne('/api/settings/limits').flush('Server Error', {
       status: 500,
@@ -534,10 +553,12 @@ describe('SettingsService', () => {
     expect(service.saveLimitsSuccess()).toBe(false);
     expect(service.savingLimits()).toBe(true);
     httpMock.expectOne('/api/settings/limits').flush(buildSettingsResponse({ maxConcurrent: 2, timeoutMinutes: 90 }));
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/limits' }));
   });
 
   it('should reset limits signals in loadSettings', () => {
     // Arrange — put signals into dirty state via public API
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.updateWorkerLimits(1, 60);
     httpMock.expectOne('/api/settings/limits').flush(buildSettingsResponse({ maxConcurrent: 1, timeoutMinutes: 60 }));
     // saveLimitsSuccess is now true; force an error state for saveLimitsError
@@ -556,6 +577,7 @@ describe('SettingsService', () => {
     expect(service.saveLimitsError()).toBeNull();
 
     flushLoadSettings(httpMock, { maxConcurrent: 1, timeoutMinutes: 60 });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/limits' }));
   });
 
   // Cycle 9: updateAuthMode updates authSettings on success
@@ -664,6 +686,9 @@ describe('SettingsService', () => {
 
   it('should set saveDispatchError when updateDispatchSettings fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateDispatchSettings(true, 60, 30);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
@@ -674,10 +699,14 @@ describe('SettingsService', () => {
     expect(service.saveDispatchError()).not.toBeNull();
     expect(service.savingDispatch()).toBe(false);
     expect(service.saveDispatchSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/dispatch' }));
   });
 
   it('should set saveDispatchError to a fixed user-facing string when updateDispatchSettings fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateDispatchSettings(true, 60, 30);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
@@ -686,6 +715,7 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.saveDispatchError()).toBe('Failed to save dispatch settings');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/dispatch' }));
   });
 
   it('should reset dispatch signals in loadSettings', () => {
@@ -776,6 +806,9 @@ describe('SettingsService', () => {
   });
 
   it('should set saveNestedDockerError and keep success false when updateNestedDocker fails', () => {
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
     // Act
     service.updateNestedDocker(true);
     httpMock.expectOne('/api/settings/nested-docker').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
@@ -784,6 +817,7 @@ describe('SettingsService', () => {
     expect(service.saveNestedDockerError()).not.toBeNull();
     expect(service.saveNestedDockerSuccess()).toBe(false);
     expect(service.savingNestedDocker()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/nested-docker' }));
   });
 
   it('should populate imageTag from loadSettings response', () => {
@@ -907,11 +941,15 @@ describe('SettingsService', () => {
 
   it('should keep saveImageFlagsSuccess false when updateWorkerImageFlags fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
     expect(service.saveImageFlagsSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/worker-image' }));
   });
 
   it('should reset saveImageFlagsSuccess in loadSettings', () => {
@@ -930,6 +968,9 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
@@ -939,10 +980,14 @@ describe('SettingsService', () => {
     // Assert
     expect(service.saveImageFlagsError()).not.toBeNull();
     expect(service.savingImageFlags()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/worker-image' }));
   });
 
   it('should set saveImageFlagsError to a fixed user-facing string when updateWorkerImageFlags fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
@@ -951,6 +996,7 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.saveImageFlagsError()).toBe('Failed to save worker image settings');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/worker-image' }));
   });
 
   // retryImageBuild calls POST /api/settings/worker-image/retry
@@ -997,12 +1043,16 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError when retryImageBuild fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.retryImageBuild();
     httpMock.expectOne('/api/settings/worker-image/retry').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
     expect(service.saveImageFlagsError()).toBe('Failed to save worker image settings');
     expect(service.savingImageFlags()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/worker-image/retry' }));
   });
 
   it('should clear imageBuildLogTail when loadSettings returns Idle after a Failed state', () => {
@@ -1145,6 +1195,9 @@ describe('SettingsService', () => {
 
   it('should reset loginPhase to null and set startLoginError when startLogin fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.startLogin();
     httpMock.expectOne('/api/credentials/login/start').flush('Server Error', {
       status: 500,
@@ -1154,6 +1207,7 @@ describe('SettingsService', () => {
     // Assert
     expect(service.loginPhase()).toBeNull();
     expect(service.startLoginError()).toBe('Failed to start login');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/credentials/login/start' }));
   });
 
 
@@ -1227,6 +1281,9 @@ describe('SettingsService', () => {
 
   it('should surface the server message when updateAllowedProviderHosts fails with a ProblemDetails body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateAllowedProviderHosts(['not-a-valid-host']);
     httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
       { type: 'tag:foundry,2026:problems/Settings.InvalidHost', title: 'Bad Request', status: 400, detail: 'Host "not-a-valid-host" is not an allowed domain' },
@@ -1237,10 +1294,14 @@ describe('SettingsService', () => {
     expect(service.saveHostsError()).toBe('Host "not-a-valid-host" is not an allowed domain');
     expect(service.savingHosts()).toBe(false);
     expect(service.saveHostsSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/allowed-provider-hosts' }));
   });
 
   it('should fall back to the generic constant when updateAllowedProviderHosts fails with a non-string error body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateAllowedProviderHosts(['host.example']);
     httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
       { title: 'Bad Request' },
@@ -1249,10 +1310,14 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.saveHostsError()).toBe('Failed to save provider hosts');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/allowed-provider-hosts' }));
   });
 
   it('should fall back to the generic constant when updateAllowedProviderHosts fails with an empty string body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.updateAllowedProviderHosts(['host.example']);
     httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
       '',
@@ -1261,6 +1326,7 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.saveHostsError()).toBe('Failed to save provider hosts');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/allowed-provider-hosts' }));
   });
 
   it('should reset hosts signals in loadSettings', () => {
@@ -1507,6 +1573,7 @@ describe('SettingsService — SignalR login session', () => {
       failureReason: null,
       failureMessage: null,
     });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.submitLoginCode('bad-code');
@@ -1518,6 +1585,7 @@ describe('SettingsService — SignalR login session', () => {
     // Assert
     expect(service.codeSubmitting()).toBe(false);
     expect(service.loginPhase()).toBe('WaitingForAuthorization');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 422, url: '/api/credentials/login/code' }));
   });
 
   // Cycle: cancelLogin clears all login signals
@@ -2060,6 +2128,7 @@ describe('SettingsService — worker environment', () => {
   it('should expose the problem detail and code when the save is rejected', () => {
     // Arrange
     service.updateWorkerEnvironment(ENV);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(ENV_URL).flush(
@@ -2072,11 +2141,13 @@ describe('SettingsService — worker environment', () => {
     expect(service.saveWorkerEnvironmentErrorCode()).toBe('Settings.InvalidCpuLimit');
     expect(service.saveWorkerEnvironmentSuccess()).toBe(false);
     expect(service.savingWorkerEnvironment()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/worker-environment' }));
   });
 
   it('should fall back to a fixed message when the error has no problem detail', () => {
     // Arrange
     service.updateWorkerEnvironment(ENV);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(ENV_URL).flush('boom', { status: 500, statusText: 'Server Error' });
@@ -2084,6 +2155,7 @@ describe('SettingsService — worker environment', () => {
     // Assert
     expect(service.saveWorkerEnvironmentError()).toBe('Failed to save worker environment');
     expect(service.saveWorkerEnvironmentErrorCode()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/worker-environment' }));
   });
 });
 
@@ -2136,6 +2208,7 @@ describe('SettingsService — claude code settings', () => {
   it('should expose the problem detail and code when the save is rejected', () => {
     // Arrange
     service.updateClaudeCodeSettings(CLAUDE_CODE);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(CLAUDE_CODE_URL).flush(
@@ -2148,11 +2221,13 @@ describe('SettingsService — claude code settings', () => {
     expect(service.saveClaudeCodeErrorCode()).toBe('Settings.InvalidDenyRule');
     expect(service.saveClaudeCodeSuccess()).toBe(false);
     expect(service.savingClaudeCode()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/claude-code' }));
   });
 
   it('should fall back to a fixed message when the error has no problem detail', () => {
     // Arrange
     service.updateClaudeCodeSettings(CLAUDE_CODE);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(CLAUDE_CODE_URL).flush('boom', { status: 500, statusText: 'Server Error' });
@@ -2160,5 +2235,6 @@ describe('SettingsService — claude code settings', () => {
     // Assert
     expect(service.saveClaudeCodeError()).toBe('Failed to save Claude Code settings');
     expect(service.saveClaudeCodeErrorCode()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/claude-code' }));
   });
 });

@@ -132,6 +132,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
   it('should set aria-invalid on the API key input when saveError is present', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);
     fixture.detectChanges();
     flushSettings(httpMock);
@@ -152,6 +153,7 @@ describe('SettingsClaudeCodeComponent', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true');
     const errorEl = el.querySelector('#api-key-error');
     expect(errorEl).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/credentials/auth' }));
   });
 
   it('should call updateAuthMode when saveApiKey is invoked', () => {
@@ -397,6 +399,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
   it('should render the switch-error role="alert" as a sibling of drain-gate, not nested inside it', () => {
     // Arrange — switch account and fail the pause request to trigger a pauseResumeError
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);
     fixture.detectChanges();
     flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
@@ -423,6 +426,7 @@ describe('SettingsClaudeCodeComponent', () => {
     const oauthSection = el.querySelector('.general-settings__oauth-section');
     const siblingAlert = oauthSection?.querySelector('.general-settings__switch-error[role="alert"]');
     expect(siblingAlert).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/dispatch/pause' }));
   });
 
   it('should show confirm dialog when "Log in again" is clicked (ReLoginNeeded status)', () => {
@@ -510,6 +514,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
   it('should reset drain-gate state when startLogin POST fails while draining', () => {
     // Arrange — enter draining state
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, service, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);
     fixture.detectChanges();
     flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
@@ -535,6 +540,7 @@ describe('SettingsClaudeCodeComponent', () => {
     // Assert — drain gate is cleared (not stranded)
     const drainGate = el.querySelector('.general-settings__drain-gate');
     expect(drainGate?.textContent?.trim()).toBe('');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/credentials/login/start' }));
   });
 
   it('should move focus to auth heading when login phase becomes Succeeded', async () => {
@@ -562,6 +568,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
   it('should show startLoginError in a role="alert" when loginPhase is null and error is set', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);
     fixture.detectChanges();
     flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH_NOT_CONFIGURED);
@@ -581,6 +588,7 @@ describe('SettingsClaudeCodeComponent', () => {
     const alerts = Array.from(el.querySelectorAll('[role="alert"]')) as HTMLElement[];
     const startLoginAlert = alerts.find(a => a.textContent?.includes('Failed to start login'));
     expect(startLoginAlert).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/credentials/login/start' }));
   });
 
   it('should focus the entry login button on cancel when login flow is not in drain state', async () => {
@@ -1116,6 +1124,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
     it('should attach an InvalidDenyRule server error to the matching row', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(b)'] });
       type(page, 'denyRule-1', 'Bash(bad)');
       saveButton(page).click();
@@ -1135,10 +1144,12 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
         '1 field needs attention.',
       );
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: CLAUDE_CODE_URL }));
     });
 
     it('should attach an InvalidDenyRule error to the exact row when another rule is a prefix of it', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(a))'] });
       makeDirty(page);
       saveButton(page).click();
@@ -1155,10 +1166,12 @@ describe('SettingsClaudeCodeComponent', () => {
       // Assert
       expect(text(page, 'denyRule-0-error')).toBe('');
       expect(text(page, 'denyRule-1-error')).toBe("Deny rule 'Bash(a))' is not allowed.");
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: CLAUDE_CODE_URL }));
     });
 
     it('should show a form-level error when the offending rule matches no row exactly', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
       makeDirty(page);
       saveButton(page).click();
@@ -1176,10 +1189,12 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
         "Deny rule 'Bash(a))' is not allowed.",
       );
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: CLAUDE_CODE_URL }));
     });
 
     it('should clear a stale form-level error after a later successful save', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const page = await loadPage();
       makeDirty(page);
       saveButton(page).click();
@@ -1198,10 +1213,12 @@ describe('SettingsClaudeCodeComponent', () => {
 
       // Assert
       expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe('');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: CLAUDE_CODE_URL }));
     });
 
     it('should show a form-level error for an error without a field', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const page = await loadPage();
       makeDirty(page);
       saveButton(page).click();
@@ -1218,6 +1235,7 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
         'Settings not found.',
       );
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: CLAUDE_CODE_URL }));
     });
   });
 });

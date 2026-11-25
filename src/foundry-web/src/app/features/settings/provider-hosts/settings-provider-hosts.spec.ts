@@ -150,6 +150,7 @@ describe('SettingsProviderHostsComponent', () => {
       fixture.detectChanges();
       flushSettings(httpMock, { ...API_KEY_RESPONSE, allowedProviderHosts: [] });
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act — trigger a failed save
       service.updateAllowedProviderHosts(['bad host!']);
@@ -165,6 +166,9 @@ describe('SettingsProviderHostsComponent', () => {
       expect(errorEl).toBeTruthy();
       expect(errorEl.getAttribute('role')).toBe('alert');
       expect(errorEl.textContent).toContain('bad host!');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400, url: '/api/settings/allowed-provider-hosts' })
+      );
     });
 
     it('should render success message in aria-live="polite" region after a successful hosts save', () => {
@@ -193,6 +197,7 @@ describe('SettingsProviderHostsComponent', () => {
       fixture.detectChanges();
       flushSettings(httpMock, { ...API_KEY_RESPONSE, allowedProviderHosts: [] });
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act — trigger a failed save
       service.updateAllowedProviderHosts(['bad host!']);
@@ -206,6 +211,9 @@ describe('SettingsProviderHostsComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
       const textarea = el.querySelector('#allowedProviderHosts') as HTMLTextAreaElement;
       expect(textarea.getAttribute('aria-invalid')).toBe('true');
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400, url: '/api/settings/allowed-provider-hosts' })
+      );
     });
 
     it('should not set aria-invalid on the allowedProviderHosts textarea when there is no error', () => {

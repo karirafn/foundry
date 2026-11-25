@@ -91,7 +91,7 @@ describe('IssueService', () => {
 
   it('should report the issues load as loaded, or failed when the request fails', async () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const loaded = service.loadIssues();
@@ -102,6 +102,7 @@ describe('IssueService', () => {
     // Assert
     expect(await loaded).toBe('loaded');
     expect(await failed).toBe('failed');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   it('should carry pullRequestUrl and providerType through loadIssues so the card can word its PR link', () => {
@@ -502,7 +503,8 @@ describe('IssueService', () => {
   });
 
   it('should set initialLoading to false after loadIssues fails', () => {
-    // Arrange — no additional setup
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadIssues();
@@ -513,10 +515,12 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.initialLoading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   it('should preserve existing issues when loadIssues fails', () => {
     // Arrange — load initial issues
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
     expect(service.issues().length).toBe(1);
@@ -530,10 +534,12 @@ describe('IssueService', () => {
 
     // Assert — original issues remain
     expect(service.issues().length).toBe(1);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   it('should set loadError when loadIssues fails', () => {
-    // Arrange — no additional setup
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadIssues();
@@ -544,10 +550,12 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.loadError()).not.toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   it('should set loadError to a fixed user-facing string when loadIssues fails', () => {
-    // Arrange — no additional setup
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadIssues();
@@ -558,10 +566,12 @@ describe('IssueService', () => {
 
     // Assert — must not contain server-influenced text such as err.message
     expect(service.loadError()).toBe('Failed to load issues');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   it('should set detailError to a fixed user-facing string when loadDetail fails', () => {
-    // Arrange — no additional setup
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadDetail('abc123');
@@ -572,28 +582,38 @@ describe('IssueService', () => {
 
     // Assert — must not contain server-influenced text such as err.message
     expect(service.detailError()).toBe('Failed to load issue details');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/issues/abc123' }));
   });
 
   it('marks the detail missing when loadDetail returns 404', () => {
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
     // Act
     service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush('Not Found', { status: 404, statusText: 'Not Found' });
 
     // Assert
     expect(service.detailMissing()).toBe(true);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/issues/abc123' }));
   });
 
   it('does not mark the detail missing when loadDetail fails with another status', () => {
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
     // Act
     service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush('Boom', { status: 500, statusText: 'Server Error' });
 
     // Assert
     expect(service.detailMissing()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues/abc123' }));
   });
 
   it('clears the missing mark when another issue is selected', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.selectIssue('abc123');
     httpMock.expectOne('/api/issues/abc123').flush('Not Found', { status: 404, statusText: 'Not Found' });
 
@@ -603,10 +623,12 @@ describe('IssueService', () => {
     // Assert
     expect(service.detailMissing()).toBe(false);
     httpMock.expectOne('/api/issues/def456').flush({ ...mockSummary, id: 'def456' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/issues/abc123' }));
   });
 
   it('should clear loadError on successful loadIssues', () => {
     // Arrange — cause an error first
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush('Server Error', {
       status: 500,
@@ -620,10 +642,12 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.loadError()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   it('should set detailLoading to false when loadDetail fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadDetail('abc123');
     expect(service.detailLoading()).toBe(true);
 
@@ -635,10 +659,12 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.detailLoading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/issues/abc123' }));
   });
 
   it('should set detailError when loadDetail fails', () => {
-    // Arrange — no additional setup
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.loadDetail('abc123');
@@ -649,11 +675,13 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.detailError()).not.toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/issues/abc123' }));
   });
 
   // Cycle 14: _upsertIssue rejects ids that do not match safe-id pattern
   it('should not upsert an issue with an id containing a path traversal sequence', () => {
     // Arrange
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const callbacks: Record<string, (data: IssueSummary) => void> = {};
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
@@ -669,6 +697,7 @@ describe('IssueService', () => {
     // Assert — issues list stays empty, the malicious id was rejected
     expect(svc.issues().length).toBe(0);
     http.verify();
+    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('invalid id'));
   });
 
   // Finding 3: loadIssues drops items with unknown state
@@ -689,6 +718,7 @@ describe('IssueService', () => {
   // Finding 3: _upsertIssue drops items with unknown state
   it('should reject an IssueUpdated event with an unknown state', () => {
     // Arrange
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const callbacks: Record<string, (data: IssueSummary) => void> = {};
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
@@ -704,6 +734,7 @@ describe('IssueService', () => {
     // Assert — issues list stays empty
     expect(svc.issues().length).toBe(0);
     http.verify();
+    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('unknown state'));
   });
 
   // Cycle 15: loadIssues filters out items with invalid IDs
@@ -765,7 +796,7 @@ describe('IssueService', () => {
 
   it('should fetch null when the detail cannot be loaded', () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result: { value: unknown } = { value: undefined };
 
     // Act
@@ -774,7 +805,7 @@ describe('IssueService', () => {
 
     // Assert
     expect(result.value).toBeNull();
-    vi.restoreAllMocks();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues/abc123' }));
   });
 
   it('should not reload the detail after retryIssue succeeds when the pane is closed', () => {
@@ -840,7 +871,7 @@ describe('IssueService', () => {
 
   it('should emit the dedicated error and not reload when retryIssue fails', () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result = outcome(service.retryIssue('abc123'));
 
     // Act
@@ -852,7 +883,7 @@ describe('IssueService', () => {
     // Assert — dedicated string, not the detail-load error
     expect(result.value).toBe('Failed to retry issue.');
     httpMock.expectNone('/api/issues/abc123');
-    vi.restoreAllMocks();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues/abc123/retry' }));
   });
 
   it('should POST to /api/issues/{id}/retry-fresh and reload detail when retryIssueFresh is subscribed', () => {
@@ -872,7 +903,7 @@ describe('IssueService', () => {
 
   it('should explain the issue was not requeued when retryIssueFresh cannot delete the branch', () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result = outcome(service.retryIssueFresh('abc123'));
 
     // Act
@@ -883,12 +914,12 @@ describe('IssueService', () => {
 
     // Assert
     expect(result.value).toBe('Could not delete the branch on the provider. The issue was not requeued.');
-    vi.restoreAllMocks();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 502, url: '/api/issues/abc123/retry-fresh' }));
   });
 
   it('should emit the generic retry-fresh error when retryIssueFresh fails otherwise', () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result = outcome(service.retryIssueFresh('abc123'));
 
     // Act
@@ -899,12 +930,12 @@ describe('IssueService', () => {
 
     // Assert
     expect(result.value).toBe('Failed to retry issue from a fresh branch.');
-    vi.restoreAllMocks();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: '/api/issues/abc123/retry-fresh' }));
   });
 
   it('should not change detailError when retryIssue fails', () => {
     // Arrange — retryIssue reports its own error to its subscriber
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     outcome(service.retryIssue('abc123'));
     httpMock.expectOne('/api/issues/abc123/retry').flush('Server Error', {
       status: 500,
@@ -913,7 +944,7 @@ describe('IssueService', () => {
 
     // Assert
     expect(service.detailError()).toBeNull();
-    vi.restoreAllMocks();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues/abc123/retry' }));
   });
 
   // Cycle 21: _upsertIssue removes issue from issues when its new state is resolved
@@ -1292,6 +1323,7 @@ describe('IssueService (resolved paging)', () => {
   // Cycle R7: resolved fetch failure leaves prior resolvedIssues intact and sets no loadError
   it('should leave prior resolvedIssues intact and not set loadError when resolved fetch fails', () => {
     // Arrange — get page 1 successfully
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const item: IssueSummary = { ...resolvedSummary, id: 'res-1' };
     service.loadResolved();
     httpMock.expectOne(r => r.url === '/api/issues').flush({
@@ -1310,6 +1342,7 @@ describe('IssueService (resolved paging)', () => {
     expect(service.resolvedIssues().length).toBe(1);
     expect(service.resolvedIssues()[0].id).toBe('res-1');
     expect(service.loadError()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('cursor=cursor-1') }));
   });
 
   // Cycle R6: repositoryId is forwarded on resolved fetches when provided
@@ -1433,6 +1466,7 @@ describe('IssueService (resolved paging)', () => {
   // New: first-page HTTP failure sets resolvedError, not loadError
   it('should set resolvedError when the first-page resolved fetch fails with an HTTP error', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
 
     // Act
@@ -1444,11 +1478,13 @@ describe('IssueService (resolved paging)', () => {
     // Assert
     expect(service.resolvedError()).toBe('Failed to load resolved issues');
     expect(service.resolvedLoading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed' }));
   });
 
   // New: first-page failure does not affect active-band loadError (band independence)
   it('should not set loadError when the resolved fetch fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
 
     // Act
@@ -1459,11 +1495,13 @@ describe('IssueService (resolved paging)', () => {
 
     // Assert
     expect(service.loadError()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed' }));
   });
 
   // New: active-band failure does not set resolvedError (band independence)
   it('should not set resolvedError when loadIssues fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadIssues();
 
     // Act
@@ -1474,11 +1512,13 @@ describe('IssueService (resolved paging)', () => {
 
     // Assert
     expect(service.resolvedError()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   // New: resolvedError cleared at the start of a fresh load
   it('should clear resolvedError when loadResolved starts a fresh fetch', () => {
     // Arrange — trigger a resolved error
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
     httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
       status: 500,
@@ -1494,11 +1534,13 @@ describe('IssueService (resolved paging)', () => {
 
     // Cleanup
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed' }));
   });
 
   // New: retryResolvedFetch clears error and re-fetches
   it('should clear resolvedError and re-fetch when retryResolvedFetch is called', () => {
     // Arrange — trigger a resolved error
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
     httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
       status: 500,
@@ -1519,11 +1561,13 @@ describe('IssueService (resolved paging)', () => {
     req.flush({ items: [resolvedSummary], nextCursor: null });
 
     expect(service.resolvedIssues().length).toBe(1);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed' }));
   });
 
   // New: load-more failure sets resolvedLoadMoreError, preserves prior issues
   it('should set resolvedLoadMoreError and preserve prior resolved issues when load-more fails', () => {
     // Arrange — get page 1 successfully with a cursor
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
@@ -1541,11 +1585,13 @@ describe('IssueService (resolved paging)', () => {
     expect(service.resolvedLoadMoreError()).toBe('Failed to load more resolved issues');
     expect(service.resolvedIssues().length).toBe(1);
     expect(service.resolvedIssues()[0].id).toBe('res-1');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('cursor=cursor-1') }));
   });
 
   // New: load-more failure does not set resolvedError (full-band error)
   it('should not set resolvedError when load-more fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
@@ -1561,11 +1607,13 @@ describe('IssueService (resolved paging)', () => {
 
     // Assert
     expect(service.resolvedError()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('cursor=cursor-1') }));
   });
 
   // New: loadMoreResolved clears resolvedLoadMoreError before retrying
   it('should clear resolvedLoadMoreError and retry when loadMoreResolved is called after a load-more failure', () => {
     // Arrange — fail a load-more
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadResolved();
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
@@ -1587,6 +1635,7 @@ describe('IssueService (resolved paging)', () => {
     // New request sent for the same cursor
     const req = httpMock.expectOne(r => r.params.get('cursor') === 'cursor-1');
     req.flush({ items: [], nextCursor: null });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: expect.stringContaining('cursor=cursor-1') }));
   });
 
 });
@@ -2108,6 +2157,7 @@ describe('IssueService (queue-order reconcile)', () => {
   // Step 5 — Failed reconcile: sets queueOrderStale, retains list, no loadError
   it('should set queueOrderStale and retain issues() when reconcile fails, without setting loadError', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { svc, http } = setup();
     svc.loadIssues();
     http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
@@ -2129,11 +2179,13 @@ describe('IssueService (queue-order reconcile)', () => {
     expect(svc.loadError()).toBeNull();
 
     http.verify({ ignoreCancelled: true });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   // Step 5 — Successful reconcile after failure clears queueOrderStale
   it('should clear queueOrderStale after a successful reconcile follows a failed one', () => {
     // Arrange — cause a failure first
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { svc, http } = setup();
     svc.loadIssues();
     http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
@@ -2156,6 +2208,7 @@ describe('IssueService (queue-order reconcile)', () => {
     expect(svc.queueOrderStale()).toBe(false);
 
     http.verify({ ignoreCancelled: true });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   // Step 5 — Stale failure from superseded request must not overwrite a fresher success
@@ -2239,6 +2292,7 @@ describe('IssueService (queue-order reconcile)', () => {
 
   it('should set queueOrderStale when reconcile fails after initial load has completed', () => {
     // Arrange — fake timers BEFORE service construction so setInterval is intercepted
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.useFakeTimers();
     const { svc, http } = setup();
     svc.loadIssues();
@@ -2258,6 +2312,7 @@ describe('IssueService (queue-order reconcile)', () => {
     expect(svc.queueOrderStale()).toBe(true);
 
     http.verify({ ignoreCancelled: true });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues' }));
   });
 
   // Step 9 (criterion 9): reconcile does not re-show loading skeletons
@@ -2577,7 +2632,6 @@ describe('IssueService (triage actions)', () => {
     });
     service = TestBed.inject(IssueService);
     httpMock = TestBed.inject(HttpTestingController);
-    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -2654,6 +2708,7 @@ describe('IssueService (triage actions)', () => {
 
       it('emits the 409 message when the issue is in the wrong state', () => {
         // Arrange
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         let result: string | null | undefined;
         c.call(service, 'abc123').subscribe((v) => (result = v));
 
@@ -2665,10 +2720,12 @@ describe('IssueService (triage actions)', () => {
         // Assert
         expect(result).toBe(c.conflict);
         httpMock.expectNone('/api/issues/abc123');
+        expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409 }));
       });
 
       it('emits the generic message on any other error', () => {
         // Arrange
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         let result: string | null | undefined;
         c.call(service, 'abc123').subscribe((v) => (result = v));
 
@@ -2679,6 +2736,7 @@ describe('IssueService (triage actions)', () => {
 
         // Assert
         expect(result).toBe(c.generic);
+        expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
       });
     });
   }

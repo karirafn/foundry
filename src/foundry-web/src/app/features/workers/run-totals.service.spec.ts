@@ -204,6 +204,7 @@ describe('WorkerRunTotalsService', () => {
   it('should set error and clear loading on HTTP failure', () => {
     // Arrange
     const { service, httpMock } = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     service.fetch();
@@ -215,11 +216,13 @@ describe('WorkerRunTotalsService', () => {
     // Assert
     expect(service.error()).toBeTruthy();
     expect(service.loading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
   });
 
   it('should clear error on successful refetch', () => {
     // Arrange
     const { service, httpMock } = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.fetch();
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush('Server error', {
       status: 500,
@@ -233,6 +236,8 @@ describe('WorkerRunTotalsService', () => {
 
     // Assert
     expect(service.error()).toBeNull();
+    expect(consoleError).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
   });
 
   // Cycle 7: zero totals renders (no empty-message behaviour needed)

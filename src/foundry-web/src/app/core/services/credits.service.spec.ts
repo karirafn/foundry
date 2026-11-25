@@ -162,11 +162,15 @@ describe('CreditsService', () => {
   // Cycle 8: checkNow clears isChecking on HTTP error
   it('should clear isChecking when the probe request fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.checkNow();
     httpMock.expectOne('/api/credentials/probe').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
     expect(service.isChecking()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/credentials/probe' }));
   });
 
   // Cycle 9: credits IsActive:true triggers a credentials refetch
