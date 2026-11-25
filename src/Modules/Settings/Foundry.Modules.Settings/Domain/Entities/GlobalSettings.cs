@@ -255,6 +255,13 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         AddIntegrationEvent(new ImageBuildFailed(errorTail, nextRetryAt, attempt));
     }
 
+    public void FailScheduledImageBuild(string? errorTail, DateTimeOffset? nextRetryAt, int attempt)
+    {
+        ImageBuildState = new ImageBuildState.ScheduledRebuildFailed(errorTail, nextRetryAt, attempt);
+        UpdatedAt = DateTimeOffset.UtcNow;
+        AddIntegrationEvent(new ScheduledImageBuildFailed(errorTail, nextRetryAt, attempt));
+    }
+
     public Result UpdateAllowedProviderHosts(IReadOnlyList<string> hosts)
     {
         List<string> normalized = new(hosts.Count);

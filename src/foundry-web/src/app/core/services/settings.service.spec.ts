@@ -1892,6 +1892,20 @@ describe('SettingsService — retry fields', () => {
     expect(service.imageBuildNextRetryAt()).toBeNull();
     httpMock.verify();
   });
+
+  it('should keep imageBuildNextRetryAt when an Idle response carries a failed scheduled rebuild', () => {
+    // Arrange
+    const { service, httpMock } = setup();
+
+    // Act
+    service.loadSettings();
+    httpMock.expectOne('/api/settings').flush(buildSettings({ imageBuildStatus: 'Idle', lastImageBuildError: 'apt failed', nextRetryAt: '2026-11-25T08:00:00Z', attempt: 1 }));
+    httpMock.expectOne('/api/credentials').flush(buildCredentials());
+
+    // Assert
+    expect(service.imageBuildNextRetryAt()).toBe('2026-11-25T08:00:00Z');
+    httpMock.verify();
+  });
 });
 
 describe('SettingsService — isColdBuildBlocking', () => {

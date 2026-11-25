@@ -14,6 +14,7 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
     private const string IdleType = "idle";
     private const string BuildingType = "building";
     private const string FailedType = "failed";
+    private const string ScheduledRebuildFailedType = "scheduled_rebuild_failed";
 
     // Clamp deserialized attempt values to prevent overflow in exponential backoff computation.
     // Beyond this point the backoff is always at maximum, so higher values add no information.
@@ -34,7 +35,8 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
         {
             IdleType => new ImageBuildState.Idle(),
             BuildingType => new ImageBuildState.Building(),
-            FailedType => ReadFailed(root),
+            FailedType => ReadFailure(root, static (errorTail, nextRetryAt, attempt) => new ImageBuildState.Failed(errorTail, nextRetryAt, attempt)),
+            ScheduledRebuildFailedType => ReadFailure(root, static (errorTail, nextRetryAt, attempt) => new ImageBuildState.ScheduledRebuildFailed(errorTail, nextRetryAt, attempt)),
             _ => throw new JsonException($"Unknown image build state type: '{type}'."),
         };
     }
@@ -57,17 +59,11 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
                 break;
 
             case ImageBuildState.Failed failed:
-                writer.WriteString(TypeProperty, FailedType);
-                writer.WriteString(ErrorTailProperty, failed.ErrorTail);
-                if (failed.NextRetryAt is DateTimeOffset nextRetryAt)
-                {
-                    writer.WriteString(NextRetryAtProperty, nextRetryAt);
-                }
-                else
-                {
-                    writer.WriteNull(NextRetryAtProperty);
-                }
-                writer.WriteNumber(AttemptProperty, failed.Attempt);
+                WriteFailure(writer, FailedType, failed.ErrorTail, failed.NextRetryAt, failed.Attempt);
+                break;
+
+            case ImageBuildState.ScheduledRebuildFailed scheduled:
+                WriteFailure(writer, ScheduledRebuildFailedType, scheduled.ErrorTail, scheduled.NextRetryAt, scheduled.Attempt);
                 break;
 
             default:
@@ -77,7 +73,29 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
         writer.WriteEndObject();
     }
 
-    private static ImageBuildState.Failed ReadFailed(JsonElement root)
+    private static void WriteFailure(
+        Utf8JsonWriter writer,
+        string type,
+        string? errorTail,
+        DateTimeOffset? nextRetryAt,
+        int attempt)
+    {
+        writer.WriteString(TypeProperty, type);
+        writer.WriteString(ErrorTailProperty, errorTail);
+        if (nextRetryAt is DateTimeOffset retryAt)
+        {
+            writer.WriteString(NextRetryAtProperty, retryAt);
+        }
+        else
+        {
+            writer.WriteNull(NextRetryAtProperty);
+        }
+        writer.WriteNumber(AttemptProperty, attempt);
+    }
+
+    private static ImageBuildState ReadFailure(
+        JsonElement root,
+        Func<string?, DateTimeOffset?, int, ImageBuildState> create)
     {
         string? errorTail = root.TryGetProperty(ErrorTailProperty, out JsonElement errorEl)
             ? errorEl.GetString()
@@ -95,6 +113,6 @@ internal sealed class ImageBuildStateJsonConverter : JsonConverter<ImageBuildSta
         // Clamp defensively: a tampered or corrupted row must not cause overflow in backoff computation.
         int attempt = Math.Clamp(rawAttempt, 0, MaxAttempt);
 
-        return new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
+        return create(errorTail, nextRetryAt, attempt);
     }
 }

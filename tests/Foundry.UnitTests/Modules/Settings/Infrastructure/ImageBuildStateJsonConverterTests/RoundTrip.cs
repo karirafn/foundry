@@ -188,4 +188,21 @@ public sealed class RoundTrip
         ImageBuildState.Failed failed = result.ShouldBeOfType<ImageBuildState.Failed>();
         failed.Attempt.ShouldBe(0);
     }
+
+    [Fact]
+    public void WhenScheduledRebuildFailedState_RoundTripsEveryField()
+    {
+        // Arrange
+        ImageBuildState.ScheduledRebuildFailed original = new(
+            ErrorTail: "apt failed",
+            NextRetryAt: new DateTimeOffset(2026, 11, 25, 8, 0, 0, TimeSpan.Zero),
+            Attempt: 2);
+
+        // Act
+        string json = JsonSerializer.Serialize<ImageBuildState>(original, Options);
+        ImageBuildState result = JsonSerializer.Deserialize<ImageBuildState>(json, Options)!;
+
+        // Assert
+        result.ShouldBe(original);
+    }
 }

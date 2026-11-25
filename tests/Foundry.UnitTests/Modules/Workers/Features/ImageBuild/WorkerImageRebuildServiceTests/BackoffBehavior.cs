@@ -228,14 +228,83 @@ public sealed class BackoffBehavior
             "TryEnqueue must have been called at least once by the delayed retry");
     }
 
+    [Fact]
+    public async Task WhenAScheduledRebuildFails_ReportsTheFailureAsScheduled()
+    {
+        // Arrange
+        using SignallingDispatcher dispatcher = new();
+        using ControlledQueue queue = new();
+        WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(queue, dispatcher);
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Act
+        queue.Enqueue(ImageRebuildOrigin.Scheduled);
+        bool failureNotified = await dispatcher.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert
+        failureNotified.ShouldBeTrue();
+        dispatcher.LastFailedEvent.ShouldNotBeNull().Origin.ShouldBe(ImageRebuildOrigin.Scheduled);
+    }
+
+    [Fact]
+    public async Task WhenARequestedRebuildFails_ReportsTheFailureAsRequested()
+    {
+        // Arrange
+        using SignallingDispatcher dispatcher = new();
+        using ControlledQueue queue = new();
+        WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(queue, dispatcher);
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Act
+        queue.Enqueue(ImageRebuildOrigin.Requested);
+        bool failureNotified = await dispatcher.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert
+        failureNotified.ShouldBeTrue();
+        dispatcher.LastFailedEvent.ShouldNotBeNull().Origin.ShouldBe(ImageRebuildOrigin.Requested);
+    }
+
+    [Fact]
+    public async Task WhenAScheduledRebuildFails_TheDelayedRetryKeepsTheScheduledOrigin()
+    {
+        // Arrange
+        using SignallingDispatcher dispatcher = new();
+        using ControlledQueue queue = new();
+        WorkerImageRebuildService sut = BuildServiceWithFastRetryPolicy(queue, dispatcher);
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Act
+        queue.Enqueue(ImageRebuildOrigin.Scheduled);
+        bool reEnqueued = await queue.WaitForTryEnqueueAsync(TimeSpan.FromSeconds(5));
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert
+        reEnqueued.ShouldBeTrue();
+        queue.LastEnqueuedOrigin.ShouldBe(ImageRebuildOrigin.Scheduled);
+    }
+
     // -------------------------------------------------------------------------
     // Test doubles
     // -------------------------------------------------------------------------
 
     private sealed class ControlledQueue : IWorkerImageRebuildQueue, IDisposable
     {
-        private readonly System.Threading.Channels.Channel<bool> _channel =
-            System.Threading.Channels.Channel.CreateBounded<bool>(
+        private readonly System.Threading.Channels.Channel<ImageRebuildOrigin> _channel =
+            System.Threading.Channels.Channel.CreateBounded<ImageRebuildOrigin>(
                 new System.Threading.Channels.BoundedChannelOptions(capacity: 10)
                 {
                     FullMode = System.Threading.Channels.BoundedChannelFullMode.DropWrite,
@@ -250,22 +319,25 @@ public sealed class BackoffBehavior
 
         public void Dispose() => _tryEnqueueSignal.Dispose();
 
-        public void Enqueue()
+        public ImageRebuildOrigin? LastEnqueuedOrigin { get; private set; }
+
+        public void Enqueue(ImageRebuildOrigin origin = ImageRebuildOrigin.Requested)
         {
-            _channel.Writer.TryWrite(true);
+            _channel.Writer.TryWrite(origin);
         }
 
         public void RequestImmediateRebuild()
         {
             ImmediateRebuildRequested?.Invoke();
-            TryEnqueue();
+            TryEnqueue(ImageRebuildOrigin.Requested);
         }
 
-        public bool TryEnqueue()
+        public bool TryEnqueue(ImageRebuildOrigin origin)
         {
             TryEnqueueCount++;
+            LastEnqueuedOrigin = origin;
             _tryEnqueueSignal.Release();
-            return _channel.Writer.TryWrite(true);
+            return _channel.Writer.TryWrite(origin);
         }
 
         /// <summary>
@@ -275,10 +347,10 @@ public sealed class BackoffBehavior
         public Task<bool> WaitForTryEnqueueAsync(TimeSpan timeout)
             => _tryEnqueueSignal.WaitAsync(timeout);
 
-        public async IAsyncEnumerable<bool> ReadAllAsync(
+        public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            await foreach (bool signal in _channel.Reader.ReadAllAsync(cancellationToken))
+            await foreach (ImageRebuildOrigin signal in _channel.Reader.ReadAllAsync(cancellationToken))
             {
                 yield return signal;
             }

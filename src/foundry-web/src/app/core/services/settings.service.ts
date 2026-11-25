@@ -596,7 +596,7 @@ export class SettingsService {
     this._imageBuildStatusSignal.set(response.imageBuildStatus);
     this._imageBuildLogTailSignal.set(response.lastImageBuildError);
     this._imageBuildNextRetryAtSignal.set(
-      response.imageBuildStatus === 'Building' || response.imageBuildStatus === 'Idle'
+      response.imageBuildStatus === 'Building'
         ? null
         : (response.nextRetryAt ?? null)
     );

@@ -149,11 +149,11 @@ internal sealed class WorkerImageRebuildService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // StartingAsync already subscribed; no second call needed here.
-        await foreach (bool _ in rebuildQueue.ReadAllAsync(stoppingToken))
+        await foreach (ImageRebuildOrigin origin in rebuildQueue.ReadAllAsync(stoppingToken))
         {
             try
             {
-                await ProcessRebuildAsync(stoppingToken);
+                await ProcessRebuildAsync(origin, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -169,7 +169,7 @@ internal sealed class WorkerImageRebuildService(
         }
     }
 
-    internal async Task ProcessRebuildAsync(CancellationToken cancellationToken)
+    internal async Task ProcessRebuildAsync(ImageRebuildOrigin origin, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
@@ -193,7 +193,7 @@ internal sealed class WorkerImageRebuildService(
 
         if (!buildEnabled)
         {
-            await InspectImageAsync(imageTag, settings, publisher, cancellationToken);
+            await InspectImageAsync(imageTag, settings, publisher, origin, cancellationToken);
             return;
         }
 
@@ -295,7 +295,7 @@ internal sealed class WorkerImageRebuildService(
             DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
             await publisher.PublishAsync(
-                new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt),
+                new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt, origin),
                 cancellationToken);
 
             logger.LogError(
@@ -310,7 +310,7 @@ internal sealed class WorkerImageRebuildService(
             // can cancel the wait. The linked CTS created inside ScheduleDelayedRetryAsync is
             // disposed within the task itself after the delay completes or is cancelled.
 #pragma warning disable CA2025 // The linked CancellationTokenSource is owned and disposed by ScheduleDelayedRetryAsync; the task disposes it internally before returning.
-            _ = ScheduleDelayedRetryAsync(backoff, retryCts, cancellationToken);
+            _ = ScheduleDelayedRetryAsync(backoff, retryCts, origin, cancellationToken);
 #pragma warning restore CA2025
         }
     }
@@ -477,6 +477,7 @@ internal sealed class WorkerImageRebuildService(
         string imageTag,
         GlobalSettingsSummary settings,
         ImageBuildEventPublisher publisher,
+        ImageRebuildOrigin origin,
         CancellationToken cancellationToken)
     {
         logger.LogInformation(
@@ -497,7 +498,7 @@ internal sealed class WorkerImageRebuildService(
                 string catalogError = TruncateTail(
                     $"Worker role catalog is invalid: {((Result<WorkerRoleCatalogContent>.Failure)catalogResult).Error.Message}");
                 logger.LogError("Worker image '{Image}' not marked available: {Error}", imageTag, catalogError);
-                await DispatchInspectFailureAsync(catalogError, settings, publisher, imageTag, cancellationToken);
+                await DispatchInspectFailureAsync(catalogError, settings, publisher, imageTag, origin, cancellationToken);
                 return;
             }
 
@@ -534,7 +535,7 @@ internal sealed class WorkerImageRebuildService(
         catch (DockerImageNotFoundException)
         {
             string errorTail = TruncateTail($"image '{imageTag}' not found on the Docker host");
-            await DispatchInspectFailureAsync(errorTail, settings, publisher, imageTag, cancellationToken);
+            await DispatchInspectFailureAsync(errorTail, settings, publisher, imageTag, origin, cancellationToken);
         }
 #pragma warning disable CA1031 // Docker inspect failures must be surfaced as status notifications, not exceptions, to avoid crashing the BackgroundService consumer loop.
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -542,7 +543,7 @@ internal sealed class WorkerImageRebuildService(
         {
             string errorTail = TruncateTail(SecretRedactor.Redact(ex.Message));
             logger.LogError("Worker image inspect failed with an unhandled exception: {Error}", errorTail);
-            await DispatchInspectFailureAsync(errorTail, settings, publisher, imageTag, cancellationToken);
+            await DispatchInspectFailureAsync(errorTail, settings, publisher, imageTag, origin, cancellationToken);
         }
     }
 
@@ -551,6 +552,7 @@ internal sealed class WorkerImageRebuildService(
         GlobalSettingsSummary settings,
         ImageBuildEventPublisher publisher,
         string imageTag,
+        ImageRebuildOrigin origin,
         CancellationToken cancellationToken)
     {
         int nextAttempt = settings.Attempt + 1;
@@ -570,7 +572,7 @@ internal sealed class WorkerImageRebuildService(
         DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
         await publisher.PublishAsync(
-            new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt),
+            new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt, origin),
             cancellationToken);
 
         logger.LogError(
@@ -581,7 +583,7 @@ internal sealed class WorkerImageRebuildService(
             errorTail);
 
 #pragma warning disable CA2025 // The linked CancellationTokenSource is owned and disposed by ScheduleDelayedRetryAsync; the task disposes it internally before returning.
-        _ = ScheduleDelayedRetryAsync(backoff, retryCts, cancellationToken);
+        _ = ScheduleDelayedRetryAsync(backoff, retryCts, origin, cancellationToken);
 #pragma warning restore CA2025
     }
 
@@ -599,6 +601,7 @@ internal sealed class WorkerImageRebuildService(
     private async Task ScheduleDelayedRetryAsync(
         TimeSpan delay,
         CancellationTokenSource retryCts,
+        ImageRebuildOrigin origin,
         CancellationToken stoppingToken)
     {
         using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
@@ -608,7 +611,8 @@ internal sealed class WorkerImageRebuildService(
         try
         {
             await Task.Delay(delay, linked.Token);
-            rebuildQueue.TryEnqueue();
+            // The retry keeps its origin, so a failed retry of a scheduled rebuild still leaves dispatch running.
+            rebuildQueue.TryEnqueue(origin);
         }
         catch (OperationCanceledException)
         {

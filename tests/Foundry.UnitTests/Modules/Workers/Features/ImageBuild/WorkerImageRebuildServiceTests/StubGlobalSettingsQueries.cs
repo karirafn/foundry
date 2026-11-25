@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
@@ -13,7 +14,10 @@ internal sealed class StubGlobalSettingsQueries(
     bool settingsExists = true,
     int attempt = 0,
     string imageTag = "foundry-worker:local",
-    bool buildEnabled = true) : IGlobalSettingsQueries
+    bool buildEnabled = true,
+    ImageBuildStatus imageBuildStatus = ImageBuildStatus.Idle,
+    DateTimeOffset? lastImageBuiltAt = null,
+    DateTimeOffset? nextRetryAt = null) : IGlobalSettingsQueries
 {
     private readonly GlobalSettingsSummary _summary = new(
         MaxConcurrent: 1,
@@ -26,10 +30,10 @@ internal sealed class StubGlobalSettingsQueries(
         ImageTag: imageTag,
         BuildEnabled: buildEnabled,
         NestedDockerEnabled: false,
-        ImageBuildStatus: ImageBuildStatus.Idle,
+        ImageBuildStatus: imageBuildStatus,
         LastImageBuildError: null,
         HasUsableImage: false,
-        NextRetryAt: null,
+        NextRetryAt: nextRetryAt,
         Attempt: attempt,
         AllowedProviderHosts: [],
         MemoryLimitMb: 8192,
@@ -37,7 +41,8 @@ internal sealed class StubGlobalSettingsQueries(
         PidsLimit: 512,
         AdditionalDenyRules: [],
         PausedHosts: [],
-        WebhookPort: 5099);
+        WebhookPort: 5099,
+        LastImageBuiltAt: lastImageBuiltAt);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
@@ -64,7 +69,7 @@ internal sealed class StubGlobalSettingsQueries(
         => Task.FromResult(true);
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
-        => Task.FromResult(ImageBuildStatus.Idle);
+        => Task.FromResult(imageBuildStatus);
 
     public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
         => Task.FromResult(imageTag);

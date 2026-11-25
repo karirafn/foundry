@@ -85,7 +85,7 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
         WorkerImageRebuildService sut = BuildService(images, buildEnabled: true);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert
         (await ReadOutboxTypesAsync()).ShouldContain(type => type.Contains(nameof(ImageBuildRequested)));
@@ -99,7 +99,7 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
         WorkerImageRebuildService sut = BuildService(new FakeImageOperations(), buildEnabled: true);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
         await RelayAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -118,7 +118,7 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
             buildEnabled: true);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
         await RelayAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -136,7 +136,7 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
         WorkerImageRebuildService sut = BuildService(new FakeImageOperations(), buildEnabled: false);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
         await RelayAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -155,7 +155,7 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
             buildEnabled: false);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
         await RelayAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -343,9 +343,9 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
 
         public void RequestImmediateRebuild() => ImmediateRebuildRequested?.Invoke();
 
-        public bool TryEnqueue() => false;
+        public bool TryEnqueue(ImageRebuildOrigin origin) => false;
 
-        public async IAsyncEnumerable<bool> ReadAllAsync(
+        public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;

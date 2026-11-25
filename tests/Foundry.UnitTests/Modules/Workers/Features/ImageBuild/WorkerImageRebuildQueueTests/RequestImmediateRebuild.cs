@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Shouldly;
@@ -47,9 +48,9 @@ public sealed class RequestImmediateRebuild
         itemConsumedBeforeEvent.ShouldBeFalse();
 
         // Drain the channel to verify the item was actually enqueued
-        bool received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
+        ImageRebuildOrigin received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
             .FirstAsync(TestContext.Current.CancellationToken);
-        received.ShouldBeTrue();
+        received.ShouldBe(ImageRebuildOrigin.Requested);
     }
 
     [Fact]
@@ -62,9 +63,9 @@ public sealed class RequestImmediateRebuild
         sut.RequestImmediateRebuild();
 
         // Assert — a signal was placed in the channel
-        bool received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
+        ImageRebuildOrigin received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
             .FirstAsync(TestContext.Current.CancellationToken);
-        received.ShouldBeTrue();
+        received.ShouldBe(ImageRebuildOrigin.Requested);
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public sealed class RequestImmediateRebuild
     {
         // Arrange — fill the channel first so the enqueue will be dropped
         WorkerImageRebuildQueue sut = new();
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
         bool eventRaised = false;
         sut.ImmediateRebuildRequested += () => eventRaised = true;
 

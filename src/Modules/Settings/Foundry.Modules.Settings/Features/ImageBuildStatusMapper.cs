@@ -13,6 +13,7 @@ internal static class ImageBuildStatusMapper
             ImageBuildState.Idle => ImageBuildStatus.Idle,
             ImageBuildState.Building => ImageBuildStatus.Building,
             ImageBuildState.Failed => ImageBuildStatus.Failed,
+            ImageBuildState.ScheduledRebuildFailed => ImageBuildStatus.Idle,
             _ => throw new UnreachableException($"Unhandled {nameof(ImageBuildState)} variant: {state.GetType().Name}"),
         };
 }

@@ -599,6 +599,69 @@ describe('SettingsWorkerImageComponent', () => {
       httpMock.expectOne('/api/settings/worker-image/retry').flush({ ...API_KEY_RESPONSE, imageBuildStatus: 'Building', nextRetryAt: null, attempt: 0 });
     });
 
+    describe('failed scheduled rebuild', () => {
+      it('should say dispatch continues and when the retry runs while the status stays Idle', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Idle', lastImageBuildError: 'apt failed', nextRetryAt: '2026-11-25T08:00:00Z', attempt: 2 });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const statusRegions = Array.from(el.querySelectorAll('.general-settings__image-status[role="status"]')) as HTMLElement[];
+        const scheduledRegion = statusRegions.find(r => r.textContent?.includes('Scheduled rebuild failed'));
+
+        // Assert
+        expect(scheduledRegion?.textContent).toContain('dispatch continues on the current image');
+        expect(scheduledRegion?.textContent).toContain('(attempt 2)');
+        expect(scheduledRegion?.textContent).toContain('retrying at');
+      });
+
+      it('should show the build log of the failed scheduled rebuild', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Idle', lastImageBuildError: 'apt failed', nextRetryAt: null, attempt: 1 });
+        fixture.detectChanges();
+
+        // Act
+        const logPre = (fixture.nativeElement as HTMLElement).querySelector('.general-settings__image-log') as HTMLElement | null;
+
+        // Assert
+        expect(logPre?.textContent).toContain('apt failed');
+      });
+
+      it('should not fire the assertive failure alert', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Idle', lastImageBuildError: 'apt failed', nextRetryAt: null, attempt: 1 });
+        fixture.detectChanges();
+
+        // Act
+        const alert = (fixture.nativeElement as HTMLElement).querySelector('.general-settings__image-failure-alert') as HTMLElement;
+
+        // Assert
+        expect(alert.textContent?.trim()).toBe('');
+      });
+
+      it('should show nothing about a failure when Idle without an error', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock);
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+
+        // Assert
+        expect(el.textContent).not.toContain('Scheduled rebuild failed');
+        expect(el.querySelector('.general-settings__image-log')).toBeNull();
+      });
+    });
+
     describe('_imageFailedText copy matrix', () => {
       it('should show plain "Worker image build failed." when nextRetryAt is null and attempt is 0', () => {
         // Arrange

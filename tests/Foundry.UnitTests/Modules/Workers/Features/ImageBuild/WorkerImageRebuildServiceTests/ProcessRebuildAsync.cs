@@ -69,7 +69,7 @@ public sealed class ProcessRebuildAsync
             settingsQueries: new StubGlobalSettingsQueries(settingsExists: false));
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert
         spyImages.BuildCalled.ShouldBeFalse();
@@ -87,7 +87,7 @@ public sealed class ProcessRebuildAsync
             dispatcher: dispatcher);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — no ImageBuildRequested (or any other report event) must be published
         dispatcher.Published.ShouldBeEmpty();
@@ -108,7 +108,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — ImageBuildRequested must be published before ImageBuildSucceeded
             dispatcher.Published.Count.ShouldBeGreaterThanOrEqualTo(1);
@@ -135,7 +135,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — ImageBuildSucceeded published after ImageBuildRequested
             dispatcher.Published.Count.ShouldBe(2);
@@ -165,7 +165,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — ImageBuildOutcomeFailed published after ImageBuildRequested
             dispatcher.Published.Count.ShouldBe(2);
@@ -195,7 +195,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -224,7 +224,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -255,7 +255,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — OutcomeFailed must have attempt=2 (persisted 1 + 1)
             IIntegrationEvent last = dispatcher.Published[^1];
@@ -284,7 +284,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Fail once
-            await firstSut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await firstSut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Now succeed — new service instance, new dispatcher
             CapturingIntegrationEventDispatcher successDispatcher = new();
@@ -294,7 +294,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — success path publishes Requested then Succeeded
             successDispatcher.Published.Count.ShouldBe(2);
@@ -323,7 +323,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             dispatcher.Published.Count.ShouldBe(2);
@@ -352,7 +352,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — the published error tail must not contain the raw secret token
             ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -383,7 +383,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — the published error tail must not contain the raw token
             ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -414,7 +414,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — the published error tail must not contain the raw secret value
             ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -444,7 +444,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — worker build (index 1) must use the tag from DB, not from options
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -473,7 +473,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — base image (Dockerfile.base) must be first; the Publisher image must be last
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -502,7 +502,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — only the base build was attempted; worker build was skipped
             sequenced.AllParameters.Count.ShouldBe(1);
@@ -530,7 +530,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -555,7 +555,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — worker build (index 1)
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -582,7 +582,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — worker build (index 1) receives BASE_IMAGE arg pointing at the base tag
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -612,7 +612,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — login image (Dockerfile.login) must follow the worker image build
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -638,7 +638,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — login image tag must match the constant used by the login-command query
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -665,7 +665,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — login image build receives BASE_IMAGE build arg
             sequenced.AllParameters.Count.ShouldBe(4);
@@ -694,7 +694,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — only base + worker builds were attempted; login was skipped
             sequenced.AllParameters.Count.ShouldBe(2);
@@ -721,7 +721,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -749,7 +749,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -776,7 +776,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — the token-holding image takes no operator build args
             ImageBuildParameters publisherParams = sequenced.AllParameters
@@ -808,7 +808,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>().ErrorTail.ShouldBe("build 4 failed");
@@ -833,7 +833,7 @@ public sealed class ProcessRebuildAsync
                 contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             sequenced.AllParameters.Count.ShouldBe(3);
@@ -865,7 +865,7 @@ public sealed class ProcessRebuildAsync
                 async () =>
                 {
                     await cts.CancelAsync();
-                    await sut.ProcessRebuildAsync(cts.Token);
+                    await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, cts.Token);
                 });
 
             // Assert
@@ -898,7 +898,7 @@ public sealed class ProcessRebuildAsync
             // Act — OCE is expected and suppressed here; we verify no OutcomeFailed was published
             try
             {
-                await sut.ProcessRebuildAsync(cts.Token);
+                await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, cts.Token);
             }
             catch (OperationCanceledException)
             {
@@ -924,7 +924,7 @@ public sealed class ProcessRebuildAsync
         WorkerImageRebuildService sut = BuildService(spyImages, imageBuildEnabled: false);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — build path was not taken
         spyImages.BuildCalled.ShouldBeFalse();
@@ -942,7 +942,7 @@ public sealed class ProcessRebuildAsync
             imageBuildEnabled: false);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — ImageBuildRequested is published even for the inspect path
         dispatcher.Published.ShouldContain(e => e is ImageBuildRequested);
@@ -964,7 +964,7 @@ public sealed class ProcessRebuildAsync
                 imageBuildEnabled: false);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — inspect succeeded → ImageBuildSucceeded published
             dispatcher.Published.Count.ShouldBe(2);
@@ -993,7 +993,7 @@ public sealed class ProcessRebuildAsync
                 roleCatalogStore: store);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             WorkerRoleCatalog catalog = store.Current.ShouldNotBeNull();
@@ -1027,7 +1027,7 @@ public sealed class ProcessRebuildAsync
                 roleCatalogStore: store);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             ImageBuildOutcomeFailed failed = dispatcher.Published[^1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -1054,7 +1054,7 @@ public sealed class ProcessRebuildAsync
                 roleCatalogStore: store);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             WorkerRoleCatalog catalog = store.Current.ShouldNotBeNull();
@@ -1084,7 +1084,7 @@ public sealed class ProcessRebuildAsync
                 toolchainRecorder: recorder);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             recorder.ImageChangedCount.ShouldBe(1);
@@ -1110,7 +1110,7 @@ public sealed class ProcessRebuildAsync
                 toolchainRecorder: recorder);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             recorder.ImageChangedCount.ShouldBe(1);
@@ -1135,7 +1135,7 @@ public sealed class ProcessRebuildAsync
                 toolchainRecorder: recorder);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             recorder.ImageChangedCount.ShouldBe(0);
@@ -1157,7 +1157,7 @@ public sealed class ProcessRebuildAsync
             toolchainRecorder: recorder);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert
         recorder.ImageChangedCount.ShouldBe(0);
@@ -1181,7 +1181,7 @@ public sealed class ProcessRebuildAsync
                 roleCatalogStore: store);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             spyImages.BuildCalled.ShouldBeFalse();
@@ -1209,7 +1209,7 @@ public sealed class ProcessRebuildAsync
             imageTag: tag);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — error message names the tag
         dispatcher.Published.Count.ShouldBe(2);
@@ -1230,7 +1230,7 @@ public sealed class ProcessRebuildAsync
             imageBuildEnabled: false);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — daemon error surfaces as OutcomeFailed
         dispatcher.Published.Count.ShouldBe(2);
@@ -1251,7 +1251,7 @@ public sealed class ProcessRebuildAsync
             imageBuildEnabled: false);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — secret is redacted from the published error
         ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -1274,7 +1274,7 @@ public sealed class ProcessRebuildAsync
             imageTag: longTag);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — error message is truncated (cap = LogTailLines * 120 = 24000 chars)
         ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -1299,7 +1299,7 @@ public sealed class ProcessRebuildAsync
             imageTag: tag);
 
         // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+        await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
         // Assert — same backoff progression as the build path
         ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
@@ -1331,7 +1331,7 @@ public sealed class ProcessRebuildAsync
             DateTimeOffset before = DateTimeOffset.UtcNow;
 
             // Act — a fresh service instance with persisted Attempt=3 fails
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — Attempt must be 4 (not 1, which would indicate the counter reset on restart)
             IIntegrationEvent last = dispatcher.Published[^1];
@@ -1361,7 +1361,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(images, contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert — the sweep removed it, and listed only after the fourth (publisher) build moved its tag.
             images.Calls.ShouldContain("delete:sha256:previous-worker");
@@ -1385,7 +1385,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(images, contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             images.Calls.ShouldNotContain("list");
@@ -1409,7 +1409,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(images, dispatcher: dispatcher, contentRootPath: contentRoot);
 
             // Act
-            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            await sut.ProcessRebuildAsync(ImageRebuildOrigin.Requested, TestContext.Current.CancellationToken);
 
             // Assert
             images.Calls.ShouldContain("list");
@@ -1780,12 +1780,12 @@ public sealed class ProcessRebuildAsync
         public void RequestImmediateRebuild()
         {
             ImmediateRebuildRequested?.Invoke();
-            TryEnqueue();
+            TryEnqueue(ImageRebuildOrigin.Requested);
         }
 
-        public bool TryEnqueue() => false;
+        public bool TryEnqueue(ImageRebuildOrigin origin) => false;
 
-        public async IAsyncEnumerable<bool> ReadAllAsync(
+        public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;

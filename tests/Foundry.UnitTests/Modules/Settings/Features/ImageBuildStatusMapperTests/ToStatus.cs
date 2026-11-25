@@ -48,4 +48,17 @@ public sealed class ToStatus
         // Assert
         result.ShouldBe(ImageBuildStatus.Idle);
     }
+
+    [Fact]
+    public void WhenStateIsScheduledRebuildFailed_ReturnsIdle()
+    {
+        // Arrange
+        ImageBuildState state = new ImageBuildState.ScheduledRebuildFailed(ErrorTail: "apt failed", NextRetryAt: null, Attempt: 1);
+
+        // Act
+        ImageBuildStatus result = state.ToStatus();
+
+        // Assert
+        result.ShouldBe(ImageBuildStatus.Idle);
+    }
 }
