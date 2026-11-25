@@ -259,6 +259,38 @@ function reasonCopy(issue: IssueSummary): ReasonCopy {
   return STATE_REASONS[issue.state] ?? NEEDS_YOU;
 }
 
+/**
+ * A review whose checks are not red: its work is finished and a person only reviews or merges, so
+ * Needs you shows it as a one-line row rather than a full card.
+ */
+export function isCompactReview(issue: IssueSummary): boolean {
+  return (
+    issue.state === 'review' &&
+    issue.checksOutcome !== 'still_failing' &&
+    issue.checksOutcome !== 'infrastructure_failed'
+  );
+}
+
+/** A link that opens the pull request for review in a new tab; `hint` is its screen-reader suffix. */
+export interface ReviewLink {
+  readonly href: string;
+  readonly label: string;
+  readonly hint: string;
+}
+
+/** The review link of an issue that awaits a person's review, or null when it has none. */
+export function reviewableLink(issue: IssueSummary): ReviewLink | null {
+  if (!isCompactReview(issue) || !issue.pullRequestUrl) {
+    return null;
+  }
+  const provider = issue.providerType ?? 'github';
+  return {
+    href: issue.pullRequestUrl,
+    label: `Review ${providerTerminology(provider).prAbbrev}`,
+    hint: ` (opens ${providerDisplayName(provider)} in a new tab)`,
+  };
+}
+
 /** Why the issue needs a person, or null when it doesn't. */
 export function needsReason(issue: IssueSummary): NeedsReason | null {
   if (!issue.needsAction) {
@@ -318,13 +350,17 @@ function since(timestamp: string): number {
   return Number.isNaN(ms) ? Number.POSITIVE_INFINITY : ms;
 }
 
-// Tone first, so a failure never sits below ready PRs; then longest waiting; then issue number.
-function compareNeeds(a: NeedsItem, b: NeedsItem): number {
+/** Longest waiting first, then by issue number. */
+export function compareWaiting(a: NeedsItem, b: NeedsItem): number {
   return (
-    TONE_RANK[a.reason.tone] - TONE_RANK[b.reason.tone] ||
     since(a.issue.enteredStateAt) - since(b.issue.enteredStateAt) ||
     a.issue.issueNumber - b.issue.issueNumber
   );
+}
+
+// Tone first, so a failure never sits below ready PRs; then longest waiting.
+function compareNeeds(a: NeedsItem, b: NeedsItem): number {
+  return TONE_RANK[a.reason.tone] - TONE_RANK[b.reason.tone] || compareWaiting(a, b);
 }
 
 function compareRunning(a: WorkerItem, b: WorkerItem): number {

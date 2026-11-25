@@ -16,7 +16,7 @@ import { IssueRefComponent } from '../issue-ref/issue-ref';
  * A compact one-line issue row: a projected `[rowLead]` (position, or run kind), the repository and
  * number, the title as the row's one button, an optional `[rowBar]` holding the lifecycle bar, and a
  * projected `[rowMarker]`.
- * Used by the Pipeline and Blocked rows.
+ * Used by the Pipeline and Blocked rows, and by Needs you's review rows.
  */
 @Component({
   selector: 'fd-board-row',
@@ -41,6 +41,10 @@ export class BoardRowComponent {
    * lines bars up across rows, with one lead column.
    */
   readonly bar: InputSignal<boolean> = input<boolean>(false);
+  /** The lead holds a needs reason: a wider lead column, ruled in the reason's `--fd-row-tone`. */
+  readonly leadWide: InputSignal<boolean> = input<boolean>(false);
+  /** Why the row needs a person; read with the title's description, not shown. */
+  readonly why: InputSignal<string | null> = input<string | null>(null);
   /** Emits the row's button, so focus can return to it when the pane closes. */
   readonly open: OutputEmitterRef<HTMLElement> = output<HTMLElement>();
 
@@ -50,6 +54,7 @@ export class BoardRowComponent {
   );
   protected readonly describedBy: Signal<string> = computed(() => {
     const base = this.idBase();
-    return `${base}-lead ${base}-repo ${base}-marker`;
+    const marker = `${base}-lead ${base}-repo ${base}-marker`;
+    return this.why() === null ? marker : `${marker} ${base}-why`;
   });
 }

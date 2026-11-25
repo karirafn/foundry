@@ -66,6 +66,19 @@
   }
 }
 
+// An issue that just arrived in Needs you rings its current segment, as the rail's beacon does.
+.bar--arriving .bar__segment[data-status='current'][data-phase='needs_you']::before {
+  animation: fd-rail-beacon var(--fd-motion-beacon) ease-out 3;
+  animation-delay: var(--fd-rail-delay);
+  border: 2px solid var(--tone);
+  border-radius: 3px;
+  content: '';
+  inset: -3px;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
 @media (forced-colors: active) {
   .bar__segment {
     border: 1px solid CanvasText;

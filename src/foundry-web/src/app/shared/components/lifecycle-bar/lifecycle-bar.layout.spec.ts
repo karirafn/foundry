@@ -74,3 +74,59 @@ describe('lifecycle bar motion', () => {
     expect([shake.animationName, shake.animationIterationCount]).toEqual(['fd-rail-shake', '1']);
   });
 });
+
+const NEEDS_YOU: readonly LifecycleStep[] = [
+  { step: 'checks', actor: 'code', status: 'done', phase: null },
+  { step: 'your_review', actor: 'person', status: 'current', phase: 'needs_you' },
+  { step: 'merge', actor: 'code', status: 'upcoming', phase: null },
+];
+
+describe('lifecycle bar arrival beacon', () => {
+  function beacon(arriving: boolean): CSSStyleDeclaration {
+    const fixture = TestBed.createComponent(LifecycleBarComponent);
+    fixture.componentRef.setInput('lifecycle', NEEDS_YOU);
+    fixture.componentRef.setInput('arriving', arriving);
+    fixture.detectChanges();
+    const current = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      ".bar__segment[data-status='current']",
+    )!;
+    return getComputedStyle(current, '::before');
+  }
+
+  it('pulses the current segment three times when the issue just arrived in Needs you', () => {
+    // Act
+    const pulse = beacon(true);
+
+    // Assert
+    expect([pulse.animationName, pulse.animationIterationCount]).toEqual(['fd-rail-beacon', '3']);
+  });
+
+  it('plays nothing when the issue did not just arrive', () => {
+    // Act
+    const pulse = beacon(false);
+
+    // Assert
+    expect(pulse.animationName).toBe('none');
+  });
+
+  it('stops the beacon under reduced motion', () => {
+    // Arrange
+    beacon(true);
+
+    // Act
+    const reduced = [...document.styleSheets]
+      .flatMap((sheet) => [...sheet.cssRules])
+      .filter(
+        (rule): rule is CSSMediaRule =>
+          rule instanceof CSSMediaRule && rule.conditionText.includes('prefers-reduced-motion'),
+      )
+      .flatMap((rule) => [...rule.cssRules])
+      .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule)
+      .filter(
+        (rule) => rule.selectorText.includes('.bar') && rule.selectorText.includes('::before'),
+      );
+
+    // Assert
+    expect(reduced.map((rule) => rule.style.animationName)).toContain('none');
+  });
+});

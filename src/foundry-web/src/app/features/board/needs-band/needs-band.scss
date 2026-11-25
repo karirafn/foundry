@@ -1,4 +1,5 @@
 @use '../../../../styles/board-lists' as *;
+@use '../../../../styles/controls' as *;
 
 :host {
   display: block;
@@ -32,4 +33,76 @@
 
 .needs-band__item {
   min-width: 0;
+}
+
+.needs-band__review-rows {
+  @include row-list;
+  margin-top: var(--fd-spacing-md);
+
+  // Under the repository alerts only, the alerts' own margin spaces it.
+  &:first-child,
+  .needs-band__alerts + & {
+    margin-top: 0;
+  }
+
+  > li[data-tone='ready'] {
+    --fd-row-tone: var(--fd-text-success);
+  }
+
+  > li[data-tone='warning'] {
+    --fd-row-tone: var(--fd-text-warning);
+  }
+}
+
+.needs-band__reason {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &[data-tone='ready'] {
+    color: var(--fd-text-success);
+  }
+
+  &[data-tone='warning'] {
+    color: var(--fd-text-warning);
+  }
+}
+
+.needs-band__marker {
+  align-items: center;
+  display: flex;
+  gap: var(--fd-spacing-xs);
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+// The waiting time gives way first, so the review link always fits.
+.needs-band__clock {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Sits above the title button's row-wide click target, so the link opens the pull request, not the pane.
+.needs-band__link {
+  align-items: center;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-link);
+  display: inline-flex;
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  gap: 2px;
+  min-height: 32px;
+  position: relative;
+  z-index: 1;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
 }
