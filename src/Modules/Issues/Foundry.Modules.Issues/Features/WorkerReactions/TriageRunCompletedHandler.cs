@@ -19,8 +19,9 @@ namespace Foundry.Modules.Issues.Features.WorkerReactions;
 /// clarification round (ADR 0123), through the dependency check to the queue or blocked; <c>needs_input</c> to
 /// awaiting input with a re-triage resume target, its decisions on the round it opens; <c>blocked</c> to waiting
 /// untriaged on the blockers it names, or to failure (<c>blocker_cycle</c>) when a named blocker would close a
-/// dependency cycle through the stored edges of other issues. Replay-safe: an issue no longer in triage with this run
-/// (a redelivery, or the issue moved on) is left as it is.
+/// dependency cycle through the stored edges of other issues. Every verdict first records the spec fingerprint of the
+/// body the run was dispatched with as the issue's triaged spec hash. Replay-safe: an issue no longer in triage with
+/// this run (a redelivery, or the issue moved on) is left as it is.
 /// </summary>
 [IntegrationEventHandlerIdentity("Issues.TriageRunCompleted")]
 internal sealed class TriageRunCompletedHandler(
@@ -46,6 +47,11 @@ internal sealed class TriageRunCompletedHandler(
                 @event.WorkerRunId,
                 issue?.GetType().Name ?? "not found");
             return;
+        }
+
+        if (@event.TriagedSpecHash is { } triagedSpecHash)
+        {
+            triaging.RecordTriagedSpec(triagedSpecHash);
         }
 
         Issue next = @event.Result switch

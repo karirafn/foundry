@@ -499,4 +499,113 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         (await ReloadAsync(triaging)).ShouldBeOfType<TriageInProgressIssue>();
     }
+
+    [Fact]
+    public async Task WhenTheRunCarriesTheSpecHashItWasDispatchedWith_TheIssueRecordsItAsItsTriagedSpecHash()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Ready(TriageKind.Feature, []),
+                DecidedAt,
+                SpecHashFixtures.Other),
+            CancellationToken.None);
+
+        // Assert
+        (await ReloadAsync(triaging)).TriagedSpecHash.ShouldBe(SpecHashFixtures.Other);
+    }
+
+    [Fact]
+    public async Task WhenABlockedVerdictCarriesTheSpecHash_TheTriageBlockedIssueRecordsIt()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(TriageKind.Feature, [new TriageBlocker(42, "Needs the API first.")]),
+                DecidedAt,
+                SpecHashFixtures.Other),
+            CancellationToken.None);
+
+        // Assert
+        Issue reloaded = await ReloadAsync(triaging);
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.ShouldBeOfType<TriageBlockedIssue>(),
+            () => reloaded.TriagedSpecHash.ShouldBe(SpecHashFixtures.Other));
+    }
+
+    [Fact]
+    public async Task WhenTheRunRecordedNoSpecHash_TheIssueHasNone()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Feature, []), DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        (await ReloadAsync(triaging)).TriagedSpecHash.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenReadyAndTheIssueHoldsOpenWork_ASpecChangedRevisionIsQueuedOnItsBranch()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        OpenWork work = OpenWork.Of("feat/7-add-retry", "https://github.com/o/r/pull/9");
+        TriageInProgressIssue triaging = Seed(
+            TriageQueuedIssue.HoldingOpenWork(new IssueBuilder().TriageQueued(), work, DecidedAt).Claim(workerRunId, DecidedAt));
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Ready(TriageKind.Bug, []), DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        RevisionQueuedIssue revision = (await ReloadAsync(triaging)).ShouldBeOfType<RevisionQueuedIssue>();
+        revision.ShouldSatisfyAllConditions(
+            () => revision.BranchName.ShouldBe(work.BranchName),
+            () => revision.PullRequestUrl.ShouldBe(work.PullRequestUrl),
+            () => revision.Trigger.ShouldBeOfType<RevisionTrigger.SpecChanged>(),
+            () => _dispatcher.DispatchedEvents.OfType<IssueQueued>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenNeedsInputAndTheIssueHoldsOpenWork_AwaitingInputKeepsIt()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        OpenWork work = OpenWork.Of("feat/7-add-retry", "https://github.com/o/r/pull/9");
+        TriageInProgressIssue triaging = Seed(
+            TriageQueuedIssue.HoldingOpenWork(new IssueBuilder().TriageQueued(), work, DecidedAt).Claim(workerRunId, DecidedAt));
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.NeedsInput(TriageKind.Feature, IssueBuilder.DefaultQuestions, []),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        AwaitingInputIssue awaiting = (await ReloadAsync(triaging)).ShouldBeOfType<AwaitingInputIssue>();
+        awaiting.ShouldSatisfyAllConditions(
+            () => awaiting.ResumeTarget.ShouldBeOfType<ResumeTarget.Retriage>(),
+            () => awaiting.OpenWork.ShouldBe(work));
+    }
 }

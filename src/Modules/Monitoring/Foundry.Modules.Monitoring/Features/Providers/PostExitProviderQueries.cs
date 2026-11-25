@@ -176,7 +176,8 @@ internal sealed class PostExitProviderQueries(
                         comment.AuthorLogin,
                         comment.Body,
                         comment.CreatedAt)),
-                ])),
+                ],
+                SpecHash.From(IssueBodyHash.OfSpec(success.Value.Body).Value))),
             Result<ProviderIssueContent>.Failure failure => Result<IssueContent>.Fail(failure.Error),
             _ => throw new UnreachableException(),
         };

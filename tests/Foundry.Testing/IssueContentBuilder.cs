@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Testing;
 
@@ -9,6 +10,7 @@ public sealed class IssueContentBuilder
     private string _title = "Add retry";
     private string _body = string.Empty;
     private List<IssueContentComment> _comments = [];
+    private SpecHash _specHash = SpecHashFixtures.Any;
 
     public IssueContentBuilder WithTitle(string title)
     {
@@ -38,5 +40,11 @@ public sealed class IssueContentBuilder
         return this;
     }
 
-    public IssueContent Build() => new(_title, _body, [.. _comments]);
+    public IssueContentBuilder WithSpecHash(SpecHash specHash)
+    {
+        _specHash = specHash;
+        return this;
+    }
+
+    public IssueContent Build() => new(_title, _body, [.. _comments], _specHash);
 }

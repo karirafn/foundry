@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -17,7 +18,7 @@ public sealed class PublishingInstructions
 {
     private const string Principles = "PRINCIPLES_MARKER Engineering principles.";
     private const string Template = "You are implementing issue #{issueNumber}.\n\n{issueContent}";
-    private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", []);
+    private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", [], SpecHashFixtures.Any);
 
     public static TheoryData<string> Variants => [.. ContextsByVariant.Keys];
 
@@ -42,6 +43,10 @@ public sealed class PublishingInstructions
                 "feat/1-fix",
                 "https://github.com/org/repo/pull/1",
                 new RevisionTrigger.InputProvided()),
+            ["spec-changed"] = new DispatchContext.Revision(
+                "feat/1-fix",
+                "https://github.com/org/repo/pull/1",
+                new RevisionTrigger.SpecChanged()),
         };
 
     private static readonly string[] RemovedPhrases =

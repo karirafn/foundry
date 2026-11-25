@@ -99,6 +99,22 @@ public sealed class GetIssueContentAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheProviderReadsTheIssue_ReturnsTheSpecHashOfTheBodyItRead()
+    {
+        // Arrange
+        _provider.Content = Result<ProviderIssueContent>.Ok(
+            new ProviderIssueContent("Add retry", "- [x] Retry webhook delivery.", []));
+
+        // Act
+        Result<IssueContent> result = await _sut.GetIssueContentAsync(
+            await SeedRepoAsync(), 7, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueContent>.Success>().Value.SpecHash.Value
+            .ShouldBe(IssueBodyHash.OfSpec("- [ ] Retry webhook delivery.").Value);
+    }
+
+    [Fact]
     public async Task WhenTheProviderReadFails_ReturnsTheFailure()
     {
         // Arrange

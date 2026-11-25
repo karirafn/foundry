@@ -235,7 +235,8 @@ internal sealed class WorkerOutcomeApplier(
                         activeRun.IssueId.Value,
                         activeRun.Id,
                         ToTriageResult(triage.Verdict),
-                        timeProvider.GetUtcNow())],
+                        timeProvider.GetUtcNow(),
+                        activeRun.SuppliedSpecHash)],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, triageRun, alongside, domainEventDispatcher, cancellationToken);

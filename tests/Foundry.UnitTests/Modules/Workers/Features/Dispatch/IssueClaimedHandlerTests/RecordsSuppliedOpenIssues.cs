@@ -74,7 +74,23 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
         run.SuppliedOpenIssueNumbers.ShouldBe([7, 12, 31]);
     }
 
-    private IssueClaimedHandler BuildHandler(TrackerContext trackerContext)
+    [Fact]
+    public async Task WhenRunIsDispatched_ActiveRunHoldsTheSpecHashOfTheIssueBodyItWasGiven()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler(
+            new TrackerContextBuilder().Build(),
+            new StubIssueContentQueries(Result<IssueContent>.Ok(new IssueContentBuilder().WithSpecHash(SpecHashFixtures.Other).Build())));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(WorkerRunId.New()), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        _dbContext.Set<WorkerRun>().OfType<ActiveRun>().Single().SuppliedSpecHash.ShouldBe(SpecHashFixtures.Other);
+    }
+
+    private IssueClaimedHandler BuildHandler(TrackerContext trackerContext, StubIssueContentQueries? issueContent = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -88,7 +104,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
             new StubFailingJobLogQueries(),
             StubWorkerRoleCatalogStore.With(),
             StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
-            new StubIssueContentQueries(),
+            issueContent ?? new StubIssueContentQueries(),
             new StubTrackerContextQueries(trackerContext),
             new CapturingSystemNotificationBroadcaster(),
             new StubWorkerHostEntryResolver(),

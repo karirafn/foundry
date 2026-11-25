@@ -68,6 +68,17 @@ public sealed class TriageQueuedIssue : QueuedIssue
         return queued;
     }
 
+    /// <summary>
+    /// An issue that already has <paramref name="openWork"/> goes back to triage holding it, so a ready verdict resumes
+    /// the work on its branch and pull request.
+    /// </summary>
+    internal static TriageQueuedIssue HoldingOpenWork(Issue source, OpenWork openWork, DateTimeOffset transitionedAt)
+    {
+        TriageQueuedIssue queued = CarryingBlockers(source, transitionedAt);
+        queued.HoldOpenWork(openWork);
+        return queued;
+    }
+
     private static TriageQueuedIssue CarryingBlockers(Issue source, DateTimeOffset enteredStateAt)
     {
         TriageQueuedIssue queued = new(source.Id, enteredStateAt);

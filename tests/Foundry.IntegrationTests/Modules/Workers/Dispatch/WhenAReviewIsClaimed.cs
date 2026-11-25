@@ -65,7 +65,7 @@ public sealed class WhenAReviewIsClaimed : IAsyncDisposable
             services.AddSingleton<IPostExitProviderQueries>(new StubBranchWorkQueries());
             services.RemoveAll<IIssueContentQueries>();
             services.AddSingleton<IIssueContentQueries>(
-                new StubIssueContentQueries(Result<IssueContent>.Ok(new IssueContent("Add retries", IssueBody, []))));
+                new StubIssueContentQueries(Result<IssueContent>.Ok(new IssueContent("Add retries", IssueBody, [], SpecHashFixtures.Any))));
             services.RemoveAll<ITrackerContextQueries>();
             services.AddSingleton<ITrackerContextQueries>(new StubTrackerContextQueries());
             services.RemoveAll<IWorkerOrchestrator>();

@@ -83,6 +83,13 @@ public sealed class StartingRun : WorkerRun
         StoreSuppliedOpenIssueNumbers([.. openReferencedNumbers.Concat(indexNumbers).Distinct()]);
     }
 
+    /// <summary>Records the fingerprint of the spec the issue body supplied to the run states; later states carry it.</summary>
+    public void RecordSuppliedSpecHash(SpecHash specHash)
+    {
+        ArgumentNullException.ThrowIfNull(specHash);
+        StoreSuppliedSpecHash(specHash);
+    }
+
     /// <summary>
     /// Records the facts code computed for a review run (ADR 0114): its pull request, reviewed commit and patch-id, its
     /// classified changed paths and the flag over them, and the issue's acceptance criteria. Later states carry them, so

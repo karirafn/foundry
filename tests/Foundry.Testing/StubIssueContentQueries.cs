@@ -16,7 +16,7 @@ public sealed class StubIssueContentQueries(
     private readonly List<(MonitoredRepositoryId RepositoryId, int IssueNumber)> _requests = [];
     private readonly List<(MonitoredRepositoryId RepositoryId, string PullRequestUrl)> _pullRequestRequests = [];
 
-    public static IssueContent DefaultContent { get; } = new("Stub issue", "Stub body.", []);
+    public static IssueContent DefaultContent { get; } = new("Stub issue", "Stub body.", [], SpecHashFixtures.Any);
 
     public const string DefaultPullRequestDescription = "Stub pull request description.";
 

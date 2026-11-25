@@ -59,7 +59,7 @@ public sealed class WhenAnApprovedPullRequestIsCaughtUp : IAsyncDisposable
             services.AddSingleton<IPostExitProviderQueries>(new StubBranchWorkQueries());
             services.RemoveAll<IIssueContentQueries>();
             services.AddSingleton<IIssueContentQueries>(
-                new StubIssueContentQueries(Result<IssueContent>.Ok(new IssueContent("Add retries", "Retry failed requests.", []))));
+                new StubIssueContentQueries(Result<IssueContent>.Ok(new IssueContent("Add retries", "Retry failed requests.", [], SpecHashFixtures.Any))));
             services.RemoveAll<ITrackerContextQueries>();
             services.AddSingleton<ITrackerContextQueries>(new StubTrackerContextQueries());
             services.RemoveAll<IWorkerOrchestrator>();

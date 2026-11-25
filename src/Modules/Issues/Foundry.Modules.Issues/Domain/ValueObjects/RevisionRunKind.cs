@@ -14,6 +14,9 @@ internal static class RevisionRunKind
         RevisionTrigger.FailedChecks => RunKind.ChecksFix,
         RevisionTrigger.RebaseConflict => RunKind.ConflictFix,
         RevisionTrigger.InputProvided => RunKind.InputResume,
+
+        // A person rewrote the issue: the work resumes on what they wrote, as it does on their answers.
+        RevisionTrigger.SpecChanged => RunKind.InputResume,
         _ => throw new InvalidOperationException($"Unknown revision trigger '{trigger.Discriminator}'."),
     };
 }

@@ -90,7 +90,7 @@ public sealed partial class HandleAsync
     private static StubIssueContentQueries ReviewContentQueries(
         Result<string>? pullRequestDescription = null,
         string issueBody = ReviewIssueBody) =>
-        new(Result<IssueContent>.Ok(new IssueContent("Add retries", issueBody, [])), pullRequestDescription);
+        new(Result<IssueContent>.Ok(new IssueContent("Add retries", issueBody, [], SpecHashFixtures.Any)), pullRequestDescription);
 
     [Fact]
     public async Task WhenTheContextIsReview_PreparesTheReviewedBranchAndCommitAndNoRunBranch()

@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -46,7 +47,7 @@ internal static class FailingJobLogPrompt
             1,
             "You are implementing issue #{issueNumber}.\n\n{issueContent}",
             new DispatchContext.Revision("feat/1-fix", "https://example.test/pull/1", new RevisionTrigger.FailedChecks([check])),
-            new IssueContent("Fix", "Body.", []),
+            new IssueContent("Fix", "Body.", [], SpecHashFixtures.Any),
             timeoutMinutes: 120,
             toolchain: ToolchainFixtures.With(docker: false, csharpLs: false),
             failingJobLogs: [new FailingJobLog(check.Name, log.Text, log.Length, log.FailureExcerpt)]);

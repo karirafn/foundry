@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -15,7 +16,7 @@ public sealed class RenderingUiChanges
 {
     private const string Principles = "Engineering principles.";
     private const string Template = "You are implementing issue #{issueNumber}.\n\n{issueContent}";
-    private static readonly IssueContent Issue = new("Fix the layout", "The cards have unequal heights.", []);
+    private static readonly IssueContent Issue = new("Fix the layout", "The cards have unequal heights.", [], SpecHashFixtures.Any);
 
     [Fact]
     public void WhenTheToolchainHasChromiumAndPlaywrightCore_IncludesTheSection()

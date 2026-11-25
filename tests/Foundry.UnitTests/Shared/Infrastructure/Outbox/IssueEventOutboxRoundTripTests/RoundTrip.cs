@@ -120,6 +120,66 @@ public sealed class RoundTrip
             .ContinuedWithoutAnswer.ShouldBeTrue();
     }
 
+    [Fact]
+    public void WhenAClaimRevisesARewrittenSpec_TheSpecChangedTriggerRoundTripsThroughOutbox()
+    {
+        // Arrange
+        IssueClaimed original = new(new ClaimedIssueDispatch(
+            IssueId.New(),
+            WorkerRunId.New(),
+            1,
+            "Title",
+            "owner/repo",
+            new Uri("https://github.com/owner/repo.git"),
+            Foundry.Shared.BranchName.From("feat/1-test"),
+            Foundry.Modules.Monitoring.Contracts.MonitoredRepositoryId.New(),
+            new Foundry.Modules.Monitoring.Contracts.WorkerProvider.GitHub(),
+            new DispatchContext.Revision("feat/1-test", "https://github.com/owner/repo/pull/1", new RevisionTrigger.SpecChanged()),
+            "https://api.github.com/repos/owner/repo/issues/1"));
+
+        // Act
+        IssueClaimed? deserialized = RoundTripThroughOutbox(original);
+
+        // Assert
+        deserialized.ShouldNotBeNull().Dispatch.Context.ShouldBeOfType<DispatchContext.Revision>()
+            .Trigger.ShouldBeOfType<RevisionTrigger.SpecChanged>();
+    }
+
+    [Fact]
+    public void WhenATriageRunCompletesWithItsSpecHash_TheHashRoundTripsThroughOutbox()
+    {
+        // Arrange
+        TriageRunCompleted original = new(
+            Guid.NewGuid(),
+            WorkerRunId.New(),
+            new TriageResult.Ready(TriageKind.Feature, []),
+            Now,
+            SpecHashFixtures.Other);
+
+        // Act
+        TriageRunCompleted? deserialized = RoundTripThroughOutbox(original);
+
+        // Assert
+        deserialized.ShouldNotBeNull().TriagedSpecHash.ShouldBe(SpecHashFixtures.Other);
+    }
+
+    [Fact]
+    public void WhenATriageRunCompletedRowHasNoSpecHash_ItReadsAsNone()
+    {
+        // Arrange
+        TriageRunCompleted original = new(
+            Guid.NewGuid(),
+            WorkerRunId.New(),
+            new TriageResult.Ready(TriageKind.Feature, []),
+            Now);
+
+        // Act
+        TriageRunCompleted? deserialized = RoundTripThroughOutbox(original);
+
+        // Assert
+        deserialized.ShouldNotBeNull().TriagedSpecHash.ShouldBeNull();
+    }
+
     private static T? RoundTripThroughOutbox<T>(T original)
         where T : class, Foundry.Shared.IIntegrationEvent
     {

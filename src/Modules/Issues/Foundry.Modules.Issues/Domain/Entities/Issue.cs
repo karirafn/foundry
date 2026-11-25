@@ -57,6 +57,27 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
             ? verdict.Kind
             : null;
 
+    /// <summary>
+    /// The fingerprint of the spec the issue body stated when the latest triage run was dispatched, recorded when that
+    /// run completed; <see langword="null"/> for an issue no triage run has recorded one for. Carried through every
+    /// transition with the shared properties.
+    /// </summary>
+    public SpecHash? TriagedSpecHash { get; private set; }
+
+    // The two persisted halves of OpenWork: both set, or both null.
+    private string? _openWorkBranchName;
+    private string? _openWorkPullRequestUrl;
+
+    /// <summary>
+    /// The branch and pull request the issue already has while it is back in triage, or <see langword="null"/> when it
+    /// has none. Carried through every transition with the shared properties; a ready verdict resumes it as a
+    /// <see cref="RevisionTrigger.SpecChanged"/> revision on that branch and consumes it.
+    /// </summary>
+    public OpenWork? OpenWork =>
+        _openWorkBranchName is { } branchName && _openWorkPullRequestUrl is { } pullRequestUrl
+            ? OpenWork.Of(branchName, pullRequestUrl)
+            : null;
+
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
     public int IssueNumber { get; private set; }
@@ -95,9 +116,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     /// <summary>
     /// How many times the issue's Implement step has run against published work, starting at 1. A revision trigger
-    /// (review findings, a person's feedback, failed checks, a rebase conflict) starts a new round; a retry, a resume
-    /// after answers and a continuation stay in the same round. Carried through every transition with the shared
-    /// properties.
+    /// (review findings, a person's feedback, failed checks, a rebase conflict, a rewritten spec) starts a new round;
+    /// a retry, a resume after answers and a continuation stay in the same round. Carried through every transition
+    /// with the shared properties.
     /// </summary>
     public int Round { get; private set; } = 1;
 
@@ -273,6 +294,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         ReviewFixAttempts = source.ReviewFixAttempts;
         ChecksFixAttempts = source.ChecksFixAttempts;
         LatestReview = source.LatestReview;
+        TriagedSpecHash = source.TriagedSpecHash;
+        _openWorkBranchName = source._openWorkBranchName;
+        _openWorkPullRequestUrl = source._openWorkPullRequestUrl;
     }
 
     /// <summary>
@@ -351,6 +375,28 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     private static IssueKind? LabelledKindOf(KindClassification kindClassification) =>
         kindClassification is KindClassification.Labelled labelled ? labelled.Kind : null;
 
+    /// <summary>Records the fingerprint of the spec the completed triage run judged; the next state carries it.</summary>
+    private protected void RecordTriagedSpecHash(SpecHash triagedSpecHash)
+    {
+        ArgumentNullException.ThrowIfNull(triagedSpecHash);
+        TriagedSpecHash = triagedSpecHash;
+    }
+
+    /// <summary>The issue goes back to triage holding <paramref name="openWork"/>; the next state carries it.</summary>
+    private protected void HoldOpenWork(OpenWork openWork)
+    {
+        ArgumentNullException.ThrowIfNull(openWork);
+        _openWorkBranchName = openWork.BranchName;
+        _openWorkPullRequestUrl = openWork.PullRequestUrl;
+    }
+
+    /// <summary>The revision resumed the open work: its state carries the branch and pull request from here on.</summary>
+    private protected void ReleaseOpenWork()
+    {
+        _openWorkBranchName = null;
+        _openWorkPullRequestUrl = null;
+    }
+
     /// <summary>Records the latest triage verdict; its kind decides the issue's kind only while no label does.</summary>
     private protected void RecordTriageVerdict(TriageVerdict verdict)
     {
@@ -361,11 +407,18 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     /// <summary>
     /// Leaves triage through the dependency check (ADR 0097): queued when the issue has no open blockers, blocked
-    /// otherwise, so an issue with open blockers is never queued. A ready <paramref name="verdict"/> is recorded on the
-    /// next state; skipping triage records none.
+    /// otherwise, so an issue with open blockers is never queued. An issue holding <see cref="OpenWork"/> resumes it as
+    /// a <see cref="RevisionTrigger.SpecChanged"/> revision on its branch instead of a fresh run, so the branch name is
+    /// never recomputed and no second pull request opens. A ready <paramref name="verdict"/> is recorded on the next
+    /// state; skipping triage records none.
     /// </summary>
     private protected Issue ReleaseThroughDependencyCheck(TriageVerdict.Ready? verdict, DateTimeOffset transitionedAt)
     {
+        if (OpenWork is { } openWork)
+        {
+            return ResumeOpenWork(verdict, openWork, transitionedAt);
+        }
+
         if (BlockedBy.Count == 0)
         {
             FreshQueuedIssue queued = FreshQueuedIssue.FromTriage(this, verdict, transitionedAt);
@@ -375,6 +428,20 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
         BlockedIssue blocked = BlockedIssue.FromTriage(this, verdict, transitionedAt);
         AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
+        return blocked;
+    }
+
+    private Issue ResumeOpenWork(TriageVerdict.Ready? verdict, OpenWork openWork, DateTimeOffset transitionedAt)
+    {
+        if (BlockedBy.Count == 0)
+        {
+            RevisionQueuedIssue queued = RevisionQueuedIssue.FromTriage(this, verdict, openWork, transitionedAt);
+            AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+            return queued;
+        }
+
+        RevisionBlockedIssue blocked = RevisionBlockedIssue.FromTriage(this, verdict, openWork, transitionedAt);
+        AddDomainEvent(new Events.IssueRevisionBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }
 

@@ -270,6 +270,7 @@ internal sealed class IssueClaimedHandler(
 
         startingRun.RecordPreparedBase(prepared.Base, claimed.MonitoredRepositoryId);
         startingRun.RecordSuppliedOpenIssues(trackerContext);
+        startingRun.RecordSuppliedSpecHash(issueContent.SpecHash);
 
         if (reviewFacts is not null)
         {

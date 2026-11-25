@@ -31,7 +31,7 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
     private const int IssueNumber = 7;
     private const int OpenIssueCap = 100;
 
-    private static readonly IssueContent Content = new("Add retry", "Retry webhook delivery.", []);
+    private static readonly IssueContent Content = new("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any);
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;

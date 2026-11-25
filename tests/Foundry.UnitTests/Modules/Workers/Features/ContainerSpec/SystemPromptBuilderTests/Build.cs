@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -19,7 +20,7 @@ public sealed class Build
     private const string Principles = "PRINCIPLES_MARKER Engineering principles.";
     private const string PrePrCommitInstruction = PrePrSection.CommitInstruction;
     private const string PrePrNothingToPublishExit = PrePrSection.NothingToPublishExit;
-    private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", []);
+    private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", [], SpecHashFixtures.Any);
 
     private const string DefaultSystemPromptTemplate =
         "You are implementing GitHub issue #{issueNumber}.\n\n{issueContent}";
@@ -70,7 +71,7 @@ public sealed class Build
     public void WhenDefaultTemplate_SubstitutesAllPlaceholders()
     {
         // Arrange
-        IssueContent issue = new("Retry webhooks", "Retry delivery on failure.", []);
+        IssueContent issue = new("Retry webhooks", "Retry delivery on failure.", [], SpecHashFixtures.Any);
 
         // Act
         Result<string> buildResult = SystemPromptBuilder.Build(
@@ -2258,7 +2259,8 @@ public sealed class Build
                 new IssueContentComment(1, "bob", "OLDEST " + new string('a', 50_000), createdAt),
                 new IssueContentComment(2, "bob", "MIDDLE " + new string('b', 50_000), createdAt.AddHours(1)),
                 new IssueContentComment(3, "bob", "NEWEST " + new string('c', 50_000), createdAt.AddHours(2)),
-            ]);
+            ],
+            SpecHashFixtures.Any);
         string olderInput = "OLDER-ANSWER " + new string('x', 2_000);
         string newestInput = "NEWEST-ANSWER " + new string('y', 2_000);
 
