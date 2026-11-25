@@ -16,6 +16,7 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
+using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -113,13 +114,13 @@ public sealed class AccountTokenValidity : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenListingIsRefusedAndScopesAreUnverifiable_AccountStaysValid()
+    public async Task WhenListingIsRefusedAndTheTokenGrantIsRead_AccountStaysValid()
     {
         // Arrange
         CredentialId accountId = await SeedAccountAsync();
         await SeedRepoAsync("owner/repo");
         CountingIssueProvider provider = new() { ListingError = Unauthorized };
-        FakeAccountTokenValidator validator = new(TokenValidationOutcome.ScopesUnverifiable("octocat", new TokenExpiry.NotChecked()));
+        FakeAccountTokenValidator validator = new(TokenValidationOutcome.GrantRead("octocat", GitLabTokenGrant.Create([]), new TokenExpiry.NotChecked()));
         MonitoringService sut = BuildService(BuildServiceProvider(provider, validator));
 
         // Act
@@ -384,6 +385,7 @@ public sealed class AccountTokenValidity : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IIssueProviderFactory>(_ => new FixedProviderFactory(provider));
         services.AddScoped<IGitHubWriteProber, GrantedWriteProber>();
+        services.AddScoped<IGitLabTokenGrantReader, FakeGitLabTokenGrantReader>();
         services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();
         services.AddScoped<IPackageSourceVerdicts, PackageSourceVerdicts>();
         services.AddScoped<ICredentialResolver, CredentialResolver>();

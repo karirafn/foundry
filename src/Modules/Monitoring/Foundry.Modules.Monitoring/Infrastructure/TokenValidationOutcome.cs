@@ -13,7 +13,14 @@ internal abstract record TokenValidationOutcome
 
     internal sealed record AuthenticationFailedOutcome : TokenValidationOutcome;
 
-    internal sealed record ScopesUnverifiableOutcome(string AccountName, TokenExpiry TokenExpiry) : TokenValidationOutcome;
+    /// <summary>
+    /// The token authenticates as a GitLab fine-grained token and reported <paramref name="Grant"/>, which is
+    /// yet to be checked against what Foundry requires.
+    /// </summary>
+    internal sealed record GrantReadOutcome(
+        string AccountName,
+        GitLabTokenGrant Grant,
+        TokenExpiry TokenExpiry) : TokenValidationOutcome;
 
     /// <summary>The token authenticates, but it is a kind of token Foundry does not accept.</summary>
     internal sealed record WrongTokenKindOutcome(
@@ -34,8 +41,11 @@ internal abstract record TokenValidationOutcome
     internal static TokenValidationOutcome AuthenticationFailed() =>
         new AuthenticationFailedOutcome();
 
-    internal static TokenValidationOutcome ScopesUnverifiable(string accountName, TokenExpiry tokenExpiry) =>
-        new ScopesUnverifiableOutcome(accountName, tokenExpiry);
+    internal static TokenValidationOutcome GrantRead(
+        string accountName,
+        GitLabTokenGrant grant,
+        TokenExpiry tokenExpiry) =>
+        new GrantReadOutcome(accountName, grant, tokenExpiry);
 
     internal static TokenValidationOutcome TokenOfWrongKind(
         string accountName,

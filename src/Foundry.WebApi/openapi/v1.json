@@ -6410,6 +6410,12 @@
           },
           "verification": {
             "type": "string"
+          },
+          "group": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7069,7 +7075,9 @@
           "missingScopes",
           "detectedProvider",
           "tokenExpiry",
-          "wrongKind"
+          "wrongKind",
+          "notAllowed",
+          "broadReach"
         ],
         "type": "object",
         "properties": {
@@ -7102,6 +7110,18 @@
               "null",
               "string"
             ]
+          },
+          "notAllowed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "broadReach": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

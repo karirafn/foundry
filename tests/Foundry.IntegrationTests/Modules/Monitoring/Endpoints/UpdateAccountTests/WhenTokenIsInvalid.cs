@@ -32,7 +32,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
@@ -81,7 +83,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -121,7 +125,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -160,7 +166,9 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
 
         using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {

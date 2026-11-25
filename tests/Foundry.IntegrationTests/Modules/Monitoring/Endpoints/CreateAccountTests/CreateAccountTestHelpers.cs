@@ -33,7 +33,9 @@ internal sealed class TokenKeyedValidateTokenStub(Dictionary<string, string> tok
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }

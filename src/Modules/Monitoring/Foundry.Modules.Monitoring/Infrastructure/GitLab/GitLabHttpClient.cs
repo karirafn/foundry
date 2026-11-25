@@ -28,10 +28,8 @@ internal sealed partial class GitLabHttpClient(
     ILogger<GitLabHttpClient> logger,
     DefaultBranchCache defaultBranchCache,
     IProviderRateBudget rateBudget,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider) : IGitLabTokenGrantReader
 {
-    private const int MaxRepositoryPages = 5;
-    private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
     private const int IssuesPerPage = 100;
     private const int MaxDiscussionPages = 20;
@@ -105,23 +103,72 @@ internal sealed partial class GitLabHttpClient(
         string accountName,
         CancellationToken cancellationToken)
     {
+        Result<GitLabTokenSelf> self = await ReadTokenSelfAsync(apiBaseUrl, token, cancellationToken);
+
+        return self switch
+        {
+            Result<GitLabTokenSelf>.Success { Value: GitLabTokenSelf.FineGrained fineGrained } =>
+                Result<TokenValidationOutcome>.Ok(
+                    TokenValidationOutcome.GrantRead(accountName, fineGrained.Grant, fineGrained.Expiry)),
+            Result<GitLabTokenSelf>.Success { Value: GitLabTokenSelf.OfWrongKind wrongKind } =>
+                Result<TokenValidationOutcome>.Ok(
+                    TokenValidationOutcome.TokenOfWrongKind(accountName, wrongKind.Kind, wrongKind.Expiry)),
+            Result<GitLabTokenSelf>.Success { Value: GitLabTokenSelf.CannotReadItself } =>
+                Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(
+                    accountName,
+                    new TokenExpiry.Unavailable(),
+                    TokenPermissions.LabelsOf(ProviderTypes.GitLab, [TokenPermissions.GitLabReadOwnTokenKey]))),
+            Result<GitLabTokenSelf>.Failure failure => Result<TokenValidationOutcome>.Fail(failure.Error),
+            _ => throw new InvalidOperationException("Unexpected result."),
+        };
+    }
+
+    /// <summary>
+    /// Reads <c>GET /personal_access_tokens/self</c>. A fine-grained token (GitLab 19.5 and later) reports its
+    /// grant in <c>granular_scopes</c>; one lacking <c>read_personal_access_token</c> is refused with
+    /// <c>insufficient_granular_scope</c>. A body without <c>granular_scopes</c> is a legacy token, or a
+    /// fine-grained one on a GitLab too old to report its grant, and any other refusal is a group or
+    /// project access token, which cannot read the endpoint. A body that cannot be read fails.
+    /// </summary>
+    public async Task<Result<GitLabTokenSelf>> ReadTokenSelfAsync(
+        Uri apiBaseUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<GitLabTokenSelf>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
         Uri selfUri = new(EnsureTrailingSlash(apiBaseUrl), "personal_access_tokens/self");
 
         using HttpRequestMessage selfRequest = new(HttpMethod.Get, selfUri);
         AddCommonHeaders(selfRequest, token);
 
         using HttpResponseMessage selfResponse = await httpClient.SendAsync(selfRequest, cancellationToken);
+        string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
 
-        // Group and project access tokens cannot read /self, so neither their scopes nor their expiry is known.
         if (!selfResponse.IsSuccessStatusCode)
         {
-            return Result<TokenValidationOutcome>.Ok(
-                TokenValidationOutcome.ScopesUnverifiable(accountName, new TokenExpiry.Unavailable()));
+            if (selfResponse.StatusCode is HttpStatusCode.Forbidden && IsInsufficientGranularScope(selfBody))
+            {
+                RecordRestHeadroom(selfResponse);
+                return Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.CannotReadItself());
+            }
+
+            // A throttled or failing GitLab says nothing about the token, so it is a failure, not a token kind.
+            if (selfResponse.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError
+                || (selfResponse.StatusCode is HttpStatusCode.Forbidden && IsRateLimited(selfResponse)))
+            {
+                return Result<GitLabTokenSelf>.Fail(ErrorFromNonSuccess(selfResponse));
+            }
+
+            return Result<GitLabTokenSelf>.Ok(
+                new GitLabTokenSelf.OfWrongKind(WrongTokenKind.GitLabResourceToken, new TokenExpiry.Unavailable()));
         }
 
         RecordRestHeadroom(selfResponse);
 
-        string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
         GitLabTokenSelfDto? dto;
         try
         {
@@ -134,18 +181,45 @@ internal sealed partial class GitLabHttpClient(
                 "GitLab token validation: failed to parse response body. Provider: gitlab, Host: {Host}, Status: {StatusCode}",
                 apiBaseUrl.Host,
                 (int)selfResponse.StatusCode);
-            return Result<TokenValidationOutcome>.Ok(
-                TokenValidationOutcome.ScopesUnverifiable(accountName, new TokenExpiry.Unavailable()));
+            return Result<GitLabTokenSelf>.Fail(GitLabErrors.UnexpectedStatusCode((int)selfResponse.StatusCode));
         }
 
-        HashSet<string> granted = new(dto?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
-        List<string> missing = TokenPermissions.GitLabScopes
-            .Where(s => !granted.Contains(s))
-            .ToList();
+        if (dto is null)
+        {
+            return Result<GitLabTokenSelf>.Fail(GitLabErrors.UnexpectedStatusCode((int)selfResponse.StatusCode));
+        }
 
-        TokenExpiry tokenExpiry = dto is null ? new TokenExpiry.Unavailable() : ReadTokenExpiry(dto.ExpiresAt, apiBaseUrl);
+        TokenExpiry tokenExpiry = ReadTokenExpiry(dto.ExpiresAt, apiBaseUrl);
 
-        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(accountName, tokenExpiry, missing));
+        if (dto.GranularScopes is null)
+        {
+            bool isFineGrained = (dto.Scopes ?? []).Contains("granular", StringComparer.OrdinalIgnoreCase);
+            return Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.OfWrongKind(
+                isFineGrained ? WrongTokenKind.GitLabVersion : WrongTokenKind.GitLabLegacy,
+                tokenExpiry));
+        }
+
+        GitLabTokenGrant grant = GitLabTokenGrant.Create(dto.GranularScopes
+            .Select(entry => new GitLabTokenGrantEntry(
+                entry.Access ?? string.Empty,
+                entry.Permissions ?? [],
+                entry.ProjectId,
+                entry.GroupId)));
+
+        return Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.FineGrained(grant, tokenExpiry));
+    }
+
+    private static bool IsInsufficientGranularScope(string body)
+    {
+        try
+        {
+            GitLabErrorBodyDto? error = JsonSerializer.Deserialize<GitLabErrorBodyDto>(body, JsonOptions);
+            return string.Equals(error?.Error, "insufficient_granular_scope", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -289,7 +363,7 @@ internal sealed partial class GitLabHttpClient(
         return Result<IReadOnlyList<int>>.Ok(issueNumbers);
     }
 
-    private async Task<Result<int>> ResolveProjectIdAsync(
+    public async Task<Result<int>> ResolveProjectIdAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -561,6 +635,10 @@ internal sealed partial class GitLabHttpClient(
         return Result<IReadOnlyList<ProviderComment>>.Ok(providerComments);
     }
 
+    /// <summary>
+    /// Lists exactly the projects the token's grant selects, each read with <c>GET /projects/:id</c>. A token
+    /// that reports no grant selects no project.
+    /// </summary>
     public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
         Uri apiBaseUrl,
         string token,
@@ -571,15 +649,24 @@ internal sealed partial class GitLabHttpClient(
             return Result<IReadOnlyList<ProviderRepository>>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
+        Result<GitLabTokenSelf> self = await ReadTokenSelfAsync(apiBaseUrl, token, cancellationToken);
+        if (self is Result<GitLabTokenSelf>.Failure selfFailure)
+        {
+            return Result<IReadOnlyList<ProviderRepository>>.Fail(selfFailure.Error);
+        }
+
+        if (self is not Result<GitLabTokenSelf>.Success { Value: GitLabTokenSelf.FineGrained fineGrained })
+        {
+            return Result<IReadOnlyList<ProviderRepository>>.Ok([]);
+        }
+
         List<ProviderRepository> repositories = [];
 
-        for (int page = 1; page <= MaxRepositoryPages; page++)
+        foreach (long projectId in fineGrained.Grant.ProjectIds)
         {
-            // simple=false (default) returns the full project payload including the permissions
-            // object, which carries project_access.access_level and group_access.access_level.
-            // Developer (30) or above is required for push access.
-            string relativePath = $"projects?membership=true&per_page={RepositoriesPerPage}&page={page}";
-            Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+            Uri requestUri = new(
+                EnsureTrailingSlash(apiBaseUrl),
+                $"projects/{projectId.ToString(CultureInfo.InvariantCulture)}");
 
             using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
             AddCommonHeaders(request, token);
@@ -594,23 +681,21 @@ internal sealed partial class GitLabHttpClient(
             RecordRestHeadroom(response);
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
-            List<GitLabProjectListItemDto>? dtos =
-                JsonSerializer.Deserialize<List<GitLabProjectListItemDto>>(body, JsonOptions);
+            GitLabProjectListItemDto? dto = JsonSerializer.Deserialize<GitLabProjectListItemDto>(body, JsonOptions);
 
-            List<GitLabProjectListItemDto> pageItems = dtos ?? [];
-            foreach (GitLabProjectListItemDto dto in pageItems)
+            if (dto is null)
             {
-                bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
-                int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
-                int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
-                bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabWritableRepositoryAccessLevel;
-                repositories.Add(new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush));
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(
+                    GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
             }
 
-            if (pageItems.Count < RepositoriesPerPage)
-            {
-                break;
-            }
+            // The permissions object carries project_access and group_access levels; Developer (30) or
+            // above can push.
+            bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
+            int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+            int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
+            bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabWritableRepositoryAccessLevel;
+            repositories.Add(new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush));
         }
 
         return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
@@ -1172,8 +1257,17 @@ internal sealed partial class GitLabHttpClient(
 
     // ExpiresAt is a JsonElement so an explicit null (never expires) is told apart from a missing field.
     private sealed record GitLabTokenSelfDto(
-        [property: JsonPropertyName("scopes")] IReadOnlyList<string> Scopes,
-        [property: JsonPropertyName("expires_at")] JsonElement ExpiresAt);
+        [property: JsonPropertyName("scopes")] IReadOnlyList<string>? Scopes,
+        [property: JsonPropertyName("expires_at")] JsonElement ExpiresAt,
+        [property: JsonPropertyName("granular_scopes")] IReadOnlyList<GitLabGranularScopeDto>? GranularScopes);
+
+    private sealed record GitLabGranularScopeDto(
+        [property: JsonPropertyName("access")] string? Access,
+        [property: JsonPropertyName("permissions")] IReadOnlyList<string>? Permissions,
+        [property: JsonPropertyName("project_id")] long? ProjectId,
+        [property: JsonPropertyName("group_id")] long? GroupId);
+
+    private sealed record GitLabErrorBodyDto([property: JsonPropertyName("error")] string? Error);
 
     private sealed record GitLabProjectInfoDto(int Id, string DefaultBranch);
 

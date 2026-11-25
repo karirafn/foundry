@@ -16,6 +16,7 @@ using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
+using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -101,6 +102,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
             new StubCredentialResolver(credential),
             new FixedCountingProviderFactory(countingProvider),
             new NeverCalledWriteProber(),
+            new FakeGitLabTokenGrantReader(),
             new StubPackageSourceVerdicts(),
             NullLogger<RepositoryEligibilityEvaluator>.Instance);
 

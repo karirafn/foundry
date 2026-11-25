@@ -14,6 +14,8 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
+using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -34,12 +36,14 @@ public sealed class EvaluateFullyAndStoreAsync
     private static RepositoryEligibilityEvaluator CreateSut(
         ICredentialResolver? resolver = null,
         IIssueProviderFactory? providerFactory = null,
-        IGitHubWriteProber? writeProber = null)
+        IGitHubWriteProber? writeProber = null,
+        IGitLabTokenGrantReader? gitLabGrantReader = null)
     {
         return new RepositoryEligibilityEvaluator(
             resolver ?? new NullCredentialResolver(),
             providerFactory ?? new NullProviderFactory(),
             writeProber ?? new GrantedWriteProber(),
+            gitLabGrantReader ?? new FakeGitLabTokenGrantReader(),
             new StubPackageSourceVerdicts(),
             NullLogger<RepositoryEligibilityEvaluator>.Instance);
     }
@@ -508,6 +512,170 @@ public sealed class EvaluateFullyAndStoreAsync
         // Assert
         repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>()
             .MissingPermissions.ShouldBe(["maintainer_role"]);
+    }
+
+    private static RepositoryEligibilityEvaluator CreateGitLabSut(
+        FakeGitLabTokenGrantReader grantReader,
+        bool canPush = true) =>
+        CreateSut(
+            resolver: new StubCredentialResolver(CreateGitLabCredential()),
+            providerFactory: new StubProviderFactory(
+                Result<BranchProtection>.Ok(new BranchProtection("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true)),
+                canPushResult: Result<bool>.Ok(canPush)),
+            gitLabGrantReader: grantReader);
+
+    [Fact]
+    public async Task WhenGitLabGrantConformsAndCoversTheProject_IsGranted()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Granted>();
+    }
+
+    [Fact]
+    public async Task WhenGitLabGrantHoldsANotAllowedPermissionAndBroadReach_DeniedRecordsBoth()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitLabTokenGrant grant = GitLabTokenGrant.Create(
+        [
+            .. FakeGitLabTokenGrantReader.ConformingGrant(FakeGitLabTokenGrantReader.DefaultProjectId).Entries,
+            new GitLabTokenGrantEntry("all_memberships", ["read_project"], ProjectId: null, GroupId: null),
+            new GitLabTokenGrantEntry("user", ["delete_user"], ProjectId: null, GroupId: null),
+        ]);
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
+        {
+            Self = Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.FineGrained(grant, new TokenExpiry.Never())),
+        });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        WriteProbeVerdict.Denied denied = repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>();
+        denied.ShouldSatisfyAllConditions(
+            () => denied.BroadReach.ShouldBe(["all_memberships"]),
+            () => denied.NotAllowed.ShouldBe(["delete_user"]),
+            () => denied.MissingPermissions.ShouldBeEmpty(),
+            () => denied.WrongKind.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenGitLabGrantLacksAProjectPermission_DeniedNamesIt()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitLabTokenGrant grant = GitLabTokenGrant.Create(
+        [
+            new GitLabTokenGrantEntry(
+                "selected_memberships",
+                [.. TokenPermissions.GitLabGrantRequirements.Project.Where(p => p != "push_code")],
+                FakeGitLabTokenGrantReader.DefaultProjectId,
+                GroupId: null),
+            new GitLabTokenGrantEntry("user", TokenPermissions.GitLabGrantRequirements.User, ProjectId: null, GroupId: null),
+        ]);
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
+        {
+            Self = Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.FineGrained(grant, new TokenExpiry.Never())),
+        });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBe(["push_code"]);
+    }
+
+    [Fact]
+    public async Task WhenNoGitLabProjectEntryTargetsTheRepository_DeniedNamesSelectedProjects()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader { ProjectId = Result<int>.Ok(7) });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBe(["selected_projects"]);
+    }
+
+    [Fact]
+    public async Task WhenTheGitLabProjectIsHiddenFromTheToken_DeniedNamesSelectedProjects()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
+        {
+            ProjectId = Result<int>.Fail(GitLabErrors.UnexpectedStatusCode(404)),
+        });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBe(["selected_projects"]);
+    }
+
+    [Fact]
+    public async Task WhenTheGitLabTokenIsOfTheWrongKind_DeniedRecordsTheKind()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
+        {
+            Self = Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.OfWrongKind(WrongTokenKind.GitLabLegacy, new TokenExpiry.Never())),
+        });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        WriteProbeVerdict.Denied denied = repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>();
+        denied.ShouldSatisfyAllConditions(
+            () => denied.WrongKind.ShouldBe("gitlab-legacy"),
+            () => denied.MissingPermissions.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenTheGitLabTokenCannotReadItself_DeniedNamesPersonalAccessTokenRead()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
+        {
+            Self = Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.CannotReadItself()),
+        });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>()
+            .MissingPermissions.ShouldBe(["read_personal_access_token"]);
+    }
+
+    [Fact]
+    public async Task WhenTheGitLabGrantCannotBeRead_IsUnknown()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
+        {
+            Self = Result<GitLabTokenSelf>.Fail(GitLabErrors.UnexpectedStatusCode(502)),
+        });
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>().LastAttemptedAt.ShouldBe(Now);
     }
 
     [Fact]

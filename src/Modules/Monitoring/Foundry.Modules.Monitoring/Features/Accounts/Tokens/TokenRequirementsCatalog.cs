@@ -19,12 +19,13 @@ internal static class TokenRequirementsCatalog
                 CreationNote: null),
             [ProviderTypes.GitLab] = new(
                 ProviderType: ProviderTypes.GitLab,
-                TokenTypeLabel: "GitLab personal access token",
+                TokenTypeLabel: "GitLab fine-grained personal access token",
                 Permissions: TokenPermissions.RequirementsFor(ProviderTypes.GitLab),
                 CreationUrlTemplate: "{baseUrl}/-/user_settings/personal_access_tokens",
                 ResourceOwnerHint: null,
-                ClosingNote: null,
-                CreationNote: null),
+                ClosingNote: "Foundry rejects a GitLab token that grants anything else or reaches all projects.",
+                // GitLab's creation page cannot preselect fine-grained permissions, so the link only opens it.
+                CreationNote: "Requires GitLab 19.5 or later. On the page, choose Generate token, then Fine-grained token."),
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     internal static TokenRequirements? For(string providerType) =>

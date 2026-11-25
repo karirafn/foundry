@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -257,5 +258,66 @@ public sealed class For
 
         // Assert
         entries.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void VersionFor_GitLab_DiffersFromTheListThatCheckedTheApiScope()
+    {
+        // Arrange
+        // The version the GitLab list had while it required the legacy api scope.
+        const string previousGitLabVersion = "gitlab-dca72eddf91357a8";
+
+        // Act
+        string version = TokenPermissions.VersionFor(ProviderTypes.GitLab);
+
+        // Assert
+        version.ShouldNotBe(previousGitLabVersion);
+    }
+
+    [Fact]
+    public void WhenProviderIsGitLab_GrantRequirementsHoldEachLevelsPermissionIdentifiers()
+    {
+        // Arrange
+
+        // Act
+        GitLabGrantRequirements requirements = TokenPermissions.GitLabGrantRequirements;
+
+        // Assert
+        requirements.ShouldSatisfyAllConditions(
+            () => requirements.Project.ShouldBe(
+            [
+                "read_project", "read_work_item", "create_work_item", "read_merge_request", "create_merge_request",
+                "update_merge_request", "merge_merge_request", "read_pipeline", "read_job", "run_job", "read_webhook",
+                "create_webhook", "update_webhook", "delete_webhook", "trigger_webhook", "read_branch", "create_branch",
+                "delete_branch", "protect_branch", "read_protected_branch", "update_protected_branch", "read_repository",
+                "read_commit", "download_code", "push_code",
+            ]),
+            () => requirements.User.ShouldBe(["read_personal_access_token", "read_user"]),
+            () => requirements.GroupAllowed.ShouldBe(["read_package"]));
+    }
+
+    [Fact]
+    public void GitLabLabelsOrIdentifiers_LabelsKnownIdentifiersAndKeepsUnknownOnes()
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> labels = TokenPermissions.GitLabLabelsOrIdentifiers(["test_webhook", "trigger_webhook"]);
+
+        // Assert
+        labels.ShouldBe(["test_webhook", "Webhook (Integrations): Trigger"]);
+    }
+
+    [Fact]
+    public void GitLabBroadReachWireNames_MapsEachAccessToItsWireName()
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> names = TokenPermissions.GitLabBroadReachWireNames(
+            ["all_memberships", "personal_projects", "instance"]);
+
+        // Assert
+        names.ShouldBe(["all-projects", "personal-projects", "instance"]);
     }
 }

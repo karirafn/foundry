@@ -1,10 +1,12 @@
 using System.Net;
 
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Extensions.Caching.Memory;
@@ -22,8 +24,17 @@ public sealed class ValidateTokenAsync
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
 
     private const string UserJson = """{ "id": 1, "username": "alice" }""";
-    private const string SelfWithApiScopeJson = """{ "scopes": ["api", "read_repository"] }""";
-    private const string SelfWithoutApiScopeJson = """{ "scopes": ["read_api", "read_repository"] }""";
+    // Shape captured from gitlab.com on 2026-11-24 (/personal_access_tokens/self for a fine-grained token).
+    private const string FineGrainedSelfJson = """
+        {
+          "scopes": ["granular"],
+          "expires_at": null,
+          "granular_scopes": [
+            { "access": "selected_memberships", "permissions": ["read_job", "run_job"], "project_id": 42, "group_id": null },
+            { "access": "user", "permissions": ["read_personal_access_token", "read_user"], "project_id": null, "group_id": null }
+          ]
+        }
+        """;
 
     private static GitLabHttpClient CreateSut(FakeHandler handler) =>
         new(new HttpClient(handler), NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
@@ -45,77 +56,6 @@ public sealed class ValidateTokenAsync
         result.IsSuccess.ShouldBeTrue();
         Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
         success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticationFailedOutcome>();
-    }
-
-    [Fact]
-    public async Task WhenTokenIsValidWithApiScope_ReturnsAuthenticatedWithNoMissingScopes()
-    {
-        // Arrange
-        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, SelfWithApiScopeJson);
-        GitLabHttpClient sut = CreateSut(handler);
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "glpat_valid_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.AuthenticatedOutcome outcome =
-            success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
-        outcome.ShouldSatisfyAllConditions(
-            () => outcome.AccountName.ShouldBe("alice"),
-            () => outcome.MissingScopes.ShouldBeEmpty());
-    }
-
-    [Fact]
-    public async Task WhenSelfScopesOmitApi_ReturnsAuthenticatedWithApiInMissingScopes()
-    {
-        // Arrange
-        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, SelfWithoutApiScopeJson);
-        GitLabHttpClient sut = CreateSut(handler);
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "glpat_limited_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.AuthenticatedOutcome outcome =
-            success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
-        outcome.MissingScopes.ShouldContain("api");
-    }
-
-    [Theory]
-    [InlineData(401)]
-    [InlineData(403)]
-    [InlineData(404)]
-    public async Task WhenSelfReturnsNonSuccess_ReturnsScopesUnverifiable(int statusCode)
-    {
-        // Arrange
-        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", (HttpStatusCode)statusCode, string.Empty);
-        GitLabHttpClient sut = CreateSut(handler);
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "glpat_old_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.ScopesUnverifiableOutcome outcome =
-            success.Value.ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>();
-        outcome.AccountName.ShouldBe("alice");
     }
 
     [Fact]
@@ -224,7 +164,7 @@ public sealed class ValidateTokenAsync
     {
         // Arrange
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, SelfWithApiScopeJson);
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, FineGrainedSelfJson);
         GitLabHttpClient sut = CreateSut(handler);
 
         // Act
@@ -242,7 +182,7 @@ public sealed class ValidateTokenAsync
     {
         // Arrange
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, SelfWithApiScopeJson);
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, FineGrainedSelfJson);
         GitLabHttpClient sut = CreateSut(handler);
 
         // Act
@@ -260,7 +200,7 @@ public sealed class ValidateTokenAsync
     {
         // Arrange
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, SelfWithApiScopeJson);
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, FineGrainedSelfJson);
         GitLabHttpClient sut = CreateSut(handler);
 
         // Act
@@ -270,31 +210,6 @@ public sealed class ValidateTokenAsync
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
         request.RequestUri.ShouldNotBeNull();
         request.RequestUri.AbsolutePath.ShouldContain("personal_access_tokens/self");
-    }
-
-    [Fact]
-    public async Task WhenNoScopesGranted_MissingScopesMatchCanonicalListForGitLab()
-    {
-        // Arrange
-        string selfNoScopesJson = """{ "scopes": [] }""";
-        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, selfNoScopesJson);
-        GitLabHttpClient sut = CreateSut(handler);
-
-        IReadOnlyList<string> expectedMissing = ["api"];
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "glpat_no_scopes_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.AuthenticatedOutcome outcome =
-            success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
-        outcome.MissingScopes.ShouldBe(expectedMissing);
     }
 
     [Fact]
@@ -317,25 +232,135 @@ public sealed class ValidateTokenAsync
         success.Value.ShouldBeOfType<TokenValidationOutcome.IdentityUnresolvedOutcome>();
     }
 
-    [Fact]
-    public async Task WhenSelfEndpointReturns200WithInvalidJson_ReturnsScopesUnverifiable()
+    private static async Task<TokenValidationOutcome> ValidateWithSelfAsync(HttpStatusCode status, string selfBody)
     {
-        // Arrange — the user endpoint succeeds; the self endpoint returns 200 but with malformed body
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, "not-valid-json");
-        GitLabHttpClient sut = CreateSut(handler);
+            .WithRoute("personal_access_tokens/self", status, selfBody);
+        Result<TokenValidationOutcome> result = await CreateSut(handler).ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_token",
+            CancellationToken.None);
+        return result.ValueOrThrow();
+    }
+
+    [Fact]
+    public async Task WhenSelfReportsGranularScopes_ReturnsTheGrantAsGitLabReportedIt()
+    {
+        // Arrange
 
         // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
+        TokenValidationOutcome outcome = await ValidateWithSelfAsync(HttpStatusCode.OK, FineGrainedSelfJson);
+
+        // Assert
+        TokenValidationOutcome.GrantReadOutcome grantRead = outcome.ShouldBeOfType<TokenValidationOutcome.GrantReadOutcome>();
+        grantRead.ShouldSatisfyAllConditions(
+            () => grantRead.AccountName.ShouldBe("alice"),
+            () => grantRead.Grant.Entries.ShouldBe(
+            [
+                new GitLabTokenGrantEntry("selected_memberships", ["read_job", "run_job"], 42, null),
+                new GitLabTokenGrantEntry("user", ["read_personal_access_token", "read_user"], null, null),
+            ]));
+    }
+
+    [Fact]
+    public async Task WhenSelfIsRefusedForInsufficientGranularScope_ReturnsAuthenticatedMissingPersonalAccessTokenRead()
+    {
+        // Arrange
+        // Body captured from gitlab.com on 2026-11-24 for a fine-grained token without read_personal_access_token.
+        const string body = """{"error":"insufficient_granular_scope"}""";
+
+        // Act
+        TokenValidationOutcome outcome = await ValidateWithSelfAsync(HttpStatusCode.Forbidden, body);
+
+        // Assert
+        TokenValidationOutcome.AuthenticatedOutcome authenticated =
+            outcome.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
+        authenticated.MissingScopes.ShouldBe(["Personal Access Token (System Access): Read"]);
+    }
+
+    [Fact]
+    public async Task WhenSelfHasNoGranularScopesAndIsNotGranular_ReturnsWrongKindGitLabLegacy()
+    {
+        // Arrange
+
+        // Act
+        TokenValidationOutcome outcome = await ValidateWithSelfAsync(
+            HttpStatusCode.OK,
+            """{ "scopes": ["api"], "expires_at": null }""");
+
+        // Assert
+        outcome.ShouldBeOfType<TokenValidationOutcome.WrongTokenKindOutcome>().WrongKind
+            .ShouldBe(WrongTokenKind.GitLabLegacy);
+    }
+
+    [Fact]
+    public async Task WhenSelfIsGranularButReportsNoGranularScopes_ReturnsWrongKindGitLabVersion()
+    {
+        // Arrange
+
+        // Act
+        TokenValidationOutcome outcome = await ValidateWithSelfAsync(
+            HttpStatusCode.OK,
+            """{ "scopes": ["granular"], "expires_at": null }""");
+
+        // Assert
+        outcome.ShouldBeOfType<TokenValidationOutcome.WrongTokenKindOutcome>().WrongKind
+            .ShouldBe(WrongTokenKind.GitLabVersion);
+    }
+
+    [Theory]
+    [InlineData(401, "")]
+    [InlineData(403, "{\"message\":\"403 Forbidden\"}")]
+    [InlineData(404, "")]
+    public async Task WhenSelfIsRefusedOtherwise_ReturnsWrongKindGitLabResourceToken(int statusCode, string body)
+    {
+        // Arrange
+
+        // Act
+        TokenValidationOutcome outcome = await ValidateWithSelfAsync((HttpStatusCode)statusCode, body);
+
+        // Assert
+        TokenValidationOutcome.WrongTokenKindOutcome wrongKind =
+            outcome.ShouldBeOfType<TokenValidationOutcome.WrongTokenKindOutcome>();
+        wrongKind.ShouldSatisfyAllConditions(
+            () => wrongKind.WrongKind.ShouldBe(WrongTokenKind.GitLabResourceToken),
+            () => wrongKind.AccountName.ShouldBe("alice"));
+    }
+
+    [Theory]
+    [InlineData(429)]
+    [InlineData(502)]
+    public async Task WhenSelfIsThrottledOrFailing_ReturnsFailure(int statusCode)
+    {
+        // Arrange
+        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
+            .WithRoute("personal_access_tokens/self", (HttpStatusCode)statusCode, string.Empty);
+
+        // Act
+        Result<TokenValidationOutcome> result = await CreateSut(handler).ValidateTokenAsync(
             ValidBaseUrl,
             "glpat_token",
             CancellationToken.None);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.ScopesUnverifiableOutcome outcome =
-            success.Value.ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>();
-        outcome.AccountName.ShouldBe("alice");
+        result.IsSuccess.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenSelfEndpointReturns200WithInvalidJson_ReturnsFailure()
+    {
+        // Arrange
+        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, "not-valid-json");
+
+        // Act
+        Result<TokenValidationOutcome> result = await CreateSut(handler).ValidateTokenAsync(
+            ValidBaseUrl,
+            "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<TokenValidationOutcome>.Failure>().Error.Code
+            .ShouldBe(GitLabErrors.UnexpectedStatusCode(200).Code);
     }
 }

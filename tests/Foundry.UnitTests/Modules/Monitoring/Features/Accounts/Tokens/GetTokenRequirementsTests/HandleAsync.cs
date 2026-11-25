@@ -66,10 +66,10 @@ public sealed class HandleAsync
 
         requirements.ShouldSatisfyAllConditions(
             () => requirements.ProviderType.ShouldBe("gitlab"),
-            () => requirements.TokenTypeLabel.ShouldBe("GitLab personal access token"),
-            () => requirements.Permissions.ShouldBe([
-                new TokenPermissionRequirement("api", "scope"),
-                new TokenPermissionRequirement("Maintainer role", "role")]),
+            () => requirements.TokenTypeLabel.ShouldBe("GitLab fine-grained personal access token"),
+            () => requirements.Permissions[0].ShouldBe(new TokenPermissionRequirement(
+                "Only selected projects (select each monitored project individually)", "granted", "Group and project access")),
+            () => requirements.Permissions[^1].ShouldBe(new TokenPermissionRequirement("Maintainer role", "role", "Repository role")),
             () => requirements.ResourceOwnerHint.ShouldBeNull());
     }
 

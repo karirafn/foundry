@@ -39,13 +39,13 @@ public sealed class ValidateTokenAsyncExpiry
     {
         // Arrange
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, """{ "scopes": ["api"], "expires_at": "2026-08-15" }""");
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, """{ "scopes": ["granular"], "granular_scopes": [], "expires_at": "2026-08-15" }""");
 
         // Act
         TokenValidationOutcome outcome = await ValidateAsync(handler);
 
         // Assert
-        outcome.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
+        outcome.ShouldBeOfType<TokenValidationOutcome.GrantReadOutcome>().TokenExpiry
             .ShouldBe(new TokenExpiry.On(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)));
     }
 
@@ -54,13 +54,13 @@ public sealed class ValidateTokenAsyncExpiry
     {
         // Arrange
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, """{ "scopes": ["api"], "expires_at": null }""");
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, """{ "scopes": ["granular"], "granular_scopes": [], "expires_at": null }""");
 
         // Act
         TokenValidationOutcome outcome = await ValidateAsync(handler);
 
         // Assert
-        outcome.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
+        outcome.ShouldBeOfType<TokenValidationOutcome.GrantReadOutcome>().TokenExpiry
             .ShouldBe(new TokenExpiry.Never());
     }
 
@@ -72,13 +72,13 @@ public sealed class ValidateTokenAsyncExpiry
     {
         // Arrange
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, UserJson)
-            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, $$"""{ "scopes": ["api"], "expires_at": {{expiresAtJson}} }""");
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, $$"""{ "scopes": ["granular"], "granular_scopes": [], "expires_at": {{expiresAtJson}} }""");
 
         // Act
         TokenValidationOutcome outcome = await ValidateAsync(handler);
 
         // Assert
-        outcome.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
+        outcome.ShouldBeOfType<TokenValidationOutcome.GrantReadOutcome>().TokenExpiry
             .ShouldBe(new TokenExpiry.Unavailable());
     }
 
@@ -96,7 +96,7 @@ public sealed class ValidateTokenAsyncExpiry
         TokenValidationOutcome outcome = await ValidateAsync(handler);
 
         // Assert
-        outcome.ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>().TokenExpiry
+        outcome.ShouldBeOfType<TokenValidationOutcome.WrongTokenKindOutcome>().TokenExpiry
             .ShouldBe(new TokenExpiry.Unavailable());
     }
 }

@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.PackageSources;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ internal sealed class RepositoryEligibilityEvaluator(
     ICredentialResolver credentialResolver,
     IIssueProviderFactory providerFactory,
     IGitHubWriteProber gitHubWriteProber,
+    IGitLabTokenGrantReader gitLabGrantReader,
     IPackageSourceVerdicts packageSourceVerdicts,
     ILogger<RepositoryEligibilityEvaluator> logger) : IRepositoryEligibilityEvaluator
 {
@@ -255,6 +257,15 @@ internal sealed class RepositoryEligibilityEvaluator(
             return await ProbeGitHubWriteAccessAsync(repo, gitHubCredential, token, now, cancellationToken);
         }
 
+        if (credential is GitLabCredential gitLabCredential)
+        {
+            WriteProbeVerdict? grantVerdict = await CheckGitLabGrantAsync(repo, gitLabCredential, token, now, cancellationToken);
+            if (grantVerdict is not null)
+            {
+                return grantVerdict;
+            }
+        }
+
         return await ProbeProviderWriteAccessAsync(repo, credential, token, now, cancellationToken);
     }
 
@@ -298,6 +309,70 @@ internal sealed class RepositoryEligibilityEvaluator(
             }
             : new WriteProbeVerdict.Granted();
     }
+
+    /// <summary>
+    /// Checks the GitLab token's grant before its role: a token Foundry refuses as a whole, or one whose
+    /// grant targets no project entry at this repository, is <c>Denied</c>. Returns <see langword="null"/>
+    /// when the grant conforms and covers the repository, so the Maintainer role check runs next.
+    /// </summary>
+    private async Task<WriteProbeVerdict?> CheckGitLabGrantAsync(
+        MonitoredRepository repo,
+        GitLabCredential credential,
+        string token,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        Result<GitLabTokenSelf> selfResult = await gitLabGrantReader.ReadTokenSelfAsync(
+            credential.ApiBaseUrl,
+            token,
+            cancellationToken);
+
+        if (selfResult is not Result<GitLabTokenSelf>.Success { Value: GitLabTokenSelf self })
+        {
+            return new WriteProbeVerdict.Unknown(LastAttemptedAt: now);
+        }
+
+        switch (self)
+        {
+            case GitLabTokenSelf.OfWrongKind wrongKind:
+                return new WriteProbeVerdict.Denied(ProbedAt: now) { WrongKind = wrongKind.Kind.WireName() };
+            case GitLabTokenSelf.CannotReadItself:
+                return new WriteProbeVerdict.Denied(ProbedAt: now)
+                {
+                    MissingPermissions = [TokenPermissions.GitLabReadOwnTokenKey],
+                };
+        }
+
+        GitLabTokenGrant grant = ((GitLabTokenSelf.FineGrained)self).Grant;
+        if (grant.Evaluate(TokenPermissions.GitLabGrantRequirements) is GitLabGrantEvaluation.NonConforming evaluation)
+        {
+            return new WriteProbeVerdict.Denied(ProbedAt: now)
+            {
+                MissingPermissions = evaluation.Missing,
+                NotAllowed = evaluation.NotAllowed,
+                BroadReach = evaluation.BroadReach,
+            };
+        }
+
+        Result<int> projectId = await gitLabGrantReader.ResolveProjectIdAsync(
+            credential.ApiBaseUrl,
+            repo.Slug,
+            token,
+            cancellationToken);
+
+        return projectId switch
+        {
+            Result<int>.Success { Value: int id } when grant.Covers(id) => null,
+            Result<int>.Success => NotSelected(now),
+            // A project the token does not select is hidden from it, so GitLab answers 404 or 403.
+            Result<int>.Failure failure
+                when GitLabErrors.TryGetStatusCode(failure.Error, out int status) && status is 403 or 404 => NotSelected(now),
+            _ => new WriteProbeVerdict.Unknown(LastAttemptedAt: now),
+        };
+    }
+
+    private static WriteProbeVerdict.Denied NotSelected(DateTimeOffset now) =>
+        new(ProbedAt: now) { MissingPermissions = [TokenPermissions.GitLabSelectedProjectKey] };
 
     private async Task<WriteProbeVerdict> ProbeProviderWriteAccessAsync(
         MonitoredRepository repo,

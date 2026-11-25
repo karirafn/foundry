@@ -26,7 +26,6 @@ internal static class ValidateToken
     {
         internal const string Authenticated = "authenticated";
         internal const string AuthenticationFailed = "authenticationFailed";
-        internal const string ScopesUnverifiable = "scopesUnverifiable";
         internal const string WrongTokenKind = "wrongTokenKind";
         internal const string IdentityUnresolved = "identityUnresolved";
         internal const string ProviderMismatch = "providerMismatch";
@@ -37,6 +36,8 @@ internal static class ValidateToken
     /// <param name="Expiry">The expiry the provider reported, kept for the account the token is set on.</param>
     /// <param name="TokenExpiry">The expiry as judged when the token was checked.</param>
     /// <param name="WrongKind">Why the token is refused when <paramref name="Kind"/> is <c>wrongTokenKind</c>, such as <c>github-classic</c>.</param>
+    /// <param name="NotAllowed">The labels, or GitLab identifiers, of permissions a GitLab token holds but must not.</param>
+    /// <param name="BroadReach">How a GitLab token reaches beyond selected projects: <c>all-projects</c>, <c>personal-projects</c> or <c>instance</c>.</param>
     internal sealed record Response(
         string Kind,
         string? AccountName,
@@ -44,7 +45,9 @@ internal static class ValidateToken
         string? DetectedProvider,
         [property: JsonIgnore] Domain.ValueObjects.TokenExpiry Expiry,
         TokenExpirySummary TokenExpiry,
-        string? WrongKind);
+        string? WrongKind,
+        IReadOnlyList<string> NotAllowed,
+        IReadOnlyList<string> BroadReach);
 
     internal sealed class Handler(
         GitHubHttpClient gitHubHttpClient,
@@ -75,7 +78,7 @@ internal static class ValidateToken
             TokenExpiry expiry = outcome switch
             {
                 TokenValidationOutcome.AuthenticatedOutcome auth => auth.TokenExpiry,
-                TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => unverifiable.TokenExpiry,
+                TokenValidationOutcome.GrantReadOutcome grantRead => grantRead.TokenExpiry,
                 TokenValidationOutcome.WrongTokenKindOutcome wrongKind => wrongKind.TokenExpiry,
                 _ => new TokenExpiry.NotChecked(),
             };
@@ -83,57 +86,68 @@ internal static class ValidateToken
 
             return outcome switch
             {
-                TokenValidationOutcome.AuthenticatedOutcome auth => new Response(
-                    Kind: Kinds.Authenticated,
-                    AccountName: auth.AccountName,
-                    MissingScopes: auth.MissingScopes,
-                    DetectedProvider: null,
-                    Expiry: expiry,
-                    TokenExpiry: summary,
-                    WrongKind: null),
-                TokenValidationOutcome.AuthenticationFailedOutcome => new Response(
-                    Kind: Kinds.AuthenticationFailed,
-                    AccountName: null,
-                    MissingScopes: [],
-                    DetectedProvider: null,
-                    Expiry: expiry,
-                    TokenExpiry: summary,
-                    WrongKind: null),
-                TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => new Response(
-                    Kind: Kinds.ScopesUnverifiable,
-                    AccountName: unverifiable.AccountName,
-                    MissingScopes: [],
-                    DetectedProvider: null,
-                    Expiry: expiry,
-                    TokenExpiry: summary,
-                    WrongKind: null),
-                TokenValidationOutcome.WrongTokenKindOutcome wrongKind => new Response(
-                    Kind: Kinds.WrongTokenKind,
-                    AccountName: wrongKind.AccountName,
-                    MissingScopes: [],
-                    DetectedProvider: null,
-                    Expiry: expiry,
-                    TokenExpiry: summary,
-                    WrongKind: wrongKind.WrongKind.WireName()),
-                TokenValidationOutcome.IdentityUnresolvedOutcome => new Response(
-                    Kind: Kinds.IdentityUnresolved,
-                    AccountName: null,
-                    MissingScopes: [],
-                    DetectedProvider: null,
-                    Expiry: expiry,
-                    TokenExpiry: summary,
-                    WrongKind: null),
-                TokenValidationOutcome.ProviderMismatchOutcome mismatch => new Response(
-                    Kind: Kinds.ProviderMismatch,
-                    AccountName: null,
-                    MissingScopes: [],
-                    DetectedProvider: mismatch.DetectedProvider,
-                    Expiry: expiry,
-                    TokenExpiry: summary,
-                    WrongKind: null),
+                TokenValidationOutcome.AuthenticatedOutcome auth => Authenticated(
+                    auth.AccountName, auth.MissingScopes, [], [], expiry, summary),
+                TokenValidationOutcome.GrantReadOutcome grantRead => FromGrant(grantRead, expiry, summary),
+                TokenValidationOutcome.AuthenticationFailedOutcome => Refused(Kinds.AuthenticationFailed, expiry, summary),
+                TokenValidationOutcome.WrongTokenKindOutcome wrongKind => Refused(Kinds.WrongTokenKind, expiry, summary) with
+                {
+                    AccountName = wrongKind.AccountName,
+                    WrongKind = wrongKind.WrongKind.WireName(),
+                },
+                TokenValidationOutcome.IdentityUnresolvedOutcome => Refused(Kinds.IdentityUnresolved, expiry, summary),
+                TokenValidationOutcome.ProviderMismatchOutcome mismatch => Refused(Kinds.ProviderMismatch, expiry, summary) with
+                {
+                    DetectedProvider = mismatch.DetectedProvider,
+                },
                 _ => throw new UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
             };
         }
+
+        private static Response FromGrant(
+            TokenValidationOutcome.GrantReadOutcome grantRead,
+            TokenExpiry expiry,
+            TokenExpirySummary summary)
+        {
+            GitLabGrantEvaluation evaluation = grantRead.Grant.Evaluate(TokenPermissions.GitLabGrantRequirements);
+            return Authenticated(
+                grantRead.AccountName,
+                TokenPermissions.LabelsOf(ProviderTypes.GitLab, evaluation.Missing),
+                TokenPermissions.GitLabLabelsOrIdentifiers(evaluation.NotAllowed),
+                TokenPermissions.GitLabBroadReachWireNames(evaluation.BroadReach),
+                expiry,
+                summary);
+        }
+
+        private static Response Authenticated(
+            string accountName,
+            IReadOnlyList<string> missing,
+            IReadOnlyList<string> notAllowed,
+            IReadOnlyList<string> broadReach,
+            TokenExpiry expiry,
+            TokenExpirySummary summary) =>
+            new(
+                Kind: Kinds.Authenticated,
+                AccountName: accountName,
+                MissingScopes: missing,
+                DetectedProvider: null,
+                Expiry: expiry,
+                TokenExpiry: summary,
+                WrongKind: null,
+                NotAllowed: notAllowed,
+                BroadReach: broadReach);
+
+        private static Response Refused(string kind, TokenExpiry expiry, TokenExpirySummary summary) =>
+            new(
+                Kind: kind,
+                AccountName: null,
+                MissingScopes: [],
+                DetectedProvider: null,
+                Expiry: expiry,
+                TokenExpiry: summary,
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
     }
 
     internal sealed record RequestBody(string Token, string BaseUrl, [property: JsonRequired] string ProviderType);
