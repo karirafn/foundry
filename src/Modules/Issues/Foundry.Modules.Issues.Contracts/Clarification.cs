@@ -9,7 +9,7 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <summary>
 /// One round on an issue's append-only clarification log (ADR 0096): <see cref="Asked"/> when a run stopped to ask a
 /// person, <see cref="Decided"/> when triage settled details itself and asked nothing (ADR 0123), or
-/// <see cref="Requested"/> when Foundry consumed a person's pull request feedback (ADR 0125).
+/// <see cref="Requested"/> when Foundry consumed a person's pull request feedback (ADR 0126).
 /// </summary>
 [JsonConverter(typeof(ClarificationJsonConverter))]
 public abstract record Clarification

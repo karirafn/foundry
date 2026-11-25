@@ -365,7 +365,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// <summary>
     /// A person's review feedback drives this revision: Foundry no longer merges on its own, the person's round gives
     /// the reviewer its full fix budget again, and the consumed batch joins the clarification log as a requested round
-    /// (ADR 0125), received when its newest comment arrived or, with no comment time, at the transition.
+    /// (ADR 0126), received when its newest comment arrived or, with no comment time, at the transition.
     /// </summary>
     private protected void RecordPersonFeedback(
         IReadOnlyList<ReviewComment> comments,

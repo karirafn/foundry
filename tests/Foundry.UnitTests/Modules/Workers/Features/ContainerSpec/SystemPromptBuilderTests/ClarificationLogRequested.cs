@@ -19,7 +19,7 @@ public sealed class ClarificationLogRequested
     private const string Principles = "Engineering principles.";
     private const string Template = "You are implementing GitHub issue #{issueNumber}.\n\n{issueContent}";
     private const string RestrictedTemplate = "You are reviewing GitHub issue #{issueNumber}.\n\n{issueContent}";
-    private static readonly IssueContent Issue = new("Add retry", "Retry webhook delivery.", []);
+    private static readonly IssueContent Issue = new("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any);
     private static readonly DateTimeOffset At = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 
     private static readonly Clarification Requested = Clarification.Request(
