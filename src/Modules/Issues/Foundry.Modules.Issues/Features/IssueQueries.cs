@@ -307,6 +307,7 @@ internal sealed class IssueQueries(
                 i.LinkedPullRequestUrl,
                 i.ResumeBranchName,
                 i.Questions,
+                i.Decisions,
                 i.QuestionPost is QuestionPost.Posted posted
                     ? new AwaitingInputPostState.Posted(
                         posted.PostedAt,

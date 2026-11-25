@@ -24,7 +24,7 @@ public sealed class ComposeStructured
             evidence: ["src/Db.cs:12 opens SQLite", "appsettings.json:4 names Postgres"]);
 
         // Act
-        string body = QuestionComment.Compose([question]);
+        string body = QuestionComment.Compose([question], []);
 
         // Assert
         body.ReplaceLineEndings("\n").ShouldBe(
@@ -61,7 +61,8 @@ public sealed class ComposeStructured
                 StructuredQuestionBuilder.Build(question: "First?"),
                 StructuredQuestionBuilder.Build(question: "Second?"),
                 StructuredQuestionBuilder.Build(question: "Third?"),
-            ]);
+            ],
+            []);
 
         // Assert
         body.ShouldSatisfyAllConditions(
@@ -76,7 +77,7 @@ public sealed class ComposeStructured
     {
         // Act
         string body = QuestionComment.Compose(
-            [StructuredQuestionBuilder.Build(options: ["One", "Two", "Three"], recommendedOption: "a", recommendationReason: "Simplest.")]);
+            [StructuredQuestionBuilder.Build(options: ["One", "Two", "Three"], recommendedOption: "a", recommendationReason: "Simplest.")], []);
 
         // Assert
         body.ShouldContain("- ✅ **a) One**: Simplest.\n- b) Two\n- c) Three\n");
@@ -87,7 +88,7 @@ public sealed class ComposeStructured
     {
         // Act
         string body = QuestionComment.Compose(
-            [StructuredQuestionBuilder.Build(options: ["One", "Two", "Three", "Four"], recommendedOption: "d", recommendationReason: "Safest.")]);
+            [StructuredQuestionBuilder.Build(options: ["One", "Two", "Three", "Four"], recommendedOption: "d", recommendationReason: "Safest.")], []);
 
         // Assert
         body.ShouldContain("- a) One\n- b) Two\n- c) Three\n- ✅ **d) Four**: Safest.\n");
@@ -97,7 +98,7 @@ public sealed class ComposeStructured
     public void WhenEvidenceIsEmpty_OmitsTheEvidenceSection()
     {
         // Act
-        string body = QuestionComment.Compose([StructuredQuestionBuilder.Build(evidence: [])]);
+        string body = QuestionComment.Compose([StructuredQuestionBuilder.Build(evidence: [])], []);
 
         // Assert
         body.ShouldSatisfyAllConditions(
@@ -114,7 +115,7 @@ public sealed class ComposeStructured
                 question: "Ask @alice about </details>?",
                 problem: "@org/team owns </details>.",
                 options: ["Ping @bob", "Close </details>"],
-                evidence: ["src/x.cs:1 says </details> @carol"])]);
+                evidence: ["src/x.cs:1 says </details> @carol"])], []);
 
         // Assert
         body.ShouldSatisfyAllConditions(

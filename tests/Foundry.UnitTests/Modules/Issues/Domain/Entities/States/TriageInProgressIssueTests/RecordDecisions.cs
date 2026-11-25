@@ -1,6 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
@@ -81,5 +83,71 @@ public sealed class RecordDecisions
             () => open.Questions.ShouldBe(questions),
             () => open.Decisions.ShouldBe([decision]),
             () => awaiting.Clarifications.ShouldHaveSingleItem().ShouldBeSameAs(open));
+    }
+
+    [Fact]
+    public void WhenAReadyVerdictWithDecisionsQueuesTheIssue_RaisesTheDecisionsAsQueued()
+    {
+        // Arrange
+        TriageInProgressIssue triaging = new IssueBuilder().TriageInProgress();
+        TriageDecision decision = TriageDecisionBuilder.Build();
+
+        // Act
+        triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Feature, DecidedAt), [decision], DateTimeOffset.UtcNow);
+
+        // Assert
+        TriageDetailsDecided decided = triaging.DomainEvents.OfType<TriageDetailsDecided>().ShouldHaveSingleItem();
+        decided.ShouldSatisfyAllConditions(
+            () => decided.IssueId.ShouldBe(triaging.Id),
+            () => decided.MonitoredRepositoryId.ShouldBe(triaging.MonitoredRepositoryId),
+            () => decided.IssueNumber.ShouldBe(triaging.IssueNumber),
+            () => decided.Decisions.ShouldBe([decision]),
+            () => decided.Release.ShouldBe(TriageRelease.Queued));
+    }
+
+    [Fact]
+    public void WhenAReadyVerdictWithDecisionsMeetsOpenBlockers_RaisesTheDecisionsAsWaitingOnBlockers()
+    {
+        // Arrange
+        TriageQueuedIssue queuedForTriage = new IssueBuilder().TriageQueued();
+        queuedForTriage.SetBlockedBy([3]);
+        TriageInProgressIssue triaging = queuedForTriage.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
+
+        // Act
+        triaging.MarkReady(
+            new TriageVerdict.Ready(IssueKind.Feature, DecidedAt), [TriageDecisionBuilder.Build()], DateTimeOffset.UtcNow);
+
+        // Assert
+        triaging.DomainEvents.OfType<TriageDetailsDecided>().ShouldHaveSingleItem()
+            .Release.ShouldBe(TriageRelease.WaitingOnBlockers);
+    }
+
+    [Fact]
+    public void WhenAReadyVerdictCarriesNoDecisions_RaisesNoDecisions()
+    {
+        // Arrange
+        TriageInProgressIssue triaging = new IssueBuilder().TriageInProgress();
+
+        // Act
+        triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Feature, DecidedAt), [], DateTimeOffset.UtcNow);
+
+        // Assert
+        triaging.DomainEvents.OfType<TriageDetailsDecided>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenANeedsInputVerdictCarriesDecisions_RaisesNoDecisionsOfItsOwn()
+    {
+        // Arrange
+        TriageInProgressIssue triaging = new IssueBuilder().TriageInProgress();
+
+        // Act
+        triaging.MarkNeedsInput(
+            new TriageVerdict.NeedsInput(IssueKind.Feature, [StructuredQuestionBuilder.Build()], DecidedAt),
+            [TriageDecisionBuilder.Build()],
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        triaging.DomainEvents.OfType<TriageDetailsDecided>().ShouldBeEmpty();
     }
 }

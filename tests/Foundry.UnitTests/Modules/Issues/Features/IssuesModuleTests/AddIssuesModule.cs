@@ -255,6 +255,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_TriageDetailsDecidedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IEnumerable<IDomainEventHandler<TriageDetailsDecided>> handlers =
+            scope.ServiceProvider.GetServices<IDomainEventHandler<TriageDetailsDecided>>();
+        handlers.ShouldContain(handler => handler is TriageDecisionsRecordedBridge);
+    }
+
+    [Fact]
     public void WhenServicesRegistered_IssueClosedWithUnpublishedRunHandlerResolvable()
     {
         // Arrange & Act

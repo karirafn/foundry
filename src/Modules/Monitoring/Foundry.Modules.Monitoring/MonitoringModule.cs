@@ -197,6 +197,7 @@ public static class MonitoringModule
         services.AddIntegrationEventHandler<IssueEnteredMergePending, IssueEnteredMergePendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredAwaitingInput, IssueEnteredAwaitingInputHandler>();
         services.AddIntegrationEventHandler<TriageBlockersFound, TriageBlockersFoundHandler>();
+        services.AddIntegrationEventHandler<TriageDecisionsRecorded, TriageDecisionsRecordedHandler>();
 
         services.AddHostedService(sp => new MonitoringService(
             sp.GetRequiredService<IServiceScopeFactory>(),

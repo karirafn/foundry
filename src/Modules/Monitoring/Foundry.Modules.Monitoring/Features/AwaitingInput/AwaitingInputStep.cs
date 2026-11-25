@@ -252,7 +252,7 @@ internal sealed class AwaitingInputStep(
             repository,
             provider,
             ThreadOf(info),
-            QuestionComment.Compose(info.Questions),
+            QuestionComment.Compose(info.Questions, info.Decisions),
             cancellationToken);
 
         switch (result)

@@ -23,7 +23,8 @@ public sealed class Compose
             [
                 new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres."),
                 new InputQuestion.Legacy("Keep v1?", string.Empty, "Yes."),
-            ]);
+            ],
+            []);
 
         // Assert
         body.ReplaceLineEndings("\n").ShouldBe(
@@ -38,7 +39,7 @@ public sealed class Compose
     {
         // Act
         string body = QuestionComment.Compose(
-            [new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres, since production runs it.")]);
+            [new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres, since production runs it.")], []);
 
         // Assert
         body.ReplaceLineEndings("\n").ShouldContain(
@@ -54,7 +55,8 @@ public sealed class Compose
             [
                 new InputQuestion.Legacy("Which database?", "Two are configured.", "Postgres."),
                 new InputQuestion.Legacy("Keep v1?", string.Empty, "Yes, clients still call it."),
-            ]);
+            ],
+            []);
 
         // Assert
         body.ShouldEndWith(AcceptRecommendationsSentence);
@@ -64,7 +66,7 @@ public sealed class Compose
     public void WhenNoQuestionHasARecommendation_WritesNoRecommendedLineAndEndsWithTheLegacySentence()
     {
         // Act
-        string body = QuestionComment.Compose([new InputQuestion.Legacy("Which database?", "Two are configured.", null)]);
+        string body = QuestionComment.Compose([new InputQuestion.Legacy("Which database?", "Two are configured.", null)], []);
 
         // Assert
         body.ShouldSatisfyAllConditions(
@@ -77,7 +79,7 @@ public sealed class Compose
     {
         // Act
         string body = QuestionComment.Compose(
-            [new InputQuestion.Legacy("Ask @alice?", "@org/team owns it.", "Ping @bob.")]);
+            [new InputQuestion.Legacy("Ask @alice?", "@org/team owns it.", "Ping @bob.")], []);
 
         // Assert
         body.ShouldSatisfyAllConditions(
@@ -91,7 +93,7 @@ public sealed class Compose
     {
         // Act
         string body = QuestionComment.Compose(
-            [new InputQuestion.Legacy("Close </details>?", "<img src=x>", "Keep <b>.")]);
+            [new InputQuestion.Legacy("Close </details>?", "<img src=x>", "Keep <b>.")], []);
 
         // Assert
         body.ShouldSatisfyAllConditions(

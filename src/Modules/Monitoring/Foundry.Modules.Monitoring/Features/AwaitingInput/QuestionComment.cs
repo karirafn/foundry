@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.IssueReactions;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Markdown;
 
@@ -19,14 +20,53 @@ internal static class QuestionComment
 
     private const string StructuredClosing = "_Work resumes two minutes after the last reply._";
 
-    public static string Compose(IReadOnlyList<InputQuestion> questions) =>
-        questions.All(question => question is InputQuestion.Legacy)
-            ? ComposeLegacy([.. questions.Cast<InputQuestion.Legacy>()])
-            : ComposeStructured(questions);
+    private const string DecisionsHeading = "Triage also decided:";
+
+    /// <summary>
+    /// The question comment of a round, listing the <paramref name="decisions"/> triage made beside its questions (ADR 0123)
+    /// after them; a round with none renders no decision section.
+    /// </summary>
+    public static string Compose(IReadOnlyList<InputQuestion> questions, IReadOnlyList<TriageDecision> decisions)
+    {
+        bool legacy = questions.All(question => question is InputQuestion.Legacy);
+
+        return TriageDecisionLines.Fit(
+            decisions,
+            (lines, shortened) =>
+            {
+                string decisionSection = DecisionSection(lines, shortened);
+                return legacy
+                    ? ComposeLegacy([.. questions.Cast<InputQuestion.Legacy>()], decisionSection)
+                    : ComposeStructured(questions, decisionSection);
+            });
+    }
+
+    private static string DecisionSection(IReadOnlyList<string> lines, bool shortened)
+    {
+        if (lines.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder section = new();
+        section.Append(DecisionsHeading).Append('\n');
+
+        foreach (string line in lines)
+        {
+            section.Append(line).Append('\n');
+        }
+
+        if (shortened)
+        {
+            section.Append(TriageDecisionLines.ShortenedNote).Append('\n');
+        }
+
+        return section.ToString();
+    }
 
     // The alert's tag line stands alone because GitHub recognises "[!IMPORTANT]" only there, and blank lines surround
     // the <details> content because GitLab renders Markdown inside it only then.
-    private static string ComposeStructured(IReadOnlyList<InputQuestion> questions)
+    private static string ComposeStructured(IReadOnlyList<InputQuestion> questions, string decisionSection)
     {
         StringBuilder body = new();
         string count = questions.Count == 1 ? "1 question" : $"{questions.Count} questions";
@@ -50,6 +90,11 @@ internal static class QuestionComment
                 default:
                     throw new UnreachableException($"Unknown InputQuestion variant: {questions[i].GetType().Name}");
             }
+        }
+
+        if (decisionSection.Length > 0)
+        {
+            body.Append('\n').Append(decisionSection);
         }
 
         body.Append('\n').Append(StructuredClosing);
@@ -111,7 +156,7 @@ internal static class QuestionComment
 
     private static string Inline(string text) => ModelMarkdown.Inline(text.Trim().ReplaceLineEndings(" "));
 
-    private static string ComposeLegacy(IReadOnlyList<InputQuestion.Legacy> questions)
+    private static string ComposeLegacy(IReadOnlyList<InputQuestion.Legacy> questions, string decisionSection)
     {
         StringBuilder body = new();
         body.AppendLine("Foundry needs input before the work on this issue can continue.");
@@ -131,6 +176,12 @@ internal static class QuestionComment
             {
                 body.Append("   **Recommended:** ").AppendLine(ModelMarkdown.Inline(question.Recommendation.Trim().ReplaceLineEndings(" ")));
             }
+        }
+
+        if (decisionSection.Length > 0)
+        {
+            body.AppendLine();
+            body.Append(decisionSection);
         }
 
         body.AppendLine();
