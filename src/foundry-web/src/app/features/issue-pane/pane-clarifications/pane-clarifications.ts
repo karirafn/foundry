@@ -90,12 +90,12 @@ export class PaneClarificationsComponent {
     return `${this.idPrefix}-r${round.number}-${part}`;
   }
 
-  protected isExpanded(round: ClarificationRoundView, index: number): boolean {
-    return this._expanded().has(`${round.number}-${index}`);
+  protected isExpanded(round: ClarificationRoundView, comment: string): boolean {
+    return this._expanded().has(`${round.number}-${comment}`);
   }
 
-  protected toggle(round: ClarificationRoundView, index: number): void {
-    const key = `${round.number}-${index}`;
+  protected toggle(round: ClarificationRoundView, comment: string): void {
+    const key = `${round.number}-${comment}`;
     this._expanded.update((keys) => {
       const next = new Set(keys);
       if (!next.delete(key)) {
@@ -114,6 +114,8 @@ export class PaneClarificationsComponent {
       case 'decided':
         return 'neutral';
       case 'unanswered':
+        return 'neutral';
+      case 'requested':
         return 'neutral';
     }
   }
@@ -135,5 +137,7 @@ function announcementFor(rounds: readonly ClarificationRoundView[]): string {
     }
     case 'unanswered':
       return `Clarification round ${last.number} continued without an answer.`;
+    case 'requested':
+      return `Round ${last.number}: review feedback received.`;
   }
 }

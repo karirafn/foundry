@@ -776,23 +776,32 @@ internal sealed class IssueQueries(
         return details with { ReviewRunId = latestReview.RunId.Value };
     }
 
-    // ClarificationDetails has no field for a requested round's review comments yet, so the detail leaves those rounds
-    // out instead of showing them as open question rounds.
     private static List<ClarificationDetails> BuildClarificationDetails(Issue issue) =>
-        [.. issue.Clarifications.Where(round => round is not Clarification.Requested).Select(round => round switch
+        [.. issue.Clarifications.Select(round => round switch
         {
             Clarification.Asked asked => new ClarificationDetails(
                 asked.Questions,
                 asked.Input is null ? null : [.. asked.Input.Parts.Select(part => BuildInputPartDetails(issue.Url, part))],
                 asked.AskedAt,
                 asked.AnsweredAt,
-                BuildDecisionDetails(asked.Decisions)),
+                BuildDecisionDetails(asked.Decisions),
+                Feedback: null),
             Clarification.Decided decided => new ClarificationDetails(
                 Questions: [],
                 Input: null,
                 AskedAt: decided.DecidedAt,
                 AnsweredAt: null,
-                BuildDecisionDetails(decided.Decisions)),
+                BuildDecisionDetails(decided.Decisions),
+                Feedback: null),
+            Clarification.Requested requested => new ClarificationDetails(
+                Questions: [],
+                Input: null,
+                AskedAt: requested.ReceivedAt,
+                AnsweredAt: null,
+                Decisions: [],
+                new ClarificationFeedbackDetails(
+                    [.. requested.Comments.Select(comment => new ReviewCommentDetails(comment.Body, comment.FilePath, comment.Line))],
+                    requested.OmittedCommentCount)),
             _ => throw new InvalidOperationException($"Unknown clarification round {round.GetType().Name}."),
         })];
 

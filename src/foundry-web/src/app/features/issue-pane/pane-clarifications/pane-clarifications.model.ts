@@ -2,6 +2,7 @@ import {
   AwaitingInputDetails,
   Clarification,
   ClarificationDecision,
+  ClarificationFeedback,
   DecisionGround,
   InputPart,
   InputQuestion,
@@ -15,7 +16,7 @@ const SHORT_SHA_LENGTH = 7;
 const LONG_COMMENT_LINES = 6;
 const LONG_COMMENT_CHARACTERS = 480;
 
-export type RoundStatus = 'open' | 'answered' | 'unanswered' | 'decided';
+export type RoundStatus = 'open' | 'answered' | 'unanswered' | 'decided' | 'requested';
 
 export type DecisionBlock =
   | { readonly type: 'lines'; readonly text: string }
@@ -29,6 +30,16 @@ export interface DecisionView {
   readonly blocks: readonly DecisionBlock[];
   readonly evidence: readonly string[];
 }
+
+export type FeedbackItemView =
+  | {
+    readonly type: 'comment';
+    /** The path, with `:line` when the comment has one; null without a path, since a line alone locates nothing. */
+    readonly location: string | null;
+    readonly text: string;
+    readonly long: boolean;
+  }
+  | { readonly type: 'note'; readonly text: string };
 
 export type InputPartView =
   | { readonly type: 'comments'; readonly text: string; readonly long: boolean }
@@ -94,6 +105,8 @@ export interface ClarificationRoundView {
   /** 1-based, oldest round first. */
   readonly number: number;
   readonly status: RoundStatus;
+  /** `requested` for a round that recorded a person's pull request feedback, `asked` for every other round. */
+  readonly kind: 'asked' | 'requested';
   readonly statusLabel: string;
   readonly questions: readonly QuestionView[];
   readonly askedAt: string;
@@ -101,6 +114,8 @@ export interface ClarificationRoundView {
   readonly input: readonly InputPartView[];
   /** The details triage settled itself in the round; empty when it settled none. */
   readonly decisions: readonly DecisionView[];
+  /** The review comments of a requested round, then a note when some were omitted; empty for an asked round. */
+  readonly feedback: readonly FeedbackItemView[];
   /** Set only for the open round of an awaiting-input issue. */
   readonly open: OpenRoundView | null;
 }
@@ -110,6 +125,7 @@ const STATUS_LABELS: Record<RoundStatus, string> = {
   answered: 'Answered',
   unanswered: 'Continued without answer',
   decided: 'Triage decided',
+  requested: 'Review feedback',
 };
 
 const GROUND_LABELS: Record<DecisionGround, string> = {
@@ -130,19 +146,24 @@ export function buildClarifications(
     return {
       number: index + 1,
       status,
+      kind: round.feedback ? 'requested' : 'asked',
       statusLabel: STATUS_LABELS[status],
       questions: round.questions.map(questionView),
       askedAt: round.askedAt,
       answeredAt: round.answeredAt,
       input: (round.input ?? []).flatMap((part) => partView(part, providerName)),
       decisions: (round.decisions ?? []).map(decisionView),
+      feedback: round.feedback ? feedbackItems(round.feedback) : [],
       open: status === 'open' && awaiting !== null ? openRound(round, awaiting, now) : null,
     };
   });
 }
 
 function roundStatus(round: Clarification): RoundStatus {
-  // A decided round has no input either, so it is told apart before the open test.
+  // Requested and decided rounds have no input either, so they are told apart before the open test.
+  if (round.feedback) {
+    return 'requested';
+  }
   if (round.questions.length === 0 && (round.decisions ?? []).length > 0) {
     return 'decided';
   }
@@ -185,6 +206,19 @@ function branchView(
       ? `View commit ${toShort}${where}`
       : `Compare ${fromShort} to ${toShort}${where}`,
   };
+}
+
+function feedbackItems(feedback: ClarificationFeedback): FeedbackItemView[] {
+  const comments: FeedbackItemView[] = feedback.comments.map((comment) => ({
+    type: 'comment',
+    location: comment.path ? (comment.line === null ? comment.path : `${comment.path}:${comment.line}`) : null,
+    text: comment.body,
+    long: isLong(comment.body),
+  }));
+  const omitted = feedback.omittedCommentCount;
+  return omitted > 0
+    ? [...comments, { type: 'note', text: `${omitted} more ${omitted === 1 ? 'comment' : 'comments'} omitted` }]
+    : comments;
 }
 
 function isLong(text: string): boolean {

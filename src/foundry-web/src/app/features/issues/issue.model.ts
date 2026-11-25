@@ -178,9 +178,23 @@ export interface ClarificationDecision {
   evidence: string[];
 }
 
+/** One review comment of a person's pull request feedback; a general comment has no path or line. */
+export interface ReviewComment {
+  body: string;
+  path: string | null;
+  line: number | null;
+}
+
+export interface ClarificationFeedback {
+  comments: ReviewComment[];
+  /** How many comments beyond `comments` the consumption cutoff left out. */
+  omittedCommentCount: number;
+}
+
 /**
  * One round of the issue's clarification log; `input` and `answeredAt` are null while it is open. A round where
- * triage only decided has no questions and its decision time as `askedAt`.
+ * triage only decided has no questions and its decision time as `askedAt`. A round that recorded a person's pull
+ * request feedback carries `feedback`, has no questions or input, and its newest comment's time as `askedAt`.
  */
 export interface Clarification {
   questions: InputQuestion[];
@@ -189,6 +203,8 @@ export interface Clarification {
   answeredAt: string | null;
   /** Absent from a server older than triage decisions. */
   decisions?: ClarificationDecision[];
+  /** Set only on a review-feedback round; absent from a server older than such rounds. */
+  feedback?: ClarificationFeedback | null;
 }
 
 export type IssueKind = 'feature' | 'bug' | 'refactor' | 'documentation';

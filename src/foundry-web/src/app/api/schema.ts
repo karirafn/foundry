@@ -1167,6 +1167,12 @@ export interface components {
             /** Format: date-time */
             answeredAt: null | string;
             decisions: components["schemas"]["ClarificationDecisionDetails"][];
+            feedback: null | components["schemas"]["ClarificationFeedbackDetails"];
+        };
+        ClarificationFeedbackDetails: {
+            comments: components["schemas"]["ReviewCommentDetails"][];
+            /** Format: int32 */
+            omittedCommentCount: number | string;
         };
         ClaudeAccountSummary: {
             /** Format: uuid */
@@ -1696,6 +1702,12 @@ export interface components {
         };
         /** @enum {unknown} */
         ReviewCategory: "Correctness" | "Criteria" | "Tests" | "Security" | "Quality" | "Design" | "Conventions";
+        ReviewCommentDetails: {
+            body: string;
+            path: null | string;
+            /** Format: int32 */
+            line: null | number | string;
+        };
         ReviewCriterionAnswer: {
             id: string;
             status: components["schemas"]["ReviewCriterionStatus"];

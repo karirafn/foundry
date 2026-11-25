@@ -3520,7 +3520,8 @@
           "input",
           "askedAt",
           "answeredAt",
-          "decisions"
+          "decisions",
+          "feedback"
         ],
         "type": "object",
         "properties": {
@@ -3555,6 +3556,39 @@
             "items": {
               "$ref": "#/components/schemas/ClarificationDecisionDetails"
             }
+          },
+          "feedback": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClarificationFeedbackDetails"
+              }
+            ]
+          }
+        }
+      },
+      "ClarificationFeedbackDetails": {
+        "required": [
+          "comments",
+          "omittedCommentCount"
+        ],
+        "type": "object",
+        "properties": {
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewCommentDetails"
+            }
+          },
+          "omittedCommentCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -5855,6 +5889,34 @@
           "Design",
           "Conventions"
         ]
+      },
+      "ReviewCommentDetails": {
+        "required": [
+          "body",
+          "path",
+          "line"
+        ],
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "line": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
       },
       "ReviewCriterionAnswer": {
         "required": [
