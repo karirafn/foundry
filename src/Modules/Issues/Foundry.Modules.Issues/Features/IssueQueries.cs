@@ -776,8 +776,10 @@ internal sealed class IssueQueries(
         return details with { ReviewRunId = latestReview.RunId.Value };
     }
 
+    // ClarificationDetails has no field for a requested round's review comments yet, so the detail leaves those rounds
+    // out instead of showing them as open question rounds.
     private static List<ClarificationDetails> BuildClarificationDetails(Issue issue) =>
-        [.. issue.Clarifications.Select(round => round switch
+        [.. issue.Clarifications.Where(round => round is not Clarification.Requested).Select(round => round switch
         {
             Clarification.Asked asked => new ClarificationDetails(
                 asked.Questions,
