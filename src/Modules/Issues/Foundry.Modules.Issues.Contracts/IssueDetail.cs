@@ -30,14 +30,35 @@ public sealed record IssueDetail(
 /// the questions a run asked and when and, once the round closed, the input that answered it and when it arrived.
 /// <paramref name="Input"/> and <paramref name="AnsweredAt"/> are both <see langword="null"/> while the round is open.
 /// <paramref name="Decisions"/> are the details triage settled itself in the round (ADR 0123); a round where triage
-/// only decided has no questions, no input, and its decision time as <paramref name="AskedAt"/>.
+/// only decided has no questions, no input, and its decision time as <paramref name="AskedAt"/>. <paramref name="Feedback"/> is
+/// set only on a round that recorded a person's pull request feedback (ADR 0126); such a round has no questions, no input,
+/// no decisions, and the newest consumed comment's time as <paramref name="AskedAt"/>.
 /// </summary>
 public sealed record ClarificationDetails(
     IReadOnlyList<InputQuestion> Questions,
     IReadOnlyList<InputPartDetails>? Input,
     DateTimeOffset AskedAt,
     DateTimeOffset? AnsweredAt,
-    IReadOnlyList<ClarificationDecisionDetails> Decisions);
+    IReadOnlyList<ClarificationDecisionDetails> Decisions,
+    ClarificationFeedbackDetails? Feedback);
+
+/// <summary>
+/// A person's pull request feedback recorded on the clarification log: the consumed comments and how many beyond them
+/// the consumption cutoff left out.
+/// </summary>
+public sealed record ClarificationFeedbackDetails(IReadOnlyList<ReviewCommentDetails> Comments, int OmittedCommentCount)
+{
+    public bool Equals(ClarificationFeedbackDetails? other) =>
+        other is not null && OmittedCommentCount == other.OmittedCommentCount && Comments.SequenceEqual(other.Comments);
+
+    public override int GetHashCode() => HashCode.Combine(Comments.Count, OmittedCommentCount);
+}
+
+/// <summary>
+/// One review comment of a person's pull request feedback. <paramref name="Body"/> is untrusted, so it renders as text,
+/// never as HTML. <paramref name="Path"/> and <paramref name="Line"/> locate an inline comment; a general comment has neither.
+/// </summary>
+public sealed record ReviewCommentDetails(string Body, string? Path, int? Line);
 
 /// <summary>
 /// A detail triage settled itself (ADR 0123). <paramref name="Ground"/> is <c>settled_business</c> or

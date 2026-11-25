@@ -138,17 +138,48 @@ public sealed class GetIssueDetailAsync_Clarifications : IAsyncDisposable
         detail.Clarifications.ShouldHaveSingleItem().Decisions.ShouldBeEmpty();
     }
 
-    // The detail exposes no field for a requested round yet, so the round is left out rather than shown as a question round.
     [Fact]
-    public async Task WhenAPersonsReviewFeedbackWasRecorded_LeavesTheRequestedRoundOut()
+    public async Task WhenAPersonsReviewFeedbackWasRecorded_ReturnsARequestedRoundWithItsComments()
     {
         // Arrange
-        Issue revision = Builder().RevisionQueued();
+        DateTimeOffset receivedAt = new(2026, 11, 20, 9, 30, 0, TimeSpan.Zero);
+        Issue revision = Builder()
+            .WithReviewComments([new ReviewComment("Use a date picker.", "src/Form.ts", 12), new ReviewComment("Looks good otherwise.")])
+            .WithOmittedCommentCount(3)
+            .WithNewestCommentAt(receivedAt)
+            .RevisionQueued();
 
         // Act
         IssueDetail detail = await SaveAndGetDetailAsync(revision);
 
         // Assert
-        detail.Clarifications.ShouldBeEmpty();
+        ClarificationDetails round = detail.Clarifications.ShouldHaveSingleItem();
+        ClarificationFeedbackDetails feedback = round.Feedback.ShouldNotBeNull();
+        round.ShouldSatisfyAllConditions(
+            () => round.Questions.ShouldBeEmpty(),
+            () => round.Input.ShouldBeNull(),
+            () => round.AskedAt.ShouldBe(receivedAt),
+            () => round.AnsweredAt.ShouldBeNull(),
+            () => round.Decisions.ShouldBeEmpty(),
+            () => feedback.OmittedCommentCount.ShouldBe(3),
+            () => feedback.Comments.ShouldBe(
+            [
+                new ReviewCommentDetails("Use a date picker.", "src/Form.ts", 12),
+                new ReviewCommentDetails("Looks good otherwise.", Path: null, Line: null),
+            ],
+            ignoreOrder: false));
+    }
+
+    [Fact]
+    public async Task WhenARoundAskedQuestions_ReturnsNoFeedback()
+    {
+        // Arrange
+        Issue awaiting = Builder().AwaitingInputFromTriage(IssueKind.Bug);
+
+        // Act
+        IssueDetail detail = await SaveAndGetDetailAsync(awaiting);
+
+        // Assert
+        detail.Clarifications.ShouldHaveSingleItem().Feedback.ShouldBeNull();
     }
 }
