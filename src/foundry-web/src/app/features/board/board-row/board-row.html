@@ -3,6 +3,7 @@
   [class.board-row--next]="next()"
   [class.board-row--done]="phase() !== 'live'"
   [class.board-row--bar]="bar()"
+  [class.board-row--lead-wide]="leadWide()"
   [class.fd-board-moved]="moved()"
 >
   <span class="board-row__lead" [id]="idBase() + '-lead'"><ng-content select="[rowLead]" /></span>
@@ -34,4 +35,7 @@
       <ng-content select="[rowMarker]" />
     }
   </span>
+  @if (why(); as why) {
+    <span class="sr-only" [id]="idBase() + '-why'">{{ why }}</span>
+  }
 </div>

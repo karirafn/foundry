@@ -389,7 +389,7 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 
 The dashboard shows each issue in one of four display groups. They come from the placement the server declares ([Issue Stage](#issue-stage), [Needs action](#needs-action), [Awaits dispatch](#awaits-dispatch)), not from a frontend list of states:
 
-- **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs you band, first on the page, as a row whose [lifecycle rail](#lifecycle-step) shows where it stopped.
+- **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs you band, first on the page, as a row whose [lifecycle rail](#lifecycle-step) shows where it stopped. A `review` issue whose checks are green (not Checks red or CI couldn't run) has finished its work and only awaits a person's review or merge, so it shows instead as a one-line row with a lifecycle bar and a link to review the pull request, in a list under those full rows, longest waiting first.
 - **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `revision_blocked`, `continuation_queued`, `continuation_blocked`, `review_queued`). It sits in the board's Pipeline band in global dispatch order, or in the Blocked band when it [Waits on blockers](#waits-on-blockers).
 - **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, `review_in_progress`), a review run waits for its automatic retry (`review_failed`), or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`, `merge_pending`). It sits in the board's In progress band as a row with its [lifecycle rail](#lifecycle-step); a row whose Claude step runs also shows the worker's live activity. A `review_failed` issue has no worker or step, so the board shows it in Needs you as a warning row ("Review failed") until its automatic retry queues the review again.
 - **Resolved** — stage Done (`completed`). It leaves the board and is listed on Resolved history (`/issues`), newest first, next to the run statistics.
@@ -408,7 +408,7 @@ The part of the lifecycle that currently owns an issue — **Triage**, **Impleme
 
 ### Needs action
 
-True when the issue progresses only after a person acts (`Issue.NeedsAction`). A Needs-action issue is in the Needs you display group: it sits in the Needs you band at the top of the board, whatever its other facts, as a row whose lifecycle rail shows the step it stopped on.
+True when the issue progresses only after a person acts (`Issue.NeedsAction`). A Needs-action issue is in the Needs you display group: it sits in the Needs you band at the top of the board, whatever its other facts, as a row whose lifecycle rail shows the step it stopped on. A `review` issue with green checks (PR ready, Review skipped or Merge skipped) shows as a one-line row with a lifecycle bar instead, under the Needs you cards; the band's count includes it.
 
 ### Awaits dispatch
 

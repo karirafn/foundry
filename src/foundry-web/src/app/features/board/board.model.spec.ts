@@ -7,8 +7,10 @@ import {
   TRIGGER_LABEL,
   bandFor,
   buildBoardBands,
+  isCompactReview,
   isRunning,
   needsReason,
+  reviewableLink,
   repoName,
   rowAction,
 } from './board.model';
@@ -979,5 +981,86 @@ describe('rowAction', () => {
 
     // Assert
     expect(action).toBeNull();
+  });
+});
+
+describe('isCompactReview', () => {
+  const review = (overrides: Partial<IssueSummary> = {}): IssueSummary =>
+    buildIssue({ state: 'review', stage: 'review', needsAction: true, ...overrides });
+
+  it('is true for a ready pull request', () => {
+    expect(isCompactReview(review())).toBe(true);
+  });
+
+  it('is true for a ready merge request', () => {
+    expect(isCompactReview(review({ providerType: 'gitlab' }))).toBe(true);
+  });
+
+  it('is true for a skipped review', () => {
+    expect(isCompactReview(review({ reviewOutcome: 'skipped' }))).toBe(true);
+  });
+
+  it('is true for a skipped merge', () => {
+    expect(isCompactReview(review({ mergeOutcome: 'skipped' }))).toBe(true);
+  });
+
+  it('is false while checks are red', () => {
+    expect(isCompactReview(review({ checksOutcome: 'still_failing' }))).toBe(false);
+  });
+
+  it("is false when CI couldn't run", () => {
+    expect(isCompactReview(review({ checksOutcome: 'infrastructure_failed' }))).toBe(false);
+  });
+
+  it('is false for an issue outside review', () => {
+    expect(isCompactReview(buildIssue({ state: 'unchanged', needsAction: true }))).toBe(false);
+  });
+});
+
+describe('reviewableLink', () => {
+  const PR = 'https://github.com/acme/api/pull/9';
+  const MR = 'https://gitlab.com/acme/api/-/merge_requests/9';
+
+  it('links a ready pull request for review on GitHub', () => {
+    // Act
+    const link = reviewableLink(
+      buildIssue({ state: 'review', needsAction: true, pullRequestUrl: PR, providerType: 'github' }),
+    );
+
+    // Assert
+    expect(link).toEqual({ href: PR, label: 'Review PR', hint: ' (opens GitHub in a new tab)' });
+  });
+
+  it('links a skipped review as a merge request on GitLab', () => {
+    // Act
+    const link = reviewableLink(
+      buildIssue({
+        state: 'review',
+        needsAction: true,
+        reviewOutcome: 'skipped',
+        pullRequestUrl: MR,
+        providerType: 'gitlab',
+      }),
+    );
+
+    // Assert
+    expect(link).toEqual({ href: MR, label: 'Review MR', hint: ' (opens GitLab in a new tab)' });
+  });
+
+  it('is null without a pull request', () => {
+    expect(reviewableLink(buildIssue({ state: 'review', needsAction: true }))).toBeNull();
+  });
+
+  it('is null while checks are red', () => {
+    expect(
+      reviewableLink(
+        buildIssue({
+          state: 'review',
+          needsAction: true,
+          checksOutcome: 'still_failing',
+          pullRequestUrl: PR,
+        }),
+      ),
+    ).toBeNull();
   });
 });

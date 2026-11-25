@@ -24,9 +24,8 @@ import { RunKindTagComponent } from '../../../shared/components/run-kind-tag/run
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { formatElapsed } from '../../../shared/utils/agent-activity-format';
 import { formatWaiting } from '../../../shared/utils/format-waiting';
-import { providerDisplayName, providerTerminology } from '../../../shared/utils/provider.util';
 import { ItemView } from '../board-state.service';
-import { rowAction } from '../board.model';
+import { ReviewLink, reviewableLink } from '../board.model';
 import { IssueRefComponent } from '../issue-ref/issue-ref';
 import { LastEventComponent } from '../progress-band/worker-activity/last-event';
 import { WorkerActivityComponent } from '../progress-band/worker-activity/worker-activity';
@@ -43,12 +42,6 @@ import {
   isRunningRow,
   rowStatus,
 } from './lifecycle-row.model';
-
-interface ReviewLink {
-  readonly href: string | null | undefined;
-  readonly label: string;
-  readonly hint: string;
-}
 
 /**
  * One issue in Needs you or In progress: its head, its whole lifecycle as a rail, and a status line
@@ -166,22 +159,6 @@ export class LifecycleRowComponent {
 
   protected readonly reviewLink: Signal<ReviewLink | null> = computed(() => {
     const item = this.item();
-    if (item.band !== 'needs') {
-      return null;
-    }
-    const issue = item.issue;
-    // A ready or merge-skipped row's own button opens the pull request; a skipped review's button
-    // retries it, so the pull request stays a link beside it.
-    const action = rowAction(item);
-    const retriesReview = action?.kind === 'action' && action.action === 'retry_review';
-    if (!retriesReview || !issue.pullRequestUrl) {
-      return null;
-    }
-    const provider = issue.providerType ?? 'github';
-    return {
-      href: issue.pullRequestUrl,
-      label: `Review ${providerTerminology(provider).prAbbrev}`,
-      hint: ` (opens ${providerDisplayName(provider)} in a new tab)`,
-    };
+    return item.band === 'needs' ? reviewableLink(item.issue) : null;
   });
 }

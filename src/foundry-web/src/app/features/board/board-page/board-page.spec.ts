@@ -354,9 +354,8 @@ describe('BoardPageComponent', () => {
     it('orders cards by tone, then longest waiting', async () => {
       // Act
       const { el } = await loaded([
-        item('ready', 1, {
-          stage: 'merge',
-          state: 'review',
+        item('unchanged', 1, {
+          state: 'unchanged',
           needsAction: true,
           enteredStateAt: minutesAgo(90),
         }),
@@ -376,7 +375,7 @@ describe('BoardPageComponent', () => {
       expect(idsIn(el, '[aria-label="Issues that need you"]')).toEqual([
         'old-failure',
         'new-failure',
-        'ready',
+        'unchanged',
       ]);
     });
 
@@ -422,7 +421,7 @@ describe('BoardPageComponent', () => {
       expect(card.querySelector('a')).toBeNull();
     });
 
-    it('opens a ready pull request in a new tab from its row button', async () => {
+    it('opens a ready merge request in a new tab from its review row', async () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
@@ -435,17 +434,16 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const link = el.querySelector<HTMLAnchorElement>('fd-lifecycle-row a')!;
+      const link = el.querySelector<HTMLAnchorElement>(
+        '[aria-label="Issues awaiting your review"] fd-board-row a',
+      )!;
       expect(link.getAttribute('href')).toBe('https://gitlab.com/acme/api/-/merge_requests/3');
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-      expect(text(link)).toBe('Open MR ↗');
-      expect(link.getAttribute('aria-label')).toBe(
-        'Open MR for issue #7 (opens GitLab in a new tab)',
-      );
+      expect(text(link)).toBe('Review MR ↗ (opens GitLab in a new tab)');
     });
 
-    it('opens a pull request Foundry did not merge from its row button', async () => {
+    it('opens a pull request Foundry did not merge from its review row', async () => {
       // Act
       const { el } = await loaded([
         item('r', 7, {
@@ -460,9 +458,11 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const link = el.querySelector<HTMLAnchorElement>('fd-lifecycle-row a')!;
+      const link = el.querySelector<HTMLAnchorElement>(
+        '[aria-label="Issues awaiting your review"] fd-board-row a',
+      )!;
       expect(link.getAttribute('href')).toBe('https://github.com/acme/api/pull/3');
-      expect(text(link)).toBe('Open PR ↗');
+      expect(text(link)).toBe('Review PR ↗ (opens GitHub in a new tab)');
     });
 
     it('keeps the review link and explains a review that did not finish', async () => {
@@ -480,11 +480,11 @@ describe('BoardPageComponent', () => {
       ]);
 
       // Assert
-      const card = el.querySelector('fd-lifecycle-row')!;
-      expect(text(card.querySelector('.lifecycle-row__why'))).toBe(
+      const row = el.querySelector('[aria-label="Issues awaiting your review"] fd-board-row')!;
+      expect(row.querySelector('.needs-band__marker')?.getAttribute('title')).toBe(
         "Checks passed; the review didn't finish: invalid verdict",
       );
-      expect(text(card.querySelector('a'))).toBe('Review PR ↗ (opens GitHub in a new tab)');
+      expect(text(row.querySelector('a'))).toBe('Review PR ↗ (opens GitHub in a new tab)');
     });
 
     it('shows its lifecycle rail with the current step marked', async () => {

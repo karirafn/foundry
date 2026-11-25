@@ -12,9 +12,9 @@
       }
     </ul>
   }
-  @if (items().length > 0) {
+  @if (cards().length > 0) {
     <ul class="needs-band__rows" aria-label="Issues that need you">
-      @for (item of items(); track item.issue.id) {
+      @for (item of cards(); track item.issue.id) {
         <li class="needs-band__item" [class.fd-board-collapse]="item.phase === 'collapse'">
           <fd-lifecycle-row
             [item]="item"
@@ -29,6 +29,54 @@
               />
             }
           </fd-lifecycle-row>
+        </li>
+      }
+    </ul>
+  }
+  @if (reviewRows().length > 0) {
+    <ul class="needs-band__review-rows" aria-label="Issues awaiting your review">
+      @for (item of reviewRows(); track item.issue.id) {
+        <li
+          [class.fd-board-collapse]="item.phase === 'collapse'"
+          [attr.data-tone]="item.reason.tone"
+        >
+          <fd-board-row
+            [issue]="item.issue"
+            [phase]="item.phase"
+            [moved]="item.moved"
+            [bar]="true"
+            [leadWide]="true"
+            [why]="item.explanation"
+            (open)="open.emit({ id: item.issue.id, invoker: $event })"
+          >
+            <span rowLead class="needs-band__reason" [attr.data-tone]="item.reason.tone">{{
+              item.reason.label
+            }}</span>
+            @if (item.issue.lifecycle; as lifecycle) {
+              <fd-lifecycle-bar rowBar [lifecycle]="lifecycle" [arriving]="item.arrived" />
+            }
+            <span rowMarker class="needs-band__marker" [attr.title]="item.explanation">
+              <time
+                class="needs-band__clock"
+                [attr.datetime]="item.issue.enteredStateAt"
+                [attr.title]="item.issue.enteredStateAt | date: 'medium'"
+                >waiting {{ waiting(item) }}</time
+              >
+              @if (reviewLink(item); as link) {
+                @if (link.href | safeHref; as href) {
+                  <span aria-hidden="true">·</span>
+                  <a
+                    class="needs-band__link"
+                    [href]="href"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >{{ link.label }} <span aria-hidden="true">↗</span
+                    ><span class="sr-only">{{ link.hint }}</span></a
+                  >
+                }
+              }
+            </span>
+          </fd-board-row>
         </li>
       }
     </ul>

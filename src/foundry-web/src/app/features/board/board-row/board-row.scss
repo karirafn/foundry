@@ -44,6 +44,11 @@
     grid-template-columns: var(--fd-row-lead, 5rem) 6.5rem minmax(0, 1fr) 11rem 12rem;
   }
 
+  &--lead-wide {
+    --fd-row-lead: 7.5rem;
+    --fd-row-rule: var(--fd-row-tone, transparent);
+  }
+
   @media (any-pointer: coarse) {
     min-height: 44px;
   }
@@ -152,7 +157,9 @@
       'lead repo marker'
       'title title title'
       'bar bar bar';
-    grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+    // The repository keeps room for a six-character number, so a long marker ellipsises rather than
+    // covering it; the slug's own min-content is its whole name, so it can't set the floor.
+    grid-template-columns: auto minmax(3.5rem, 1fr) minmax(0, auto);
     padding-block: var(--fd-spacing-sm);
     row-gap: 2px;
 
