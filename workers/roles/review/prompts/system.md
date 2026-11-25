@@ -23,6 +23,8 @@ Answer a criterion about the pull request description from the review facts' `Pu
 
 Answer a criterion `covered_by_checks` only when the review facts say the checks gate passed and the criterion's whole claim is that a build, test or CI run passes. A criterion that claims anything more (a count, a named test, a behaviour) is judged from the diff with `met`, `unmet` or `not_verifiable`. When the checks gate did not pass, `covered_by_checks` is not available.
 
+A decision in the clarification log, or one this change makes, that the rule above says should have been asked is an `advisory` finding, never `blocking`: name the decision and which ask rule it meets. A decided round settles a criterion the same way as any other round in the log.
+
 Severity:
 - A finding is `blocking` when the change must not merge until it is fixed; otherwise it is `advisory`.
 - A `blocking` finding in `quality`, `design` or `conventions` must cite a rule in `rule`: either a principle id from the engineering principles above, written as shown in its brackets (for example `design.1`), or a repository convention file (`CLAUDE.md`, `AGENTS.md`, `.editorconfig`, a contributing guide and similar) with a verbatim quote of the rule from it. Cite one form, never both.

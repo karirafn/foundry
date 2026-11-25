@@ -1435,6 +1435,7 @@ public sealed class ProcessRebuildAsync
         File.WriteAllText(Path.Combine(implement, "prompts", "task.md"), "Implement issue #{issueNumber}.");
         File.WriteAllText(Path.Combine(shared, ".claude-plugin", "plugin.json"), """{"name":"shared"}""");
         File.WriteAllText(Path.Combine(shared, "prompts", "principles.md"), "Engineering principles.");
+        File.WriteAllText(Path.Combine(shared, "prompts", "decisions.md"), "Ask only about uncertain business logic.");
         Directory.CreateDirectory(Path.Combine(shared, "prompts", "principles"));
         foreach (string section in (string[])["testing", "design", "code", "domain"])
         {

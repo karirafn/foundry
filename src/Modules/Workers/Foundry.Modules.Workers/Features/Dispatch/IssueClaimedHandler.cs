@@ -544,7 +544,8 @@ internal sealed class IssueClaimedHandler(
                 toolchain,
                 claimed.Clarifications ?? [],
                 trackerContext: trackerContext,
-                review: reviewPrompt)
+                review: reviewPrompt,
+                decisionRule: content.DecisionRuleFor(role.Role))
             : SystemPromptBuilder.Build(
                 principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
@@ -555,7 +556,8 @@ internal sealed class IssueClaimedHandler(
                 toolchain,
                 failingJobLogs,
                 claimed.Clarifications ?? [],
-                trackerContext: trackerContext);
+                trackerContext: trackerContext,
+                decisionRule: content.DecisionRuleFor(role.Role));
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {

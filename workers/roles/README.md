@@ -36,6 +36,17 @@ Each bullet of a section file gets a principle id `<section>.<n>` when Foundry a
 always show the same ids. A review finding cites an id as its rule; inserting a bullet renumbers the later ids for
 future runs only. The ids count towards the 8 KiB cap.
 
+`shared/prompts/decisions.md` holds the ask-or-decide rule (ADR 0123): ask a person only about uncertain business
+logic and important implementation details, and decide the rest, stating each answer with its ground and evidence.
+It is not a Principle Section: it carries no ids and no "repository conventions win" framing, and does not count
+towards the 8 KiB cap. Each role declares in Foundry's code (`WorkerRole.CarriesDecisionRule`) whether its system
+prompt carries it: triage, implement and review do. Foundry places it under its own heading after the Worker
+Principles and before the role prompt; a role that does not carry it gets neither the heading nor the text. The file
+is required, non-blank and takes no placeholders, like the principle files: a missing, blank or placeholder-bearing
+file fails the unit tests and the startup image build. Each role's own prompt says how it applies the rule (triage
+returns its decisions in `decisions`, implement records them in the pull request `notes`/`attention`, review raises a
+decision that should have been asked as an advisory finding).
+
 ## Capability profiles
 
 Each role declares the `WorkerCapability` it runs under in Foundry's code (`WorkerRole`), never in its folder

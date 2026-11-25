@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { PromptAssemblyComponent } from './prompt-assembly';
 import {
   IMPLEMENT_PRINCIPLES,
+  DECISIONS_SLOT,
+  DECISION_RULE,
   PRINCIPLES_SLOT,
   PRINCIPLE_SECTIONS,
   ROLE_PROMPT_SLOT,
@@ -14,6 +16,7 @@ const ROLE_SYSTEM_PROMPT = 'You are implementing issue #{issueNumber} in {reposi
 interface RenderOptions {
   readonly rolePrincipleSections?: readonly string[];
   readonly rolePrinciplesText?: string;
+  readonly roleDecisionRule?: string;
 }
 
 function render(
@@ -25,6 +28,7 @@ function render(
   fixture.componentRef.setInput('sections', sections);
   fixture.componentRef.setInput('rolePromptSlot', ROLE_PROMPT_SLOT);
   fixture.componentRef.setInput('principlesSlot', PRINCIPLES_SLOT);
+  fixture.componentRef.setInput('decisionsSlot', DECISIONS_SLOT);
   fixture.componentRef.setInput('principleSections', PRINCIPLE_SECTIONS);
   fixture.componentRef.setInput('roleName', 'implement');
   fixture.componentRef.setInput('roleSystemPrompt', ROLE_SYSTEM_PROMPT);
@@ -36,6 +40,7 @@ function render(
     'rolePrinciplesText',
     options.rolePrinciplesText ?? IMPLEMENT_PRINCIPLES,
   );
+  fixture.componentRef.setInput('roleDecisionRule', options.roleDecisionRule ?? DECISION_RULE);
   fixture.detectChanges();
   return { fixture, el: fixture.nativeElement as HTMLElement };
 }
@@ -421,6 +426,78 @@ describe('PromptAssemblyComponent', () => {
         // Assert
         expect(sections(el).every((d) => d.open)).toBe(true);
         expect(text(button)).toBe('Collapse all');
+      });
+    });
+  });
+
+  describe('ask-or-decide rule', () => {
+    const WITH_DECISIONS: readonly PromptSectionDescriptor[] = [
+      {
+        key: 'principles',
+        title: 'Worker principles',
+        condition: 'Always',
+        content: PRINCIPLES_SLOT,
+      },
+      {
+        key: 'decisions',
+        title: 'Ask-or-decide rule',
+        condition: 'Always',
+        content: DECISIONS_SLOT,
+      },
+      { key: 'role', title: 'Role prompt', condition: 'Always', content: ROLE_PROMPT_SLOT },
+    ];
+
+    function decisionsRow(el: HTMLElement): Element | undefined {
+      return Array.from(el.querySelectorAll('.prompt-assembly__section')).find(
+        (row) => text(row.querySelector('.prompt-assembly__title-text')) === 'Ask-or-decide rule',
+      );
+    }
+
+    it("should show the role's rule text in place of the slot", () => {
+      // Act
+      const { el } = render(WITH_DECISIONS);
+
+      // Assert
+      const row = decisionsRow(el)!;
+      expect(row.tagName).toBe('DETAILS');
+      expect(row.querySelector('pre')!.textContent).toBe(DECISION_RULE);
+      expect(row.textContent).not.toContain(DECISIONS_SLOT);
+    });
+
+    it('should number the rule between the principles and the role prompt', () => {
+      // Act
+      const { el } = render(WITH_DECISIONS);
+
+      // Assert
+      const ordinals = Array.from(el.querySelectorAll('li.prompt-assembly__item')).map((li) =>
+        text(li.querySelector(':scope > span[aria-hidden="true"]')),
+      );
+      expect(ordinals).toEqual(['1', '2', '3']);
+    });
+
+    describe('when the role does not carry the rule', () => {
+      it('should keep the row as a static Not included row and say why', () => {
+        // Act
+        const { el } = render(WITH_DECISIONS, { roleDecisionRule: '' });
+
+        // Assert
+        const row = decisionsRow(el)!;
+        expect(row.tagName).toBe('DIV');
+        expect(text(row.querySelector('.prompt-assembly__condition'))).toBe('Not included');
+        expect(text(row.querySelector('.prompt-assembly__note'))).toBe(
+          'This role does not carry the ask-or-decide rule, so its prompt has none.',
+        );
+      });
+
+      it('should number only the included sections', () => {
+        // Act
+        const { el } = render(WITH_DECISIONS, { roleDecisionRule: '' });
+
+        // Assert
+        const ordinals = Array.from(el.querySelectorAll('li.prompt-assembly__item')).map((li) =>
+          text(li.querySelector(':scope > span[aria-hidden="true"]')),
+        );
+        expect(ordinals).toEqual(['1', '', '2']);
       });
     });
   });

@@ -19,6 +19,7 @@ public sealed class DescribeSections
         [
             ("safety-preamble", PromptSectionCondition.Always),
             ("principles", PromptSectionCondition.Always),
+            ("decisions", PromptSectionCondition.Always),
             ("role-prompt", PromptSectionCondition.Always),
             ("issue-content", PromptSectionCondition.Always),
             ("task-list", PromptSectionCondition.Always),
@@ -67,7 +68,8 @@ public sealed class DescribeSections
             () => sections.Single(s => s.Key == "review-feedback").Content.ShouldContain("- {reviewComment}"),
             () => sections.Single(s => s.Key == "failing-checks").Content.ShouldContain("- {checkName} ({conclusion}) {detailsUrl}"),
             () => sections.Single(s => s.Key == "rebase-conflict").Content.ShouldStartWith(SystemPromptBuilder.RebaseConflictSectionMarker),
-            () => sections.Single(s => s.Key == "role-prompt").Content.ShouldBe(SystemPromptBuilder.RolePromptSlot));
+            () => sections.Single(s => s.Key == "role-prompt").Content.ShouldBe(SystemPromptBuilder.RolePromptSlot),
+            () => sections.Single(s => s.Key == "decisions").Content.ShouldBe(SystemPromptBuilder.DecisionsSlot));
     }
 
     [Fact]
