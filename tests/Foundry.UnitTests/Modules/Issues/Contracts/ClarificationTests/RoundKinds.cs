@@ -36,6 +36,43 @@ public sealed class RoundKinds
     }
 
     [Fact]
+    public void ARequestedRound_IsNeverOpenAndCarriesNoDecisions()
+    {
+        // Act
+        Clarification.Requested requested = Clarification.Request([new ReviewComment("Use a date picker.")], 0, At);
+
+        // Assert
+        requested.ShouldSatisfyAllConditions(
+            () => requested.IsOpen.ShouldBeFalse(),
+            () => requested.Decisions.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public void ARequestedRound_RejectsANegativeOmittedCount()
+    {
+        // Act
+        ArgumentOutOfRangeException thrown = Should.Throw<ArgumentOutOfRangeException>(
+            () => Clarification.Request([new ReviewComment("Use a date picker.")], -1, At));
+
+        // Assert
+        thrown.ParamName.ShouldBe("omittedCommentCount");
+    }
+
+    [Fact]
+    public void RequestedRoundsWithDifferentComments_AreNotEqual()
+    {
+        // Arrange
+        Clarification first = Clarification.Request([new ReviewComment("Use a date picker.", "src/Form.cs", 12)], 0, At);
+        Clarification second = Clarification.Request([new ReviewComment("Use a date picker.", "src/Form.cs", 13)], 0, At);
+
+        // Act
+        bool equal = first.Equals(second);
+
+        // Assert
+        equal.ShouldBeFalse();
+    }
+
+    [Fact]
     public void AnsweringAnAskedRound_KeepsItsDecisions()
     {
         // Arrange
@@ -75,6 +112,7 @@ public sealed class RoundKinds
             Clarification.Ask([StructuredQuestionBuilder.Build()], [TriageDecisionBuilder.Build()], At)
                 .Answer(ClarificationInput.FromComments("ok"), At.AddHours(1)),
             Clarification.Decide([TriageDecisionBuilder.Build(ground: TriageDecisionGround.ImplementationDetail)], At.AddHours(2)),
+            Clarification.Request([new ReviewComment("Use a date picker.", "src/Form.cs", 12), new ReviewComment("Thanks.")], 3, At.AddHours(3)),
         ];
 
         // Act

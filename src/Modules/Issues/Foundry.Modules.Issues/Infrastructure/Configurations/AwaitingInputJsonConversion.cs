@@ -16,7 +16,8 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 /// <summary>
 /// JSON column mappings for the awaiting-input state (ADR 0096): the <see cref="ResumeTarget"/> and
-/// <see cref="QuestionPost"/> unions on <c>awaiting_input</c> rows, and the clarification log every issue carries.
+/// <see cref="QuestionPost"/> unions on <c>awaiting_input</c> rows, and the clarification log every issue carries
+/// (asked, decided and requested rounds).
 /// </summary>
 internal static class AwaitingInputJsonConversion
 {
@@ -35,6 +36,7 @@ internal static class AwaitingInputJsonConversion
     private const string SentKind = "sent";
     private const string AskedKind = "asked";
     private const string DecidedKind = "decided";
+    private const string RequestedKind = "requested";
     private const string SettledBusinessGround = "settled_business";
     private const string ImplementationDetailGround = "implementation_detail";
 
@@ -198,6 +200,17 @@ internal static class AwaitingInputJsonConversion
             AnsweredAt: null,
             SerializeDecisions(decided.Decisions),
             decided.DecidedAt),
+        Clarification.Requested requested => new ClarificationDto(
+            RequestedKind,
+            Questions: null,
+            Input: null,
+            AskedAt: null,
+            AnsweredAt: null,
+            Decisions: null,
+            DecidedAt: null,
+            [.. requested.Comments.Select(comment => new ReviewCommentDto(comment.Body, comment.FilePath, comment.Line))],
+            requested.OmittedCommentCount,
+            requested.ReceivedAt),
         _ => throw new UnreachableException($"Unknown Clarification variant: {round.GetType().Name}"),
     };
 
@@ -213,6 +226,10 @@ internal static class AwaitingInputJsonConversion
                     dto.AnsweredAt,
                     DeserializeDecisions(dto.Decisions)),
                 DecidedKind => new Clarification.Decided(DeserializeDecisions(dto.Decisions), Required(dto.DecidedAt)),
+                RequestedKind => new Clarification.Requested(
+                    [.. (dto.Comments ?? []).Select(comment => new ReviewComment(comment.Body, comment.FilePath, comment.Line))],
+                    dto.OmittedCommentCount ?? 0,
+                    Required(dto.ReceivedAt)),
                 _ => throw new UnreachableException($"Unknown Clarification kind: '{dto.Kind}'"),
             })
             .ToList();
@@ -317,7 +334,17 @@ internal static class AwaitingInputJsonConversion
         [property: JsonPropertyName("answeredAt")] DateTimeOffset? AnsweredAt,
         [property: JsonPropertyName("decisions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<TriageDecisionDto>? Decisions,
-        [property: JsonPropertyName("decidedAt"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DecidedAt);
+        [property: JsonPropertyName("decidedAt"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DecidedAt,
+        [property: JsonPropertyName("comments"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<ReviewCommentDto>? Comments = null,
+        [property: JsonPropertyName("omittedCommentCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        int? OmittedCommentCount = null,
+        [property: JsonPropertyName("receivedAt"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? ReceivedAt = null);
+
+    private sealed record ReviewCommentDto(
+        [property: JsonPropertyName("body")] string Body,
+        [property: JsonPropertyName("filePath"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FilePath,
+        [property: JsonPropertyName("line"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Line);
 
     private sealed record TriageDecisionDto(
         [property: JsonPropertyName("question")] string Question,

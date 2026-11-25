@@ -8,7 +8,8 @@ namespace Foundry.Modules.Issues.Contracts;
 
 /// <summary>
 /// One round on an issue's append-only clarification log (ADR 0096): <see cref="Asked"/> when a run stopped to ask a
-/// person, or <see cref="Decided"/> when triage settled details itself and asked nothing (ADR 0123).
+/// person, <see cref="Decided"/> when triage settled details itself and asked nothing (ADR 0123), or
+/// <see cref="Requested"/> when Foundry consumed a person's pull request feedback (ADR 0126).
 /// </summary>
 [JsonConverter(typeof(ClarificationJsonConverter))]
 public abstract record Clarification
@@ -20,7 +21,7 @@ public abstract record Clarification
         Decisions = [.. decisions];
     }
 
-    /// <summary>The details triage settled itself in this round (ADR 0123).</summary>
+    /// <summary>The details triage settled itself in this round (ADR 0123); always empty on a <see cref="Requested"/> round.</summary>
     public IReadOnlyList<TriageDecision> Decisions { get; }
 
     /// <summary>Whether the round still waits for input; only an <see cref="Asked"/> round ever does.</summary>
@@ -33,6 +34,9 @@ public abstract record Clarification
         new(questions, input: null, askedAt, answeredAt: null, decisions);
 
     public static Decided Decide(IReadOnlyList<TriageDecision> decisions, DateTimeOffset decidedAt) => new(decisions, decidedAt);
+
+    public static Requested Request(IReadOnlyList<ReviewComment> comments, int omittedCommentCount, DateTimeOffset receivedAt) =>
+        new(comments, omittedCommentCount, receivedAt);
 
     public virtual bool Equals(Clarification? other) =>
         other is not null && EqualityContract == other.EqualityContract && Decisions.SequenceEqual(other.Decisions);
@@ -127,17 +131,53 @@ public abstract record Clarification
 
         public override int GetHashCode() => HashCode.Combine(base.GetHashCode(), DecidedAt);
     }
+
+    /// <summary>
+    /// Foundry consumed a person's pull request feedback for a revision: the comments, how many beyond them the
+    /// consumption cutoff left out, and when the newest consumed comment arrived. It asks nothing and is never open.
+    /// </summary>
+    public sealed record Requested : Clarification
+    {
+        public Requested(IReadOnlyList<ReviewComment> comments, int omittedCommentCount, DateTimeOffset receivedAt)
+            : base([])
+        {
+            ArgumentNullException.ThrowIfNull(comments);
+            ArgumentOutOfRangeException.ThrowIfNegative(omittedCommentCount);
+
+            Comments = [.. comments];
+            OmittedCommentCount = omittedCommentCount;
+            ReceivedAt = receivedAt;
+        }
+
+        public IReadOnlyList<ReviewComment> Comments { get; }
+
+        public int OmittedCommentCount { get; }
+
+        public DateTimeOffset ReceivedAt { get; }
+
+        public override bool IsOpen => false;
+
+        public bool Equals(Requested? other) =>
+            other is not null
+            && base.Equals(other)
+            && Comments.SequenceEqual(other.Comments)
+            && OmittedCommentCount == other.OmittedCommentCount
+            && ReceivedAt == other.ReceivedAt;
+
+        public override int GetHashCode() => HashCode.Combine(base.GetHashCode(), Comments.Count, OmittedCommentCount, ReceivedAt);
+    }
 }
 
 /// <summary>
-/// The wire form of a <see cref="Clarification"/> on integration events: a <c>Kind</c> of <c>asked</c> or
-/// <c>decided</c> beside the round's fields. A round written before rounds had kinds carries none and reads as an
-/// <see cref="Clarification.Asked"/> round with no decisions.
+/// The wire form of a <see cref="Clarification"/> on integration events: a <c>Kind</c> of <c>asked</c>,
+/// <c>decided</c> or <c>requested</c> beside the round's fields. A round written before rounds had kinds carries none
+/// and reads as an <see cref="Clarification.Asked"/> round with no decisions.
 /// </summary>
 internal sealed class ClarificationJsonConverter : JsonConverter<Clarification>
 {
     private const string AskedKind = "asked";
     private const string DecidedKind = "decided";
+    private const string RequestedKind = "requested";
 
     public override Clarification Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
@@ -155,6 +195,10 @@ internal sealed class ClarificationJsonConverter : JsonConverter<Clarification>
             DecidedKind => new Clarification.Decided(
                 wire.Decisions ?? [],
                 wire.DecidedAt ?? throw new JsonException("A decided clarification round has no DecidedAt.")),
+            RequestedKind => new Clarification.Requested(
+                wire.Comments ?? [],
+                wire.OmittedCommentCount ?? 0,
+                wire.ReceivedAt ?? throw new JsonException("A requested clarification round has no ReceivedAt.")),
             _ => throw new JsonException($"Unknown clarification round kind '{wire.Kind}'."),
         };
     }
@@ -179,6 +223,17 @@ internal sealed class ClarificationJsonConverter : JsonConverter<Clarification>
                 AnsweredAt: null,
                 decided.Decisions,
                 decided.DecidedAt),
+            Clarification.Requested requested => new ClarificationWire(
+                RequestedKind,
+                Questions: null,
+                Input: null,
+                AskedAt: null,
+                AnsweredAt: null,
+                Decisions: null,
+                DecidedAt: null,
+                requested.Comments,
+                requested.OmittedCommentCount,
+                requested.ReceivedAt),
             _ => throw new JsonException($"Unknown clarification round {value.GetType().Name}."),
         };
 
@@ -192,5 +247,8 @@ internal sealed class ClarificationJsonConverter : JsonConverter<Clarification>
         DateTimeOffset? AskedAt,
         DateTimeOffset? AnsweredAt,
         IReadOnlyList<TriageDecision>? Decisions,
-        DateTimeOffset? DecidedAt);
+        DateTimeOffset? DecidedAt,
+        IReadOnlyList<ReviewComment>? Comments = null,
+        int? OmittedCommentCount = null,
+        DateTimeOffset? ReceivedAt = null);
 }

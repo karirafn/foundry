@@ -137,4 +137,18 @@ public sealed class GetIssueDetailAsync_Clarifications : IAsyncDisposable
         // Assert
         detail.Clarifications.ShouldHaveSingleItem().Decisions.ShouldBeEmpty();
     }
+
+    // The detail exposes no field for a requested round yet, so the round is left out rather than shown as a question round.
+    [Fact]
+    public async Task WhenAPersonsReviewFeedbackWasRecorded_LeavesTheRequestedRoundOut()
+    {
+        // Arrange
+        Issue revision = Builder().RevisionQueued();
+
+        // Act
+        IssueDetail detail = await SaveAndGetDetailAsync(revision);
+
+        // Assert
+        detail.Clarifications.ShouldBeEmpty();
+    }
 }

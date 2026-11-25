@@ -122,7 +122,7 @@ public sealed class NeedsInput : IAsyncDisposable
         AwaitingInputIssue awaiting = await LoadAwaitingAsync();
         awaiting.ShouldSatisfyAllConditions(
             () => awaiting.ResumeTarget.ShouldBe(new ResumeTarget.Revision(BranchName, PullRequestUrl)),
-            () => awaiting.Clarifications.ShouldHaveSingleItem().IsOpen.ShouldBeTrue());
+            () => awaiting.Clarifications.OfType<Clarification.Asked>().ShouldHaveSingleItem().IsOpen.ShouldBeTrue());
     }
 
     private static WorkerRunCompleted Completed(
