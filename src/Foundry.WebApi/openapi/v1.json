@@ -3488,12 +3488,39 @@
           }
         }
       },
+      "ClarificationDecisionDetails": {
+        "required": [
+          "question",
+          "decision",
+          "ground",
+          "evidence"
+        ],
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "ground": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "ClarificationDetails": {
         "required": [
           "questions",
           "input",
           "askedAt",
-          "answeredAt"
+          "answeredAt",
+          "decisions"
         ],
         "type": "object",
         "properties": {
@@ -3522,6 +3549,12 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClarificationDecisionDetails"
+            }
           }
         }
       },

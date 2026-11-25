@@ -23,37 +23,39 @@
             }
           </p>
 
-          <p class="pane-clarifications__label" [id]="roundId(r, 'questions')">Questions</p>
-          <ol class="pane-clarifications__questions" [attr.aria-labelledby]="roundId(r, 'questions')">
-            @for (q of r.questions; track $index) {
-              <li class="pane-clarifications__question">
-                <span class="pane-clarifications__question-text">{{ q.question }}</span>
-                @switch (q.kind) {
-                  @case ('structured') {
-                    @if (r.open) {
-                      <ng-container *ngTemplateOutlet="full; context: { $implicit: q, nested: false }" />
-                    } @else {
-                      <span class="pane-clarifications__option pane-clarifications__option--recommended">
-                        <span aria-hidden="true">✅ </span><span class="sr-only">Recommended: </span>{{ q.recommended.letter }}) {{ q.recommended.text }}
-                      </span>
-                      <details class="pane-clarifications__disclosure">
-                        <summary>Details<span class="sr-only"> for question {{ $index + 1 }}</span></summary>
-                        <ng-container *ngTemplateOutlet="full; context: { $implicit: q, nested: true }" />
-                      </details>
+          @if (r.questions.length > 0) {
+            <p class="pane-clarifications__label" [id]="roundId(r, 'questions')">Questions</p>
+            <ol class="pane-clarifications__questions" [attr.aria-labelledby]="roundId(r, 'questions')">
+              @for (q of r.questions; track $index) {
+                <li class="pane-clarifications__question">
+                  <span class="pane-clarifications__question-text">{{ q.question }}</span>
+                  @switch (q.kind) {
+                    @case ('structured') {
+                      @if (r.open) {
+                        <ng-container *ngTemplateOutlet="full; context: { $implicit: q, nested: false }" />
+                      } @else {
+                        <span class="pane-clarifications__option pane-clarifications__option--recommended">
+                          <span aria-hidden="true">✅ </span><span class="sr-only">Recommended: </span>{{ q.recommended.letter }}) {{ q.recommended.text }}
+                        </span>
+                        <details class="pane-clarifications__disclosure">
+                          <summary>Details<span class="sr-only"> for question {{ $index + 1 }}</span></summary>
+                          <ng-container *ngTemplateOutlet="full; context: { $implicit: q, nested: true }" />
+                        </details>
+                      }
+                    }
+                    @case ('legacy') {
+                      @if (q.context) {
+                        <span class="pane-clarifications__secondary">{{ q.context }}</span>
+                      }
+                      @if (q.recommendation) {
+                        <span class="pane-clarifications__secondary"><strong>Recommended:</strong> {{ q.recommendation }}</span>
+                      }
                     }
                   }
-                  @case ('legacy') {
-                    @if (q.context) {
-                      <span class="pane-clarifications__secondary">{{ q.context }}</span>
-                    }
-                    @if (q.recommendation) {
-                      <span class="pane-clarifications__secondary"><strong>Recommended:</strong> {{ q.recommendation }}</span>
-                    }
-                  }
-                }
-              </li>
-            }
-          </ol>
+                </li>
+              }
+            </ol>
+          }
 
           @if (r.input.length > 0) {
             <p class="pane-clarifications__label" [id]="roundId(r, 'input')">Input</p>
@@ -100,6 +102,72 @@
                         >{{ p.shortRange }}</span>
                       }
                     }
+                  }
+                </li>
+              }
+            </ul>
+          }
+
+          @if (r.decisions.length > 0) {
+            <p class="pane-clarifications__label" [id]="roundId(r, 'decisions')">{{
+              r.questions.length > 0 ? 'Triage also decided' : 'Triage decided'
+            }}</p>
+            <ul class="pane-clarifications__decisions" [attr.aria-labelledby]="roundId(r, 'decisions')">
+              @for (d of r.decisions; track $index; let n = $index) {
+                <li class="pane-clarifications__decision">
+                  <div>
+                    <span class="pane-clarifications__question-text">{{ d.question }}</span>
+                    @if (d.groundLabel; as groundLabel) {
+                      <span class="pane-clarifications__ground">{{ groundLabel }}</span>
+                    }
+                  </div>
+                  <!-- Untrusted model output: interpolated as text, never bound as HTML. -->
+                  <div class="pane-clarifications__decision-body">
+                    @for (b of d.blocks; track $index) {
+                      @switch (b.type) {
+                        @case ('table') {
+                          <div
+                            class="pane-clarifications__table-wrap"
+                            role="region"
+                            tabindex="0"
+                            [attr.aria-label]="'Decision ' + (n + 1) + ' table'"
+                          >
+                            <table class="pane-clarifications__table">
+                              <caption class="sr-only">Decision {{ n + 1 }}</caption>
+                              <thead>
+                                <tr>
+                                  @for (h of b.header; track $index) {
+                                    <th scope="col">{{ h }}</th>
+                                  }
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (row of b.rows; track $index) {
+                                  <tr>
+                                    @for (cell of row; track $index) {
+                                      <td>{{ cell }}</td>
+                                    }
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                        }
+                        @default {
+                          <p class="pane-clarifications__lines">{{ b.text }}</p>
+                        }
+                      }
+                    }
+                  </div>
+                  @if (d.evidence.length > 0) {
+                    <details class="pane-clarifications__disclosure">
+                      <summary>Evidence ({{ d.evidence.length }})<span class="sr-only"> for decision {{ n + 1 }}</span></summary>
+                      <ul class="pane-clarifications__evidence">
+                        @for (e of d.evidence; track $index) {
+                          <li>{{ e }}</li>
+                        }
+                      </ul>
+                    </details>
                   }
                 </li>
               }

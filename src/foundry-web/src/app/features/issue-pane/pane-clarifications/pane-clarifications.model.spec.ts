@@ -1,5 +1,5 @@
-import { AwaitingInputDetails, Clarification, InputQuestion, IssueDetail } from '../../issues/issue.model';
-import { buildClarifications, questionView } from './pane-clarifications.model';
+import { AwaitingInputDetails, Clarification, ClarificationDecision, InputQuestion, IssueDetail } from '../../issues/issue.model';
+import { buildClarifications, decisionBlocks, questionView } from './pane-clarifications.model';
 
 const ASKED_AT = '2026-02-01T12:00:00Z';
 const NOW = Date.parse('2026-02-03T13:00:00Z');
@@ -334,5 +334,139 @@ describe('questionView', () => {
 
     // Assert
     expect(view).toEqual({ kind: 'legacy', question: 'Which API?', context: null, recommendation: null });
+  });
+});
+
+describe('triage decisions', () => {
+  const decision: ClarificationDecision = {
+    question: 'Which retry cap?',
+    decision: 'Three attempts.',
+    ground: 'settled_business',
+    evidence: ['src/Retry.cs:8 caps at three'],
+  };
+
+  function decided(overrides: Partial<Clarification> = {}): Clarification {
+    return round({ questions: [], decisions: [decision], ...overrides });
+  }
+
+  it('marks a round with decisions and no questions decided, even though it has no input', () => {
+    // Act
+    const [view] = buildClarifications(detail([decided()], 'awaiting_input', awaiting()), 'github', NOW);
+
+    // Assert
+    expect(view.status).toBe('decided');
+    expect(view.statusLabel).toBe('Triage decided');
+    expect(view.open).toBeNull();
+  });
+
+  it.each([
+    ['open', null, null],
+    ['answered', [{ kind: 'comments', text: 'ok' }], '2026-02-01T14:00:00Z'],
+    ['unanswered', [{ kind: 'continuedWithoutAnswer' }], '2026-02-01T14:00:00Z'],
+  ] as const)('keeps a round with questions and decisions %s', (expected, input, answeredAt) => {
+    // Act
+    const [view] = buildClarifications(
+      detail([round({ decisions: [decision], input: input === null ? null : [...input], answeredAt })]),
+      'github',
+      NOW,
+    );
+
+    // Assert
+    expect(view.status).toBe(expected);
+  });
+
+  it('gives a round from a server without decisions an empty decision list', () => {
+    // Act
+    const [view] = buildClarifications(detail([round()]), 'github', NOW);
+
+    // Assert
+    expect(view.decisions).toEqual([]);
+  });
+
+  it('maps each decision with its ground label, blocks and evidence', () => {
+    // Act
+    const [view] = buildClarifications(detail([decided()]), 'github', NOW);
+
+    // Assert
+    expect(view.decisions).toEqual([
+      {
+        question: 'Which retry cap?',
+        ground: 'settled_business',
+        groundLabel: 'Settled by existing behaviour',
+        blocks: [{ type: 'lines', text: 'Three attempts.' }],
+        evidence: ['src/Retry.cs:8 caps at three'],
+      },
+    ]);
+  });
+
+  it('labels an implementation-detail decision', () => {
+    // Act
+    const [view] = buildClarifications(detail([decided({ decisions: [{ ...decision, ground: 'implementation_detail' }] })]), 'github', NOW);
+
+    // Assert
+    expect(view.decisions[0].groundLabel).toBe('Implementation detail');
+  });
+
+  it('omits the label of a ground this dashboard does not know', () => {
+    // Arrange
+    const future = { ...decision, ground: 'future_ground' } as unknown as ClarificationDecision;
+
+    // Act
+    const [view] = buildClarifications(detail([decided({ decisions: [future] })]), 'github', NOW);
+
+    // Assert
+    expect(view.decisions[0].groundLabel).toBeNull();
+  });
+});
+
+describe('decisionBlocks', () => {
+  it('turns consecutive pipe lines with a separator row into a table without the separator', () => {
+    // Act
+    const blocks = decisionBlocks('| State | Cap |\n|---|:---:|\n| queued | 3 |\n| failed | 0 |');
+
+    // Assert
+    expect(blocks).toEqual([{ type: 'table', header: ['State', 'Cap'], rows: [['queued', '3'], ['failed', '0']] }]);
+  });
+
+  it('keeps a table whose rows disagree on their column count as lines', () => {
+    // Arrange
+    const text = '| State | Cap |\n|---|---|\n| queued | 3 | extra |';
+
+    // Act
+    const blocks = decisionBlocks(text);
+
+    // Assert
+    expect(blocks).toEqual([{ type: 'lines', text }]);
+  });
+
+  it('keeps pipe lines without a separator row as lines', () => {
+    // Arrange
+    const text = '| State | Cap |\n| queued | 3 |';
+
+    // Act
+    const blocks = decisionBlocks(text);
+
+    // Assert
+    expect(blocks).toEqual([{ type: 'lines', text }]);
+  });
+
+  it('keeps plain text as one block of lines', () => {
+    // Act
+    const blocks = decisionBlocks('Three attempts.\nThen fail.');
+
+    // Assert
+    expect(blocks).toEqual([{ type: 'lines', text: 'Three attempts.\nThen fail.' }]);
+  });
+
+  it('splits text around a table into lines, table, lines', () => {
+    // Act
+    const blocks = decisionBlocks('Caps per state:\n| State | Cap |\n| --- | --- |\n| queued | 3 |\nOthers stay uncapped.');
+
+    // Assert
+    expect(blocks).toEqual([
+      { type: 'lines', text: 'Caps per state:' },
+      { type: 'table', header: ['State', 'Cap'], rows: [['queued', '3']] },
+      { type: 'lines', text: 'Others stay uncapped.' },
+    ]);
   });
 });

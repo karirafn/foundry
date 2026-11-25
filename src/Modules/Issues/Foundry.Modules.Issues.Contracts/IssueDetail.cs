@@ -29,12 +29,39 @@ public sealed record IssueDetail(
 /// One round of the issue's clarification log (ADR 0096), oldest first in <see cref="IssueDetail.Clarifications"/>:
 /// the questions a run asked and when and, once the round closed, the input that answered it and when it arrived.
 /// <paramref name="Input"/> and <paramref name="AnsweredAt"/> are both <see langword="null"/> while the round is open.
+/// <paramref name="Decisions"/> are the details triage settled itself in the round (ADR 0123); a round where triage
+/// only decided has no questions, no input, and its decision time as <paramref name="AskedAt"/>.
 /// </summary>
 public sealed record ClarificationDetails(
     IReadOnlyList<InputQuestion> Questions,
     IReadOnlyList<InputPartDetails>? Input,
     DateTimeOffset AskedAt,
-    DateTimeOffset? AnsweredAt);
+    DateTimeOffset? AnsweredAt,
+    IReadOnlyList<ClarificationDecisionDetails> Decisions);
+
+/// <summary>
+/// A detail triage settled itself (ADR 0123). <paramref name="Ground"/> is <c>settled_business</c> or
+/// <c>implementation_detail</c>. The question, decision and evidence are untrusted model output, so they render as
+/// text, never as HTML.
+/// </summary>
+public sealed record ClarificationDecisionDetails(
+    string Question,
+    string Decision,
+    string Ground,
+    IReadOnlyList<string> Evidence)
+{
+    public const string SettledBusinessGround = "settled_business";
+    public const string ImplementationDetailGround = "implementation_detail";
+
+    public bool Equals(ClarificationDecisionDetails? other) =>
+        other is not null
+        && Question == other.Question
+        && Decision == other.Decision
+        && Ground == other.Ground
+        && Evidence.SequenceEqual(other.Evidence);
+
+    public override int GetHashCode() => HashCode.Combine(Question, Decision, Ground, Evidence.Count);
+}
 
 /// <summary>One part of a clarification round's input, as the dashboard renders it.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]

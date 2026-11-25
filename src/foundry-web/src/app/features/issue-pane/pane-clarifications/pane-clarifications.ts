@@ -111,7 +111,9 @@ export class PaneClarificationsComponent {
         return 'warning';
       case 'answered':
         return 'success';
-      default:
+      case 'decided':
+        return 'neutral';
+      case 'unanswered':
         return 'neutral';
     }
   }
@@ -127,7 +129,11 @@ function announcementFor(rounds: readonly ClarificationRoundView[]): string {
       return `Clarification round ${last.number} opened.`;
     case 'answered':
       return `Clarification round ${last.number} answered.`;
-    default:
+    case 'decided': {
+      const count = last.decisions.length;
+      return `Triage decided ${count} ${count === 1 ? 'question' : 'questions'} in round ${last.number}.`;
+    }
+    case 'unanswered':
       return `Clarification round ${last.number} continued without an answer.`;
   }
 }
