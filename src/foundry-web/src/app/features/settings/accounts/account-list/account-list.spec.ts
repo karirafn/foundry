@@ -11,6 +11,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -24,6 +25,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   tokenStatus: 'absent',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -43,6 +45,7 @@ const MOCK_ACCOUNT_INVALID: AccountSummary = {
   name: 'rejected-github',
   tokenStatus: 'invalid',
   tokenInvalidSince: '2026-11-12T15:04:05Z',
+  nonConformingToken: null,
 };
 
 const FIVE_NAMESPACES = ['octo-org', 'acme/web', 'acme', 'acme/platform', 'zeta'];

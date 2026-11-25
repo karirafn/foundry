@@ -42,7 +42,8 @@ public sealed class WhenProviderMismatches : IAsyncDisposable
             MissingScopes: [],
             DetectedProvider: "github",
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
 
         await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithOverrides(services =>
         {

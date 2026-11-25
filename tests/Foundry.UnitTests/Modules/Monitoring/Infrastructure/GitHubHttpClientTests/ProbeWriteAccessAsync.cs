@@ -25,6 +25,7 @@ public sealed class ProbeWriteAccessAsync
     private static readonly (HttpStatusCode, string) Refused = (HttpStatusCode.Forbidden, string.Empty);
     private static readonly (HttpStatusCode, string) DefaultBranch = (HttpStatusCode.OK, """{"default_branch":"main"}""");
     private static readonly (HttpStatusCode, string) ReadGranted = (HttpStatusCode.OK, "[]");
+    private static readonly (HttpStatusCode, string) ActionsGranted = (HttpStatusCode.NotFound, string.Empty);
 
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
@@ -45,7 +46,7 @@ public sealed class ProbeWriteAccessAsync
     {
         // Arrange
         SequentialFakeHandler handler = new(
-            [Granted, Granted, Granted, Granted, Granted, DefaultBranch, ReadGranted, ReadGranted]);
+            [Granted, Granted, Granted, Granted, Granted, DefaultBranch, ReadGranted, ActionsGranted]);
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act
@@ -61,7 +62,7 @@ public sealed class ProbeWriteAccessAsync
     {
         // Arrange
         SequentialFakeHandler handler = new(
-            [Granted, Granted, Granted, Granted, Granted, DefaultBranch, ReadGranted, ReadGranted]);
+            [Granted, Granted, Granted, Granted, Granted, DefaultBranch, ReadGranted, ActionsGranted]);
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act
@@ -77,7 +78,7 @@ public sealed class ProbeWriteAccessAsync
             "POST /repos/owner/repo/hooks",
             "GET /repos/owner/repo",
             "GET /repos/owner/repo/commits/main/statuses?per_page=1",
-            "GET /repos/owner/repo/actions/runs?per_page=1",
+            "POST /repos/owner/repo/actions/jobs/1/rerun",
         ]);
     }
 
@@ -86,7 +87,7 @@ public sealed class ProbeWriteAccessAsync
     {
         // Arrange
         SequentialFakeHandler handler = new(
-            [Granted, Granted, Granted, Refused, Refused, DefaultBranch, ReadGranted, ReadGranted]);
+            [Granted, Granted, Granted, Refused, Refused, DefaultBranch, ReadGranted, ActionsGranted]);
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act
@@ -103,7 +104,7 @@ public sealed class ProbeWriteAccessAsync
     {
         // Arrange
         SequentialFakeHandler handler = new(
-            [Refused, Granted, Granted, Granted, Granted, DefaultBranch, ReadGranted, ReadGranted]);
+            [Refused, Granted, Granted, Granted, Granted, DefaultBranch, ReadGranted, ActionsGranted]);
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act

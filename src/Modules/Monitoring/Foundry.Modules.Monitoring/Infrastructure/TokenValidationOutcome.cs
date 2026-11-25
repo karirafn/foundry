@@ -15,6 +15,12 @@ internal abstract record TokenValidationOutcome
 
     internal sealed record ScopesUnverifiableOutcome(string AccountName, TokenExpiry TokenExpiry) : TokenValidationOutcome;
 
+    /// <summary>The token authenticates, but it is a kind of token Foundry does not accept.</summary>
+    internal sealed record WrongTokenKindOutcome(
+        string AccountName,
+        WrongTokenKind WrongKind,
+        TokenExpiry TokenExpiry) : TokenValidationOutcome;
+
     internal sealed record IdentityUnresolvedOutcome : TokenValidationOutcome;
 
     internal sealed record ProviderMismatchOutcome(string DetectedProvider) : TokenValidationOutcome;
@@ -30,6 +36,12 @@ internal abstract record TokenValidationOutcome
 
     internal static TokenValidationOutcome ScopesUnverifiable(string accountName, TokenExpiry tokenExpiry) =>
         new ScopesUnverifiableOutcome(accountName, tokenExpiry);
+
+    internal static TokenValidationOutcome TokenOfWrongKind(
+        string accountName,
+        WrongTokenKind wrongKind,
+        TokenExpiry tokenExpiry) =>
+        new WrongTokenKindOutcome(accountName, wrongKind, tokenExpiry);
 
     internal static TokenValidationOutcome IdentityUnresolved() =>
         new IdentityUnresolvedOutcome();

@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
-public sealed class ProbeActionsReadAsync
+public sealed class ProbeActionsWriteAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
 
@@ -35,13 +35,13 @@ public sealed class ProbeActionsReadAsync
             TimeProvider.System);
 
     private static Task<Result<WritePermissionProbeResult>> ProbeAsync(GitHubHttpClient sut) =>
-        sut.ProbeActionsReadAsync(ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+        sut.ProbeActionsWriteAsync(ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
 
     [Fact]
-    public async Task WhenProbing_RequestsActionsRunsEndpoint()
+    public async Task WhenProbing_PostsARerunOfAJobIdThatDoesNotExist()
     {
         // Arrange
-        FakeHandler handler = CreateHandler(HttpStatusCode.OK);
+        FakeHandler handler = CreateHandler(HttpStatusCode.NotFound);
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act
@@ -49,15 +49,15 @@ public sealed class ProbeActionsReadAsync
 
         // Assert
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
-        request.Method.ShouldBe(HttpMethod.Get);
-        request.RequestUri.ShouldNotBeNull().PathAndQuery.ShouldBe("/repos/owner/repo/actions/runs?per_page=1");
+        request.Method.ShouldBe(HttpMethod.Post);
+        request.RequestUri.ShouldNotBeNull().PathAndQuery.ShouldBe("/repos/owner/repo/actions/jobs/1/rerun");
     }
 
     [Fact]
-    public async Task WhenGitHubReturns200_ReturnsGranted()
+    public async Task WhenGitHubReturns404_ReturnsGranted()
     {
         // Arrange
-        GitHubHttpClient sut = CreateSut(CreateHandler(HttpStatusCode.OK));
+        GitHubHttpClient sut = CreateSut(CreateHandler(HttpStatusCode.NotFound));
 
         // Act
         Result<WritePermissionProbeResult> result = await ProbeAsync(sut);
@@ -99,7 +99,9 @@ public sealed class ProbeActionsReadAsync
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.Created)]
+    [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.InternalServerError)]
     [InlineData(HttpStatusCode.UnprocessableEntity)]
     public async Task WhenGitHubReturnsAnyOtherStatus_ReturnsFailure(HttpStatusCode statusCode)
@@ -122,7 +124,7 @@ public sealed class ProbeActionsReadAsync
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act
-        Result<WritePermissionProbeResult> result = await sut.ProbeActionsReadAsync(
+        Result<WritePermissionProbeResult> result = await sut.ProbeActionsWriteAsync(
             new Uri("http://api.github.com"), ValidSlug, "ghp_token", CancellationToken.None);
 
         // Assert

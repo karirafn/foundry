@@ -104,6 +104,8 @@ internal sealed class AccountTokenExpiryBackfillService : PeriodicBackgroundServ
                 authenticated.TokenExpiry,
             Result<TokenValidationOutcome>.Success { Value: TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable } =>
                 unverifiable.TokenExpiry,
+            Result<TokenValidationOutcome>.Success { Value: TokenValidationOutcome.WrongTokenKindOutcome wrongKind } =>
+                wrongKind.TokenExpiry,
             _ => null,
         };
 

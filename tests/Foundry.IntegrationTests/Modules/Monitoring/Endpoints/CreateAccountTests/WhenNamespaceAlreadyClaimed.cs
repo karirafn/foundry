@@ -134,7 +134,8 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -147,7 +148,7 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
         {
             if (StaticListingFakeHandler.IsProbePost(request))
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+                return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
             }
 
             if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)

@@ -587,26 +587,6 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenClassicTokenLacksAdministration_ReturnsFailureNamingTheAdminRole()
-    {
-        // Arrange
-        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
-        MissingWriteProber missingProber = new(WritePermission.Administration);
-        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: missingProber);
-        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
-
-        // Act
-        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
-        failure.Error.Message.ShouldBe(
-            "The token is missing the 'Admin role on the repository' permission required by Foundry.");
-    }
-
-    [Fact]
     public async Task WhenGitHubProbeReturnsMissingContents_ReturnsFailureNamingPermission()
     {
         // Arrange
@@ -916,6 +896,29 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTokenIsOfTheWrongKind_RejectsWithWrongTokenKind()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.WrongTokenKind,
+                AccountName: "octocat",
+                MissingScopes: []));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_" + "classic");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.WrongTokenKindCode);
+    }
+
+    [Fact]
     public async Task WhenAuthenticationFailed_RejectsWithInvalidToken()
     {
         // Arrange
@@ -1042,7 +1045,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: expiry,
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1060,7 +1064,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1081,7 +1086,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1103,7 +1109,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: MissingScopes,
                 DetectedProvider: DetectedProvider,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

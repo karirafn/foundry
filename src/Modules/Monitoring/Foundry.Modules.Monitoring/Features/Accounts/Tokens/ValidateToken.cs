@@ -27,6 +27,7 @@ internal static class ValidateToken
         internal const string Authenticated = "authenticated";
         internal const string AuthenticationFailed = "authenticationFailed";
         internal const string ScopesUnverifiable = "scopesUnverifiable";
+        internal const string WrongTokenKind = "wrongTokenKind";
         internal const string IdentityUnresolved = "identityUnresolved";
         internal const string ProviderMismatch = "providerMismatch";
     }
@@ -35,13 +36,15 @@ internal static class ValidateToken
 
     /// <param name="Expiry">The expiry the provider reported, kept for the account the token is set on.</param>
     /// <param name="TokenExpiry">The expiry as judged when the token was checked.</param>
+    /// <param name="WrongKind">Why the token is refused when <paramref name="Kind"/> is <c>wrongTokenKind</c>, such as <c>github-classic</c>.</param>
     internal sealed record Response(
         string Kind,
         string? AccountName,
         IReadOnlyList<string> MissingScopes,
         string? DetectedProvider,
         [property: JsonIgnore] Domain.ValueObjects.TokenExpiry Expiry,
-        TokenExpirySummary TokenExpiry);
+        TokenExpirySummary TokenExpiry,
+        string? WrongKind);
 
     internal sealed class Handler(
         GitHubHttpClient gitHubHttpClient,
@@ -73,6 +76,7 @@ internal static class ValidateToken
             {
                 TokenValidationOutcome.AuthenticatedOutcome auth => auth.TokenExpiry,
                 TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => unverifiable.TokenExpiry,
+                TokenValidationOutcome.WrongTokenKindOutcome wrongKind => wrongKind.TokenExpiry,
                 _ => new TokenExpiry.NotChecked(),
             };
             TokenExpirySummary summary = TokenExpirySummaries.From(expiry, now);
@@ -85,35 +89,48 @@ internal static class ValidateToken
                     MissingScopes: auth.MissingScopes,
                     DetectedProvider: null,
                     Expiry: expiry,
-                    TokenExpiry: summary),
+                    TokenExpiry: summary,
+                    WrongKind: null),
                 TokenValidationOutcome.AuthenticationFailedOutcome => new Response(
                     Kind: Kinds.AuthenticationFailed,
                     AccountName: null,
                     MissingScopes: [],
                     DetectedProvider: null,
                     Expiry: expiry,
-                    TokenExpiry: summary),
+                    TokenExpiry: summary,
+                    WrongKind: null),
                 TokenValidationOutcome.ScopesUnverifiableOutcome unverifiable => new Response(
                     Kind: Kinds.ScopesUnverifiable,
                     AccountName: unverifiable.AccountName,
                     MissingScopes: [],
                     DetectedProvider: null,
                     Expiry: expiry,
-                    TokenExpiry: summary),
+                    TokenExpiry: summary,
+                    WrongKind: null),
+                TokenValidationOutcome.WrongTokenKindOutcome wrongKind => new Response(
+                    Kind: Kinds.WrongTokenKind,
+                    AccountName: wrongKind.AccountName,
+                    MissingScopes: [],
+                    DetectedProvider: null,
+                    Expiry: expiry,
+                    TokenExpiry: summary,
+                    WrongKind: wrongKind.WrongKind.WireName()),
                 TokenValidationOutcome.IdentityUnresolvedOutcome => new Response(
                     Kind: Kinds.IdentityUnresolved,
                     AccountName: null,
                     MissingScopes: [],
                     DetectedProvider: null,
                     Expiry: expiry,
-                    TokenExpiry: summary),
+                    TokenExpiry: summary,
+                    WrongKind: null),
                 TokenValidationOutcome.ProviderMismatchOutcome mismatch => new Response(
                     Kind: Kinds.ProviderMismatch,
                     AccountName: null,
                     MissingScopes: [],
                     DetectedProvider: mismatch.DetectedProvider,
                     Expiry: expiry,
-                    TokenExpiry: summary),
+                    TokenExpiry: summary,
+                    WrongKind: null),
                 _ => throw new UnreachableException($"Unhandled outcome: {outcome.GetType().Name}"),
             };
         }

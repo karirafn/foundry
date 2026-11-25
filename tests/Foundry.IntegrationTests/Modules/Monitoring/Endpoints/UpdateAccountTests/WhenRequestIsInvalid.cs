@@ -45,7 +45,8 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
             MissingScopes: [],
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();

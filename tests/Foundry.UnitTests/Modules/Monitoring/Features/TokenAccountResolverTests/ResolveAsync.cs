@@ -431,7 +431,8 @@ public sealed class ResolveAsync : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -453,7 +454,8 @@ public sealed class ResolveAsync : IAsyncDisposable
                 MissingScopes: MissingScopes,
                 DetectedProvider: DetectedProvider,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

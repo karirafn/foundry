@@ -32,15 +32,16 @@ internal sealed class TokenKeyedValidateTokenStub(Dictionary<string, string> tok
             MissingScopes: [],
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }
 
 /// <summary>
 /// A fake HttpMessageHandler for the GitHub listing endpoint.
-/// Returns a fixed listing JSON for GET requests; returns 422 (Granted) for probe POSTs and 200 for
-/// the read probes so that permission probing passes by default.
+/// Returns a fixed listing JSON for GET requests; returns 422 (Granted) for probe POSTs, 404 (Granted)
+/// for the Actions probe and 200 for the read probes so that permission probing passes by default.
 /// </summary>
 internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string responseBody) : DelegatingHandler
 {
@@ -50,7 +51,7 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
     {
         if (IsProbePost(request))
         {
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
         }
 
         if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)
@@ -65,6 +66,15 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
         return Task.FromResult(response);
     }
 
+    /// <summary>
+    /// The status a probe POST gets when the token holds its permission: the Actions probe reruns a job that
+    /// does not exist, so GitHub answers 404; every other probe sends an invalid payload and gets 422.
+    /// </summary>
+    internal static HttpStatusCode GrantedProbeStatus(HttpRequestMessage request) =>
+        (request.RequestUri?.AbsolutePath ?? string.Empty).EndsWith("/actions/jobs/1/rerun", StringComparison.OrdinalIgnoreCase)
+            ? HttpStatusCode.NotFound
+            : HttpStatusCode.UnprocessableEntity;
+
     internal static bool IsProbePost(HttpRequestMessage request)
     {
         if (request.Method != HttpMethod.Post)
@@ -77,7 +87,8 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
             || path.EndsWith("/issues", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith("/pulls", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith("/rulesets", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith("/hooks", StringComparison.OrdinalIgnoreCase);
+            || path.EndsWith("/hooks", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/actions/jobs/1/rerun", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -97,7 +108,6 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
         {
             ["repos", _, _] => """{"default_branch":"main"}""",
             ["repos", _, _, "commits", _, "statuses"] => "[]",
-            ["repos", _, _, "actions", "runs"] => """{"total_count":0,"workflow_runs":[]}""",
             _ => null,
         };
 
@@ -117,7 +127,7 @@ internal sealed class StaticListingFakeHandler(HttpStatusCode statusCode, string
 /// <summary>
 /// A fake HttpMessageHandler for the GitHub listing endpoint.
 /// Returns a listing JSON keyed by the Bearer token in the Authorization header.
-/// Returns 422 (Granted) for probe POSTs and 200 for the read probes.
+/// Returns 422 (Granted) for probe POSTs, 404 (Granted) for the Actions probe and 200 for the read probes.
 /// Falls back to "[]" for unknown tokens on listing requests.
 /// </summary>
 internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> tokenToListing) : DelegatingHandler
@@ -128,7 +138,7 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
     {
         if (StaticListingFakeHandler.IsProbePost(request))
         {
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
         }
 
         if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)

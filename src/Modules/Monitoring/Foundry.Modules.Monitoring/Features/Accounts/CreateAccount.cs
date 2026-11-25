@@ -382,9 +382,7 @@ internal static partial class CreateAccount
 
             if (probeSuccess.Value is WritePermissionProbeResult.Missing missing)
             {
-                IReadOnlyList<string> missingKeys = TokenPermissions.GitHubMissingKeys(
-                    missing.Permissions,
-                    GitHubTokenKind.IsFineGrainedPat(token));
+                IReadOnlyList<string> missingKeys = TokenPermissions.GitHubMissingKeys(missing.Permissions);
                 IReadOnlyList<string> labels = TokenPermissions.LabelsOf(ProviderTypes.GitHub, missingKeys);
                 return new Outcome.Failure(CredentialErrors.MissingWritePermission(labels));
             }

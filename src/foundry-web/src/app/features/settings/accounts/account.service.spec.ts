@@ -16,6 +16,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -29,6 +30,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -1044,6 +1046,8 @@ describe('AccountService', () => {
       permissions: [{ label: 'Contents (read and write)', verification: 'probe' }, { label: 'Workflows (read and write)', verification: 'unverifiable' }],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
       resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
+      closingNote: null,
+      creationNote: null,
     };
 
     // Act
@@ -1067,6 +1071,8 @@ describe('AccountService', () => {
       permissions: [{ label: 'api', verification: 'scope' }],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
       resourceOwnerHint: null,
+      closingNote: null,
+      creationNote: null,
     };
 
     // Act
@@ -1090,6 +1096,8 @@ describe('AccountService', () => {
       permissions: [{ label: 'Contents (read and write)', verification: 'probe' }, { label: 'Workflows (read and write)', verification: 'unverifiable' }],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
       resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
+      closingNote: null,
+      creationNote: null,
     };
 
     // Act — first call fetches
@@ -1474,6 +1482,8 @@ describe('AccountService', () => {
       permissions: [{ label: 'Contents (read and write)', verification: 'probe' }, { label: 'Workflows (read and write)', verification: 'unverifiable' }],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
       resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
+      closingNote: null,
+      creationNote: null,
     };
     const gitlabRequirements: TokenRequirements = {
       providerType: 'gitlab',
@@ -1481,6 +1491,8 @@ describe('AccountService', () => {
       permissions: [{ label: 'api', verification: 'scope' }],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
       resourceOwnerHint: null,
+      closingNote: null,
+      creationNote: null,
     };
 
     // Act — fetch GitHub

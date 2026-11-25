@@ -6,18 +6,22 @@ const GITHUB_REQUIREMENTS: TokenRequirements = {
   providerType: 'github',
   tokenTypeLabel: 'GitHub fine-grained personal access token',
   permissions: [
+    { label: 'Repository access: Only select repositories', verification: 'not-checked' },
     { label: 'Contents (read and write)', verification: 'probe' },
     { label: 'Issues (read and write)', verification: 'probe' },
     { label: 'Pull requests (read and write)', verification: 'probe' },
     { label: 'Administration (read and write)', verification: 'probe' },
     { label: 'Webhooks (read and write)', verification: 'probe' },
     { label: 'Commit statuses (read)', verification: 'probe' },
-    { label: 'Actions (read)', verification: 'probe' },
+    { label: 'Actions (read and write)', verification: 'probe' },
     { label: 'Metadata (read)', verification: 'always-granted' },
     { label: 'Workflows (read and write)', verification: 'unverifiable' },
   ],
   creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write',
   resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner.',
+  closingNote:
+    "GitHub can't report a token's extra permissions, so Foundry can't check for any. Grant only the permissions listed here.",
+  creationNote: null,
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
@@ -29,6 +33,8 @@ const GITLAB_REQUIREMENTS: TokenRequirements = {
   ],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
   resourceOwnerHint: null,
+  closingNote: null,
+  creationNote: null,
 };
 
 function render(requirements: TokenRequirements, baseUrl = 'https://github.com', idPrefix = 'test'): HTMLElement {
@@ -161,5 +167,69 @@ describe('TokenRequirementsComponent', () => {
     // Assert
     expect(el.querySelector('.token-requirements__link')).toBeNull();
     expect(el.querySelector('.token-requirements__link-hint')?.textContent).toContain('Enter a Base URL above');
+  });
+  it('should note that a not-checked permission is not checked', () => {
+    // Arrange / Act
+    const item = itemFor(render(GITHUB_REQUIREMENTS), 'Repository access: Only select repositories');
+
+    // Assert
+    expect(item.querySelector('.token-requirements__note')?.textContent?.trim()).toBe('· not checked');
+  });
+
+  it('should render the closing note right after the list', () => {
+    // Arrange / Act
+    const el = render(GITHUB_REQUIREMENTS);
+
+    // Assert
+    const note = el.querySelector('.token-requirements__closing-note');
+    expect(note?.textContent?.trim()).toBe(GITHUB_REQUIREMENTS.closingNote);
+    expect(note?.previousElementSibling?.classList.contains('token-requirements__list')).toBe(true);
+    expect(note?.nextElementSibling?.classList.contains('token-requirements__explanation')).toBe(true);
+  });
+
+  it('should leave out the closing note when there is none', () => {
+    // Arrange / Act
+    const el = render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com');
+
+    // Assert
+    expect(el.querySelector('.token-requirements__closing-note')).toBeNull();
+  });
+
+  it('should leave out the explanation when only a not-checked permission cannot be verified', () => {
+    // Arrange
+    const requirements: TokenRequirements = {
+      ...GITHUB_REQUIREMENTS,
+      permissions: GITHUB_REQUIREMENTS.permissions.filter((permission) => permission.verification !== 'unverifiable'),
+    };
+
+    // Act
+    const el = render(requirements);
+
+    // Assert
+    expect(el.querySelector('.token-requirements__explanation')).toBeNull();
+  });
+
+  it('should render the creation note before the link and describe the link by it and the owner hint', () => {
+    // Arrange
+    const requirements: TokenRequirements = { ...GITHUB_REQUIREMENTS, creationNote: 'Choose Generate token.' };
+
+    // Act
+    const el = render(requirements, 'https://github.com', 'setup');
+
+    // Assert
+    const note = el.querySelector('.token-requirements__creation-note');
+    const link = el.querySelector('.token-requirements__link');
+    expect(note?.textContent?.trim()).toBe('Choose Generate token.');
+    expect(note?.id).toBe('setup-creation-note');
+    expect(note?.nextElementSibling).toBe(link);
+    expect(link?.getAttribute('aria-describedby')).toBe('setup-owner-hint setup-creation-note');
+  });
+
+  it('should leave the link undescribed when there is neither an owner hint nor a creation note', () => {
+    // Arrange / Act
+    const el = render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com');
+
+    // Assert
+    expect(el.querySelector('.token-requirements__link')?.hasAttribute('aria-describedby')).toBe(false);
   });
 });

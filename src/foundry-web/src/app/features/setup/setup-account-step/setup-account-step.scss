@@ -127,6 +127,11 @@ $text-warning: #d29922;
     align-items: center;
     display: inline-flex;
     gap: var(--fd-spacing-xs);
+
+    // A multi-line message keeps its dot on the first line.
+    &:has(.setup-account-step__validation-list) {
+      align-items: baseline;
+    }
   }
 
   &__validation-dot {
@@ -160,6 +165,24 @@ $text-warning: #d29922;
 
     &--error {
       color: var(--fd-text-error);
+    }
+  }
+
+  &__validation-list {
+    margin: 2px 0 0;
+    padding-inline-start: var(--fd-spacing-md);
+  }
+
+  &__validation-link {
+    color: var(--fd-text-link);
+    display: inline-block;
+    margin-inline-start: var(--fd-spacing-xs);
+    overflow-wrap: anywhere;
+
+    &:focus-visible {
+      border-radius: var(--fd-radius-sm);
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
     }
   }
 

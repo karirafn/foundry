@@ -7,7 +7,8 @@ namespace Foundry.Modules.Monitoring.Contracts;
 /// confirmed; it is null unless <see cref="TokenStatus"/> is <c>invalid</c>. <see cref="TokenExpiry"/> is the
 /// account token's expiry as last read from the provider, judged when the summary was built.
 /// <see cref="DeniedRepositories"/> lists the monitored repositories resolving to this account whose
-/// write-probe verdict is <c>Denied</c>.
+/// write-probe verdict is <c>Denied</c>. <see cref="NonConformingToken"/> says why the token as a whole fails
+/// Foundry's requirements, or is null when it does not.
 /// </summary>
 public sealed record CredentialSummary(
     Guid Id,
@@ -19,4 +20,5 @@ public sealed record CredentialSummary(
     IReadOnlyList<string> Namespaces,
     DateTimeOffset? TokenInvalidSince,
     TokenExpirySummary TokenExpiry,
-    IReadOnlyList<DeniedRepositorySummary> DeniedRepositories);
+    IReadOnlyList<DeniedRepositorySummary> DeniedRepositories,
+    NonConformingTokenSummary? NonConformingToken);

@@ -29,7 +29,8 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
             MissingScopes: [],
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }
@@ -48,7 +49,7 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
     {
         if (StaticListingFakeHandler.IsProbePost(request))
         {
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
         }
 
         if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)

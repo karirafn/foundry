@@ -29,7 +29,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.ApplyBranchRules
 
 public sealed class WhenRepositoryExists : IAsyncDisposable
 {
-    private const string AccountToken = "ghp_account_token";
+    private const string AccountToken = "github_pat_account_token";
 
     private readonly ProviderState _state = new();
     private readonly FoundryWebAppFactory _factory;
@@ -185,7 +185,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
         Guid otherAccountId = await AccountSeeder.SeedGitHubAccountAsync(
             _factory,
             name: "Other Org",
-            token: "ghp_other");
+            token: "github_pat_other");
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, otherAccountId, "other");
 
         // Act

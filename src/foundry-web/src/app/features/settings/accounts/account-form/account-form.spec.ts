@@ -14,6 +14,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -27,6 +28,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -36,6 +38,7 @@ const VALID_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -44,6 +47,7 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -52,6 +56,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   missingScopes: ['repo', 'workflow'],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -60,6 +65,7 @@ const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -68,6 +74,7 @@ const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -76,6 +83,7 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: 'gitlab',
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -91,6 +99,8 @@ const GITHUB_REQUIREMENTS: TokenRequirements = {
   ],
   creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
   resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
+  closingNote: null,
+  creationNote: null,
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
@@ -102,6 +112,8 @@ const GITLAB_REQUIREMENTS: TokenRequirements = {
   ],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
   resourceOwnerHint: null,
+  closingNote: null,
+  creationNote: null,
 };
 
 class FakeAccountService {
@@ -557,7 +569,8 @@ describe('AccountFormComponent', () => {
     const dot = el.querySelector('.account-form__validation-dot--warning');
     expect(dot).toBeTruthy();
     const msg = el.querySelector('.account-form__validation-message--warning');
-    expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
+    expect(msg?.textContent).toContain('Missing permissions:');
+    expect(Array.from(msg?.querySelectorAll('li') ?? [], (li) => li.textContent?.trim())).toEqual(['repo', 'workflow']);
   });
 
   // Cycle 27: identityUnresolved state
@@ -998,7 +1011,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, wrongKind: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1092,7 +1105,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, wrongKind: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1194,6 +1207,7 @@ describe('AccountFormComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -1736,9 +1750,60 @@ describe('AccountFormComponent', () => {
     const dot = el.querySelector('.account-form__validation-dot--warning');
     expect(dot).toBeTruthy();
     const msg = el.querySelector('.account-form__validation-message--warning');
-    expect(msg?.textContent).toContain('Missing required scopes: repo, workflow');
+    expect(msg?.textContent).toContain('Missing permissions:');
+    expect(Array.from(msg?.querySelectorAll('li') ?? [], (li) => li.textContent?.trim())).toEqual(['repo', 'workflow']);
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
+  });
+
+  it('should show the classic-token error with a create link and disable save when kind is wrongTokenKind', async () => {
+    // Arrange
+    const wrongKind: TokenValidationResult = { ...VALID_RESULT, kind: 'wrongTokenKind', wrongKind: 'github-classic' };
+    const { el, fixture } = setup({ account: null, validationResult: wrongKind });
+    await fixture.whenStable();
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'classic_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
+    expect(el.querySelector('[role="status"] .account-form__validation-dot--error')).toBeTruthy();
+    expect(msg?.querySelector('.sr-only')?.textContent).toBe('Error: ');
+    expect(msg?.textContent).toContain(
+      'This is a classic token. Foundry needs a fine-grained personal access token (it starts with github_pat_).',
+    );
+    const link = msg?.querySelector<HTMLAnchorElement>('a.account-form__validation-link');
+    expect(link?.getAttribute('href')).toBe(
+      'https://github.com/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
+    );
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Create a fine-grained token on github.com ↗(opens in a new tab)');
+    expect((el.querySelector('.account-form__save-btn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('should fall back to the generic fine-grained message for an unknown wrongKind', () => {
+    // Arrange
+    const wrongKind: TokenValidationResult = { ...VALID_RESULT, kind: 'wrongTokenKind', wrongKind: 'something-new' };
+    const { el, fixture } = setup({ account: null, validationResult: wrongKind });
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    tokenInput.value = 'odd_token';
+    tokenInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    tokenInput.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    // Assert
+    const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
+    expect(msg?.textContent).toContain('Foundry needs a fine-grained personal access token.');
+    expect(msg?.textContent).not.toContain('classic');
   });
 
   // Cycle K4: providerMismatch — shows error dot with named detected provider, Save disabled
@@ -1801,6 +1866,7 @@ describe('AccountFormComponent', () => {
         missingScopes: [],
         accountName: null,
         detectedProvider: null,
+        wrongKind: null,
         tokenExpiry: { status: 'notChecked', expiresAt: null },
       },
     });
@@ -2042,6 +2108,7 @@ describe('AccountFormComponent', () => {
     tokenStatus: 'unreadable',
     deniedRepositories: [],
     tokenInvalidSince: null,
+    nonConformingToken: null,
     namespaces: [],
     tokenExpiry: { status: 'notChecked', expiresAt: null },
   };
@@ -2159,6 +2226,7 @@ describe('AccountFormComponent', () => {
       name: 'rejected-account',
       tokenStatus: 'invalid',
       tokenInvalidSince: INVALID_SINCE,
+      nonConformingToken: null,
     };
 
     it('should render the invalid callout naming the provider and the medium-format date in a time element', () => {

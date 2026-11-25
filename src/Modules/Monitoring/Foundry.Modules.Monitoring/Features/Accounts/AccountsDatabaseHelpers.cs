@@ -3,6 +3,8 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -53,7 +55,16 @@ internal static class AccountsDatabaseHelpers
                     ? invalid.DetectedAt
                     : null,
             TokenExpirySummaries.From(credential.TokenExpiry, now),
-            deniedRepositories);
+            deniedRepositories,
+            NonConformingTokenOf(credential));
+
+    // Read from the stored token itself, so replacing the token clears it with nothing else to update.
+    private static NonConformingTokenSummary? NonConformingTokenOf(Credential credential) =>
+        credential is GitHubCredential
+            && credential.TokenUsability is TokenUsability.Usable usable
+            && GitHubTokenKind.WrongKindOf(usable.Token) is WrongTokenKind wrongKind
+                ? new NonConformingTokenSummary(wrongKind.WireName(), [], [])
+                : null;
 
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,

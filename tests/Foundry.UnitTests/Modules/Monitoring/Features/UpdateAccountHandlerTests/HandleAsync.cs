@@ -661,6 +661,28 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTokenIsOfTheWrongKind_RejectsWithWrongTokenKind()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new KindValidateTokenHandler(
+                ValidateToken.Kinds.WrongTokenKind,
+                AccountName: "updated-user",
+                MissingScopes: []));
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_" + "classic");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.WrongTokenKindCode);
+    }
+
+    [Fact]
     public async Task WhenAuthenticationFailed_RejectsWithInvalidToken()
     {
         // Arrange
@@ -982,7 +1004,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1004,7 +1027,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: MissingScopes,
                 DetectedProvider: DetectedProvider,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1167,7 +1191,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 MissingScopes: [],
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

@@ -12,6 +12,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -21,6 +22,7 @@ const VALID_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -29,6 +31,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   missingScopes: ['repo', 'workflow'],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -37,6 +40,7 @@ const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -52,6 +56,8 @@ const GITHUB_REQUIREMENTS: TokenRequirements = {
   ],
   creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write',
   resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner. To reach an organization\'s repositories, choose that organization as the token\'s resource owner when creating the token.',
+  closingNote: null,
+  creationNote: null,
 };
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
@@ -63,6 +69,8 @@ const GITLAB_REQUIREMENTS: TokenRequirements = {
   ],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
   resourceOwnerHint: null,
+  closingNote: null,
+  creationNote: null,
 };
 
 class FakeAccountService {

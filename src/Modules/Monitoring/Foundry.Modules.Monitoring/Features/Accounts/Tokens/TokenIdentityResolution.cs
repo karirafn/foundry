@@ -47,6 +47,7 @@ internal static class TokenIdentityResolution
             ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
             ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
             ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
+            ValidateToken.Kinds.WrongTokenKind => CredentialErrors.WrongTokenKind,
             ValidateToken.Kinds.ProviderMismatch => CredentialErrors.ProviderMismatch(response.DetectedProvider ?? string.Empty),
             _ => CredentialErrors.InvalidToken,
         };

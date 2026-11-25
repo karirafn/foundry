@@ -1232,6 +1232,7 @@ export interface components {
             tokenInvalidSince: null | string;
             tokenExpiry: components["schemas"]["TokenExpirySummary"];
             deniedRepositories: components["schemas"]["DeniedRepositorySummary"][];
+            nonConformingToken: null | components["schemas"]["NonConformingTokenSummary"];
         };
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -1498,6 +1499,11 @@ export interface components {
             /** Format: uuid */
             holderCredentialId: string;
             holderName: string;
+        };
+        NonConformingTokenSummary: {
+            wrongKind: null | string;
+            notAllowed: string[];
+            broadReach: string[];
         };
         PackageSourceCredentialCommandsRequestBody: {
             username: null | string;
@@ -1820,6 +1826,8 @@ export interface components {
             permissions: components["schemas"]["TokenPermissionRequirement"][];
             creationUrlTemplate: string;
             resourceOwnerHint: null | string;
+            closingNote: null | string;
+            creationNote: null | string;
         };
         TokenTotal: {
             /** Format: int64 */
@@ -1967,6 +1975,7 @@ export interface components {
             missingScopes: string[];
             detectedProvider: null | string;
             tokenExpiry: components["schemas"]["TokenExpirySummary"];
+            wrongKind: null | string;
         };
         WebhookRegistrationOutcome: {
             kind: string;

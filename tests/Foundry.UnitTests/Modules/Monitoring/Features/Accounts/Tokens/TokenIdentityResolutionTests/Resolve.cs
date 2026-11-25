@@ -19,7 +19,7 @@ public sealed class Resolve
         IReadOnlyList<string> missingScopes,
         string? detectedProvider,
         TokenExpiry? expiry = null) =>
-        new(kind, accountName, missingScopes, detectedProvider, expiry ?? new TokenExpiry.NotChecked(), new TokenExpirySummary("notChecked", null));
+        new(kind, accountName, missingScopes, detectedProvider, expiry ?? new TokenExpiry.NotChecked(), new TokenExpirySummary("notChecked", null), WrongKind: null);
 
     [Fact]
     public void WhenAuthenticated_CarriesTheTokenExpiry()
@@ -60,6 +60,22 @@ public sealed class Resolve
 
         // Assert
         result.ValueOrThrow().Name.Value.ShouldBe("group-bot");
+    }
+
+    [Fact]
+    public void WhenTokenIsOfTheWrongKind_ReturnsWrongTokenKind()
+    {
+        // Arrange
+        ValidateToken.Response response = Response(ValidateToken.Kinds.WrongTokenKind, "octocat", [], null) with
+        {
+            WrongKind = "github-classic",
+        };
+
+        // Act
+        Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
+
+        // Assert
+        ErrorOf(result).ShouldBe(CredentialErrors.WrongTokenKind);
     }
 
     [Fact]

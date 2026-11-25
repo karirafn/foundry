@@ -106,6 +106,7 @@ public sealed class TokenValidationOutcomeTests
             TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()),
             TokenValidationOutcome.AuthenticationFailed(),
             TokenValidationOutcome.ScopesUnverifiable("octocat", new TokenExpiry.NotChecked()),
+            TokenValidationOutcome.TokenOfWrongKind("octocat", WrongTokenKind.GitHubClassic, new TokenExpiry.NotChecked()),
             TokenValidationOutcome.IdentityUnresolved(),
             TokenValidationOutcome.ProviderMismatch("gitlab"),
         ];
@@ -118,6 +119,7 @@ public sealed class TokenValidationOutcomeTests
                 TokenValidationOutcome.AuthenticatedOutcome => "authenticated",
                 TokenValidationOutcome.AuthenticationFailedOutcome => "authenticationFailed",
                 TokenValidationOutcome.ScopesUnverifiableOutcome => "scopesUnverifiable",
+                TokenValidationOutcome.WrongTokenKindOutcome => "wrongTokenKind",
                 TokenValidationOutcome.IdentityUnresolvedOutcome => "identityUnresolved",
                 TokenValidationOutcome.ProviderMismatchOutcome => "providerMismatch",
                 _ => throw new InvalidOperationException($"Unhandled: {outcome.GetType().Name}"),

@@ -34,8 +34,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 /// </summary>
 public sealed class WhenAccountTokenIsRotated : IAsyncDisposable
 {
-    private const string AccountToken = "ghp_account_token";
-    private const string RotatedToken = "ghp_rotated_token";
+    private const string AccountToken = "github_pat_account_token";
+    private const string RotatedToken = "github_pat_rotated_token";
 
     private const string ListingJson = """
         [

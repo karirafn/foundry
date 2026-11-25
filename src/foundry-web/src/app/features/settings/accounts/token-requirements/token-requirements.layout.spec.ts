@@ -7,6 +7,7 @@ const REQUIREMENTS: TokenRequirements = {
   providerType: 'github',
   tokenTypeLabel: 'GitHub fine-grained personal access token',
   permissions: [
+    { label: 'Repository access: Only select repositories', verification: 'not-checked' },
     { label: 'Contents (read and write)', verification: 'probe' },
     { label: 'Administration (read and write)', verification: 'probe' },
     { label: 'Metadata (read)', verification: 'always-granted' },
@@ -14,6 +15,9 @@ const REQUIREMENTS: TokenRequirements = {
   ],
   creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry',
   resourceOwnerHint: 'Fine-grained tokens are bound to a single resource owner.',
+  closingNote:
+    "GitHub can't report a token's extra permissions, so Foundry can't check for any. Grant only the permissions listed here.",
+  creationNote: null,
 };
 
 @Component({
@@ -66,4 +70,23 @@ describe('token requirements layout', () => {
     expect(note.top).toBeGreaterThanOrEqual(label.bottom - 1);
     expect(overflowing).toEqual([]);
   });
+
+  for (const width of [240, 360]) {
+    it(`fits the longest label and its note at ${width}px with no horizontal overflow`, async () => {
+      // Arrange
+      const host = await render(width);
+
+      // Act
+      const item = host.querySelector('[data-verification="not-checked"]') as HTMLElement;
+      const hostRight = host.getBoundingClientRect().right;
+      const overflowing = Array.from(host.querySelectorAll('*'))
+        .filter((el) => el.getBoundingClientRect().right > hostRight + 0.5)
+        .map((el) => el.className);
+
+      // Assert
+      expect(item.querySelector('.token-requirements__note')!.getBoundingClientRect().width).toBeGreaterThan(0);
+      expect(overflowing).toEqual([]);
+      expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth);
+    });
+  }
 });

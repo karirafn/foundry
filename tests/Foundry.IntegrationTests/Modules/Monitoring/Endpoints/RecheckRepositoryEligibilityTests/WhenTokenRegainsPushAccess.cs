@@ -114,7 +114,7 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
             if (StaticListingFakeHandler.IsProbePost(request))
             {
                 HttpStatusCode statusCode = ProbeGranted
-                    ? HttpStatusCode.UnprocessableEntity
+                    ? StaticListingFakeHandler.GrantedProbeStatus(request)
                     : HttpStatusCode.Forbidden;
                 return Task.FromResult(new HttpResponseMessage(statusCode));
             }

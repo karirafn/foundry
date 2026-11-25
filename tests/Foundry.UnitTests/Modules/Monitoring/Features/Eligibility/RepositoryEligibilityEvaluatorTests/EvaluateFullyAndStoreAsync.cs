@@ -187,7 +187,7 @@ public sealed class EvaluateFullyAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -209,7 +209,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo("owner/repo");
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         StubProviderFactory factory = new(Result<BranchProtection>.Ok(protection));
@@ -236,7 +236,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo("owner/repo");
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -258,7 +258,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -279,7 +279,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -302,7 +302,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -323,7 +323,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -347,7 +347,7 @@ public sealed class EvaluateFullyAndStoreAsync
         repo.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -370,7 +370,7 @@ public sealed class EvaluateFullyAndStoreAsync
         repo.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -391,7 +391,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo("owner/repo");
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         StubProviderFactory factory = new(
@@ -421,7 +421,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo("owner/repo");
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         StubProviderFactory factory = new(
@@ -447,7 +447,7 @@ public sealed class EvaluateFullyAndStoreAsync
     private static GitLabCredential CreateGitLabCredential() =>
         GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
 
     private static string FineGrainedToken => "github" + "_pat_" + "abc123";
@@ -469,21 +469,27 @@ public sealed class EvaluateFullyAndStoreAsync
             .MissingPermissions.ShouldBe(["administration", "repository_hooks"]);
     }
 
-    [Fact]
-    public async Task WhenClassicTokenLacksAdministrationAndWebhooks_DeniedNamesTheAdminRole()
+    [Theory]
+    [InlineData("ghp_")]
+    [InlineData("gho_")]
+    [InlineData("ghu_")]
+    [InlineData("")]
+    public async Task WhenGitHubTokenIsNotFineGrained_DeniedWithNoMissingPermissionsAndNoProbe(string prefix)
     {
         // Arrange
         MonitoredRepository repo = CreateRepo();
+        CountingWriteProber writeProber = new();
         RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(CreateGitHubCredential("ghp_" + "classic")),
-            writeProber: new MissingWriteProber(WritePermission.Administration, WritePermission.Webhooks));
+            resolver: new StubCredentialResolver(CreateGitHubCredential(prefix + "classic")),
+            writeProber: writeProber);
 
         // Act
         await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
 
         // Assert
-        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>()
-            .MissingPermissions.ShouldBe(["admin_role"]);
+        repo.ShouldSatisfyAllConditions(
+            () => repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBeEmpty(),
+            () => writeProber.Calls.ShouldBe(0));
     }
 
     [Fact]
@@ -511,7 +517,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(CreateGitHubCredential("token")),
+            resolver: new StubCredentialResolver(CreateGitHubCredential(FineGrainedToken)),
             providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)),
             writeProber: new GrantedWriteProber());
 
@@ -545,7 +551,7 @@ public sealed class EvaluateFullyAndStoreAsync
         // Arrange
         MonitoredRepository repo = CreateRepo();
         RepositoryEligibilityEvaluator sut = CreateSut(
-            resolver: new StubCredentialResolver(CreateGitHubCredential("token")),
+            resolver: new StubCredentialResolver(CreateGitHubCredential(FineGrainedToken)),
             writeProber: new ThrowingWriteProber());
 
         // Act
@@ -563,7 +569,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -586,7 +592,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         RepositoryEligibilityEvaluator sut = CreateSut(
@@ -610,7 +616,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -630,7 +636,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -651,7 +657,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitLabCredential credential = GitLabCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://gitlab.com").ValueOrThrow());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         StubProviderFactory factory = new(
@@ -679,7 +685,7 @@ public sealed class EvaluateFullyAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: false, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -701,7 +707,7 @@ public sealed class EvaluateFullyAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: false, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -723,7 +729,7 @@ public sealed class EvaluateFullyAndStoreAsync
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: false);
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -744,7 +750,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -765,7 +771,7 @@ public sealed class EvaluateFullyAndStoreAsync
         MonitoredRepository repo = CreateRepo();
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create("test").ValueOrThrow(),
-            new IssuedToken("token", new TokenExpiry.NotChecked()),
+            new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         RepositoryEligibilityEvaluator sut = CreateSut(
             resolver: new StubCredentialResolver(credential),
@@ -791,7 +797,7 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     private static GitHubCredential UsableCredential() =>
-        GitHubCredential.Create(AccountName.Create("test").ValueOrThrow(), new IssuedToken("token", new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
+        GitHubCredential.Create(AccountName.Create("test").ValueOrThrow(), new IssuedToken(FineGrainedToken, new TokenExpiry.NotChecked()), BaseUrl.Create("https://github.com").ValueOrThrow());
 
     [Fact]
     public async Task WhenPushIsDeniedAndASourceIsUnreadable_ListsBothViolations()
@@ -1237,6 +1243,21 @@ public sealed class EvaluateFullyAndStoreAsync
             string token,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
+    }
+
+    private sealed class CountingWriteProber : IGitHubWriteProber
+    {
+        public int Calls { get; private set; }
+
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()));
+        }
     }
 
     // Returns Missing with the given permission — simulates insufficient write access

@@ -17,14 +17,18 @@ This replaces ADR 0084's separate-token clause.
 Each account holds one token, and that token must hold every permission Foundry uses it for.
 Foundry verifies this rather than assuming it:
 
-- **One permission list per provider** declares each permission's display label, template-URL parameter, classic scope and how it is verified.
-  The account form's list, the token creation link, the classic-scope check and the write-probe sequence are all derived from it.
+- **One permission list per provider** declares each permission's display label, template-URL parameter and how it is verified.
+  The account form's list, the token creation link and the write-probe sequence are all derived from it.
+- **GitHub tokens must be fine-grained** (`github_pat_` prefix).
+  Any other token fails validation, and a saved one makes every repository of its account ineligible until the token is replaced.
 - **GitHub fine-grained** permissions are probed per repository with deliberately invalid requests.
   Contents, Issues, Pull requests, Administration (`POST /rulesets`) and Webhooks (`POST /hooks`) read 422 as granted and 403 as missing.
-  Commit statuses and Actions are probed with GETs that read 200 as granted, 403 as missing and anything else as unknown.
+  Actions (write) is probed with `POST /actions/jobs/1/rerun`, a job id that does not exist: 404 is granted, 403 is missing.
+  Commit statuses is probed with a GET that reads 200 as granted and 403 as missing.
+  Any other response is unknown and fails closed.
   Workflows (write) cannot be verified before use.
-- **GitHub classic** tokens keep the `repo` scope, which already covers repository hooks.
-  The Administration need is the repository admin role, which the write probe verifies.
+- **GitHub cannot report a token's permissions**, so extra permissions and "All repositories" access are not checked.
+  The account form says so, and the creation link preselects exactly the list.
 - **GitLab** requires the Maintainer role (access level 40) on each repository, up from Developer (30).
 - **A probe verdict records the permission list it was taken against.**
   A verdict taken against an older list counts as unprobed and is re-probed automatically, so adding a permission to the list reaches every repository with no migration.
@@ -43,6 +47,7 @@ Its account row names the missing permissions with the remedy for its provider.
 - **A one-off migration resetting every verdict** — rejected for a recorded permission-list version, which needs no migration the next time the list changes.
 - **Authenticate as a GitHub App minting per-purpose tokens** — still deferred, as in ADR 0084.
   It would restore separation without the operator cost, but is a large prerequisite.
+- **Probe GitHub tokens for extra permissions** — rejected: a denylist reads as complete while every permission off it passes, and probing all of GitHub's ~30 repository permissions costs ~30 requests per repository per check and still misses account permissions.
 
 ## Consequences
 
@@ -50,7 +55,12 @@ Its account row names the missing permissions with the remedy for its provider.
   An exploit of git's bundle or pack handling there could delete the repository, rewrite the default branch or re-point webhooks.
   A token with Contents and Pull requests write alone could already land code on the default branch through a pull request Foundry merges, so the added exposure is destructive power, not code integrity.
 - After the upgrade, every repository whose account token lacks Administration or Webhooks becomes ineligible until the token is edited or replaced.
-- A Denied repository costs at most five write-probe POSTs per hour against GitHub's secondary rate limit.
+- A Denied repository costs at most six write-probe POSTs per hour against GitHub's secondary rate limit.
 - The probe classification rests on a spike run on 2026-11-18 against `karirafn/foundry` with two fine-grained tokens.
   It returned 403 for a missing Administration, Webhooks or Contents permission and 422 when granted.
   The missing case for the read GETs was not observed, which is why their unknown responses fail closed.
+- The Actions write probe rests on a spike run on 2026-11-24 against `karirafn/foundry` with two fine-grained tokens: `POST /actions/jobs/1/rerun` returned 404 with Actions write and 403 ("Resource not accessible by personal access token") without it, with or without a malformed body.
+
+## Revisions
+
+- 2026-11-24 — GitHub account tokens must be fine-grained; Actions needs write, verified by a rerun probe (#1287)

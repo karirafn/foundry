@@ -33,6 +33,10 @@ internal sealed partial class GitHubHttpClient(
     private const string ApiVersion = "2026-03-10";
     private const string TokenExpirationHeader = "github-authentication-token-expiration";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
+
+    // The rerun endpoint is scoped to {owner}/{repo}, and job id 1 resolves to no job there, so the Actions
+    // write probe never re-runs anything: GitHub answers 404 with Actions write and 403 without it.
+    private const int ActionsProbeJobId = 1;
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
@@ -192,11 +196,6 @@ internal sealed partial class GitHubHttpClient(
           }
         }
         """;
-
-    // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
-    // Each permission entry keeps its classic scope apart from its fine-grained display label, so the scopes
-    // checked here stay decoupled from the labels the token requirements list shows in the UI.
-    private static readonly IReadOnlyList<string> ClassicPatOAuthScopes = TokenPermissions.GitHubClassicScopes;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -1011,19 +1010,11 @@ internal sealed partial class GitHubHttpClient(
 
         TokenExpiry tokenExpiry = ReadTokenExpiry(response, apiBaseUrl);
 
-        // GitHub never sends X-OAuth-Scopes for a fine-grained PAT, so its absence is normal for that
-        // token kind. Any other token without the header, including a prefix GitHub adds later, stays
-        // ScopesUnverifiable.
-        if (!response.Headers.TryGetValues("X-OAuth-Scopes", out IEnumerable<string>? scopeValues))
-        {
-            return GitHubTokenKind.IsFineGrainedPat(token)
-                ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry))
-                : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(login, tokenExpiry));
-        }
-
-        IReadOnlyList<string> missingScopes = ParseMissingScopes(scopeValues);
-
-        return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry, missingScopes));
+        // A fine-grained token's permissions are checked per repository by the probes, so nothing here
+        // reads scopes.
+        return GitHubTokenKind.WrongKindOf(token) is WrongTokenKind wrongKind
+            ? Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.TokenOfWrongKind(login, wrongKind, tokenExpiry))
+            : Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(login, tokenExpiry));
     }
 
     public async Task<Result<WritePermissionProbeResult>> ProbeContentsWriteAsync(
@@ -1171,7 +1162,7 @@ internal sealed partial class GitHubHttpClient(
         return ClassifyReadProbeResponse(response, WritePermission.CommitStatuses);
     }
 
-    public async Task<Result<WritePermissionProbeResult>> ProbeActionsReadAsync(
+    public async Task<Result<WritePermissionProbeResult>> ProbeActionsWriteAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -1182,11 +1173,11 @@ internal sealed partial class GitHubHttpClient(
             return Result<WritePermissionProbeResult>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
-        using HttpResponseMessage response = await SendGetAsync(
-            apiBaseUrl, slug, "actions/runs?per_page=1", token, cancellationToken);
+        using HttpResponseMessage response = await SendEmptyPostAsync(
+            apiBaseUrl, slug, $"actions/jobs/{ActionsProbeJobId}/rerun", token, cancellationToken);
 
         RecordRestHeadroom(response);
-        return ClassifyReadProbeResponse(response, WritePermission.Actions);
+        return ClassifyActionsWriteProbeResponse(response);
     }
 
     /// <summary>
@@ -1236,7 +1227,7 @@ internal sealed partial class GitHubHttpClient(
             WritePermission.Administration => ProbeAdministrationWriteAsync(apiBaseUrl, slug, token, cancellationToken),
             WritePermission.Webhooks => ProbeWebhooksWriteAsync(apiBaseUrl, slug, token, cancellationToken),
             WritePermission.CommitStatuses => ProbeCommitStatusesReadAsync(apiBaseUrl, slug, token, cancellationToken),
-            WritePermission.Actions => ProbeActionsReadAsync(apiBaseUrl, slug, token, cancellationToken),
+            WritePermission.Actions => ProbeActionsWriteAsync(apiBaseUrl, slug, token, cancellationToken),
             _ => throw new UnreachableException($"No probe for {permission}."),
         };
 
@@ -1638,6 +1629,17 @@ internal sealed partial class GitHubHttpClient(
             _ => ClassifyRefusal(response, permission),
         };
 
+    /// <summary>
+    /// Classifies the Actions write probe. GitHub checks the token's Actions write permission before it looks
+    /// the job up, so a 404 for the nonexistent job means granted and a 403 means missing.
+    /// </summary>
+    private static Result<WritePermissionProbeResult> ClassifyActionsWriteProbeResponse(HttpResponseMessage response) =>
+        response.StatusCode switch
+        {
+            HttpStatusCode.NotFound => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            _ => ClassifyRefusal(response, WritePermission.Actions),
+        };
+
     private static Result<WritePermissionProbeResult> ClassifyReadProbeResponse(
         HttpResponseMessage response,
         WritePermission permission) =>
@@ -1693,29 +1695,6 @@ internal sealed partial class GitHubHttpClient(
     {
         string uriString = uri.ToString();
         return uriString.EndsWith('/') ? uri : new Uri(uriString + '/');
-    }
-
-    private static List<string> ParseMissingScopes(IEnumerable<string> scopeHeaders)
-    {
-        HashSet<string> grantedScopes = new(StringComparer.OrdinalIgnoreCase);
-        foreach (string header in scopeHeaders)
-        {
-            foreach (string scope in header.Split(','))
-            {
-                grantedScopes.Add(scope.Trim());
-            }
-        }
-
-        List<string> missing = [];
-        foreach (string required in ClassicPatOAuthScopes)
-        {
-            if (!grantedScopes.Contains(required))
-            {
-                missing.Add(required);
-            }
-        }
-
-        return missing;
     }
 
     // Matches a SHA-1 hex object id (up to 40 hex chars), deliberately aligned with the

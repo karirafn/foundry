@@ -77,14 +77,13 @@ public sealed class WhenAdapterIsSelectedByProvider
 
     // Records whether it was called and returns a minimal valid provider-shaped response.
     // Handles multiple calls per request (GitLab validates in two HTTP calls).
-    private sealed class RecordingHandler(string responseBody, string? scopesHeaderValue = null)
-        : HttpMessageHandler
+    private sealed class RecordingHandler(string responseBody) : HttpMessageHandler
     {
         public bool WasCalled { get; private set; }
 
-        // Returns a minimal valid GitHub /user response with X-OAuth-Scopes header.
+        // Returns a minimal valid GitHub /user response.
         public static RecordingHandler ForGitHub() =>
-            new("""{"login":"testuser"}""", scopesHeaderValue: "repo");
+            new("""{"login":"testuser"}""");
 
         // Returns a minimal valid GitLab response for both /user and /personal_access_tokens/self.
         public static RecordingHandler ForGitLab() =>
@@ -100,12 +99,6 @@ public sealed class WhenAdapterIsSelectedByProvider
             {
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
             };
-
-            if (scopesHeaderValue is not null)
-            {
-                response.Headers.Add("X-OAuth-Scopes", scopesHeaderValue);
-            }
-
             return Task.FromResult(response);
         }
     }

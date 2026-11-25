@@ -19,6 +19,7 @@ const GITHUB_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: ['octocat'],
   tokenExpiry: { status: 'never', expiresAt: null },
 };
@@ -82,7 +83,7 @@ describe('AccountListComponent missing permissions', () => {
     expect(block.getAttribute('aria-label')).toBe('Token permissions for octocat');
     expect(problemLines(el)).toEqual([
       "This token is missing permissions Foundry needs, so Foundry won't start work on 2 repositories until it has them.",
-      'Missing: Administration (read and write), Webhooks (read and write).',
+      'Missing: Administration (read and write); Webhooks (read and write).',
       'Repositories: octocat/repo-1, octocat/repo-2',
       `Edit the token's permissions on GitHub, or create a new token, then re-check. ${RECHECK}`,
     ]);
@@ -146,21 +147,33 @@ describe('AccountListComponent missing permissions', () => {
     expect(link.classList).not.toContain('account-list__btn--primary');
   });
 
-  it('should name the admin role and give the classic remedy for a classic GitHub token', () => {
+  it('should give a classic GitHub token the wrong-kind tag, reason, remedy and create link', () => {
     // Act
-    const { el } = setup([{ ...GITHUB_ACCOUNT, deniedRepositories: [denied(1, 'Admin role on the repository')] }]);
+    const { el } = setup([
+      {
+        ...GITHUB_ACCOUNT,
+        nonConformingToken: { wrongKind: 'github-classic', notAllowed: [], broadReach: [] },
+        deniedRepositories: [denied(1)],
+      },
+    ]);
 
     // Assert
-    const lines = problemLines(el);
-    expect(lines[1]).toBe('Missing: Admin role on the repository.');
-    expect(lines[3]).toBe(
-      `Ask a repository admin to give the token's user, octocat, the Admin role on these repositories, then re-check. ${RECHECK}`,
-    );
-    const only = actions(el);
-    expect(only).toHaveLength(1);
-    expect(only[0].tagName).toBe('BUTTON');
-    expect(text(only[0])).toBe('Replace token');
-    expect(only[0].classList).not.toContain('account-list__btn--primary');
+    expect(text(el.querySelector('.account-list__status--side'))).toBe('Wrong token kind');
+    expect(el.querySelector('.account-list__problem')?.getAttribute('aria-label')).toBe('Token permissions for octocat');
+    expect(problemLines(el)).toEqual([
+      "This token doesn't meet Foundry's requirements, so Foundry won't start work on 1 repository until it does.",
+      'Wrong token kind: classic token.',
+      'Repositories: octocat/repo-1',
+      `Create a fine-grained personal access token on GitHub, then replace this one. A classic token can't be converted. ${RECHECK}`,
+    ]);
+    const [link, replace] = actions(el);
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('https://github.com/settings/personal-access-tokens/new');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('aria-label')).toBe('Create token on github.com for octocat (opens in a new tab)');
+    expect(text(link)).toBe('Create token on github.com ↗(opens in a new tab)');
+    expect(replace.tagName).toBe('BUTTON');
   });
 
   it('should name the Maintainer role and give the GitLab remedy with no edit-token link', () => {

@@ -133,6 +133,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: ['octo-org'],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -230,6 +231,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -322,6 +324,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -407,6 +410,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -440,6 +444,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     }));
@@ -497,6 +502,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -534,6 +540,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -568,6 +575,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -608,6 +616,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -651,6 +660,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -717,6 +727,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -750,6 +761,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -782,6 +794,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -815,6 +828,7 @@ describe('SettingsAccountsComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };

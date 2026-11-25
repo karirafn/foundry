@@ -75,8 +75,10 @@
     margin-inline-end: 2px;
   }
 
+  &__closing-note,
   &__explanation,
-  &__owner-hint {
+  &__owner-hint,
+  &__creation-note {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
     line-height: 1.5;
