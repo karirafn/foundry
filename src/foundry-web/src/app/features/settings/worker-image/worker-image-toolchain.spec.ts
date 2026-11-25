@@ -179,6 +179,7 @@ describe('WorkerImageToolchainComponent', () => {
     // Arrange
     const harness = setup();
     respond(harness, RECORDED);
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     // Act
     harness.reloadTrigger.next();
@@ -189,6 +190,9 @@ describe('WorkerImageToolchainComponent', () => {
 
     // Assert
     expect(harness.el.querySelectorAll('fd-toolchain-list dt').length).toBe(2);
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to load the worker image toolchain')
+    );
   });
 
   it('should have nothing focusable', () => {

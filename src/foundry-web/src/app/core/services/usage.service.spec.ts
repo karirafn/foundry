@@ -208,12 +208,17 @@ describe('UsageService', () => {
   it('should leave snapshot null and not throw when the seed request fails', () => {
     // Arrange
     const { svc, http } = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     http.expectOne('/api/credentials/usage').flush('Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
     expect(svc.snapshot()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[UsageService] Failed to fetch usage snapshot',
+      expect.objectContaining({ status: 500 }),
+    );
   });
 
   describe('refresh', () => {
@@ -338,6 +343,10 @@ describe('UsageService', () => {
 
       // Assert
       expect(svc.refreshState()).toBe('error');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[UsageService] Failed to request usage refresh',
+        expect.objectContaining({ status: 500 }),
+      );
       consoleSpy.mockRestore();
     });
 

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TimeoutError } from 'rxjs';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AccountService } from './account.service';
@@ -97,7 +98,7 @@ describe('AccountService', () => {
 
   it('should report the accounts load as loaded, or failed when the request fails', async () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const loaded = service.loadAccounts();
@@ -108,6 +109,8 @@ describe('AccountService', () => {
     // Assert
     expect(await loaded).toBe('loaded');
     expect(await failed).toBe('failed');
+    expect(consoleError).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/accounts' }));
   });
 
   // Cycle 2: loadAccounts populates accounts signal
@@ -143,6 +146,9 @@ describe('AccountService', () => {
 
   it('should set loading to false when loadAccounts fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush('Server Error', {
       status: 500,
@@ -151,11 +157,13 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.loading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/accounts' }));
   });
 
   it('should set loadError when loadAccounts fails with a ProblemDetails body', () => {
     // Arrange
     service.loadAccounts();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(
@@ -165,10 +173,12 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.loadError()).toBe('Forbidden');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 403, url: '/api/accounts' }));
   });
 
   it('should clear loadError at start of loadAccounts', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush('Server Error', {
       status: 500,
@@ -181,6 +191,7 @@ describe('AccountService', () => {
     // Assert — error is cleared before response
     expect(service.loadError()).toBeNull();
     httpMock.expectOne('/api/accounts').flush([]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/accounts' }));
   });
 
   // Cycle 4: loadAccounts loads multiple accounts
@@ -270,6 +281,9 @@ describe('AccountService', () => {
 
   it('should set saving to false when createAccount fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     const request: CreateAccountRequest = {
       providerType: 'github',
       baseUrl: 'https://api.github.com',
@@ -284,6 +298,7 @@ describe('AccountService', () => {
     // Assert
     expect(service.saving()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/accounts' }));
   });
 
   it('should set saveError when createAccount fails with a ProblemDetails body', () => {
@@ -294,6 +309,7 @@ describe('AccountService', () => {
       token: 'ghp_test',
     };
     service.createAccount(request);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(
@@ -303,10 +319,12 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.saveError()).toBe('An account with this name already exists.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/accounts' }));
   });
 
   it('should clear saveError at start of createAccount', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'x' });
     httpMock.expectOne('/api/accounts').flush('Bad Request', { status: 400, statusText: 'Bad Request' });
 
@@ -316,6 +334,7 @@ describe('AccountService', () => {
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
     httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/accounts' }));
   });
 
   // Conflict (409) handling
@@ -330,6 +349,7 @@ describe('AccountService', () => {
       conflicts,
     };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(body, { status: 409, statusText: 'Conflict' });
@@ -338,10 +358,12 @@ describe('AccountService', () => {
     expect(service.conflicts()).toEqual(conflicts);
     expect(service.saveError()).toBeNull();
     expect(service.saving()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: '/api/accounts' }));
   });
 
   it('should clear conflicts at start of createAccount', () => {
     // Arrange — first call returns conflicts
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const conflicts: NamespaceConflict[] = [
       { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
     ];
@@ -360,12 +382,14 @@ describe('AccountService', () => {
     // Assert — conflicts cleared before response
     expect(service.conflicts()).toEqual([]);
     httpMock.expectOne('/api/accounts').flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: '/api/accounts' }));
   });
 
   it('should set saveError for 422 TakeoverValidationResponse listing invalid namespaces', () => {
     // Arrange
     const body = { invalidNamespaces: ['ns-a', 'ns-b'] };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(body, { status: 422, statusText: 'Unprocessable Entity' });
@@ -373,6 +397,7 @@ describe('AccountService', () => {
     // Assert
     expect(service.saveError()).toBe('Invalid namespaces for takeover: ns-a, ns-b.');
     expect(service.conflicts()).toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 422, url: '/api/accounts' }));
   });
 
   it('should set affectedRepositories when createAccount succeeds with affected repos', () => {
@@ -415,6 +440,7 @@ describe('AccountService', () => {
       token: null,
     };
     service.updateAccount(id, request);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${id}`).flush(
@@ -424,10 +450,12 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.saveError()).toBe('An account with this name already exists.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should clear saveError at start of updateAccount', () => {
     // Arrange — updateAccount call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
       status: 409,
@@ -440,6 +468,7 @@ describe('AccountService', () => {
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   // Claimed-elsewhere (409 with UpdateAccountConflictResponse, reason ClaimedElsewhere) — update path
@@ -450,6 +479,7 @@ describe('AccountService', () => {
       message: 'Cannot rotate token: all derived namespaces are claimed by other accounts — myorg (held by Other Account).',
     };
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(body, {
@@ -461,11 +491,13 @@ describe('AccountService', () => {
     expect(service.saveError()).toContain('Other Account');
     expect(service.saveSuccess()).toBe(false);
     expect(service.saving()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should not populate conflicts() when updateAccount returns 409 with reason ClaimedElsewhere', () => {
     // Arrange — conflicts starts empty (fresh service)
     expect(service.conflicts()).toEqual([]);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act — update-path 409 with claimed-elsewhere body
     const body: UpdateAccountConflictResponse = {
@@ -480,6 +512,7 @@ describe('AccountService', () => {
 
     // Assert — conflicts() remains empty (takeover panel must NOT activate on the update path)
     expect(service.conflicts()).toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should set saveError rendering server-composed message naming all holders when multiple namespaces are claimed elsewhere', () => {
@@ -489,6 +522,7 @@ describe('AccountService', () => {
       message: 'Cannot rotate token: all derived namespaces are claimed by other accounts — org-a (held by Account Alpha), org-b (held by Account Beta).',
     };
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(body, {
@@ -500,6 +534,7 @@ describe('AccountService', () => {
     const error = service.saveError();
     expect(error).toContain('Account Alpha');
     expect(error).toContain('Account Beta');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should set saveError from message when createAccount returns 409 with unrecognised reason (AC5)', () => {
@@ -510,6 +545,7 @@ describe('AccountService', () => {
       conflicts: [],
     };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(body, { status: 409, statusText: 'Conflict' });
@@ -519,6 +555,7 @@ describe('AccountService', () => {
     expect(service.conflicts()).toEqual([]);
     expect(service.saving()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: '/api/accounts' }));
   });
 
   it('should set saveError from message when createAccount returns 409 with reason DuplicateAccount (AC6)', () => {
@@ -529,6 +566,7 @@ describe('AccountService', () => {
       conflicts: [],
     };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(body, { status: 409, statusText: 'Conflict' });
@@ -538,11 +576,13 @@ describe('AccountService', () => {
     expect(service.conflicts()).toEqual([]);
     expect(service.saving()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: '/api/accounts' }));
   });
 
   it('should set saveError from extracted message and not throw when createAccount returns 409 with null body', () => {
     // Arrange — a null/empty body that cannot be cast to CreateAccountConflictResponse
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(null, { status: 409, statusText: 'Conflict' });
@@ -552,6 +592,7 @@ describe('AccountService', () => {
     expect(service.conflicts()).toEqual([]);
     expect(service.saving()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: '/api/accounts' }));
   });
 
   // Cycle 6: updateAccount calls PUT /api/accounts/{id}
@@ -673,6 +714,7 @@ describe('AccountService', () => {
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
     service.deleteAccount(MOCK_ACCOUNT.id);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(
@@ -682,11 +724,13 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.deleteFailure()).toEqual({ kind: 'failed', message: 'Account is in use.' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should set a refused deleteFailure when deleteAccount is refused with blocking issues', () => {
     // Arrange
     service.deleteAccount(MOCK_ACCOUNT.id);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(REFUSED_BODY, { status: 409, statusText: 'Conflict' });
@@ -699,17 +743,20 @@ describe('AccountService', () => {
         { repositorySlug: 'acme/web', issueNumber: 7, state: 'triage_in_progress' },
       ],
     });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should clear the screen-reader announcement when deleteAccount is refused', () => {
     // Arrange
     service.deleteAccount(MOCK_ACCOUNT.id);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(REFUSED_BODY, { status: 409, statusText: 'Conflict' });
 
     // Assert — the page's alert region is the only announcer of a refusal.
     expect(service.srAnnouncement()).toBe('');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should keep the account in the list when deleteAccount is refused', () => {
@@ -717,6 +764,7 @@ describe('AccountService', () => {
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
     service.deleteAccount(MOCK_ACCOUNT.id);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(REFUSED_BODY, { status: 409, statusText: 'Conflict' });
@@ -724,10 +772,12 @@ describe('AccountService', () => {
     // Assert
     expect(service.accounts().map(a => a.id)).toEqual([MOCK_ACCOUNT.id]);
     expect(service.deletingAccountId()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should clear deleteFailure at start of deleteAccount', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteAccount(MOCK_ACCOUNT.id);
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Conflict', {
       status: 409,
@@ -743,6 +793,7 @@ describe('AccountService', () => {
       status: 204,
       statusText: 'No Content',
     });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   it('should remove the deleted account from accounts signal after deleteAccount succeeds', () => {
@@ -928,6 +979,9 @@ describe('AccountService', () => {
 
   it('should set validating to false when validateToken fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     const request = { token: 'bad', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
     service.validateToken(request);
     httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
@@ -937,12 +991,14 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.validating()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/accounts/validate-token' }));
   });
 
   it('should set validationError when validateToken fails', () => {
     // Arrange
     const request = { token: 'bad', baseUrl: 'https://api.github.com', providerType: 'GitHub' };
     service.validateToken(request);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
@@ -952,10 +1008,12 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.validationError()).not.toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/accounts/validate-token' }));
   });
 
   it('should clear validationError at start of validateToken', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.validateToken({ token: 'bad', baseUrl: 'https://api.github.com', providerType: 'GitHub' });
     httpMock.expectOne('/api/accounts/validate-token').flush('Bad Request', {
       status: 400,
@@ -974,6 +1032,7 @@ describe('AccountService', () => {
       missingScopes: [],
       accountName: null,
     });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/accounts/validate-token' }));
   });
 
   // Cycle 9: getTokenRequirements fetches from correct lowercased URL
@@ -1221,6 +1280,7 @@ describe('AccountService', () => {
   it('should set terminal error announcement when createAccount fails', () => {
     // Arrange
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush(
@@ -1230,12 +1290,14 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.srAnnouncement()).toBe('Could not add account: Unauthorized.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 401, url: '/api/accounts' }));
   });
 
   // Announcements — updateAccount terminal error
   it('should set terminal error announcement when updateAccount fails', () => {
     // Arrange
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(
@@ -1245,12 +1307,14 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.srAnnouncement()).toBe('Could not update account: Token is invalid.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 422, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   // Announcements — deleteAccount terminal error
   it('should set terminal error announcement when deleteAccount fails', () => {
     // Arrange
     service.deleteAccount(MOCK_ACCOUNT.id);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(
@@ -1260,6 +1324,7 @@ describe('AccountService', () => {
 
     // Assert
     expect(service.srAnnouncement()).toBe('Could not delete account: Account is in use.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${MOCK_ACCOUNT.id}` }));
   });
 
   // Announcements — alternation: two identical creates re-fire start announcement
@@ -1301,6 +1366,7 @@ describe('AccountService', () => {
       // Arrange
       service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
       expect(service.saving()).toBe(true);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act — advance past timeout; the timeout operator cancels the underlying request
       vi.advanceTimersByTime(60_000);
@@ -1308,6 +1374,7 @@ describe('AccountService', () => {
       // Assert — state reflects timeout error, no response was flushed
       expect(service.saving()).toBe(false);
       expect(service.saveError()).toBe('The request timed out. Please try again.');
+      expect(consoleError).toHaveBeenCalledWith(expect.any(TimeoutError));
 
       // Drain the cancelled request so httpMock.verify() passes
       httpMock.match('/api/accounts');
@@ -1316,12 +1383,14 @@ describe('AccountService', () => {
     it('should set timeout terminal error announcement when createAccount times out', () => {
       // Arrange
       service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act
       vi.advanceTimersByTime(60_000);
 
       // Assert
       expect(service.srAnnouncement()).toBe('Could not add account: The request timed out. Please try again.');
+      expect(consoleError).toHaveBeenCalledWith(expect.any(TimeoutError));
 
       // Drain the cancelled request
       httpMock.match('/api/accounts');
@@ -1331,6 +1400,7 @@ describe('AccountService', () => {
       // Arrange
       service.deleteAccount(MOCK_ACCOUNT.id);
       expect(service.deletingAccountId()).toBe(MOCK_ACCOUNT.id);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act — advance past timeout
       vi.advanceTimersByTime(60_000);
@@ -1338,6 +1408,7 @@ describe('AccountService', () => {
       // Assert
       expect(service.deletingAccountId()).toBeNull();
       expect(service.deleteFailure()).toEqual({ kind: 'failed', message: 'The request timed out. Please try again.' });
+      expect(consoleError).toHaveBeenCalledWith(expect.any(TimeoutError));
 
       // Drain the cancelled request
       httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
@@ -1346,12 +1417,14 @@ describe('AccountService', () => {
     it('should set timeout terminal error announcement when updateAccount times out', () => {
       // Arrange
       service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act
       vi.advanceTimersByTime(60_000);
 
       // Assert
       expect(service.srAnnouncement()).toBe('Could not update account: The request timed out. Please try again.');
+      expect(consoleError).toHaveBeenCalledWith(expect.any(TimeoutError));
 
       // Drain the cancelled request
       httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
@@ -1360,12 +1433,14 @@ describe('AccountService', () => {
     it('should set timeout terminal error announcement when deleteAccount times out', () => {
       // Arrange
       service.deleteAccount(MOCK_ACCOUNT.id);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act
       vi.advanceTimersByTime(60_000);
 
       // Assert
       expect(service.srAnnouncement()).toBe('Could not delete account: The request timed out. Please try again.');
+      expect(consoleError).toHaveBeenCalledWith(expect.any(TimeoutError));
 
       // Drain the cancelled request
       httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);
@@ -1375,6 +1450,7 @@ describe('AccountService', () => {
       // Arrange
       service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
       expect(service.saving()).toBe(true);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act — advance past timeout
       vi.advanceTimersByTime(60_000);
@@ -1382,6 +1458,7 @@ describe('AccountService', () => {
       // Assert
       expect(service.saving()).toBe(false);
       expect(service.saveError()).toBe('The request timed out. Please try again.');
+      expect(consoleError).toHaveBeenCalledWith(expect.any(TimeoutError));
 
       // Drain the cancelled request
       httpMock.match(`/api/accounts/${MOCK_ACCOUNT.id}`);

@@ -393,6 +393,7 @@ describe('SettingsRepositoriesComponent', () => {
 
   it('should display delete error when deleteRepository fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     flushAccounts(httpMock, [ACCOUNT_1]);
@@ -413,10 +414,12 @@ describe('SettingsRepositoriesComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const deleteError = el.querySelector('.repositories-settings__delete-error');
     expect(deleteError?.textContent).toContain('Repository is in use.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}` }));
   });
 
   it('should list the blocking issues when deleteRepository is refused', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     flushAccounts(httpMock, [ACCOUNT_1]);
@@ -445,6 +448,7 @@ describe('SettingsRepositoriesComponent', () => {
       .toBe('Repository not deleted — a worker is still active on:');
     expect(alert?.querySelector('.delete-failure__issues li')?.textContent?.trim()).toBe('acme/api#42 — in progress');
     expect(alert?.querySelector('.delete-failure__hint')?.textContent?.trim()).toBe('Try again once these finish.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}` }));
   });
   describe('header and reorder mode', () => {
     function loadedWith(repos: RepositorySummary[]) {
@@ -619,6 +623,7 @@ describe('SettingsRepositoriesComponent', () => {
 
     it('shows the load error with Retry even when the list is empty', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, httpMock } = setup();
       fixture.detectChanges();
       httpMock.expectOne(UNCLAIMED_URL).flush({ detail: 'Database unavailable.' }, { status: 500, statusText: 'Server Error' });
@@ -633,6 +638,7 @@ describe('SettingsRepositoriesComponent', () => {
       expect(unclaimedSection(el)?.querySelector('.unclaimed-repository-list__error-message')?.textContent?.trim())
         .toBe('Database unavailable.');
       httpMock.expectOne(UNCLAIMED_URL).flush([]);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: UNCLAIMED_URL }));
     });
 
     it('confirms with the repository dialog and deletes through /api/repositories/{id}, then reloads both lists', () => {
@@ -681,6 +687,7 @@ describe('SettingsRepositoriesComponent', () => {
 
     it('lists the blocking issues in the section alert when the removal is refused', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, httpMock, el } = render([UNCLAIMED_1]);
       fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
 
@@ -705,6 +712,7 @@ describe('SettingsRepositoriesComponent', () => {
         .toBe('Repository not deleted — a worker is still active on:');
       expect(alert?.querySelector('.delete-failure__issues li')?.textContent?.trim()).toBe('orphan/project#4 — in progress');
       expect(el.querySelector<HTMLButtonElement>('.unclaimed-repository-list__delete-btn')?.disabled).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/repositories/${UNCLAIMED_1.id}` }));
     });
 
     it('focuses the Repositories heading after removing the last unclaimed repository', async () => {
@@ -836,6 +844,7 @@ describe('SettingsRepositoriesComponent', () => {
 
       it('clears the unclaimed delete failure when a re-check starts', () => {
         // Arrange
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const { fixture, httpMock, el } = render([UNCLAIMED_1]);
         fixture.componentInstance.onDeleteUnclaimed(UNCLAIMED_1);
         fixture.componentInstance.confirmDeleteRepository();
@@ -854,6 +863,7 @@ describe('SettingsRepositoriesComponent', () => {
         expect(unclaimedSection(el)?.querySelector('.delete-failure__lead')).toBeNull();
         httpMock.expectOne(r => r.url === RECHECK_URL).flush({ reclaimedRepositoryCount: 0 });
         flushRepositories(httpMock, ACCOUNT_1.id, []);
+        expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/repositories/${UNCLAIMED_1.id}` }));
       });
 
       it('focuses the Repositories heading when the re-check reclaims the last unclaimed repository', async () => {

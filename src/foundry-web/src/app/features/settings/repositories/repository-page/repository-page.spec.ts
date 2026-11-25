@@ -417,6 +417,7 @@ describe('RepositoryPageComponent', () => {
       fixture.detectChanges();
       httpMock.expectOne('/api/accounts').flush([ACCOUNT_1]);
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       // The account-keyed effect fires the first load; flush it
       httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush([], { status: 500, statusText: 'Server Error' });
       fixture.detectChanges();
@@ -431,6 +432,9 @@ describe('RepositoryPageComponent', () => {
       const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`);
       expect(req.request.method).toBe('GET');
       req.flush([REPO_1]);
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_1.id}/repositories` })
+      );
     });
 
     it('should announce "Could not load repositories" in the status live region on load-error', () => {
@@ -726,6 +730,7 @@ describe('RepositoryPageComponent', () => {
       flushAccounts(httpMock);
       seedRepositories(repositoryService, [REPO_1_INELIGIBLE], component);
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Act
       component.onRecheck();
@@ -737,6 +742,12 @@ describe('RepositoryPageComponent', () => {
       // Assert
       expect(component['_recheckPending']()).toBe(false);
       expect(component['_recheckError']()).not.toBeNull();
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 500,
+          url: `/api/accounts/${REPO_1_INELIGIBLE.accountId}/repositories/${REPO_1_INELIGIBLE.id}/recheck`,
+        })
+      );
     });
 
     it('should clear recheckError on subsequent successful recheck', () => {
@@ -746,6 +757,7 @@ describe('RepositoryPageComponent', () => {
       flushAccounts(httpMock);
       seedRepositories(repositoryService, [REPO_1_INELIGIBLE], component);
       fixture.detectChanges();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // First recheck fails
       component.onRecheck();
@@ -763,6 +775,12 @@ describe('RepositoryPageComponent', () => {
 
       // Assert
       expect(component['_recheckError']()).toBeNull();
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 500,
+          url: `/api/accounts/${REPO_1_INELIGIBLE.accountId}/repositories/${REPO_1_INELIGIBLE.id}/recheck`,
+        })
+      );
     });
   });
 

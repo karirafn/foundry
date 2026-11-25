@@ -221,6 +221,7 @@ describe('SetupAuthStepComponent', () => {
     input.value = 'sk-ant-test123';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const button = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
@@ -236,6 +237,9 @@ describe('SetupAuthStepComponent', () => {
     // Assert
     const errorEl = el.querySelector('[role="alert"]');
     expect(errorEl?.textContent?.trim()).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 500, url: '/api/credentials/auth' })
+    );
   });
 
   // Cycle 9: does not emit complete on API Key save failure
@@ -256,6 +260,7 @@ describe('SetupAuthStepComponent', () => {
     input.value = 'sk-ant-test123';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const button = el.querySelector('button[class*="next-btn"]') as HTMLButtonElement;
@@ -270,6 +275,9 @@ describe('SetupAuthStepComponent', () => {
 
     // Assert
     expect(emitted).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 500, url: '/api/credentials/auth' })
+    );
   });
 
   // Cycle 10: does not emit complete if saveSuccess is already true from prior navigation
@@ -686,6 +694,7 @@ describe('SetupAuthStepComponent', () => {
     fixture.detectChanges();
 
     const service = fixture.componentInstance['_settingsService'];
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act — simulate startLogin POST failure
     service.startLogin();
@@ -699,6 +708,9 @@ describe('SetupAuthStepComponent', () => {
     const alerts = Array.from(el.querySelectorAll('[role="alert"]')) as HTMLElement[];
     const errorAlert = alerts.find(a => a.textContent?.includes('Failed to start login'));
     expect(errorAlert).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 500, url: '/api/credentials/login/start' })
+    );
   });
 });
 

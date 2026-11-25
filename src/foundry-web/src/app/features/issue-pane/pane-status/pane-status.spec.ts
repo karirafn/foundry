@@ -451,6 +451,7 @@ describe('PaneStatusComponent', () => {
   describe('focus after an action', () => {
     it('moves focus to the callout title once the reloaded detail lands', async () => {
       // Arrange
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const { fixture, el, render } = setup(issue('failed'));
       (el.querySelector('fd-pane-actions button') as HTMLButtonElement).click();
       await render();
@@ -461,6 +462,8 @@ describe('PaneStatusComponent', () => {
       await render();
 
       // Assert
+      // The reload replaces the whole action set, which re-creates every action row; Angular reports that in dev mode.
+      expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('NG0956'));
       expect(focusedBeforeReload?.classList.contains('pane-callout__title')).toBe(false);
       expect(document.activeElement?.classList.contains('pane-callout__title')).toBe(true);
       expect(text(document.activeElement)).toBe('Queued');
@@ -499,6 +502,7 @@ describe('PaneStatusComponent', () => {
 
     it('does not move focus on an ordinary detail reload', async () => {
       // Arrange
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const { fixture, render } = setup(issue('failed'));
 
       // Act
@@ -506,6 +510,8 @@ describe('PaneStatusComponent', () => {
       await render();
 
       // Assert
+      // The reload replaces the whole action set, which re-creates every action row; Angular reports that in dev mode.
+      expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('NG0956'));
       expect(document.activeElement?.classList.contains('pane-callout__title')).toBe(false);
     });
   });

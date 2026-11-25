@@ -77,6 +77,7 @@ describe('SystemStatusService', () => {
   it('should swallow HTTP errors and not call applyDockerAvailability', () => {
     // Arrange
     const { http, mockSignalR } = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const req = http.expectOne('/api/system/status');
@@ -84,6 +85,10 @@ describe('SystemStatusService', () => {
 
     // Assert
     expect(mockSignalR.applyDockerAvailability).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[SystemStatusService] Failed to fetch system status',
+      expect.objectContaining({ status: 500 }),
+    );
   });
 
   // Cycle 4: reconnect triggers a new GET and re-seeds

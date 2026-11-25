@@ -73,6 +73,7 @@ describe('setup wizard layout', () => {
 
   it('fits four steps and the webhook step into 320px, stacking the actions', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await page.viewport(320, 900);
 
     // Act
@@ -83,6 +84,7 @@ describe('setup wizard layout', () => {
     const error = host.querySelector('#setup-webhook-url-error')!.getBoundingClientRect();
 
     // Assert
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
     for (const step of Array.from(host.querySelectorAll('.setup-wizard__step'))) {
       expect(step.getBoundingClientRect().right).toBeLessThanOrEqual(steps.right + 0.5);
     }
@@ -95,6 +97,7 @@ describe('setup wizard layout', () => {
 
   it('keeps the steps on one row with connectors and the button at the end from 640px', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await page.viewport(1280, 900);
 
     // Act
@@ -104,6 +107,7 @@ describe('setup wizard layout', () => {
     const continueBtn = host.querySelector('.setup-webhook-step__continue-btn')!.getBoundingClientRect();
 
     // Assert
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
     expect(new Set(steps.map(s => Math.round(s.top))).size).toBe(1);
     expect(getComputedStyle(host.querySelector('.setup-wizard__step')!, '::after').display).not.toBe('none');
     expect(continueBtn.right).toBeCloseTo(actions.right, 0);

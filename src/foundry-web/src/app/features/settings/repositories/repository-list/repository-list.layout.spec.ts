@@ -3,6 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { Subject } from 'rxjs';
+import { SystemSignalRService } from '../../../../core/services/system-signalr.service';
 import { RepositorySummary } from '../repository.model';
 import { RepositoryListComponent } from './repository-list';
 
@@ -90,7 +92,15 @@ class HostComponent {
 
 async function render(width: number, reordering: boolean): Promise<HTMLElement> {
   TestBed.configureTestingModule({
-    providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    providers: [
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      provideRouter([]),
+      {
+        provide: SystemSignalRService,
+        useValue: { reconnected: new Subject<void>(), repositoryWebhookChanged: new Subject(), repositoryWebhooksChanged: new Subject<void>() },
+      },
+    ],
   });
   const fixture = TestBed.createComponent(HostComponent);
   fixture.componentRef.setInput('width', width);

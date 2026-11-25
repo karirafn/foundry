@@ -153,6 +153,7 @@ function setupApp(
 ) {
   const mockAccountService = createMockAccountService();
   const workerHub = new FakeHubTransport();
+  workerHub.invokeResult = () => Promise.resolve({ workerActivities: [], agentActivities: [] });
   TestBed.configureTestingModule({
     imports: [App],
     providers: [

@@ -169,6 +169,7 @@ describe('RepositoryService', () => {
 
   it('should set loading to false when loadRepositories fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Server Error', {
       status: 500,
@@ -177,10 +178,12 @@ describe('RepositoryService', () => {
 
     // Assert
     expect(service.loading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   it('should set loadError when loadRepositories fails with a ProblemDetails body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadRepositories(ACCOUNT_ID);
 
     // Act
@@ -191,10 +194,12 @@ describe('RepositoryService', () => {
 
     // Assert
     expect(service.loadError()).toBe('Forbidden');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 403, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   it('should clear loadError at start of loadRepositories', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Server Error', {
       status: 500,
@@ -207,6 +212,7 @@ describe('RepositoryService', () => {
     // Assert — error is cleared before response
     expect(service.loadError()).toBeNull();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   it('should populate multiple repositories', () => {
@@ -292,6 +298,7 @@ describe('RepositoryService', () => {
 
   it('should set loadAvailableError when loadAvailableRepositories fails with a ProblemDetails body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadAvailableRepositories(ACCOUNT_ID);
 
     // Act
@@ -305,10 +312,12 @@ describe('RepositoryService', () => {
     // Assert
     expect(service.loadAvailableError()).toBe('Forbidden');
     expect(service.loadingAvailable()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 403, url: `/api/accounts/${ACCOUNT_ID}/repositories/available-repositories` }));
   });
 
   it('should leave availableHasClaims as false and set loadAvailableError when loadAvailableRepositories fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadAvailableRepositories(ACCOUNT_ID);
 
     // Act
@@ -319,10 +328,12 @@ describe('RepositoryService', () => {
     // Assert
     expect(service.availableHasClaims()).toBe(false);
     expect(service.loadAvailableError()).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories/available-repositories` }));
   });
 
   it('should clear loadAvailableError at start of loadAvailableRepositories', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadAvailableRepositories(ACCOUNT_ID);
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
@@ -336,6 +347,7 @@ describe('RepositoryService', () => {
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
       .flush({ hasClaims: false, repositories: [] });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories/available-repositories` }));
   });
 
   // Cycle 4: createRepository calls POST
@@ -428,6 +440,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to false when createRepository fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Bad Request', {
@@ -438,10 +451,12 @@ describe('RepositoryService', () => {
     // Assert
     expect(service.saving()).toBe(false);
     expect(service.saveSuccess()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   it('should set saveError when createRepository fails with a ProblemDetails body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const request: CreateRepositoryRequest = { slug: 'my-org/duplicate', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
 
@@ -453,10 +468,12 @@ describe('RepositoryService', () => {
 
     // Assert
     expect(service.saveError()).toBe('Repository already exists.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   it('should clear saveError at start of createRepository', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null, maxConcurrentWorkers: null }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Conflict', {
       status: 409,
@@ -471,6 +488,7 @@ describe('RepositoryService', () => {
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
       .flush(MOCK_CREATE_RESPONSE, { status: 201, statusText: 'Created' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   // Cycle 5: updateRepository calls PUT
@@ -534,6 +552,7 @@ describe('RepositoryService', () => {
 
   it('should set saveError when updateRepository fails with a ProblemDetails body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const request: UpdateRepositoryRequest = { pollIntervalSeconds: -1, isActive: true, maxConcurrentWorkers: 1 };
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe({ error: () => {} });
 
@@ -545,10 +564,12 @@ describe('RepositoryService', () => {
 
     // Assert
     expect(service.saveError()).toBe('Invalid interval.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: `/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}` }));
   });
 
   it('should clear saveError at start of updateRepository', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true, maxConcurrentWorkers: 1 }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Bad Request', {
       status: 400,
@@ -561,6 +582,7 @@ describe('RepositoryService', () => {
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush(MOCK_REPOSITORY);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: `/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}` }));
   });
 
   // Cycle 6: deleteRepository calls DELETE
@@ -619,6 +641,7 @@ describe('RepositoryService', () => {
 
   it('should set a failed deleteFailure when deleteRepository fails with a ProblemDetails body', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
 
     // Act
@@ -629,10 +652,12 @@ describe('RepositoryService', () => {
 
     // Assert
     expect(service.deleteFailure()).toEqual({ kind: 'failed', message: 'Repository is in use.' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}` }));
   });
 
   it('should set a refused deleteFailure when deleteRepository is refused with blocking issues', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
 
     // Act
@@ -652,10 +677,12 @@ describe('RepositoryService', () => {
       kind: 'refused',
       blockingIssues: [{ repositorySlug: 'acme/api', issueNumber: 42, state: 'in_progress' }],
     });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}` }));
   });
 
   it('should clear deleteFailure at start of deleteRepository', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Conflict', {
       status: 409,
@@ -670,6 +697,7 @@ describe('RepositoryService', () => {
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
       .flush(null, { status: 204, statusText: 'No Content' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}` }));
   });
 
   // Cycle 7: loadAllRepositories — loads across multiple accounts and combines results
@@ -687,7 +715,7 @@ describe('RepositoryService', () => {
 
   it('should report loadAllRepositories as loaded, or failed when any request fails', async () => {
     // Arrange
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
 
     // Act
@@ -701,6 +729,7 @@ describe('RepositoryService', () => {
     expect(await loaded).toBe('loaded');
     expect(await failed).toBe('failed');
     expect(await service.loadAllRepositories([])).toBe('loaded');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID_2}/repositories` }));
   });
 
   it('should sort combined repositories by position after loadAllRepositories succeeds', () => {
@@ -762,6 +791,7 @@ describe('RepositoryService', () => {
 
   it('should set loadError when any account repository load fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const ACCOUNT_ID_2 = '00000000-0000-0000-0000-000000000002';
     service.loadAllRepositories([ACCOUNT_ID, ACCOUNT_ID_2]);
 
@@ -775,10 +805,12 @@ describe('RepositoryService', () => {
     // Assert
     expect(service.loadError()).toBe('Forbidden');
     expect(service.loading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 403, url: `/api/accounts/${ACCOUNT_ID_2}/repositories` }));
   });
 
   it('should clear loadError at start of loadAllRepositories', () => {
     // Arrange — first call that fails
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadAllRepositories([ACCOUNT_ID]);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Error', {
       status: 500,
@@ -791,6 +823,7 @@ describe('RepositoryService', () => {
     // Assert — error is cleared before response
     expect(service.loadError()).toBeNull();
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/accounts/${ACCOUNT_ID}/repositories` }));
   });
 
   it('should set repositories to empty array when loadAllRepositories is called with no account IDs', () => {
@@ -838,6 +871,7 @@ describe('RepositoryService', () => {
   // Fix 3a — signal reverted on PATCH error (WCAG 4.1.3 + status visibility)
   it('should revert the repositories signal to the pre-move order when moveRepository fails', () => {
     // Arrange — load two repos in initial order
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
 
@@ -852,6 +886,7 @@ describe('RepositoryService', () => {
     const repos = service.repositories();
     expect(repos[0].id).toBe(REPO_ID);
     expect(repos[1].id).toBe(REPO_ID_2);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: `/api/repositories/${REPO_ID}/position` }));
   });
 
   // Cycle 8: recheckEligibility calls POST to recheck endpoint
@@ -909,6 +944,7 @@ describe('RepositoryService', () => {
 
   it('should leave the repositories signal unchanged when applyBranchRules fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY_2]);
     let failed = false;
@@ -921,6 +957,7 @@ describe('RepositoryService', () => {
     // Assert
     expect(failed).toBe(true);
     expect(service.repositories()).toEqual([MOCK_REPOSITORY_2]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: `/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID_2}/apply-branch-rules` }));
   });
 });
 
@@ -1031,7 +1068,7 @@ describe('RepositoryService live webhook updates', () => {
     vi.advanceTimersByTime(300);
     httpMock.expectOne(WEBHOOK_URL).flush(ACTIVE_INFO);
 
-    expect(consoleError).toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: WEBHOOK_URL }));
     expect(statusOf(REPO_ID)).toBe('active');
     consoleError.mockRestore();
   });
@@ -1078,6 +1115,7 @@ describe('RepositoryService live webhook updates', () => {
 
     expect(service.repositories().map((r) => r.id)).toEqual([REPO_ID, REPO_ID_2]);
     expect(service.loadError()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: LIST_URL }));
     consoleError.mockRestore();
   });
 
@@ -1145,6 +1183,9 @@ describe('RepositoryService unclaimed repositories', () => {
   });
 
   it('sets the load error from the ProblemDetails body and resolves failed', async () => {
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
     // Act
     const outcome = service.loadUnclaimedRepositories();
     httpMock.expectOne(UNCLAIMED_URL).flush(
@@ -1156,10 +1197,12 @@ describe('RepositoryService unclaimed repositories', () => {
     expect(await outcome).toBe('failed');
     expect(service.unclaimedLoadError()).toBe('Database unavailable.');
     expect(service.unclaimedLoading()).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: UNCLAIMED_URL }));
   });
 
   it('clears the load error when a reload starts', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.loadUnclaimedRepositories();
     httpMock.expectOne(UNCLAIMED_URL).flush('boom', { status: 500, statusText: 'Server Error' });
 
@@ -1169,6 +1212,7 @@ describe('RepositoryService unclaimed repositories', () => {
     // Assert
     expect(service.unclaimedLoadError()).toBeNull();
     httpMock.expectOne(UNCLAIMED_URL).flush([]);
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: UNCLAIMED_URL }));
   });
 
   it('deletes through DELETE /api/repositories/{id} and filters the row out', () => {
@@ -1188,6 +1232,7 @@ describe('RepositoryService unclaimed repositories', () => {
 
   it('sets a refused unclaimedDeleteFailure when the removal is refused', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteUnclaimedRepository(REPO_ID).subscribe({ error: () => {} });
 
     // Act
@@ -1207,10 +1252,12 @@ describe('RepositoryService unclaimed repositories', () => {
       blockingIssues: [{ repositorySlug: 'orphan/project', issueNumber: 4, state: 'in_progress' }],
     });
     expect(service.deleteFailure()).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 409, url: `/api/repositories/${REPO_ID}` }));
   });
 
   it('clears unclaimedDeleteFailure when a delete starts', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteUnclaimedRepository(REPO_ID).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(
       { status: 404, detail: 'Not found.' },
@@ -1223,6 +1270,7 @@ describe('RepositoryService unclaimed repositories', () => {
     // Assert
     expect(service.unclaimedDeleteFailure()).toBeNull();
     httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(null, { status: 204, statusText: 'No Content' });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: `/api/repositories/${REPO_ID}` }));
   });
 
   it('recheckClaims posts the host to the unclaimed recheck endpoint and returns the reclaimed count', () => {
@@ -1242,6 +1290,7 @@ describe('RepositoryService unclaimed repositories', () => {
 
   it('recheckClaims clears unclaimedDeleteFailure when it starts', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     service.deleteUnclaimedRepository(REPO_ID).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/repositories/${REPO_ID}`).flush(
       { status: 404, detail: 'Not found.' },
@@ -1254,5 +1303,6 @@ describe('RepositoryService unclaimed repositories', () => {
     // Assert
     expect(service.unclaimedDeleteFailure()).toBeNull();
     httpMock.expectOne(r => r.url === '/api/repositories/unclaimed/recheck').flush({ reclaimedRepositoryCount: 0 });
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: `/api/repositories/${REPO_ID}` }));
   });
 });

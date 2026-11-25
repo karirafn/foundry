@@ -201,6 +201,7 @@ describe('SettingsAccountsComponent', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     httpMock.expectOne('/api/accounts').flush('Unauthorized', {
@@ -213,6 +214,9 @@ describe('SettingsAccountsComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const errorEl = el.querySelector('.account-list__error');
     expect(errorEl).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 401, url: '/api/accounts' })
+    );
   });
 
   it('should display delete error in accounts section when deleteAccount fails', () => {
@@ -233,6 +237,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.detectChanges();
     flushAccounts(httpMock, [account]);
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const accountService = TestBed.inject(AccountService);
@@ -249,6 +254,9 @@ describe('SettingsAccountsComponent', () => {
     expect(deleteError).toBeTruthy();
     expect(deleteError?.getAttribute('role')).toBe('alert');
     expect(deleteError?.textContent).toContain('Account is in use.');
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 409, url: `/api/accounts/${account.id}` })
+    );
   });
 
   it('should list the blocking issues when deleteAccount is refused', () => {
@@ -257,6 +265,7 @@ describe('SettingsAccountsComponent', () => {
     fixture.detectChanges();
     flushAccounts(httpMock);
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const accountService = TestBed.inject(AccountService);
@@ -283,6 +292,9 @@ describe('SettingsAccountsComponent', () => {
     expect(Array.from(alert?.querySelectorAll('.delete-failure__issues li') ?? []).map(li => li.textContent?.trim()))
       .toEqual(['acme/api#42 — in progress', 'acme/web#7 — triaging']);
     expect(alert?.querySelector('.delete-failure__hint')?.textContent?.trim()).toBe('Try again once these finish.');
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 409, url: '/api/accounts/acc-1' })
+    );
   });
 
   it('should render delete error container even when no delete error is present', () => {

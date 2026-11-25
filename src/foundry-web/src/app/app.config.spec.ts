@@ -54,6 +54,7 @@ describe('app initializer', () => {
     const httpMock = TestBed.inject(HttpTestingController);
     const settingsService = TestBed.inject(SettingsService);
     const accountService = TestBed.inject(AccountService);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const p = Promise.all([
@@ -70,6 +71,8 @@ describe('app initializer', () => {
     await p;
     expect(settingsService.loadError()).not.toBeNull();
     expect(accountService.loadError()).not.toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/accounts' }));
   });
 
   // Cycle 2: initializer resolves successfully when both API calls succeed

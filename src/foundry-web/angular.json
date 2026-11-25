@@ -76,6 +76,9 @@
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
+            "setupFiles": [
+              "src/test-setup.ts"
+            ],
             "exclude": [
               "src/**/*.layout.spec.ts"
             ]
@@ -84,6 +87,9 @@
         "test-layout": {
           "builder": "@angular/build:unit-test",
           "options": {
+            "setupFiles": [
+              "src/test-setup.ts"
+            ],
             "browsers": [
               "ChromiumHeadless"
             ],

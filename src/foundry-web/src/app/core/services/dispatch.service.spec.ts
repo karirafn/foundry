@@ -227,6 +227,9 @@ describe('DispatchService', () => {
   // Cycle 8: pauseDispatch sets pauseResumeError on failure
   it('should set pauseResumeError when pauseDispatch fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.pauseDispatch();
     httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', {
       status: 500,
@@ -234,12 +237,16 @@ describe('DispatchService', () => {
     });
 
     // Assert
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/dispatch/pause' }));
     expect(service.pauseResumeError()).not.toBeNull();
     expect(service.pausing()).toBe(false);
   });
 
   it('should set pauseResumeError to a fixed user-facing string when pauseDispatch fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.pauseDispatch();
     httpMock.expectOne('/api/settings/dispatch/pause').flush('Server Error', {
       status: 500,
@@ -247,6 +254,7 @@ describe('DispatchService', () => {
     });
 
     // Assert
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/dispatch/pause' }));
     expect(service.pauseResumeError()).toBe("Couldn't pause dispatch. Try again.");
   });
 
@@ -293,6 +301,9 @@ describe('DispatchService', () => {
   // Cycle 12: resumeDispatch sets pauseResumeError on failure
   it('should set pauseResumeError when resumeDispatch fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.resumeDispatch();
     httpMock.expectOne('/api/settings/dispatch/resume').flush('Server Error', {
       status: 500,
@@ -300,12 +311,16 @@ describe('DispatchService', () => {
     });
 
     // Assert
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/dispatch/resume' }));
     expect(service.pauseResumeError()).not.toBeNull();
     expect(service.resuming()).toBe(false);
   });
 
   it('should set pauseResumeError to a fixed user-facing string when resumeDispatch fails', () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
     service.resumeDispatch();
     httpMock.expectOne('/api/settings/dispatch/resume').flush('Server Error', {
       status: 500,
@@ -313,6 +328,7 @@ describe('DispatchService', () => {
     });
 
     // Assert
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/dispatch/resume' }));
     expect(service.pauseResumeError()).toBe("Couldn't resume dispatch. Try again.");
   });
 });

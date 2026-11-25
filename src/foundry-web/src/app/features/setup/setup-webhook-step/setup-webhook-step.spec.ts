@@ -70,6 +70,7 @@ describe('SetupWebhookStepComponent', () => {
   describe('settings unavailable', () => {
     it('should replace the port, guide and field with an alert', () => {
       // Arrange & Act
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { el, input } = setup({ settings: 'error' });
 
       // Assert
@@ -78,10 +79,12 @@ describe('SetupWebhookStepComponent', () => {
       expect(el.querySelector('.setup-webhook-step__port')).toBeNull();
       expect(el.querySelector('fd-webhook-expose-guide')).toBeNull();
       expect(input()).toBeNull();
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
     });
 
     it('should reload the settings when Retry is clicked and then show the field', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, el, httpMock, input } = setup({ settings: 'error' });
       const retry = el.querySelector('.setup-webhook-step__retry-btn') as HTMLButtonElement;
 
@@ -92,14 +95,17 @@ describe('SetupWebhookStepComponent', () => {
 
       // Assert
       expect(input().value).toBe(STORED_URL);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
     });
 
     it('should still show Back', () => {
       // Arrange & Act
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { backBtn } = setup({ settings: 'error' });
 
       // Assert
       expect(backBtn()).toBeTruthy();
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings' }));
     });
   });
 
@@ -275,6 +281,7 @@ describe('SetupWebhookStepComponent', () => {
   describe('server errors', () => {
     it('should show an unreachable error under the field, mark it invalid, clear the status and focus the field', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, input, continueBtn, fieldError, status, completed, httpMock } = setup();
       type(fixture, input(), NEW_URL);
 
@@ -290,10 +297,12 @@ describe('SetupWebhookStepComponent', () => {
       expect(document.activeElement).toBe(input());
       expect(continueBtn().textContent?.trim()).toBe('Verify and continue');
       expect(completed).toHaveLength(0);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
     });
 
     it('should show an invalid-URL error from the server under the field', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, input, continueBtn, fieldError, httpMock } = setup();
       type(fixture, input(), 'https://localhost');
 
@@ -307,10 +316,12 @@ describe('SetupWebhookStepComponent', () => {
 
       // Assert
       expect(fieldError()).toBe('GitHub and GitLab can\'t deliver to this address.');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
     });
 
     it('should hide a server error once the field is edited and show it again when the submitted URL returns', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, input, continueBtn, fieldError, httpMock } = setup();
       type(fixture, input(), NEW_URL);
       continueBtn().click();
@@ -325,10 +336,12 @@ describe('SetupWebhookStepComponent', () => {
       // Assert
       expect(afterEdit).toBe('');
       expect(fieldError()).toBe(UNREACHABLE_PROBLEM.detail);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: '/api/settings/webhooks' }));
     });
 
     it('should show any other error as a general alert with its detail', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, input, continueBtn, fieldError, saveError, httpMock } = setup();
       type(fixture, input(), NEW_URL);
 
@@ -340,10 +353,12 @@ describe('SetupWebhookStepComponent', () => {
       // Assert
       expect(saveError()).toBe('Something broke.');
       expect(fieldError()).toBe('');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/webhooks' }));
     });
 
     it('should fall back to a generic general error when the response has no detail', () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, input, continueBtn, saveError, httpMock } = setup();
       type(fixture, input(), NEW_URL);
 
@@ -354,6 +369,7 @@ describe('SetupWebhookStepComponent', () => {
 
       // Assert
       expect(saveError()).toBe('Couldn\'t save the webhook URL. Please try again.');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/settings/webhooks' }));
     });
   });
 

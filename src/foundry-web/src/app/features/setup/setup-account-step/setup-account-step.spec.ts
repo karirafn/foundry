@@ -425,6 +425,7 @@ describe('SetupAccountStepComponent', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
@@ -439,6 +440,9 @@ describe('SetupAccountStepComponent', () => {
     // Assert
     const errorEl = el.querySelector('[role="alert"]');
     expect(errorEl?.textContent?.trim()).toBeTruthy();
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 500, url: '/api/accounts' })
+    );
   });
 
   // Does not emit complete on failure
@@ -459,6 +463,7 @@ describe('SetupAccountStepComponent', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
     fixture.detectChanges();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     // Act
     const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
@@ -472,6 +477,9 @@ describe('SetupAccountStepComponent', () => {
 
     // Assert
     expect(emitted).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 500, url: '/api/accounts' })
+    );
   });
 
   // Does not emit complete when saveSuccess is already true from a previous unrelated save

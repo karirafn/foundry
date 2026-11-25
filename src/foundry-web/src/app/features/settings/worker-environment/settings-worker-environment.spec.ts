@@ -133,6 +133,7 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
   it('should summarise a field-keyed server error and focus the offending control', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const page = await loadPage();
     type(page, 'cpuLimit', '4');
     saveButton(page.el).click();
@@ -149,10 +150,12 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(page.el.querySelector('.general-settings__save-error')?.textContent?.trim()).toBe('1 field needs attention.');
     expect(document.activeElement).toBe(input(page.el, 'cpuLimit'));
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: ENV_URL }));
   });
 
   it('should clear only the edited control server error', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const page = await loadPage();
     type(page, 'cpuLimit', '4');
     saveButton(page.el).click();
@@ -168,6 +171,7 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
     // Assert
     expect(text(page.el, 'cpuLimit-error')).toBe('CPU limit 4 is not allowed.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: ENV_URL }));
   });
 
   it('should show a range error for an out-of-range memory', async () => {
@@ -251,6 +255,7 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
   it('should attach a limit error to its limit control', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const page = await loadPage();
     type(page, 'cpuLimit', '4');
 
@@ -265,10 +270,12 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
     // Assert
     expect(text(page.el, 'cpuLimit-error')).toBe('CPU limit 4 is not allowed.');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 400, url: ENV_URL }));
   });
 
   it('should show unmapped server errors in the form summary and clear them on edit', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const page = await loadPage();
     type(page, 'pidsLimit', '1024');
     saveButton(page.el).click();
@@ -286,6 +293,7 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(shown).toBe('Settings not found.');
     expect(page.el.querySelector('.general-settings__save-error')?.textContent?.trim()).toBe('');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: ENV_URL }));
   });
 
   it('should disable Save and show Saving... while the request is in flight', async () => {

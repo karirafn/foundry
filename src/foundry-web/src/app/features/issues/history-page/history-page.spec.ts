@@ -288,6 +288,9 @@ describe('HistoryPageComponent', () => {
     }
 
     it('shows an alert with a Retry button when the first page fails', async () => {
+      // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
       // Act
       const { el } = await failedFirstPage();
 
@@ -297,10 +300,12 @@ describe('HistoryPageComponent', () => {
       expect(alert.querySelector('button')?.textContent?.trim()).toBe('Retry');
       expect(el.querySelector('.history-page__empty')).toBeNull();
       expect(announcer(el)).toBe('');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed' }));
     });
 
     it('fetches the first page again and focuses the list heading on Retry', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, httpMock, el } = await failedFirstPage();
 
       // Act
@@ -312,6 +317,7 @@ describe('HistoryPageComponent', () => {
       expectResolvedPage(httpMock).flush({ items: [completed], nextCursor: null });
       await render(fixture);
       expect(el.querySelectorAll('fd-issue-card').length).toBe(1);
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed' }));
     });
   });
 
@@ -355,6 +361,7 @@ describe('HistoryPageComponent', () => {
 
     it('keeps the loaded cards and offers Retry when the next page fails, which focuses the list heading', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, httpMock, el } = await openWith([completed], 'cursor-1');
       el.querySelector<HTMLButtonElement>('.history-page__load-more')!.click();
       httpMock
@@ -374,6 +381,7 @@ describe('HistoryPageComponent', () => {
       httpMock
         .expectOne((r) => isResolvedPage(r) && r.params.get('cursor') === 'cursor-1')
         .flush({ items: [], nextCursor: null });
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500, url: '/api/issues?states=completed&cursor=cursor-1' }));
     });
   });
 
@@ -419,6 +427,7 @@ describe('HistoryPageComponent', () => {
 
     it('removes a deep-linked id whose detail is not found and opens nothing', async () => {
       // Arrange
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { fixture, httpMock, el } = setup();
       const router = TestBed.inject(Router);
       await router.navigateByUrl('/?issue=gone');
@@ -433,6 +442,7 @@ describe('HistoryPageComponent', () => {
       // Assert
       expect(el.querySelector('[role="dialog"]')).toBeNull();
       expect(router.url).toBe('/');
+      expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404, url: '/api/issues/gone' }));
     });
   });
 });
