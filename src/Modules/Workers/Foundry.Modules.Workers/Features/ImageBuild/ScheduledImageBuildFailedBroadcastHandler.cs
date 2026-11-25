@@ -4,7 +4,7 @@ using Foundry.Shared;
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
 /// <summary>
-/// A failed scheduled rebuild leaves dispatch running (ADR 0126), so the image-build notification goes inactive; the
+/// A failed scheduled rebuild leaves dispatch running (ADR 0127), so the image-build notification goes inactive; the
 /// notification still makes the dashboard reload the settings that carry the failure.
 /// </summary>
 [IntegrationEventHandlerIdentity("Workers.ScheduledImageBuildFailedBroadcast")]
