@@ -37,5 +37,6 @@ public sealed class AwaitingInputIssueConfiguration : IEntityTypeConfiguration<A
             .HasColumnName("question_reminder");
 
         builder.Ignore(i => i.Questions);
+        builder.Ignore(i => i.Decisions);
     }
 }
