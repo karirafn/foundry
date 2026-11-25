@@ -67,6 +67,9 @@ public sealed class AwaitingInputIssue : Issue
     /// <summary>The questions waiting for input: the open round of the clarification log.</summary>
     public IReadOnlyList<InputQuestion> Questions => OpenClarification?.Questions ?? [];
 
+    /// <summary>The details triage settled beside the open round's questions (ADR 0123).</summary>
+    public IReadOnlyList<TriageDecision> Decisions => OpenClarification?.Decisions ?? [];
+
     internal static AwaitingInputIssue FromInProgress(
         InProgressIssue source,
         ResumeTarget resumeTarget,

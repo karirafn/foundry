@@ -183,6 +183,29 @@ public sealed class RunAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTriageDecidedDetailsBesideItsQuestions_PostsTheDecisionsInTheQuestionComment()
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = new IssueBuilder()
+            .WithMonitoredRepositoryId(_repository.Id)
+            .WithIssueNumber(1)
+            .TriageInProgress()
+            .MarkNeedsInput(
+                new TriageVerdict.NeedsInput(IssueKind.Feature, [StructuredQuestionBuilder.Build()], PostedAt),
+                [TriageDecisionBuilder.Build(question: "Which retry cap?", decision: "Three attempts.")],
+                PostedAt);
+        Seed(awaiting);
+        _provider.PostResult = Result<ProviderCommentId>.Ok(ProviderCommentId.Create(557).ValueOrThrow());
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        _provider.PostedBodies.ShouldHaveSingleItem().ShouldContain(
+            "Triage also decided:\n- `Which retry cap?`: `Three attempts.` (Settled by existing behaviour)");
+    }
+
+    [Fact]
     public async Task WhenPendingWithoutAPullRequest_PostsOnTheIssue()
     {
         // Arrange

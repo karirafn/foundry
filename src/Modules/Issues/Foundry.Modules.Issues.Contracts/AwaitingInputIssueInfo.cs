@@ -7,6 +7,7 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <paramref name="PullRequestUrl"/>'s thread when it is set, otherwise on the issue's own thread.
 /// <paramref name="BranchName"/> is the resume target's branch, whose head counts as input: set for a revision or a
 /// continuation, <see langword="null"/> for a fresh run or a re-triage, which have no branch.
+/// <paramref name="Decisions"/> are the details triage settled beside the questions (ADR 0123), posted with them.
 /// </summary>
 public sealed record AwaitingInputIssueInfo(
     IssueId IssueId,
@@ -15,6 +16,7 @@ public sealed record AwaitingInputIssueInfo(
     string? PullRequestUrl,
     string? BranchName,
     IReadOnlyList<InputQuestion> Questions,
+    IReadOnlyList<TriageDecision> Decisions,
     AwaitingInputPostState PostState);
 
 /// <summary>How an awaiting-input issue's question post stands, as the poll step acts on it.</summary>

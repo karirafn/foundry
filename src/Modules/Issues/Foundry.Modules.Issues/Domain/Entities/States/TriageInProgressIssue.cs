@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
@@ -52,7 +53,7 @@ public sealed class TriageInProgressIssue : Issue
     /// <summary>
     /// Triage judged the issue ready: it records the verdict and any <paramref name="decisions"/> it made as a decided
     /// clarification round (ADR 0123), then goes through the dependency check, queued when it has no open blockers and
-    /// blocked otherwise.
+    /// blocked otherwise. Decisions are raised with where the check sent the issue, so the thread can be told.
     /// </summary>
     public Issue MarkReady(TriageVerdict.Ready verdict, IReadOnlyList<TriageDecision> decisions, DateTimeOffset transitionedAt)
     {
@@ -61,7 +62,19 @@ public sealed class TriageInProgressIssue : Issue
 
         RecordDecisions(decisions, verdict.DecidedAt);
 
-        return ReleaseThroughDependencyCheck(verdict, transitionedAt);
+        Issue released = ReleaseThroughDependencyCheck(verdict, transitionedAt);
+
+        if (decisions.Count > 0)
+        {
+            AddDomainEvent(new Events.TriageDetailsDecided(
+                Id,
+                MonitoredRepositoryId,
+                IssueNumber,
+                decisions,
+                released is BlockedIssue ? TriageRelease.WaitingOnBlockers : TriageRelease.Queued));
+        }
+
+        return released;
     }
 
     /// <summary>

@@ -47,6 +47,7 @@ public sealed class LoadTrackingContextAsync
             pullRequestUrl,
             branchName,
             [new InputQuestion.Legacy("Which?", "Context.", null)],
+            [],
             new AwaitingInputPostState.Posted(DateTimeOffset.UnixEpoch, CommentUrl: null, ReminderDueAt: null));
 
     private sealed class StubIssueQueries(IReadOnlyList<AwaitingInputIssueInfo> awaitingInput) : IIssueQueries
