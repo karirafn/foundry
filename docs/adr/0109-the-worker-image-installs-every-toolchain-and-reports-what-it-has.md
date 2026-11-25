@@ -26,6 +26,10 @@ After every successful build, and on inspect when building is disabled, Foundry 
 Settings shows it read-only.
 The entrypoint runs the same script at start and reports one `FOUNDRY_TOOLCHAIN` line, which Foundry stores on the run, so a run's record is the container it actually ran in.
 
+The .NET SDKs installed are every `active` or `maintenance` channel in Microsoft's `releases-index.json`, selected by `workers/install-dotnet-sdks.sh`.
+A channel with no apt package is skipped and shows as absent from the toolchain list, which carries one `dotnet-sdk` entry per installed SDK.
+The index is `ADD`ed so the SDK layer rebuilds exactly when the index changes.
+
 Prompt sections that depend on a toolchain (C# LSP, Playwright) are included from the stored list.
 An image without a list gets none of them.
 Foundry retries the probe with backoff at startup and on the image sweep until the list is recorded, so a failed probe never waits for the next build to clear.
@@ -49,3 +53,4 @@ A `Full` run gets the 0079 allowances and a `dockerd` only while the operator's 
 
 ## Revisions
 - 2026-11-14 — A `Full` run gets the 0079 allowances and a daemon only while the operator's nested-Docker switch is on ([ADR 0110](0110-nested-docker-privileges-stay-an-operator-switch.md)).
+- 2026-11-24 — .NET SDKs track the supported channels instead of a fixed version (#1285)

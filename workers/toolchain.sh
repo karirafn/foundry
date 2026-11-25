@@ -53,9 +53,22 @@ report_package() {
     report "$name" jq -er .version "$manifest"
 }
 
+# report_dotnet_sdks
+# Adds one dotnet-sdk entry per line of `dotnet --list-sdks` ("10.0.404 [/usr/share/dotnet/sdk]"), so
+# an SDK the image skipped shows as a missing entry rather than hiding behind the default SDK.
+report_dotnet_sdks() {
+    command -v dotnet >/dev/null 2>&1 || return 0
+    local output line version
+    output="$(timeout "$VERSION_TIMEOUT" dotnet --list-sdks 2>/dev/null)" || return 0
+    while IFS= read -r line; do
+        version="$(extract_version "${line%% \[*}")" || continue
+        entries+=("dotnet-sdk" "$version")
+    done <<<"$output"
+}
+
 report node node --version
 report_package claude-code "$CLAUDE_CODE_DIR/node_modules/@anthropic-ai/claude-code/package.json"
-report dotnet-sdk dotnet --version
+report_dotnet_sdks
 report csharp-ls csharp-ls --version
 if command -v npm >/dev/null 2>&1 && npm_root="$(run_version npm root -g)"; then
     report_package angular-cli "$npm_root/@angular/cli/package.json"
