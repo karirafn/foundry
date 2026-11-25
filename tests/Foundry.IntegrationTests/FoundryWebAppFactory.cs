@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 namespace Foundry.IntegrationTests;
 
@@ -169,6 +171,10 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         {
             builder.UseSetting(LegacyApplicationNameSetting, _legacyApplicationName);
         }
+
+        // Each host boot otherwise prints its Information startup lines to the console, burying test output in CI.
+        // Only the console provider is raised: CapturedLogs keeps Information for smoke-test diagnostics.
+        builder.ConfigureLogging(logging => logging.AddFilter<ConsoleLoggerProvider>(category: null, LogLevel.Warning));
 
         builder.UseEnvironment("Testing");
     }
