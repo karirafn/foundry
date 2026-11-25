@@ -11,11 +11,11 @@ using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
-using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 using Microsoft.Extensions.Logging.Abstractions;
 

@@ -15,8 +15,8 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Testing;
-using Foundry.WebApi.Persistence;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
+using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
