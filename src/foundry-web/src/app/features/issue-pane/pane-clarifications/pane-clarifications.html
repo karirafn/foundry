@@ -16,14 +16,14 @@
           </div>
 
           <p class="pane-clarifications__meta">
-            Asked <time [attr.datetime]="r.askedAt">{{ r.askedAt | date: 'medium' }}</time>
+            {{ r.kind === 'requested' ? 'Received' : 'Asked' }} <time [attr.datetime]="r.askedAt">{{ r.askedAt | date: 'medium' }}</time>
             @if (r.answeredAt; as answeredAt) {
               <span aria-hidden="true"> · </span>
               Answered <time [attr.datetime]="answeredAt">{{ answeredAt | date: 'medium' }}</time>
             }
           </p>
 
-          @if (r.questions.length > 0) {
+          @if (r.kind === 'asked' && r.questions.length > 0) {
             <p class="pane-clarifications__label" [id]="roundId(r, 'questions')">Questions</p>
             <ol class="pane-clarifications__questions" [attr.aria-labelledby]="roundId(r, 'questions')">
               @for (q of r.questions; track $index) {
@@ -64,21 +64,9 @@
                 <li class="pane-clarifications__part">
                   @switch (p.type) {
                     @case ('comments') {
-                      <!-- Untrusted comment text: interpolated as text, never bound as HTML. -->
-                      <p
-                        class="pane-clarifications__comment"
-                        [class.pane-clarifications__comment--clamped]="p.long && !isExpanded(r, $index)"
-                        [id]="roundId(r, 'comment-' + $index)"
-                      >{{ p.text }}</p>
-                      @if (p.long) {
-                        <button
-                          type="button"
-                          class="pane-clarifications__more"
-                          [attr.aria-expanded]="isExpanded(r, $index)"
-                          [attr.aria-controls]="roundId(r, 'comment-' + $index)"
-                          (click)="toggle(r, $index)"
-                        >{{ isExpanded(r, $index) ? 'Show less' : 'Show more' }}</button>
-                      }
+                      <ng-container
+                        *ngTemplateOutlet="comment; context: { $implicit: p.text, long: p.long, round: r, key: 'comment-' + $index }"
+                      />
                     }
                     @case ('note') {
                       <span class="pane-clarifications__note">{{ p.text }}</span>
@@ -101,6 +89,28 @@
                           [attr.title]="p.fullRange"
                         >{{ p.shortRange }}</span>
                       }
+                    }
+                  }
+                </li>
+              }
+            </ul>
+          }
+
+          @if (r.feedback.length > 0) {
+            <ul class="pane-clarifications__input" aria-label="Review comments">
+              @for (f of r.feedback; track $index) {
+                <li class="pane-clarifications__part">
+                  @switch (f.type) {
+                    @case ('comment') {
+                      @if (f.location) {
+                        <span class="pane-clarifications__secondary pane-clarifications__mono">{{ f.location }}</span>
+                      }
+                      <ng-container
+                        *ngTemplateOutlet="comment; context: { $implicit: f.text, long: f.long, round: r, key: 'feedback-' + $index }"
+                      />
+                    }
+                    @case ('note') {
+                      <span class="pane-clarifications__note">{{ f.text }}</span>
                     }
                   }
                 </li>
@@ -265,5 +275,24 @@
         </ul>
       </details>
     }
+  }
+</ng-template>
+
+<!-- An input or review comment, collapsed behind Show more when long. `key` keeps each list's expand state apart. -->
+<ng-template #comment let-text let-long="long" let-r="round" let-key="key">
+  <!-- Untrusted comment text: interpolated as text, never bound as HTML. -->
+  <p
+    class="pane-clarifications__comment"
+    [class.pane-clarifications__comment--clamped]="long && !isExpanded(r, key)"
+    [id]="roundId(r, key)"
+  >{{ text }}</p>
+  @if (long) {
+    <button
+      type="button"
+      class="pane-clarifications__more"
+      [attr.aria-expanded]="isExpanded(r, key)"
+      [attr.aria-controls]="roundId(r, key)"
+      (click)="toggle(r, key)"
+    >{{ isExpanded(r, key) ? 'Show less' : 'Show more' }}</button>
   }
 </ng-template>

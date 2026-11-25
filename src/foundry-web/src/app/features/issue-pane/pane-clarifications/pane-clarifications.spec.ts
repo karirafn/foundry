@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { AwaitingInputDetails, Clarification, ClarificationDecision, InputQuestion, IssueDetail } from '../../issues/issue.model';
+import { AwaitingInputDetails, Clarification, ClarificationDecision, ClarificationFeedback, InputQuestion, IssueDetail } from '../../issues/issue.model';
 import { PaneClarificationsComponent } from './pane-clarifications';
 
 const ASKED_AT = '2026-02-01T12:00:00Z';
@@ -557,5 +557,138 @@ describe('PaneClarificationsComponent triage decisions', () => {
 
     // Assert
     expect(status(el)).toBe('Triage decided 2 questions in round 1.');
+  });
+});
+
+describe('PaneClarificationsComponent review feedback', () => {
+  const RECEIVED_AT = '2026-02-02T09:30:00Z';
+
+  function requested(feedback: Partial<ClarificationFeedback> = {}): Clarification {
+    return round({
+      questions: [],
+      askedAt: RECEIVED_AT,
+      decisions: [],
+      feedback: { comments: [{ body: 'Use a date picker.', path: null, line: null }], omittedCommentCount: 0, ...feedback },
+    });
+  }
+
+  function labels(el: HTMLElement): string[] {
+    return Array.from(el.querySelectorAll('.pane-clarifications__label')).map(text);
+  }
+
+  function comments(el: HTMLElement): Element[] {
+    return Array.from(el.querySelectorAll('ul[aria-label="Review comments"] > li'));
+  }
+
+  it('shows a requested round with its neutral Review feedback chip, received time, and no questions, input or post facts', () => {
+    // Act
+    const { el } = setup(detail([requested()], 'awaiting_input', awaiting()));
+
+    // Assert
+    const chip = el.querySelector('.pane-clarifications__chip')!;
+    expect(text(chip)).toBe('Review feedback');
+    expect(chip.classList).toContain('pane-clarifications__chip--neutral');
+    expect(labels(el)).toEqual([]);
+    expect(el.querySelector('.pane-clarifications__questions')).toBeNull();
+    expect(el.querySelector('.pane-clarifications__facts')).toBeNull();
+    expect(text(el.querySelector('.pane-clarifications__meta'))).toMatch(/^Received /);
+    expect(el.querySelector('.pane-clarifications__meta time')!.getAttribute('datetime')).toBe(RECEIVED_AT);
+  });
+
+  it('shows each comment with its path and line when it has a path, and the body alone otherwise', () => {
+    // Act
+    const { el } = setup(detail([requested({
+      comments: [
+        { body: 'Use a date picker.', path: 'src/form.ts', line: 12 },
+        { body: 'Looks good otherwise.', path: null, line: null },
+        { body: 'A line without a path.', path: null, line: 4 },
+      ],
+    })]));
+
+    // Assert
+    const items = comments(el);
+    expect(items.map((li) => text(li.querySelector('.pane-clarifications__mono')))).toEqual(['src/form.ts:12', '', '']);
+    expect(items.map((li) => text(li.querySelector('.pane-clarifications__comment'))))
+      .toEqual(['Use a date picker.', 'Looks good otherwise.', 'A line without a path.']);
+  });
+
+  it('ends the comments with a note naming how many were omitted', () => {
+    // Act
+    const { el } = setup(detail([requested({ omittedCommentCount: 4 })]));
+
+    // Assert
+    const items = comments(el);
+    expect(items.length).toBe(2);
+    expect(text(items[1].querySelector('.pane-clarifications__note'))).toBe('4 more comments omitted');
+  });
+
+  it('shows no comment list for a round with neither comments nor omitted ones', () => {
+    // Act
+    const { el } = setup(detail([requested({ comments: [] })]));
+
+    // Assert
+    expect(el.querySelector('ul[aria-label="Review comments"]')).toBeNull();
+  });
+
+  it('renders a comment and its path that look like HTML as text', () => {
+    // Arrange
+    const body = '<script>alert(1)</script><img src=x>';
+
+    // Act
+    const { el } = setup(detail([requested({ comments: [{ body, path: '<b>src</b>.ts', line: 1 }] })]));
+
+    // Assert
+    const li = comments(el)[0];
+    expect(li.querySelector('script, img, b')).toBeNull();
+    expect(li.querySelector('.pane-clarifications__comment')!.textContent).toBe(body);
+    expect(text(li.querySelector('.pane-clarifications__mono'))).toBe('<b>src</b>.ts:1');
+  });
+
+  it('expands a long comment on its own, apart from an input comment at the same index', () => {
+    // Arrange
+    const long = 'line\n'.repeat(10);
+    const answered = round({ input: [{ kind: 'comments', text: long }], answeredAt: '2026-02-01T14:00:00Z' });
+    const { fixture, el } = setup(detail([answered, requested({ comments: [{ body: long, path: null, line: null }] })]));
+    const [inputComment, feedbackComment] = Array.from(el.querySelectorAll('.pane-clarifications__comment'));
+    const feedbackButton = comments(el)[0].querySelector<HTMLButtonElement>('.pane-clarifications__more')!;
+    expect(feedbackButton.getAttribute('aria-controls')).toBe(feedbackComment.id);
+
+    // Act
+    feedbackButton.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(feedbackComment.classList).not.toContain('pane-clarifications__comment--clamped');
+    expect(feedbackButton.getAttribute('aria-expanded')).toBe('true');
+    expect(inputComment.classList).toContain('pane-clarifications__comment--clamped');
+  });
+
+  it('expands one long review comment without the others', () => {
+    // Arrange
+    const long = 'line\n'.repeat(10);
+    const { fixture, el } = setup(detail([requested({ comments: [{ body: long, path: null, line: null }, { body: long, path: null, line: null }] })]));
+    const [first, second] = Array.from(el.querySelectorAll('.pane-clarifications__comment'));
+
+    // Act
+    el.querySelectorAll<HTMLButtonElement>('.pane-clarifications__more')[1].click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(first.classList).toContain('pane-clarifications__comment--clamped');
+    expect(second.classList).not.toContain('pane-clarifications__comment--clamped');
+    expect(first.id).not.toBe(second.id);
+  });
+
+  it('announces a requested round with its number', () => {
+    // Arrange
+    const answered = round({ input: [{ kind: 'comments', text: 'ok' }], answeredAt: '2026-02-01T14:00:00Z' });
+    const { fixture, el } = setup(detail([answered]));
+
+    // Act
+    fixture.componentRef.setInput('detail', detail([answered, requested()]));
+    fixture.detectChanges();
+
+    // Assert
+    expect(status(el)).toBe('Round 2: review feedback received.');
   });
 });

@@ -1,4 +1,4 @@
-import { AwaitingInputDetails, Clarification, ClarificationDecision, InputQuestion, IssueDetail } from '../../issues/issue.model';
+import { AwaitingInputDetails, Clarification, ClarificationDecision, ClarificationFeedback, InputQuestion, IssueDetail } from '../../issues/issue.model';
 import { buildClarifications, decisionBlocks, questionView } from './pane-clarifications.model';
 
 const ASKED_AT = '2026-02-01T12:00:00Z';
@@ -468,5 +468,140 @@ describe('decisionBlocks', () => {
       { type: 'table', header: ['State', 'Cap'], rows: [['queued', '3']] },
       { type: 'lines', text: 'Others stay uncapped.' },
     ]);
+  });
+});
+
+describe('review feedback', () => {
+  const RECEIVED_AT = '2026-02-02T09:30:00Z';
+
+  function requested(feedback: Partial<ClarificationFeedback> = {}): Clarification {
+    return round({
+      questions: [],
+      askedAt: RECEIVED_AT,
+      decisions: [],
+      feedback: { comments: [{ body: 'Use a date picker.', path: null, line: null }], omittedCommentCount: 0, ...feedback },
+    });
+  }
+
+  it('marks a round with feedback requested, even though it has no input', () => {
+    // Act
+    const [view] = buildClarifications(detail([requested()], 'awaiting_input', awaiting()), 'github', NOW);
+
+    // Assert
+    expect(view.status).toBe('requested');
+    expect(view.statusLabel).toBe('Review feedback');
+    expect(view.kind).toBe('requested');
+    expect(view.open).toBeNull();
+  });
+
+  it('shows a requested round received when its newest comment arrived, with no questions or input', () => {
+    // Act
+    const [view] = buildClarifications(detail([requested()]), 'github', NOW);
+
+    // Assert
+    expect(view.askedAt).toBe(RECEIVED_AT);
+    expect(view.answeredAt).toBeNull();
+    expect(view.questions).toEqual([]);
+    expect(view.input).toEqual([]);
+  });
+
+  it.each([
+    ['open', null, null],
+    ['answered', [{ kind: 'comments', text: 'ok' }], '2026-02-01T14:00:00Z'],
+    ['unanswered', [{ kind: 'continuedWithoutAnswer' }], '2026-02-01T14:00:00Z'],
+  ] as const)('keeps an asked round %s with no feedback', (expected, input, answeredAt) => {
+    // Act
+    const [view] = buildClarifications(
+      detail([round({ input: input === null ? null : [...input], answeredAt })]),
+      'github',
+      NOW,
+    );
+
+    // Assert
+    expect(view.status).toBe(expected);
+    expect(view.kind).toBe('asked');
+    expect(view.feedback).toEqual([]);
+  });
+
+  it('keeps a decided round decided when the server sends a null feedback', () => {
+    // Act
+    const [view] = buildClarifications(
+      detail([round({ questions: [], decisions: [{ question: 'q', decision: 'd', ground: 'settled_business', evidence: [] }], feedback: null })]),
+      'github',
+      NOW,
+    );
+
+    // Assert
+    expect(view.status).toBe('decided');
+  });
+
+  it('locates a comment by its path and line, or its path alone', () => {
+    // Act
+    const [view] = buildClarifications(
+      detail([requested({
+        comments: [
+          { body: 'Inline', path: 'src/Form.ts', line: 12 },
+          { body: 'File-level', path: 'src/Form.ts', line: null },
+        ],
+      })]),
+      'github',
+      NOW,
+    );
+
+    // Assert
+    expect(view.feedback).toEqual([
+      { type: 'comment', location: 'src/Form.ts:12', text: 'Inline', long: false },
+      { type: 'comment', location: 'src/Form.ts', text: 'File-level', long: false },
+    ]);
+  });
+
+  it.each([
+    ['no path or line', null, null],
+    ['a line but no path', null, 7],
+  ] as const)('shows a comment with %s without a location', (_case, path, line) => {
+    // Act
+    const [view] = buildClarifications(detail([requested({ comments: [{ body: 'General', path, line }] })]), 'github', NOW);
+
+    // Assert
+    expect(view.feedback).toEqual([{ type: 'comment', location: null, text: 'General', long: false }]);
+  });
+
+  it('marks a long comment', () => {
+    // Act
+    const [view] = buildClarifications(
+      detail([requested({ comments: [{ body: 'x'.repeat(481), path: null, line: null }] })]),
+      'github',
+      NOW,
+    );
+
+    // Assert
+    expect(view.feedback[0]).toMatchObject({ type: 'comment', long: true });
+  });
+
+  it.each([
+    [1, '1 more comment omitted'],
+    [3, '3 more comments omitted'],
+  ])('ends with a note when %i comments were omitted', (omitted, text) => {
+    // Act
+    const [view] = buildClarifications(detail([requested({ omittedCommentCount: omitted })]), 'github', NOW);
+
+    // Assert
+    expect(view.feedback.at(-1)).toEqual({ type: 'note', text });
+  });
+
+  it('adds no note when no comment was omitted', () => {
+    // Act
+    const [view] = buildClarifications(detail([requested()]), 'github', NOW);
+
+    // Assert
+    expect(view.feedback.map((item) => item.type)).toEqual(['comment']);
+  });
+
+  it('shows only the note for a round whose comments were all omitted', () => {
+    // Act
+    const [view] = buildClarifications(detail([requested({ comments: [], omittedCommentCount: 2 })]), 'github', NOW);
+
+    // Assert
+    expect(view.feedback).toEqual([{ type: 'note', text: '2 more comments omitted' }]);
   });
 });

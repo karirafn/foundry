@@ -202,3 +202,54 @@ describe('pane clarifications layout with a decided round', () => {
     expect(wrap.getBoundingClientRect().right).toBeLessThanOrEqual(host.getBoundingClientRect().right + 0.5);
   });
 });
+
+const REQUESTED: IssueDetail = {
+  ...DETAIL,
+  state: 'revision_queued',
+  clarifications: [
+    {
+      questions: [],
+      input: null,
+      askedAt: '2026-01-01T00:00:00Z',
+      answeredAt: null,
+      decisions: [],
+      feedback: {
+        comments: [
+          { body: Array.from({ length: 10 }, (_, i) => `Line ${i} https://example.test/${LONG_WORD}`).join('\n'), path: LONG_PATH, line: 7 },
+          { body: `General ${LONG_WORD}`, path: null, line: null },
+        ],
+        omittedCommentCount: 3,
+      },
+    },
+  ],
+};
+
+@Component({
+  selector: 'fd-pane-clarifications-requested-layout-host',
+  imports: [PaneClarificationsComponent],
+  template: `<div class="host" style="width: 480px"><fd-pane-clarifications [detail]="detail" providerType="github" /></div>`,
+})
+class RequestedHostComponent {
+  readonly detail = REQUESTED;
+}
+
+describe('pane clarifications layout with a review-feedback round', () => {
+  it('wraps a long comment and a long path inside a 480px pane', async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(RequestedHostComponent);
+    await fixture.whenStable();
+    const host = (fixture.nativeElement as HTMLElement).querySelector('.host') as HTMLElement;
+    host.querySelector<HTMLButtonElement>('.pane-clarifications__more')!.click();
+    await fixture.whenStable();
+    const hostRight = host.getBoundingClientRect().right;
+
+    // Act
+    const overflowing = Array.from(host.querySelectorAll<HTMLElement>('section *'))
+      .filter((b) => b.getBoundingClientRect().right > hostRight + 0.5);
+
+    // Assert
+    expect(host.querySelectorAll('ul[aria-label="Review comments"] > li').length).toBe(3);
+    expect(host.scrollWidth).toBe(host.clientWidth);
+    expect(overflowing.map((b) => b.className || b.tagName)).toEqual([]);
+  });
+});
