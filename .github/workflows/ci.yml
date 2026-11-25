@@ -31,7 +31,7 @@ jobs:
               - 'workers/**'  # the composed-host smoke test builds the role catalog from workers/
               - 'Directory.Build.props'
               - 'Directory.Packages.props'
-              - '*.sln'
+              - '*.slnx'
 
       - name: Setup .NET
         if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
@@ -521,6 +521,7 @@ jobs:
               - 'docs/adr/**'
               - 'DOMAIN.md'
               - 'scripts/**'
+              - '.github/workflows/**'
 
       - name: Install bats
         if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
@@ -534,6 +535,14 @@ jobs:
       - name: Check ADR numbering contract
         if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
         run: bash scripts/check-adr-numbering.sh
+
+      - name: Run path-filter BATS suite
+        if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
+        run: bats scripts/tests/check-ci-path-filters.bats
+
+      - name: Check every path-filter pattern matches a tracked file
+        if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
+        run: bash scripts/check-ci-path-filters.sh
 
   login-integration:
     runs-on: ubuntu-latest
@@ -551,9 +560,12 @@ jobs:
               - 'workers/Dockerfile.login'
               - 'workers/package.json'
               - 'workers/package-lock.json'
-              - 'tests/Foundry.IntegrationTests/Modules/Workers/Login/**'
-              - 'src/Modules/Workers/Foundry.Modules.Workers/Features/Login/**'
-              - 'src/Modules/Workers/Foundry.Modules.Workers/Infrastructure/DockerWorkerOrchestrator.cs'
+              - 'src/Modules/Workers/Foundry.Modules.Workers/Infrastructure/DockerWorkerOrchestrator.cs'  # LoginFlowIntegrationTests streams logs through it
+              - 'src/Modules/Credentials/Foundry.Modules.Credentials/Features/Login/**'
+              - 'src/Modules/Credentials/Foundry.Modules.Credentials/Infrastructure/Orchestration/**'
+              - 'src/Modules/Credentials/Foundry.Modules.Credentials/Domain/ValueObjects/**'
+              - 'src/Foundry.Shared.Infrastructure.Docker/**'
+              - 'tests/Foundry.IntegrationTests/Modules/Credentials/Login/**'
 
       - name: Setup .NET
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
