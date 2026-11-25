@@ -552,6 +552,22 @@ public sealed class RepositoryRoles
     }
 
     [Fact]
+    public void TheReviewSystemPrompt_JudgesEachCriterionAsTheClarificationLogLeavesItOnce()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Review.Name);
+
+        // Act
+        int occurrences = prompt.Split("as the clarification log leaves it").Length - 1;
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => occurrences.ShouldBe(1),
+            () => prompt.ShouldContain("cite the round"),
+            () => prompt.ShouldNotContain(SystemPromptBuilder.PersonInputPrecedenceRule));
+    }
+
+    [Fact]
     public void TheReviewSecuritySkill_HoldsTheWholeChecklistInOneFile()
     {
         // Arrange

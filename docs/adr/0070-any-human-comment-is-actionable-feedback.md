@@ -51,3 +51,4 @@ GitLab bot comments other than system notes are not filtered.
 
 ## Revisions
 - 2026-11-23 — The cutoff advances to the newest consumed comment; the deferred option is built (#925).
+- 2026-11-25 — Consumed feedback is also recorded on the issue's clarification log as a `Requested` round, where it supersedes the issue text for every later run ([ADR 0125](0125-a-persons-pull-request-feedback-is-recorded-on-the-clarification-log-and-supersedes-the-issue.md)).

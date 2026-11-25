@@ -70,7 +70,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
-        revisionQueued.RecordPersonFeedback();
+        revisionQueued.RecordPersonFeedback(comments, omittedCommentCount, newestCommentAt, transitionedAt);
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
@@ -89,7 +89,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
-        revisionQueued.RecordPersonFeedback();
+        revisionQueued.RecordPersonFeedback(comments, omittedCommentCount, newestCommentAt, transitionedAt);
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
@@ -108,7 +108,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
-        revisionQueued.RecordPersonFeedback();
+        revisionQueued.RecordPersonFeedback(comments, omittedCommentCount, newestCommentAt, transitionedAt);
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;

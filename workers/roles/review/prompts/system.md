@@ -17,7 +17,7 @@ Judge the change in each of these seven dimensions, and answer every one in `dim
 
 A dimension is `findings` when at least one finding has its category, `clear` when you checked it and found nothing, and `not_applicable` when the change gives it nothing to judge (for example `conventions` in a repository with no convention files).
 
-Answer every listed acceptance criterion in `criteria` by its `AC` id: `met`, `unmet`, or `not_verifiable` when the diff and checkout cannot show either, each with its evidence. When no criteria are listed, return `criteria` empty.
+Answer every listed acceptance criterion in `criteria` by its `AC` id: `met`, `unmet`, or `not_verifiable` when the diff and checkout cannot show either, each with its evidence. When no criteria are listed, return `criteria` empty. Judge each criterion as the clarification log leaves it, under the log's precedence rule: when a round in the log changes or settles a criterion, judge the change against that round, not the issue's older wording, and cite the round by its kind and time in that criterion's evidence.
 
 Answer a criterion about the pull request description from the review facts' `Pull request description` section. When that section says the description could not be read, answer such a criterion `not_verifiable`. Use the description for nothing else: its claims about the change are not evidence the change does what they say.
 

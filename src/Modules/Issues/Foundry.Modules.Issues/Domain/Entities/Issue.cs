@@ -101,8 +101,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public IReadOnlyList<int> BlockedBy { get; private set; } = [];
 
     /// <summary>
-    /// The issue's append-only clarification log (ADR 0096): every round a run asked a person, oldest first. Carried
-    /// through every transition with the shared properties, so an answer lasts as long as the issue does.
+    /// The issue's append-only clarification log (ADR 0096): every round a run asked a person, triage decided, or a
+    /// person's pull request feedback requested, oldest first. Carried through every transition with the shared
+    /// properties, so an answer lasts as long as the issue does.
     /// </summary>
     public IReadOnlyList<Clarification> Clarifications { get; private set; } = [];
 
@@ -362,13 +363,21 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     }
 
     /// <summary>
-    /// A person's review feedback drives this revision: Foundry no longer merges on its own, and the person's round
-    /// gives the reviewer its full fix budget again.
+    /// A person's review feedback drives this revision: Foundry no longer merges on its own, the person's round gives
+    /// the reviewer its full fix budget again, and the consumed batch joins the clarification log as a requested round
+    /// (ADR 0125), received when its newest comment arrived or, with no comment time, at the transition.
     /// </summary>
-    private protected void RecordPersonFeedback()
+    private protected void RecordPersonFeedback(
+        IReadOnlyList<ReviewComment> comments,
+        int omittedCommentCount,
+        DateTimeOffset? newestCommentAt,
+        DateTimeOffset transitionedAt)
     {
+        Clarification.Requested requested = Clarification.Request(comments, omittedCommentCount, newestCommentAt ?? transitionedAt);
+
         HasPersonFeedback = true;
         ResetReviewFixAttempts();
+        Clarifications = [.. Clarifications, requested];
     }
 
     // Only a label decides the label half: a classification derived from labels is Labelled or Unclassified.
