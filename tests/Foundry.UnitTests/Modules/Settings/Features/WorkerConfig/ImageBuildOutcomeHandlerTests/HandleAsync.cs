@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -222,6 +223,82 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         processor.Delivered.ShouldContain(e => e is ImageBuildFailed);
+    }
+
+    [Fact]
+    public async Task WhenAScheduledRebuildFails_RecordsAScheduledFailureThatLeavesTheStatusIdle()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        await SeedSettingsAsync(settings);
+
+        DateTimeOffset nextRetryAt = new(2026, 11, 25, 8, 0, 0, TimeSpan.Zero);
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CapturingIntegrationEventProcessor processor = new();
+        ImageBuildOutcomeFailedHandler sut = new(dbContext, processor);
+
+        // Act
+        await sut.HandleAsync(
+            new ImageBuildOutcomeFailed("apt failed", nextRetryAt, Attempt: 2, ImageRebuildOrigin.Scheduled),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        stored.ShouldNotBeNull();
+        stored.ShouldSatisfyAllConditions(
+            () => stored.ImageBuildState.ShouldBe(new ImageBuildState.ScheduledRebuildFailed("apt failed", nextRetryAt, 2)),
+            () => stored.ImageBuildState.ToStatus().ShouldBe(ImageBuildStatus.Idle));
+    }
+
+    [Fact]
+    public async Task WhenAScheduledRebuildFails_DeliversOnlyAScheduledImageBuildFailedEvent()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        settings.ClearIntegrationEvents();
+        await SeedSettingsAsync(settings);
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CapturingIntegrationEventProcessor processor = new();
+        ImageBuildOutcomeFailedHandler sut = new(dbContext, processor);
+
+        // Act
+        await sut.HandleAsync(
+            new ImageBuildOutcomeFailed("apt failed", DateTimeOffset.UtcNow.AddMinutes(1), Attempt: 1, ImageRebuildOrigin.Scheduled),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        processor.Delivered.ShouldHaveSingleItem().ShouldBeOfType<ScheduledImageBuildFailed>();
+    }
+
+    [Fact]
+    public async Task WhenARequestedRebuildFails_SetsTheFailedStatus()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.BeginImageBuild();
+        await SeedSettingsAsync(settings);
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CapturingIntegrationEventProcessor processor = new();
+        ImageBuildOutcomeFailedHandler sut = new(dbContext, processor);
+
+        // Act
+        await sut.HandleAsync(
+            new ImageBuildOutcomeFailed("apt failed", DateTimeOffset.UtcNow.AddMinutes(1), Attempt: 1, ImageRebuildOrigin.Requested),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        GlobalSettings? stored = await assertDb.Set<GlobalSettings>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+        stored.ShouldNotBeNull();
+        stored.ImageBuildState.ToStatus().ShouldBe(ImageBuildStatus.Failed);
     }
 
     [Fact]

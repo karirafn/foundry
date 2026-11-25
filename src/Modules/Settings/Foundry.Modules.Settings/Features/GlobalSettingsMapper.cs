@@ -19,14 +19,14 @@ internal static class GlobalSettingsMapper
 
     internal static GlobalSettingsSummary ToSummary(GlobalSettings settings, DispatchPauseState pauseState, int webhookPort)
     {
-        // Capture the failed state once; derive both status and failure fields from a single pattern.
-        ImageBuildState.Failed? failedState = settings.ImageBuildState as ImageBuildState.Failed;
-
         ImageBuildStatus status = settings.ImageBuildState.ToStatus();
 
-        string? lastError = failedState?.ErrorTail;
-        DateTimeOffset? nextRetryAt = failedState?.NextRetryAt;
-        int attempt = failedState?.Attempt ?? 0;
+        (string? lastError, DateTimeOffset? nextRetryAt, int attempt) = settings.ImageBuildState switch
+        {
+            ImageBuildState.Failed failed => (failed.ErrorTail, failed.NextRetryAt, failed.Attempt),
+            ImageBuildState.ScheduledRebuildFailed scheduled => (scheduled.ErrorTail, scheduled.NextRetryAt, scheduled.Attempt),
+            _ => ((string?)null, (DateTimeOffset?)null, 0),
+        };
 
         return new GlobalSettingsSummary(
             settings.MaxConcurrent,
@@ -54,6 +54,7 @@ internal static class GlobalSettingsMapper
             settings.WebhookPublicBaseUrl?.Value,
             settings.BackstopIntervalMinutes,
             settings.AwaitingInputReminderDelayHours,
-            pauseState.PackageProxyPause);
+            pauseState.PackageProxyPause,
+            settings.LastImageBuiltAt);
     }
 }

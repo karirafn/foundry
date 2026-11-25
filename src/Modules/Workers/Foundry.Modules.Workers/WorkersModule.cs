@@ -107,6 +107,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<ImageBuildStarted, ImageBuildStartedBroadcastHandler>();
         services.AddIntegrationEventHandler<ImageBuildCompleted, ImageBuildCompletedBroadcastHandler>();
         services.AddIntegrationEventHandler<ImageBuildFailed, ImageBuildFailedBroadcastHandler>();
+        services.AddIntegrationEventHandler<ScheduledImageBuildFailed, ScheduledImageBuildFailedBroadcastHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
         services.AddDomainEventHandler<Domain.Events.WorkerRunFailed, WorkerRunFailedBridgeHandler>();
 
@@ -122,6 +123,7 @@ public static class WorkersModule
         services.AddHostedService<AgentActivityFollowerService>();
         services.AddHostedService<WorkerImageRebuildService>();
         services.AddHostedService<FoundryImageSweepService>();
+        services.AddHostedService<WorkerImageRebuildScheduler>();
         services.AddHostedService(sp => sp.GetRequiredService<WorkerImageToolchainRecorder>());
         services.AddHostedService<StaleStartingRunService>();
         services.AddHostedService<StaleReservationService>();

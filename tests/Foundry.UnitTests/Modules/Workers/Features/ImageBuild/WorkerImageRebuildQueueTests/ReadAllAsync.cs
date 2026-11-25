@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Shouldly;
@@ -13,14 +14,14 @@ public sealed class ReadAllAsync
     {
         // Arrange
         WorkerImageRebuildQueue sut = new();
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         // Act
-        bool received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
+        ImageRebuildOrigin received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
             .FirstAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        received.ShouldBeTrue();
+        received.ShouldBe(ImageRebuildOrigin.Requested);
     }
 
     [Fact]
@@ -28,19 +29,19 @@ public sealed class ReadAllAsync
     {
         // Arrange
         WorkerImageRebuildQueue sut = new();
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         await sut.ReadAllAsync(TestContext.Current.CancellationToken)
             .FirstAsync(TestContext.Current.CancellationToken);
 
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         // Act
-        bool received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
+        ImageRebuildOrigin received = await sut.ReadAllAsync(TestContext.Current.CancellationToken)
             .FirstAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        received.ShouldBeTrue();
+        received.ShouldBe(ImageRebuildOrigin.Requested);
     }
 
     [Fact]
@@ -50,15 +51,15 @@ public sealed class ReadAllAsync
         WorkerImageRebuildQueue sut = new();
         CancellationTokenSource cts = new();
 
-        List<bool> received = [];
+        List<ImageRebuildOrigin> received = [];
 
         // Act — enqueue one, start reading, then cancel mid-stream
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
         await cts.CancelAsync();
 
         await Should.ThrowAsync<OperationCanceledException>(async () =>
         {
-            await foreach (bool signal in sut.ReadAllAsync(cts.Token))
+            await foreach (ImageRebuildOrigin signal in sut.ReadAllAsync(cts.Token))
             {
                 received.Add(signal);
             }

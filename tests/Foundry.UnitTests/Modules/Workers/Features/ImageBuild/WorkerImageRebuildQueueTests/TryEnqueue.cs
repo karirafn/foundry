@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Shouldly;
@@ -15,7 +16,7 @@ public sealed class TryEnqueue
         WorkerImageRebuildQueue sut = new();
 
         // Act
-        bool result = sut.TryEnqueue();
+        bool result = sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         // Assert
         result.ShouldBeTrue();
@@ -26,10 +27,10 @@ public sealed class TryEnqueue
     {
         // Arrange
         WorkerImageRebuildQueue sut = new();
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         // Act
-        bool result = sut.TryEnqueue();
+        bool result = sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         // Assert
         result.ShouldBeFalse();
@@ -40,15 +41,77 @@ public sealed class TryEnqueue
     {
         // Arrange
         WorkerImageRebuildQueue sut = new();
-        sut.TryEnqueue();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         await sut.ReadAllAsync(CancellationToken.None)
             .FirstAsync(TestContext.Current.CancellationToken);
 
         // Act
-        bool result = sut.TryEnqueue();
+        bool result = sut.TryEnqueue(ImageRebuildOrigin.Requested);
 
         // Assert
         result.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenAScheduledRequestFollowsAPendingRequestedOne_MergesIntoTheRequestedOne()
+    {
+        // Arrange
+        WorkerImageRebuildQueue sut = new();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
+
+        // Act
+        bool accepted = sut.TryEnqueue(ImageRebuildOrigin.Scheduled);
+
+        // Assert
+        accepted.ShouldBeFalse();
+        (await sut.ReadAllAsync(TestContext.Current.CancellationToken).FirstAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(ImageRebuildOrigin.Requested);
+    }
+
+    [Fact]
+    public async Task WhenARequestedRequestFollowsAPendingScheduledOne_TheMergedRebuildIsRequested()
+    {
+        // Arrange
+        WorkerImageRebuildQueue sut = new();
+        sut.TryEnqueue(ImageRebuildOrigin.Scheduled);
+
+        // Act
+        bool accepted = sut.TryEnqueue(ImageRebuildOrigin.Requested);
+
+        // Assert
+        accepted.ShouldBeFalse();
+        (await sut.ReadAllAsync(TestContext.Current.CancellationToken).FirstAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(ImageRebuildOrigin.Requested);
+    }
+
+    [Fact]
+    public async Task WhenOnlyAScheduledRequestIsPending_YieldsScheduled()
+    {
+        // Arrange
+        WorkerImageRebuildQueue sut = new();
+
+        // Act
+        sut.TryEnqueue(ImageRebuildOrigin.Scheduled);
+
+        // Assert
+        (await sut.ReadAllAsync(TestContext.Current.CancellationToken).FirstAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(ImageRebuildOrigin.Scheduled);
+    }
+
+    [Fact]
+    public async Task WhenAScheduledRequestMergedIntoAPendingOne_OnlyOneRebuildIsYielded()
+    {
+        // Arrange
+        WorkerImageRebuildQueue sut = new();
+        sut.TryEnqueue(ImageRebuildOrigin.Requested);
+        sut.TryEnqueue(ImageRebuildOrigin.Scheduled);
+        await sut.ReadAllAsync(TestContext.Current.CancellationToken).FirstAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        bool accepted = sut.TryEnqueue(ImageRebuildOrigin.Scheduled);
+
+        // Assert
+        accepted.ShouldBeTrue("the merged request left nothing behind in the queue");
     }
 }

@@ -12,4 +12,12 @@ internal abstract record ImageBuildState
         string? ErrorTail,
         DateTimeOffset? NextRetryAt,
         int Attempt) : ImageBuildState;
+
+    /// <summary>
+    /// A scheduled rebuild failed while the previous verified image stays usable, so dispatch continues (ADR 0126).
+    /// </summary>
+    internal sealed record ScheduledRebuildFailed(
+        string? ErrorTail,
+        DateTimeOffset? NextRetryAt,
+        int Attempt) : ImageBuildState;
 }

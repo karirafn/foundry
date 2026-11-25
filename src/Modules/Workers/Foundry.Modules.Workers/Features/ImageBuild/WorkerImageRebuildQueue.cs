@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
+using Foundry.Modules.Workers.Contracts;
+
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
 internal sealed class WorkerImageRebuildQueue : IWorkerImageRebuildQueue
@@ -15,6 +17,11 @@ internal sealed class WorkerImageRebuildQueue : IWorkerImageRebuildQueue
             SingleWriter = false,
         });
 
+    // The origin of the pending rebuild lives beside the signal so a later request can upgrade it in place;
+    // a channel item cannot be replaced once written.
+    private readonly Lock _pendingLock = new();
+    private ImageRebuildOrigin? _pendingOrigin;
+
     public event Action? ImmediateRebuildRequested;
 
     public void RequestImmediateRebuild()
@@ -23,27 +30,47 @@ internal sealed class WorkerImageRebuildQueue : IWorkerImageRebuildQueue
         // before the new signal enters the channel.
         // The event is raised outside any lock — see csharp rules on events-inside-locks.
         ImmediateRebuildRequested?.Invoke();
-        TryEnqueue();
+        TryEnqueue(ImageRebuildOrigin.Requested);
     }
 
-    public bool TryEnqueue()
+    public bool TryEnqueue(ImageRebuildOrigin origin)
     {
-        // DropWrite silently drops the item when full but still returns true from TryWrite.
-        // Check count first so callers know whether the signal was enqueued or dropped.
-        if (_channel.Reader.Count >= 1)
+        lock (_pendingLock)
         {
-            return false;
+            if (_pendingOrigin is ImageRebuildOrigin pending)
+            {
+                _pendingOrigin = Merge(pending, origin);
+                return false;
+            }
+
+            _pendingOrigin = origin;
         }
 
         return _channel.Writer.TryWrite(true);
     }
 
-    public async IAsyncEnumerable<bool> ReadAllAsync(
+    public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (bool signal in _channel.Reader.ReadAllAsync(cancellationToken))
+        await foreach (bool _ in _channel.Reader.ReadAllAsync(cancellationToken))
         {
-            yield return signal;
+            ImageRebuildOrigin? origin;
+            lock (_pendingLock)
+            {
+                origin = _pendingOrigin;
+                _pendingOrigin = null;
+            }
+
+            if (origin is ImageRebuildOrigin taken)
+            {
+                yield return taken;
+            }
         }
     }
+
+    // A requested rebuild's failure must stop dispatch, so it is never downgraded by merging a scheduled one into it.
+    private static ImageRebuildOrigin Merge(ImageRebuildOrigin pending, ImageRebuildOrigin incoming) =>
+        pending is ImageRebuildOrigin.Requested || incoming is ImageRebuildOrigin.Requested
+            ? ImageRebuildOrigin.Requested
+            : ImageRebuildOrigin.Scheduled;
 }

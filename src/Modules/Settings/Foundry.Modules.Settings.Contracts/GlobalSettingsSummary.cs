@@ -28,4 +28,5 @@ public sealed record GlobalSettingsSummary(
     string? WebhookPublicBaseUrl = null,
     int BackstopIntervalMinutes = 15,
     int AwaitingInputReminderDelayHours = 72,
-    PausedPackageProxy? PackageProxyPause = null);
+    PausedPackageProxy? PackageProxyPause = null,
+    DateTimeOffset? LastImageBuiltAt = null);

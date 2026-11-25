@@ -21,7 +21,15 @@ internal sealed class ImageBuildOutcomeFailedHandler(
             return;
         }
 
-        settings.FailImageBuild(@event.ErrorTail, @event.NextRetryAt, @event.Attempt);
+        if (@event.Origin is ImageRebuildOrigin.Scheduled)
+        {
+            settings.FailScheduledImageBuild(@event.ErrorTail, @event.NextRetryAt, @event.Attempt);
+        }
+        else
+        {
+            settings.FailImageBuild(@event.ErrorTail, @event.NextRetryAt, @event.Attempt);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
         await ImageBuildBroadcastDelivery.DeliverAsync(settings, integrationEventProcessor, cancellationToken);
     }

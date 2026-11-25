@@ -31,7 +31,8 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
         <p class="general-settings__section-description">
           Every worker image comes with the full toolchain: the .NET SDK, the Angular CLI, headless Chromium and the Docker
           engine. Saving the image tag or the build toggle rebuilds the image in the background; dispatch pauses until the
-          build finishes.
+          build finishes. Foundry also rebuilds the image a day after its last successful build; when that scheduled
+          rebuild fails, dispatch keeps running on the current image and the failure shows below.
         </p>
 
         @if (settingsService.settings()) {
@@ -98,7 +99,7 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
             <div role="status" class="general-settings__save-success">{{ settingsService.saveImageFlagsSuccess() ? 'Worker image settings saved — building now…' : '' }}</div>
           </div>
 
-          @if (settingsService.imageBuildStatus() === 'Failed' && settingsService.imageBuildLogTail()) {
+          @if ((settingsService.imageBuildStatus() === 'Failed' || _scheduledRebuildFailed()) && settingsService.imageBuildLogTail()) {
             <pre
               class="general-settings__image-log"
               tabindex="0"
@@ -220,7 +221,15 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
     this.settingsService.imageBuildStatus() === 'Building' ? 'Building worker image…' : ''
   );
 
+  // A failed scheduled rebuild keeps the status Idle so dispatch runs on the current image; only its error says so.
+  protected readonly _scheduledRebuildFailed: Signal<boolean> = computed(
+    () => this.settingsService.imageBuildStatus() === 'Idle' && !!this.settingsService.imageBuildLogTail()
+  );
+
   protected readonly _imageFailedText: Signal<string> = computed(() => {
+    if (this._scheduledRebuildFailed()) {
+      return this._scheduledRebuildFailedText();
+    }
     if (this.settingsService.imageBuildStatus() !== 'Failed') {
       return '';
     }
@@ -241,6 +250,15 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
     }
     return 'Worker image build failed.';
   });
+
+  private _scheduledRebuildFailedText(): string {
+    const retryAt = this.settingsService.imageBuildNextRetryAt();
+    const attempt = this.settingsService.imageBuildAttempt();
+    const formattedTime = retryAt ? this._datePipe.transform(retryAt, 'HH:mm') : null;
+    const retry = formattedTime !== null ? `; retrying at ${formattedTime}` : '';
+    const attemptText = attempt >= 1 ? ` (attempt ${attempt})` : '';
+    return `Scheduled rebuild failed — dispatch continues on the current image${retry}${attemptText}`;
+  }
 
   private _imagePreviousStatus: ImageBuildStatus = 'Idle';
   private readonly _imageFailureAlertTextSignal: WritableSignal<string> = signal('');

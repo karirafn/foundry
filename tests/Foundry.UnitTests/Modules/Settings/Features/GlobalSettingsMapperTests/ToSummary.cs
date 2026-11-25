@@ -446,4 +446,45 @@ public sealed class ToSummary
         // Assert
         result.AdditionalDenyRules.ShouldBe(settings.ClaudeCodeSettings.AdditionalDenyRules);
     }
+
+    [Fact]
+    public void WhenAScheduledRebuildFailed_SummaryIsIdleAndCarriesTheFailure()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+        DateTimeOffset nextRetryAt = new(2026, 11, 25, 8, 0, 0, TimeSpan.Zero);
+        settings.FailScheduledImageBuild("apt failed", nextRetryAt, attempt: 2);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, Unpaused, StubWebhookIngressProbe.DefaultPort);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ImageBuildStatus.ShouldBe(ImageBuildStatus.Idle),
+            () => result.LastImageBuildError.ShouldBe("apt failed"),
+            () => result.NextRetryAt.ShouldBe(nextRetryAt),
+            () => result.Attempt.ShouldBe(2));
+    }
+
+    [Fact]
+    public void WhenBuildCompletedSuccessfully_SummaryCarriesLastImageBuiltAt()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.BeginImageBuild();
+        settings.CompleteImageBuild();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings, Unpaused, StubWebhookIngressProbe.DefaultPort);
+
+        // Assert
+        result.LastImageBuiltAt.ShouldBe(settings.LastImageBuiltAt);
+    }
+
+    [Fact]
+    public void WhenNeverBuilt_SummaryHasNoLastImageBuiltAt()
+    {
+        GlobalSettingsMapper.ToSummary(CreateDefaultSettings(), Unpaused, StubWebhookIngressProbe.DefaultPort).LastImageBuiltAt.ShouldBeNull();
+    }
 }

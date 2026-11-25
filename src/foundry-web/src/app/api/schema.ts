@@ -1308,6 +1308,8 @@ export interface components {
              */
             awaitingInputReminderDelayHours: number | string;
             packageProxyPause?: null | components["schemas"]["PausedPackageProxy"];
+            /** Format: date-time */
+            lastImageBuiltAt?: null | string;
         };
         HttpValidationProblemDetails: {
             type?: null | string;

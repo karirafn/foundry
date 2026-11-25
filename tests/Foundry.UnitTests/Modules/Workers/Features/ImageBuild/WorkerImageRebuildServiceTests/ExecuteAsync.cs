@@ -3,6 +3,7 @@ using System.Threading;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Roles;
@@ -117,16 +118,16 @@ public sealed class ExecuteAsync
         public void RequestImmediateRebuild()
         {
             ImmediateRebuildRequested?.Invoke();
-            TryEnqueue();
+            TryEnqueue(ImageRebuildOrigin.Requested);
         }
 
-        public bool TryEnqueue() => false;
+        public bool TryEnqueue(ImageRebuildOrigin origin) => false;
 
-        public async IAsyncEnumerable<bool> ReadAllAsync(
+        public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            yield return true;
-            yield return true;
+            yield return ImageRebuildOrigin.Requested;
+            yield return ImageRebuildOrigin.Requested;
             await Task.CompletedTask;
             Completed.Release();
         }
@@ -142,12 +143,12 @@ public sealed class ExecuteAsync
         public void RequestImmediateRebuild()
         {
             ImmediateRebuildRequested?.Invoke();
-            TryEnqueue();
+            TryEnqueue(ImageRebuildOrigin.Requested);
         }
 
-        public bool TryEnqueue() => false;
+        public bool TryEnqueue(ImageRebuildOrigin origin) => false;
 
-        public async IAsyncEnumerable<bool> ReadAllAsync(
+        public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)

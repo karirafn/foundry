@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Features.ImageBuild;
 
@@ -49,12 +50,12 @@ public sealed class HandleAsync
         {
             RequestImmediateRebuildCalled = true;
             ImmediateRebuildRequested?.Invoke();
-            TryEnqueue();
+            TryEnqueue(ImageRebuildOrigin.Requested);
         }
 
-        public bool TryEnqueue() => true;
+        public bool TryEnqueue(ImageRebuildOrigin origin) => true;
 
-        public async IAsyncEnumerable<bool> ReadAllAsync(
+        public async IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.CompletedTask;

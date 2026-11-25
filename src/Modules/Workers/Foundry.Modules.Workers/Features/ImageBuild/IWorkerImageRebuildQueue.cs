@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Contracts;
+
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
 internal interface IWorkerImageRebuildQueue
@@ -9,19 +11,19 @@ internal interface IWorkerImageRebuildQueue
     event Action? ImmediateRebuildRequested;
 
     /// <summary>
-    /// Raises <see cref="ImmediateRebuildRequested"/> and then enqueues a rebuild signal,
-    /// superseding any pending delayed retry.
+    /// Raises <see cref="ImmediateRebuildRequested"/> and then enqueues a <see cref="ImageRebuildOrigin.Requested"/>
+    /// rebuild, superseding any pending delayed retry.
     /// </summary>
     void RequestImmediateRebuild();
 
     /// <summary>
-    /// Enqueues a rebuild signal. Returns true if the signal was accepted, false if it was dropped
-    /// because a rebuild is already pending (bounded capacity 1).
+    /// Enqueues a rebuild. Returns false when a rebuild is already pending (bounded capacity 1): the request merges
+    /// into it, and the merged rebuild is <see cref="ImageRebuildOrigin.Requested"/> when either request was.
     /// </summary>
-    bool TryEnqueue();
+    bool TryEnqueue(ImageRebuildOrigin origin);
 
     /// <summary>
-    /// Reads rebuild signals as they arrive. Completes when the channel is closed.
+    /// Reads pending rebuilds, each with the origin it ran for. Completes when the channel is closed.
     /// </summary>
-    IAsyncEnumerable<bool> ReadAllAsync(CancellationToken cancellationToken);
+    IAsyncEnumerable<ImageRebuildOrigin> ReadAllAsync(CancellationToken cancellationToken);
 }
