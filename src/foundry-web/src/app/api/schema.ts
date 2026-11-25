@@ -1153,6 +1153,12 @@ export interface components {
             inFlight: boolean;
             outcome: null | string;
         };
+        ClarificationDecisionDetails: {
+            question: string;
+            decision: string;
+            ground: string;
+            evidence: string[];
+        };
         ClarificationDetails: {
             questions: components["schemas"]["InputQuestion"][];
             input: null | components["schemas"]["InputPartDetails"][];
@@ -1160,6 +1166,7 @@ export interface components {
             askedAt: string;
             /** Format: date-time */
             answeredAt: null | string;
+            decisions: components["schemas"]["ClarificationDecisionDetails"][];
         };
         ClaudeAccountSummary: {
             /** Format: uuid */

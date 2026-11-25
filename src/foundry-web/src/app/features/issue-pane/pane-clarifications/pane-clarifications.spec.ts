@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { AwaitingInputDetails, Clarification, InputQuestion, IssueDetail } from '../../issues/issue.model';
+import { AwaitingInputDetails, Clarification, ClarificationDecision, InputQuestion, IssueDetail } from '../../issues/issue.model';
 import { PaneClarificationsComponent } from './pane-clarifications';
 
 const ASKED_AT = '2026-02-01T12:00:00Z';
@@ -425,5 +425,137 @@ describe('PaneClarificationsComponent', () => {
 
     // Assert
     expect(status(el)).toBe('Clarification round 2 opened.');
+  });
+});
+
+describe('PaneClarificationsComponent triage decisions', () => {
+  const decision: ClarificationDecision = {
+    question: 'Which retry cap?',
+    decision: 'Three attempts.',
+    ground: 'settled_business',
+    evidence: ['src/Retry.cs:8 caps at three', 'docs/retry.md:4 says three'],
+  };
+
+  function decided(decisions: ClarificationDecision[] = [decision]): Clarification {
+    return round({ questions: [], decisions });
+  }
+
+  function labels(el: HTMLElement): string[] {
+    return Array.from(el.querySelectorAll('.pane-clarifications__label')).map(text);
+  }
+
+  it('shows a decided round with its chip, asked time and decisions, and no questions, input or post facts', () => {
+    // Act
+    const { el } = setup(detail([decided()], 'awaiting_input', awaiting()));
+
+    // Assert
+    expect(text(el.querySelector('.pane-clarifications__chip'))).toBe('Triage decided');
+    expect(el.querySelector('.pane-clarifications__chip')!.classList).toContain('pane-clarifications__chip--neutral');
+    expect(labels(el)).toEqual(['Triage decided']);
+    expect(el.querySelector('.pane-clarifications__questions')).toBeNull();
+    expect(el.querySelector('.pane-clarifications__facts')).toBeNull();
+    expect(text(el.querySelector('.pane-clarifications__meta'))).toMatch(/^Asked /);
+  });
+
+  it('shows a mixed round\'s questions, then its input, then what triage also decided', () => {
+    // Arrange
+    const mixed = round({ decisions: [decision], input: [{ kind: 'comments', text: 'ok' }], answeredAt: '2026-02-01T14:00:00Z' });
+
+    // Act
+    const { el } = setup(detail([mixed]));
+
+    // Assert
+    expect(labels(el)).toEqual(['Questions', 'Input', 'Triage also decided']);
+    const list = el.querySelector('.pane-clarifications__decisions')!;
+    expect(text(el.querySelector(`#${list.getAttribute('aria-labelledby')}`))).toBe('Triage also decided');
+  });
+
+  it('shows each decision\'s question, ground and full text', () => {
+    // Arrange
+    const long = `${'Retry three times. '.repeat(50)}End.`;
+
+    // Act
+    const { el } = setup(detail([decided([{ ...decision, decision: long }, { ...decision, ground: 'implementation_detail' }])]));
+
+    // Assert
+    const items = Array.from(el.querySelectorAll('.pane-clarifications__decision'));
+    expect(items.map((li) => text(li.querySelector('.pane-clarifications__question-text')))).toEqual(['Which retry cap?', 'Which retry cap?']);
+    expect(items.map((li) => text(li.querySelector('.pane-clarifications__ground'))))
+      .toEqual(['Settled by existing behaviour', 'Implementation detail']);
+    expect(items[0].querySelector('.pane-clarifications__decision-body')!.textContent).toBe(long);
+  });
+
+  it('shows no ground tag for a ground it does not know', () => {
+    // Act
+    const { el } = setup(detail([decided([{ ...decision, ground: 'future' } as unknown as ClarificationDecision])]));
+
+    // Assert
+    expect(el.querySelector('.pane-clarifications__ground')).toBeNull();
+  });
+
+  it('collapses a decision\'s evidence behind a closed disclosure naming the decision', () => {
+    // Act
+    const { el } = setup(detail([decided()]));
+
+    // Assert
+    const disclosure = el.querySelector<HTMLDetailsElement>('.pane-clarifications__decision details')!;
+    expect(disclosure.open).toBe(false);
+    expect(text(disclosure.querySelector('summary'))).toBe('Evidence (2) for decision 1');
+    expect(Array.from(disclosure.querySelectorAll('.pane-clarifications__evidence li')).map(text))
+      .toEqual(['src/Retry.cs:8 caps at three', 'docs/retry.md:4 says three']);
+  });
+
+  it('shows no evidence disclosure for a decision without evidence', () => {
+    // Act
+    const { el } = setup(detail([decided([{ ...decision, evidence: [] }])]));
+
+    // Assert
+    expect(el.querySelector('.pane-clarifications__decision summary')).toBeNull();
+  });
+
+  it('renders a pipe table as a captioned table in a scrollable region', () => {
+    // Arrange
+    const table = '| State | Cap |\n|---|---|\n| queued | 3 |';
+
+    // Act
+    const { el } = setup(detail([decided([{ ...decision, decision: `Caps:\n${table}` }])]));
+
+    // Assert
+    const body = el.querySelector('.pane-clarifications__decision-body')!;
+    const wrap = body.querySelector('.pane-clarifications__table-wrap')!;
+    expect(wrap.getAttribute('role')).toBe('region');
+    expect(wrap.getAttribute('aria-label')).toBe('Decision 1 table');
+    expect(wrap.getAttribute('tabindex')).toBe('0');
+    expect(text(wrap.querySelector('caption'))).toBe('Decision 1');
+    expect(Array.from(wrap.querySelectorAll('th')).map((th) => [text(th), th.getAttribute('scope')])).toEqual([['State', 'col'], ['Cap', 'col']]);
+    expect(Array.from(wrap.querySelectorAll('tbody td')).map(text)).toEqual(['queued', '3']);
+    expect(text(body.firstElementChild)).toBe('Caps:');
+  });
+
+  it('renders decision text that looks like HTML as text', () => {
+    // Arrange
+    const tricky = { ...decision, question: '<b>Cap</b>?', decision: '<script>alert(1)</script>\n| <img src=x> | b |\n|---|---|\n| 1 | 2 |' };
+
+    // Act
+    const { el } = setup(detail([decided([tricky])]));
+
+    // Assert
+    const li = el.querySelector('.pane-clarifications__decision')!;
+    expect(li.querySelector('script, img, b')).toBeNull();
+    expect(li.querySelector('.pane-clarifications__question-text')!.textContent).toBe('<b>Cap</b>?');
+    expect(li.querySelector('.pane-clarifications__decision-body')!.textContent).toContain('<script>alert(1)</script>');
+    expect(text(li.querySelector('th'))).toBe('<img src=x>');
+  });
+
+  it('announces a decided round', () => {
+    // Arrange
+    const { fixture, el } = setup(detail([]));
+
+    // Act
+    fixture.componentRef.setInput('detail', detail([decided([decision, { ...decision, question: 'Which log level?' }])]));
+    fixture.detectChanges();
+
+    // Assert
+    expect(status(el)).toBe('Triage decided 2 questions in round 1.');
   });
 });

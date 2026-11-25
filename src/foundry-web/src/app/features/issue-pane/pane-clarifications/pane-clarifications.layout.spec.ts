@@ -148,3 +148,57 @@ describe('pane clarifications layout', () => {
     expect(heights.filter((h) => h < 32)).toEqual([]);
   });
 });
+
+const WIDE_TABLE = [
+  `| ${Array.from({ length: 8 }, (_, i) => `Column heading ${i}`).join(' | ')} |`,
+  `|${' --- |'.repeat(8)}`,
+  `| ${Array.from({ length: 8 }, (_, i) => `value-without-breaks-${i}`).join(' | ')} |`,
+].join('\n');
+
+const DECIDED: IssueDetail = {
+  ...DETAIL,
+  state: 'queued',
+  clarifications: [
+    {
+      questions: [],
+      input: null,
+      askedAt: '2026-01-01T00:00:00Z',
+      answeredAt: null,
+      decisions: [
+        {
+          question: `Which caps? ${LONG_WORD}`,
+          decision: `Caps per state:\n${WIDE_TABLE}\n${LONG_WORD}`,
+          ground: 'implementation_detail',
+          evidence: [LONG_PATH],
+        },
+      ],
+    },
+  ],
+};
+
+@Component({
+  selector: 'fd-pane-clarifications-decided-layout-host',
+  imports: [PaneClarificationsComponent],
+  template: `<div class="host" style="width: 480px"><fd-pane-clarifications [detail]="detail" providerType="github" /></div>`,
+})
+class DecidedHostComponent {
+  readonly detail = DECIDED;
+}
+
+describe('pane clarifications layout with a decided round', () => {
+  it('scrolls a wide decision table inside its own region at a 480px pane', async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(DecidedHostComponent);
+    await fixture.whenStable();
+    const host = (fixture.nativeElement as HTMLElement).querySelector('.host') as HTMLElement;
+    host.querySelectorAll('details').forEach((d) => (d.open = true));
+
+    // Act
+    const wrap = host.querySelector<HTMLElement>('.pane-clarifications__table-wrap')!;
+
+    // Assert
+    expect(host.scrollWidth).toBe(host.clientWidth);
+    expect(wrap.scrollWidth).toBeGreaterThan(wrap.clientWidth);
+    expect(wrap.getBoundingClientRect().right).toBeLessThanOrEqual(host.getBoundingClientRect().right + 0.5);
+  });
+});

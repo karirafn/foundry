@@ -1,4 +1,12 @@
-import { AwaitingInputDetails, Clarification, InputPart, InputQuestion, IssueDetail } from '../../issues/issue.model';
+import {
+  AwaitingInputDetails,
+  Clarification,
+  ClarificationDecision,
+  DecisionGround,
+  InputPart,
+  InputQuestion,
+  IssueDetail,
+} from '../../issues/issue.model';
 import { providerDisplayName } from '../../../shared/utils/provider.util';
 import { formatWaiting } from '../../../shared/utils/format-waiting';
 
@@ -7,7 +15,20 @@ const SHORT_SHA_LENGTH = 7;
 const LONG_COMMENT_LINES = 6;
 const LONG_COMMENT_CHARACTERS = 480;
 
-export type RoundStatus = 'open' | 'answered' | 'unanswered';
+export type RoundStatus = 'open' | 'answered' | 'unanswered' | 'decided';
+
+export type DecisionBlock =
+  | { readonly type: 'lines'; readonly text: string }
+  | { readonly type: 'table'; readonly header: readonly string[]; readonly rows: readonly (readonly string[])[] };
+
+export interface DecisionView {
+  readonly question: string;
+  readonly ground: DecisionGround;
+  /** Null for a ground this dashboard does not know. */
+  readonly groundLabel: string | null;
+  readonly blocks: readonly DecisionBlock[];
+  readonly evidence: readonly string[];
+}
 
 export type InputPartView =
   | { readonly type: 'comments'; readonly text: string; readonly long: boolean }
@@ -78,6 +99,8 @@ export interface ClarificationRoundView {
   readonly askedAt: string;
   readonly answeredAt: string | null;
   readonly input: readonly InputPartView[];
+  /** The details triage settled itself in the round; empty when it settled none. */
+  readonly decisions: readonly DecisionView[];
   /** Set only for the open round of an awaiting-input issue. */
   readonly open: OpenRoundView | null;
 }
@@ -86,6 +109,12 @@ const STATUS_LABELS: Record<RoundStatus, string> = {
   open: 'Open',
   answered: 'Answered',
   unanswered: 'Continued without answer',
+  decided: 'Triage decided',
+};
+
+const GROUND_LABELS: Record<DecisionGround, string> = {
+  settled_business: 'Settled by existing behaviour',
+  implementation_detail: 'Implementation detail',
 };
 
 /** The issue's clarification log as the pane's Clarifications section renders it, oldest round first. */
@@ -106,12 +135,17 @@ export function buildClarifications(
       askedAt: round.askedAt,
       answeredAt: round.answeredAt,
       input: (round.input ?? []).flatMap((part) => partView(part, providerName)),
+      decisions: (round.decisions ?? []).map(decisionView),
       open: status === 'open' && awaiting !== null ? openRound(round, awaiting, now) : null,
     };
   });
 }
 
 function roundStatus(round: Clarification): RoundStatus {
+  // A decided round has no input either, so it is told apart before the open test.
+  if (round.questions.length === 0 && (round.decisions ?? []).length > 0) {
+    return 'decided';
+  }
   if (round.input === null) {
     return 'open';
   }
@@ -224,4 +258,92 @@ export function questionView(q: InputQuestion): QuestionView {
 
 function questionOnly(question: string): QuestionView {
   return { kind: 'legacy', question, context: null, recommendation: null };
+}
+
+// An unknown ground from a newer server shows the decision without a ground label.
+function decisionView(decision: ClarificationDecision): DecisionView {
+  return {
+    question: decision.question,
+    ground: decision.ground,
+    groundLabel: GROUND_LABELS[decision.ground] ?? null,
+    blocks: decisionBlocks(decision.decision),
+    evidence: decision.evidence,
+  };
+}
+
+const TABLE_SEPARATOR_CELL = /^:?-+:?$/;
+
+/**
+ * Splits a decision's text into pre-wrapped lines and pipe tables, so a table triage wrote reads as one without a
+ * Markdown renderer. A run of lines starting with `|` is a table only when its second row is a separator and every
+ * row has the header's column count; anything else stays text.
+ */
+export function decisionBlocks(text: string): DecisionBlock[] {
+  const blocks: DecisionBlock[] = [];
+  let pending: string[] = [];
+  const flushLines = (): void => {
+    const lines = trimBlankLines(pending);
+    if (lines.length > 0) {
+      blocks.push({ type: 'lines', text: lines.join('\n') });
+    }
+    pending = [];
+  };
+
+  const lines = text.split('\n');
+  let i = 0;
+  while (i < lines.length) {
+    if (!isPipeLine(lines[i])) {
+      pending.push(lines[i]);
+      i++;
+      continue;
+    }
+    const start = i;
+    while (i < lines.length && isPipeLine(lines[i])) {
+      i++;
+    }
+    const run = lines.slice(start, i);
+    const table = parseTable(run);
+    if (table === null) {
+      pending.push(...run);
+    } else {
+      flushLines();
+      blocks.push(table);
+    }
+  }
+  flushLines();
+  return blocks;
+}
+
+function isPipeLine(line: string): boolean {
+  return line.trimStart().startsWith('|');
+}
+
+function parseTable(run: readonly string[]): DecisionBlock | null {
+  if (run.length < 2) {
+    return null;
+  }
+  const [header, separator, ...rows] = run.map(cells);
+  if (!separator.every((cell) => TABLE_SEPARATOR_CELL.test(cell))) {
+    return null;
+  }
+  const consistent = [separator, ...rows].every((row) => row.length === header.length);
+  return consistent ? { type: 'table', header, rows } : null;
+}
+
+function cells(line: string): string[] {
+  const trimmed = line.trim();
+  const inner = trimmed.length > 1 && trimmed.endsWith('|') ? trimmed.slice(1, -1) : trimmed.slice(1);
+  return inner.split('|').map((cell) => cell.trim());
+}
+
+function trimBlankLines(lines: readonly string[]): readonly string[] {
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start].trim() === '') {
+    start++;
+  }
+  while (end > start && lines[end - 1].trim() === '') {
+    end--;
+  }
+  return lines.slice(start, end);
 }

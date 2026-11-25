@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -145,6 +146,30 @@ public sealed class WhenIssueHasClarifications : IAsyncDisposable
         // Assert
         JsonElement details = body.RootElement.GetProperty("stateDetails").GetProperty("awaitingInput");
         details.GetProperty("reminderDueAt").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task WhenTriageDecidedWithoutAsking_ReturnsTheDecisionsWithTheirGround()
+    {
+        // Arrange
+        TriageDecision decision = TriageDecisionBuilder.Build(ground: TriageDecisionGround.SettledBusiness);
+        Issue queued = Builder().TriageInProgress()
+            .MarkReady(new TriageVerdict.Ready(IssueKind.Bug, PostedAt), [decision], PostedAt);
+        await SeedAsync(queued);
+
+        // Act
+        using JsonDocument body = await GetDetailAsync(queued);
+
+        // Assert
+        JsonElement round = body.RootElement.GetProperty("clarifications").EnumerateArray().ShouldHaveSingleItem();
+        JsonElement decided = round.GetProperty("decisions").EnumerateArray().ShouldHaveSingleItem();
+        round.ShouldSatisfyAllConditions(
+            () => round.GetProperty("questions").GetArrayLength().ShouldBe(0),
+            () => round.GetProperty("askedAt").GetDateTimeOffset().ShouldBe(PostedAt),
+            () => decided.GetProperty("question").GetString().ShouldBe(decision.Question),
+            () => decided.GetProperty("decision").GetString().ShouldBe(decision.Decision),
+            () => decided.GetProperty("ground").GetString().ShouldBe("settled_business"),
+            () => decided.GetProperty("evidence")[0].GetString().ShouldBe(decision.Evidence[0]));
     }
 
     [Fact]

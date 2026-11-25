@@ -777,11 +777,34 @@ internal sealed class IssueQueries(
     }
 
     private static List<ClarificationDetails> BuildClarificationDetails(Issue issue) =>
-        [.. issue.Clarifications.OfType<Clarification.Asked>().Select(round => new ClarificationDetails(
-            round.Questions,
-            round.Input is null ? null : [.. round.Input.Parts.Select(part => BuildInputPartDetails(issue.Url, part))],
-            round.AskedAt,
-            round.AnsweredAt))];
+        [.. issue.Clarifications.Select(round => round switch
+        {
+            Clarification.Asked asked => new ClarificationDetails(
+                asked.Questions,
+                asked.Input is null ? null : [.. asked.Input.Parts.Select(part => BuildInputPartDetails(issue.Url, part))],
+                asked.AskedAt,
+                asked.AnsweredAt,
+                BuildDecisionDetails(asked.Decisions)),
+            Clarification.Decided decided => new ClarificationDetails(
+                Questions: [],
+                Input: null,
+                AskedAt: decided.DecidedAt,
+                AnsweredAt: null,
+                BuildDecisionDetails(decided.Decisions)),
+            _ => throw new InvalidOperationException($"Unknown clarification round {round.GetType().Name}."),
+        })];
+
+    private static List<ClarificationDecisionDetails> BuildDecisionDetails(IReadOnlyList<TriageDecision> decisions) =>
+        [.. decisions.Select(decision => new ClarificationDecisionDetails(
+            decision.Question,
+            decision.Decision,
+            decision.Ground switch
+            {
+                TriageDecisionGround.SettledBusiness => ClarificationDecisionDetails.SettledBusinessGround,
+                TriageDecisionGround.ImplementationDetail => ClarificationDecisionDetails.ImplementationDetailGround,
+                _ => throw new InvalidOperationException($"Unknown triage decision ground {decision.Ground}."),
+            },
+            decision.Evidence))];
 
     private static InputPartDetails BuildInputPartDetails(ProviderUrl issueUrl, InputPart part) =>
         part switch

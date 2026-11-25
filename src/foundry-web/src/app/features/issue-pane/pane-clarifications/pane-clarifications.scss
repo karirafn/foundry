@@ -260,3 +260,77 @@
     }
   }
 }
+
+.pane-clarifications__decisions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pane-clarifications__decision {
+  color: var(--fd-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+// Outlined like the chip but square and quieter, so a ground never reads as a round status.
+.pane-clarifications__ground {
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  display: inline-block;
+  font-size: 0.75rem;
+  margin-inline-start: var(--fd-spacing-xs);
+  padding: 0 var(--fd-spacing-xs);
+}
+
+.pane-clarifications__decision-body {
+  line-height: 1.6;
+  margin-top: var(--fd-spacing-xs);
+  white-space: pre-wrap;
+}
+
+.pane-clarifications__lines {
+  margin: 0;
+}
+
+// Only the table scrolls, inside its own region, so the pane itself never scrolls sideways.
+.pane-clarifications__table-wrap {
+  margin: var(--fd-spacing-xs) 0;
+  max-width: 100%;
+  overflow-x: auto;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-clarifications__table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  white-space: normal;
+
+  th,
+  td {
+    border: 1px solid var(--fd-border-default);
+    overflow-wrap: normal;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--fd-bg-card-hover);
+    font-weight: 600;
+  }
+
+  @media (max-width: 479px) {
+    th,
+    td {
+      padding: var(--fd-spacing-xs);
+    }
+  }
+}

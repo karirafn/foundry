@@ -166,12 +166,29 @@ export type InputPart =
   | { kind: 'branchUpdated'; fromSha: string | null; toSha: string; compareUrl: string | null }
   | { kind: 'continuedWithoutAnswer' };
 
-/** One round of the issue's clarification log; `input` and `answeredAt` are null while it is open. */
+/** Why triage could settle a detail itself (ADR 0123). */
+export type DecisionGround = 'settled_business' | 'implementation_detail';
+
+/** A detail triage settled itself. Untrusted model output: render it as text, never as HTML. */
+export interface ClarificationDecision {
+  question: string;
+  decision: string;
+  /** A newer server may send a ground this dashboard does not know. */
+  ground: DecisionGround;
+  evidence: string[];
+}
+
+/**
+ * One round of the issue's clarification log; `input` and `answeredAt` are null while it is open. A round where
+ * triage only decided has no questions and its decision time as `askedAt`.
+ */
 export interface Clarification {
   questions: InputQuestion[];
   input: InputPart[] | null;
   askedAt: string;
   answeredAt: string | null;
+  /** Absent from a server older than triage decisions. */
+  decisions?: ClarificationDecision[];
 }
 
 export type IssueKind = 'feature' | 'bug' | 'refactor' | 'documentation';
