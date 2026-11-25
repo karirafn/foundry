@@ -30,8 +30,10 @@ import {
   UpdateAccountRequest,
   ResolvedTokenExpiry,
   isTokenExpiryWarning,
+  createTokenLink,
   narrowTokenValidationKind,
   providerDisplayName,
+  wrongTokenKindMessage,
   resolveTokenExpiry,
   resolveTokenStatus,
 } from '../account.model';
@@ -265,7 +267,12 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                 <span class="account-form__validation-block">
                   <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
                   <span class="account-form__validation-message account-form__validation-message--warning">
-                    <span class="sr-only">Warning: </span>Missing required scopes: {{ result.missingScopes.join(', ') }}
+                    <span class="sr-only">Warning: </span>Missing permissions:
+                    <ul class="account-form__validation-list">
+                      @for (label of result.missingScopes; track label) {
+                        <li>{{ label }}</li>
+                      }
+                    </ul>
                   </span>
                 </span>
               }
@@ -296,6 +303,21 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                   <span class="account-form__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
                 </span>
               }
+            }
+            @case ('wrongTokenKind') {
+              <span class="account-form__validation-block">
+                <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--error">
+                  <span class="sr-only">Error: </span>{{ _wrongTokenKindMessage(result.wrongKind) }}
+                  @if (_createTokenLink(); as link) {
+                    <a class="account-form__validation-link" [href]="link.url" target="_blank" rel="noopener noreferrer">
+                      Create a fine-grained token on {{ link.host }}
+                      <span aria-hidden="true">↗</span>
+                      <span class="sr-only">(opens in a new tab)</span>
+                    </a>
+                  }
+                </span>
+              </span>
             }
             @case ('authenticationFailed') {
               <span class="account-form__validation-block">
@@ -455,6 +477,12 @@ export class AccountFormComponent implements OnInit {
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
   protected readonly _tokenRequirements: WritableSignal<TokenRequirements | null> = signal(null);
+
+  protected readonly _createTokenLink: Signal<{ readonly url: string; readonly host: string } | null> = computed(() =>
+    createTokenLink(this._tokenRequirements(), this._baseUrl()),
+  );
+
+  protected readonly _wrongTokenKindMessage = wrongTokenKindMessage;
   /** Tracks visible conflicts (cleared when inputs change). */
   protected readonly _visibleConflicts: WritableSignal<NamespaceConflict[]> = signal([]);
 

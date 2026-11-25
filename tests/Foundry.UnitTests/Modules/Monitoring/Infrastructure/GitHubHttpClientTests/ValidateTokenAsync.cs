@@ -51,7 +51,7 @@ public sealed class ValidateTokenAsync
     }
 
     [Fact]
-    public async Task WhenClassicPatHasExpirationHeaderButNoScopesHeader_ReturnsScopesUnverifiableWithExpiry()
+    public async Task WhenTokenIsNotFineGrained_ReturnsWrongTokenKindWithExpiry()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
@@ -60,10 +60,10 @@ public sealed class ValidateTokenAsync
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_classic_token_without_scope_header", CancellationToken.None);
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_" + "classic_token", CancellationToken.None);
 
         // Assert
-        result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>().TokenExpiry
+        result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.WrongTokenKindOutcome>().TokenExpiry
             .ShouldBe(new TokenExpiry.On(new DateTimeOffset(2026, 11, 22, 10, 16, 35, TimeSpan.Zero)));
     }
 
@@ -72,12 +72,11 @@ public sealed class ValidateTokenAsync
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "ghp_valid_token", CancellationToken.None);
+        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(ValidBaseUrl, "github_pat_valid_token", CancellationToken.None);
 
         // Assert
         result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>().TokenExpiry
@@ -146,55 +145,7 @@ public sealed class ValidateTokenAsync
     }
 
     [Fact]
-    public async Task WhenTokenIsValidAndHasRepoScope_ReturnsAuthenticatedWithNoMissingScopes()
-    {
-        // Arrange
-        string json = """{ "login": "octocat" }""";
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo, user";
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "ghp_valid_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.AuthenticatedOutcome outcome = success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
-        outcome.ShouldSatisfyAllConditions(
-            () => outcome.AccountName.ShouldBe("octocat"),
-            () => outcome.MissingScopes.ShouldBeEmpty());
-    }
-
-    [Fact]
-    public async Task WhenTokenLacksRepoScope_ReturnsAuthenticatedWithMissingScopes()
-    {
-        // Arrange
-        string json = """{ "login": "octocat" }""";
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "user, read:org";
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "ghp_limited_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.AuthenticatedOutcome outcome = success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
-        outcome.MissingScopes.ShouldContain("repo");
-    }
-
-    [Fact]
-    public async Task WhenFineGrainedPatHasRequiredScopeInHeader_ReturnsAuthenticatedWithNoMissingScopes()
+    public async Task WhenFineGrainedPatResponseCarriesAScopesHeader_ReturnsAuthenticatedWithNoMissingScopes()
     {
         // Arrange
         string json = """{ "login": "octocat" }""";
@@ -218,26 +169,32 @@ public sealed class ValidateTokenAsync
             () => outcome.MissingScopes.ShouldBeEmpty());
     }
 
-    [Fact]
-    public async Task WhenClassicPatHasNoScopesHeader_ReturnsScopesUnverifiable()
+    [Theory]
+    [InlineData("ghp_")]
+    [InlineData("gho_")]
+    [InlineData("ghu_")]
+    [InlineData("ghs_")]
+    [InlineData("")]
+    public async Task WhenTokenIsNotFineGrained_ReturnsWrongTokenKindGitHubClassic(string prefix)
     {
         // Arrange
-        string json = """{ "login": "octocat" }""";
-        FakeHandler handler = new(HttpStatusCode.OK, json);
+        FakeHandler handler = new(HttpStatusCode.OK, """{ "login": "octocat" }""");
+        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo, user";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        GitHubHttpClient sut = CreateSut(httpClient);
 
         // Act
         Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
             ValidBaseUrl,
-            "ghp_classic_token_without_scope_header",
+            prefix + "classic_token",
             CancellationToken.None);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.ScopesUnverifiableOutcome outcome = success.Value.ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>();
-        outcome.AccountName.ShouldBe("octocat");
+        TokenValidationOutcome.WrongTokenKindOutcome outcome =
+            result.ValueOrThrow().ShouldBeOfType<TokenValidationOutcome.WrongTokenKindOutcome>();
+        outcome.ShouldSatisfyAllConditions(
+            () => outcome.AccountName.ShouldBe("octocat"),
+            () => outcome.WrongKind.ShouldBe(WrongTokenKind.GitHubClassic));
     }
 
     [Fact]
@@ -292,7 +249,6 @@ public sealed class ValidateTokenAsync
         // Arrange
         string json = """{ "login": "" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
@@ -314,7 +270,6 @@ public sealed class ValidateTokenAsync
         // Arrange
         string json = """{ "id": 1 }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
@@ -336,7 +291,6 @@ public sealed class ValidateTokenAsync
         // Arrange
         string json = "not valid json {{{";
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
@@ -399,7 +353,6 @@ public sealed class ValidateTokenAsync
         // Arrange
         string json = """{ "login": "octocat" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
@@ -418,7 +371,6 @@ public sealed class ValidateTokenAsync
         // Arrange
         string json = """{ "login": "octocat" }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = "repo";
         using HttpClient httpClient = new(handler);
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
@@ -431,28 +383,5 @@ public sealed class ValidateTokenAsync
         request.Headers.Authorization.ShouldSatisfyAllConditions(
             () => request.Headers.Authorization.Scheme.ShouldBe("Bearer"),
             () => request.Headers.Authorization.Parameter.ShouldBe("ghp_my_secret_token"));
-    }
-
-    [Fact]
-    public async Task WhenNoScopesGranted_ReturnsAuthenticatedWithRepoInMissingScopes()
-    {
-        // Arrange
-        string json = """{ "login": "octocat" }""";
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        handler.ResponseHeaders["X-OAuth-Scopes"] = string.Empty;
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<TokenValidationOutcome> result = await sut.ValidateTokenAsync(
-            ValidBaseUrl,
-            "ghp_no_scopes_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<TokenValidationOutcome>.Success success = result.ShouldBeOfType<Result<TokenValidationOutcome>.Success>();
-        TokenValidationOutcome.AuthenticatedOutcome outcome = success.Value.ShouldBeOfType<TokenValidationOutcome.AuthenticatedOutcome>();
-        outcome.MissingScopes.ShouldBe(["repo"]);
     }
 }

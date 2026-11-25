@@ -25,6 +25,7 @@ const CREATED_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -39,6 +40,7 @@ const VALID_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -47,6 +49,7 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -55,6 +58,7 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   missingScopes: ['repo', 'workflow'],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -63,6 +67,7 @@ const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -71,6 +76,7 @@ const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -79,6 +85,7 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: null,
   detectedProvider: 'gitlab',
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -543,7 +550,8 @@ describe('SetupAccountStepComponent', () => {
 
     // Assert
     const statusRegion = el.querySelector('[role="status"]');
-    expect(statusRegion?.textContent).toContain('Missing required scopes: repo, workflow');
+    expect(statusRegion?.textContent).toContain('Missing permissions:');
+    expect(Array.from(statusRegion?.querySelectorAll('li') ?? [], (li) => li.textContent?.trim())).toEqual(['repo', 'workflow']);
   });
 
   // identityUnresolved message
@@ -758,7 +766,8 @@ describe('SetupAccountStepComponent', () => {
 
     // Assert
     const statusRegion = el.querySelector('[role="status"]');
-    expect(statusRegion?.textContent).toContain('Missing required scopes: repo, workflow');
+    expect(statusRegion?.textContent).toContain('Missing permissions:');
+    expect(Array.from(statusRegion?.querySelectorAll('li') ?? [], (li) => li.textContent?.trim())).toEqual(['repo', 'workflow']);
     const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
@@ -1106,6 +1115,7 @@ describe('SetupAccountStepComponent', () => {
       missingScopes: [],
       accountName: null,
       detectedProvider: null,
+      wrongKind: null,
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     httpMock.expectOne('/api/accounts/validate-token').flush(unknownResult);
@@ -1227,6 +1237,8 @@ describe('SetupAccountStepComponent', () => {
       ],
       creationUrlTemplate: '{baseUrl}/settings/personal-access-tokens/new?name=Foundry',
       resourceOwnerHint: null,
+      closingNote: null,
+      creationNote: null,
     };
     const GITLAB_REQUIREMENTS: TokenRequirements = {
       providerType: 'gitlab',
@@ -1237,7 +1249,46 @@ describe('SetupAccountStepComponent', () => {
       ],
       creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
       resourceOwnerHint: null,
+      closingNote: null,
+      creationNote: null,
     };
+
+    it('should show the classic-token error with a create link and keep Create disabled for wrongTokenKind', async () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+      httpMock.expectOne('/api/providers/github/token-requirements').flush(GITHUB_REQUIREMENTS);
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
+      tokenInput.value = 'classic_token';
+      tokenInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      // Act
+      tokenInput.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+      httpMock
+        .expectOne('/api/accounts/validate-token')
+        .flush({ ...VALID_RESULT, kind: 'wrongTokenKind', wrongKind: 'github-classic' });
+      fixture.detectChanges();
+
+      // Assert
+      const msg = el.querySelector('[role="status"] .setup-account-step__validation-message--error');
+      expect(msg?.querySelector('.sr-only')?.textContent).toBe('Error: ');
+      expect(msg?.textContent).toContain(
+        'This is a classic token. Foundry needs a fine-grained personal access token (it starts with github_pat_).',
+      );
+      const link = msg?.querySelector<HTMLAnchorElement>('a.setup-account-step__validation-link');
+      expect(link?.getAttribute('href')).toBe(
+        GITHUB_REQUIREMENTS.creationUrlTemplate.replace('{baseUrl}', 'https://github.com'),
+      );
+      expect(link?.getAttribute('target')).toBe('_blank');
+      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(link?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Create a fine-grained token on github.com ↗(opens in a new tab)');
+      expect((el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement).disabled).toBe(true);
+    });
 
     it('should show the GitHub requirements list between Base URL and Token', async () => {
       // Arrange

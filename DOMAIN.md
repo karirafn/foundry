@@ -244,20 +244,22 @@ On a token-bearing update, derivation runs and both guards evaluate *before* the
 ### Token Validation Outcome
 
 A closed variant set (`TokenValidationOutcome`) returned by both provider adapters after validating a PAT.
-Five variants:
+Six variants:
 
 - `Authenticated(AccountName, MissingScopes)` — the token authenticated and the PAT owner resolved; `MissingScopes` lists any required scopes absent from the token.
 - `AuthenticationFailed` — the token was rejected (401/unauthorized).
-- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read. Triggered by: GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx; and GitHub tokens served without an `X-OAuth-Scopes` response header that are **not** fine-grained PATs (e.g. GHES classic tokens, server configurations that suppress the header). GitHub fine-grained PATs (`github_pat_` prefix) are classified by prefix at validation time and, when served without `X-OAuth-Scopes`, return `Authenticated` with empty `MissingScopes` instead — no caution. Fine-grained permission enforcement is delegated to the provider and the create-time write probe (`IGitHubWriteProber`). The required scopes come from the provider's [permission list](#repository-eligibility): GitHub classic tokens need `repo` (which covers repository hooks), GitLab tokens need `api`. Permissions a scope cannot express — GitHub fine-grained permissions, a classic token's admin role, the GitLab Maintainer role — are verified per repository by the eligibility probes, and the create-time probe rejects a GitHub token missing any of them, naming every missing permission.
+- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read. Only GitLab produces it: group and project access tokens, for which `personal_access_tokens/self` returns non-2xx. GitHub never returns it. GitLab tokens need the `api` scope from the provider's [permission list](#repository-eligibility); the GitLab Maintainer role is verified per repository by the eligibility probe.
+- `WrongTokenKind(AccountName, WrongKind)` — the token authenticated and the owner resolved, but it is a kind of token Foundry refuses whatever it holds. A GitHub token must be a fine-grained personal access token (`github_pat_` prefix); any other GitHub token — classic `ghp_`, OAuth `gho_`, a GHES classic token, any other prefix — is `WrongTokenKind` with `WrongKind = github-classic`, and Foundry reads no scopes from it. A fine-grained token is `Authenticated` with empty `MissingScopes`: its permissions are verified per repository by the eligibility probes (`IGitHubWriteProber`), and the create-time probe rejects a token missing any of them, naming every missing permission. GitHub cannot report a fine-grained token's permissions, so extra permissions and "All repositories" access are not checked.
 - `IdentityUnresolved` — the response could not be parsed to an identity (neither provider's identity field present).
 - `ProviderMismatch(DetectedProvider)` — the response carried the *other* provider's identity shape (e.g. GitLab answered while GitHub was selected); names the detected provider.
 
-Two behavioral rules apply:
+Three behavioral rules apply:
 
 1. A successful authentication requires a PAT owner — a "valid but nameless" state cannot be represented; if the owner cannot be resolved the outcome is `IdentityUnresolved` or `ProviderMismatch`, not `Authenticated`.
 2. `ScopesUnverifiable` warns but permits saving — the provider owns authorization and claim-time scope enforcement is the real gate, so an unreadable scope list is advisory, not blocking.
+3. `WrongTokenKind` blocks saving: account creation and token replacement refuse it with a 400 problem (`Credential.WrongTokenKind`). A saved GitHub token of the wrong kind makes every repository of its account `Denied` with no missing permissions and no write probe sent, and the account summary's `NonConformingToken.WrongKind` names the kind; replacing the token clears it through the credential-update re-evaluation, and the Denied re-probe cooldown is the automatic exit.
 
-The endpoint (`POST /api/accounts/validate-token`) maps these variants to the response `Kind` field: `"authenticated"`, `"authenticationFailed"`, `"scopesUnverifiable"`, `"identityUnresolved"`, `"providerMismatch"`.
+The endpoint (`POST /api/accounts/validate-token`) maps these variants to the response `Kind` field: `"authenticated"`, `"authenticationFailed"`, `"scopesUnverifiable"`, `"wrongTokenKind"` (with `wrongKind`), `"identityUnresolved"`, `"providerMismatch"`.
 
 ### Unreadable Token
 
@@ -933,21 +935,22 @@ Stored on the Monitored Repository and composed from two checks of different cad
 Classification keys on explicit rate-limit response headers: a 403 with `X-RateLimit-Remaining: 0` or a present `Retry-After` header is treated as rate-limit exhaustion and produces `Result.Fail(RateLimitExhausted)` → `Unknown(RateLimited)`.
 A 403 with headroom or no rate-limit headers stays `Missing` → `Denied` → `CannotPush` (fail-closed for genuine permission denial).
 
-**Permission list.** One list per provider (`TokenPermissions`, [ADR 0115](docs/adr/0115-one-account-token-verified-against-every-permission-foundry-uses.md)) names everything the account token needs, and how each entry is verified. The account form's requirements, the GitHub creation link, the classic-scope check, the probes and the GitLab minimum role all derive from it.
+**Permission list.** One list per provider (`TokenPermissions`, [ADR 0115](docs/adr/0115-one-account-token-verified-against-every-permission-foundry-uses.md)) names everything the account token needs, and how each entry is verified. The account form's requirements, the GitHub creation link, the probes and the GitLab minimum role all derive from it.
 
 | Provider | Permission | Verified by |
 |---|---|---|
+| GitHub | Repository access: Only select repositories | not checked — GitHub cannot report a token's repository selection |
 | GitHub | Contents, Issues, Pull requests (read and write) | write probe: `POST git/refs`, `issues`, `pulls` — 422 or 404 granted |
 | GitHub | Administration (read and write) | write probe: `POST rulesets` with `{}` — 422 granted |
 | GitHub | Webhooks (read and write) | write probe: `POST hooks` with `{}` — 422 granted |
 | GitHub | Commit statuses (read) | read probe: `GET commits/{default branch}/statuses?per_page=1` — 200 granted |
-| GitHub | Actions (read) | read probe: `GET actions/runs?per_page=1` — 200 granted |
+| GitHub | Actions (read and write) | write probe: `POST actions/jobs/1/rerun` (a job id that does not exist) — 404 granted |
 | GitHub | Metadata (read) | always granted |
 | GitHub | Workflows (read and write) | not verifiable before use; a push touching `.github/workflows/` without it is refused at publish |
 | GitLab | `api` scope | token validation |
 | GitLab | Maintainer role (access level 40) | the token user's project or group role on the repository |
 
-Every probe reads a 403 that is not rate-limited as *missing*, and a rate-limited 403 as `Unknown(RateLimited)`. The Administration, Webhooks and read probes read any other status — 404 included, which is what GitHub Enterprise Server without the rulesets API answers — as indeterminate (`Unknown`), never as granted. The GitHub sequence runs every probe and collects every missing permission, so the operator learns them all in one pass; it stops only at an indeterminate probe. A classic GitHub token's `repo` scope already covers Administration and Webhooks, so a classic token refused by either probe is reported as the single permission **Admin role on the repository**: only the user's admin role on the repository can grant it. The writable-repository listing used for namespace claims keeps the Developer role threshold; only eligibility requires Maintainer.
+Every probe reads a 403 that is not rate-limited as *missing*, and a rate-limited 403 as `Unknown(RateLimited)`. The Administration, Webhooks and read probes read any other status — 404 included, which is what GitHub Enterprise Server without the rulesets API answers — as indeterminate (`Unknown`), never as granted; the Actions probe reads 404 as granted and any other status as indeterminate. The GitHub sequence runs every probe and collects every missing permission, so the operator learns them all in one pass; it stops only at an indeterminate probe. A GitHub token that is not fine-grained is never probed: its repositories are `Denied` with no missing permissions (see [Token Validation Outcome](#token-validation-outcome)). The writable-repository listing used for namespace claims keeps the Developer role threshold; only eligibility requires Maintainer.
 
 **Permission-list version.** Every `WriteProbeVerdict` (`Granted`, `Denied`, `Unknown`) carries the `PermissionListVersion` of the provider's list it was checked against — a hash of the list's verified entries (key and verification kind), so adding or changing a verified entry changes it with no hand edit. A verdict whose version is not current, including a verdict persisted before versions existed, is due for a write probe on the next poll whatever its kind or cooldown, and the poller re-runs the full evaluation for it. `Denied` also carries `MissingPermissions`: the stable permission-list keys of what the token lacks (a legacy `Denied` row deserializes with none), from which the `cannot-push` description is derived.
 

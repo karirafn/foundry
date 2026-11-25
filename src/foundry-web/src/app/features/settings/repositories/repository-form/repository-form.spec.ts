@@ -21,6 +21,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -34,6 +35,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -1349,6 +1351,7 @@ describe('RepositoryFormComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: ['team-alpha'],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
@@ -1361,6 +1364,7 @@ describe('RepositoryFormComponent', () => {
       tokenStatus: 'present',
       deniedRepositories: [],
       tokenInvalidSince: null,
+      nonConformingToken: null,
       namespaces: ['team-beta'],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };

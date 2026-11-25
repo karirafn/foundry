@@ -17,9 +17,11 @@ import {
   TokenRequirements,
   TokenValidationKind,
   TokenValidationResult,
+  createTokenLink,
   narrowTokenValidationKind,
   providerDisplayName,
   resolveTokenExpiry,
+  wrongTokenKindMessage,
 } from '../../settings/accounts/account.model';
 import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
 import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
@@ -152,7 +154,12 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                   <span class="setup-account-step__validation-block">
                     <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
                     <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
-                      <span class="sr-only">Warning: </span>Missing required scopes: {{ result.missingScopes.join(', ') }}
+                      <span class="sr-only">Warning: </span>Missing permissions:
+                      <ul class="setup-account-step__validation-list">
+                        @for (label of result.missingScopes; track label) {
+                          <li>{{ label }}</li>
+                        }
+                      </ul>
                     </span>
                   </span>
                 }
@@ -183,6 +190,21 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                     <span class="setup-account-step__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
                   </span>
                 }
+              }
+              @case ('wrongTokenKind') {
+                <span class="setup-account-step__validation-block">
+                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                  <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                    <span class="sr-only">Error: </span>{{ _wrongTokenKindMessage(result.wrongKind) }}
+                    @if (_createTokenLink(); as link) {
+                      <a class="setup-account-step__validation-link" [href]="link.url" target="_blank" rel="noopener noreferrer">
+                        Create a fine-grained token on {{ link.host }}
+                        <span aria-hidden="true">↗</span>
+                        <span class="sr-only">(opens in a new tab)</span>
+                      </a>
+                    }
+                  </span>
+                </span>
               }
               @case ('authenticationFailed') {
                 <span class="setup-account-step__validation-block">
@@ -269,6 +291,12 @@ export class SetupAccountStepComponent {
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
   protected readonly _tokenRequirements: WritableSignal<TokenRequirements | null> = signal(null);
+
+  protected readonly _createTokenLink: Signal<{ readonly url: string; readonly host: string } | null> = computed(() =>
+    createTokenLink(this._tokenRequirements(), this._baseUrl()),
+  );
+
+  protected readonly _wrongTokenKindMessage = wrongTokenKindMessage;
 
   /** Tracks the last (token, baseUrl, providerType) triple sent to resolution to avoid duplicate calls. */
   private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string; providerType: string } | null> = signal(null);

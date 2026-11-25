@@ -16,7 +16,7 @@ internal static class AccountSeeder
     internal static async Task<Guid> SeedGitHubAccountAsync(
         FoundryWebAppFactory factory,
         string name = "My GitHub",
-        string? token = "ghp_test_token",
+        string? token = "github_pat_test_token",
         string baseUrl = "https://github.com",
         TokenExpiry? tokenExpiry = null)
     {

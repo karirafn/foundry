@@ -44,17 +44,18 @@ public sealed class WhenProviderIsGitHub : IAsyncDisposable
         dto.ShouldSatisfyAllConditions(
             () => dto.TokenTypeLabel.ShouldBe("GitHub fine-grained personal access token"),
             () => dto.Permissions.ShouldBe([
+                new TokenPermissionRequirement("Repository access: Only select repositories", "not-checked"),
                 new TokenPermissionRequirement("Contents (read and write)", "probe"),
                 new TokenPermissionRequirement("Issues (read and write)", "probe"),
                 new TokenPermissionRequirement("Pull requests (read and write)", "probe"),
                 new TokenPermissionRequirement("Administration (read and write)", "probe"),
                 new TokenPermissionRequirement("Webhooks (read and write)", "probe"),
                 new TokenPermissionRequirement("Commit statuses (read)", "probe"),
-                new TokenPermissionRequirement("Actions (read)", "probe"),
+                new TokenPermissionRequirement("Actions (read and write)", "probe"),
                 new TokenPermissionRequirement("Metadata (read)", "always-granted"),
                 new TokenPermissionRequirement("Workflows (read and write)", "unverifiable")]),
             () => dto.CreationUrlTemplate.ShouldContain("personal-access-tokens/new"),
-            () => dto.CreationUrlTemplate.ShouldContain("name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=read&workflows=write"),
+            () => dto.CreationUrlTemplate.ShouldContain("name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=write&workflows=write"),
             () => dto.ResourceOwnerHint.ShouldNotBeNull());
     }
 }

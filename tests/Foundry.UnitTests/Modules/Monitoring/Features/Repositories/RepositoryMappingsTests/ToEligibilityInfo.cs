@@ -227,14 +227,14 @@ public sealed class ToEligibilityInfo
     {
         // Arrange
         RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.CannotPush("myorg/myrepo")]);
-        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied { MissingPermissions = ["admin_role"] };
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied { MissingPermissions = ["administration"] };
 
         // Act
         RepositoryEligibilityInfo? result = RepositoryMappings.ToEligibilityInfo(ineligible, verdict, "github");
 
         // Assert
         result.ShouldNotBeNull().Violations.ShouldHaveSingleItem().Description.ShouldBe(
-            "Token is missing Admin role on the repository for myorg/myrepo.");
+            "Token is missing Administration (read and write) for myorg/myrepo.");
     }
 
     [Fact]

@@ -11,6 +11,7 @@ const VALID_RESULT: TokenValidationResult = {
   missingScopes: [],
   accountName: 'octocat',
   detectedProvider: null,
+  wrongKind: null,
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 

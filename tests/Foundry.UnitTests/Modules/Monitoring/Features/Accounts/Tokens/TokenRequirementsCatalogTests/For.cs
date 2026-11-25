@@ -24,17 +24,21 @@ public sealed class For
             () => result.ProviderType.ShouldBe("github"),
             () => result.TokenTypeLabel.ShouldBe("GitHub fine-grained personal access token"),
             () => result.Permissions.ShouldBe([
+                new TokenPermissionRequirement("Repository access: Only select repositories", "not-checked"),
                 new TokenPermissionRequirement("Contents (read and write)", "probe"),
                 new TokenPermissionRequirement("Issues (read and write)", "probe"),
                 new TokenPermissionRequirement("Pull requests (read and write)", "probe"),
                 new TokenPermissionRequirement("Administration (read and write)", "probe"),
                 new TokenPermissionRequirement("Webhooks (read and write)", "probe"),
                 new TokenPermissionRequirement("Commit statuses (read)", "probe"),
-                new TokenPermissionRequirement("Actions (read)", "probe"),
+                new TokenPermissionRequirement("Actions (read and write)", "probe"),
                 new TokenPermissionRequirement("Metadata (read)", "always-granted"),
                 new TokenPermissionRequirement("Workflows (read and write)", "unverifiable")]),
             () => result.CreationUrlTemplate.ShouldBe(
-                "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=read&workflows=write"));
+                "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write&statuses=read&actions=write&workflows=write"),
+            () => result.ClosingNote.ShouldBe(
+                "GitHub can't report a token's extra permissions, so Foundry can't check for any. Grant only the permissions listed here."),
+            () => result.CreationNote.ShouldBeNull());
     }
 
     [Fact]

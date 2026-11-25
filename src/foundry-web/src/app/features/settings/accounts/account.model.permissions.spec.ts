@@ -18,6 +18,7 @@ const GITHUB_ACCOUNT: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: ['octocat'],
   tokenExpiry: { status: 'current', expiresAt: '2027-06-01T00:00:00Z' },
 };
@@ -49,6 +50,18 @@ describe('account.model missing permissions', () => {
 
       // Assert
       expect(tag).toEqual({ kind: 'missing-permissions', label: 'Missing permissions', tone: 'warning' });
+    });
+
+    it('should tag a present token of the wrong kind as wrong token kind', () => {
+      // Act
+      const tag = accountStatusTag({
+        ...GITHUB_ACCOUNT,
+        nonConformingToken: { wrongKind: 'github-classic', notAllowed: [], broadReach: [] },
+        deniedRepositories: [denied('o/a')],
+      });
+
+      // Assert
+      expect(tag).toEqual({ kind: 'wrong-token-kind', label: 'Wrong token kind', tone: 'warning' });
     });
 
     it('should prefer missing permissions over an expiry tag', () => {
@@ -117,7 +130,8 @@ describe('account.model missing permissions', () => {
         ],
         remedy: 'github-fine-grained',
         remedyText: `Edit the token's permissions on GitHub, or create a new token, then re-check. ${RECHECK}`,
-        editToken: { url: 'https://github.com/settings/personal-access-tokens', host: 'github.com' },
+        reasons: [],
+        tokenLink: { url: 'https://github.com/settings/personal-access-tokens', host: 'github.com', mode: 'edit' },
       });
     });
 
@@ -140,7 +154,7 @@ describe('account.model missing permissions', () => {
         ...GITHUB_ACCOUNT,
         deniedRepositories: [
           denied('o/a', 'Contents (read and write)', 'Webhooks (read and write)'),
-          denied('o/b', 'Administration (read and write)', 'Webhooks (read and write)', 'Actions (read)'),
+          denied('o/b', 'Administration (read and write)', 'Webhooks (read and write)', 'Actions (read and write)'),
         ],
       });
 
@@ -149,7 +163,7 @@ describe('account.model missing permissions', () => {
         'Contents (read and write)',
         'Administration (read and write)',
         'Webhooks (read and write)',
-        'Actions (read)',
+        'Actions (read and write)',
       ]);
     });
 
@@ -162,25 +176,48 @@ describe('account.model missing permissions', () => {
       });
 
       // Assert
-      expect(problem.editToken).toEqual({
+      expect(problem.tokenLink).toEqual({
         url: 'https://ghe.example.com/settings/personal-access-tokens',
         host: 'ghe.example.com',
+        mode: 'edit',
       });
     });
 
-    it('should give a classic GitHub token missing the admin role the classic remedy', () => {
+    it('should give a GitHub token of the wrong kind its own message, reason, remedy and create link', () => {
       // Act
       const problem = permissionsProblem({
         ...GITHUB_ACCOUNT,
-        deniedRepositories: [denied('o/a', 'Admin role on the repository')],
+        nonConformingToken: { wrongKind: 'github-classic', notAllowed: [], broadReach: [] },
+        deniedRepositories: [denied('o/a'), denied('o/b')],
       });
 
       // Assert
-      expect(problem.remedy).toBe('github-classic');
-      expect(problem.remedyText).toBe(
-        `Ask a repository admin to give the token's user, octocat, the Admin role on these repositories, then re-check. ${RECHECK}`,
+      expect(problem.remedy).toBe('github-wrong-kind');
+      expect(problem.message).toBe(
+        "This token doesn't meet Foundry's requirements, so Foundry won't start work on 2 repositories until it does.",
       );
-      expect(problem.editToken).toBeNull();
+      expect(problem.reasons).toEqual(['Wrong token kind: classic token.']);
+      expect(problem.missingPermissions).toEqual([]);
+      expect(problem.remedyText).toBe(
+        `Create a fine-grained personal access token on GitHub, then replace this one. A classic token can't be converted. ${RECHECK}`,
+      );
+      expect(problem.tokenLink).toEqual({
+        url: 'https://github.com/settings/personal-access-tokens/new',
+        host: 'github.com',
+        mode: 'create',
+      });
+    });
+
+    it('should read an unknown wrong kind generically', () => {
+      // Act
+      const problem = permissionsProblem({
+        ...GITHUB_ACCOUNT,
+        nonConformingToken: { wrongKind: 'github-something-new', notAllowed: [], broadReach: [] },
+        deniedRepositories: [denied('o/a')],
+      });
+
+      // Assert
+      expect(problem.reasons).toEqual(['Wrong token kind: not a fine-grained personal access token.']);
     });
 
     it('should give a GitLab token below Maintainer the GitLab remedy', () => {
@@ -196,7 +233,7 @@ describe('account.model missing permissions', () => {
       expect(problem.remedyText).toBe(
         `Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. ${RECHECK}`,
       );
-      expect(problem.editToken).toBeNull();
+      expect(problem.tokenLink).toBeNull();
     });
 
     it('should carry the expiry when it also warrants a warning', () => {

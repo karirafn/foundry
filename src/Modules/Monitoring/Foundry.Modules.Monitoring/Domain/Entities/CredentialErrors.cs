@@ -16,6 +16,7 @@ internal static class CredentialErrors
     internal const string DuplicateAccountCode = "Credential.DuplicateAccount";
     internal const string NamespaceDerivationUnavailableCode = "Credential.NamespaceDerivationUnavailable";
     internal const string RateLimitExhaustedCode = "Credential.RateLimitExhausted";
+    internal const string WrongTokenKindCode = "Credential.WrongTokenKind";
 
     internal static Error NotFound(CredentialId id) =>
         new(NotFoundCode, $"Credential with ID '{id.Value}' was not found.");
@@ -42,6 +43,9 @@ internal static class CredentialErrors
 
     internal static readonly Error InvalidToken =
         new(InvalidTokenCode, "The token is not valid or is missing required scopes.");
+
+    internal static readonly Error WrongTokenKind =
+        new(WrongTokenKindCode, "Foundry needs a fine-grained personal access token; this token is of another kind.");
 
     internal static readonly Error UnresolvedIdentity =
         new(UnresolvedIdentityCode, "Could not resolve the account identity from the provider.");

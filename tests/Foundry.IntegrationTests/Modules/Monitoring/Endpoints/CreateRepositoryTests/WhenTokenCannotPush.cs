@@ -79,7 +79,7 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
             () => repository.Eligibility.Violations[0].Rule.ShouldBe("cannot-push:owner/no-push-repo"),
             () => repository.Eligibility.Violations[0].Description.ShouldBe(
                 "Token is missing Contents (read and write), Issues (read and write), Pull requests (read and write)"
-                + " and Admin role on the repository for owner/no-push-repo."));
+                + ", Administration (read and write), Webhooks (read and write) and Actions (read and write) for owner/no-push-repo."));
     }
 
 }

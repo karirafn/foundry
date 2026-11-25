@@ -19,7 +19,7 @@ internal sealed class ProbeGrantedFakeHandler : DelegatingHandler
     {
         if (StaticListingFakeHandler.IsProbePost(request))
         {
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+            return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
         }
 
         if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)

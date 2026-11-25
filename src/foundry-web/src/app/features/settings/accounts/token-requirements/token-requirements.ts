@@ -1,14 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, Signal, computed, input } from '@angular/core';
-import { TokenPermissionRequirement, TokenRequirements } from '../account.model';
-
-function isHttpUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+import { TokenPermissionRequirement, TokenRequirements, creationUrl } from '../account.model';
 
 /**
  * The muted note a requirement shows after its label, or null when the label stands alone.
@@ -22,6 +13,8 @@ export function requirementNote(requirement: TokenPermissionRequirement): string
       return 'always granted';
     case 'unverifiable':
       return 'checked when used';
+    case 'not-checked':
+      return 'not checked';
     default:
       return null;
   }
@@ -60,6 +53,9 @@ export function requirementNote(requirement: TokenPermissionRequirement): string
           </li>
         }
       </ul>
+      @if (req.closingNote) {
+        <p class="token-requirements__closing-note">{{ req.closingNote }}</p>
+      }
       @if (_hasUnverifiable()) {
         <p class="token-requirements__explanation">
           Foundry checks each permission on every repository before it starts work. Permissions marked "checked when used" can't be checked ahead of time, so a missing one fails the push that needs it.
@@ -68,9 +64,12 @@ export function requirementNote(requirement: TokenPermissionRequirement): string
       @if (req.resourceOwnerHint) {
         <p [id]="_ownerHintId()" class="token-requirements__owner-hint">{{ req.resourceOwnerHint }}</p>
       }
+      @if (req.creationNote) {
+        <p [id]="_creationNoteId()" class="token-requirements__creation-note">{{ req.creationNote }}</p>
+      }
       @if (_createTokenUrl(); as url) {
         <a class="token-requirements__link" [href]="url" target="_blank" rel="noopener noreferrer"
-           [attr.aria-describedby]="req.resourceOwnerHint ? _ownerHintId() : null">
+           [attr.aria-describedby]="_linkDescribedBy()">
           Create token on {{ _resolvedHost() }}
           <span class="token-requirements__link-icon" aria-hidden="true">↗</span>
           <span class="sr-only">(opens in a new tab)</span>
@@ -87,11 +86,21 @@ export function requirementNote(requirement: TokenPermissionRequirement): string
 export class TokenRequirementsComponent {
   readonly requirements: InputSignal<TokenRequirements> = input.required<TokenRequirements>();
   readonly baseUrl: InputSignal<string> = input.required<string>();
-  /** Prefixes the heading and owner-hint ids, so two lists on one page never share an id. */
+  /** Prefixes the heading, owner-hint and creation-note ids, so two lists on one page never share an id. */
   readonly idPrefix: InputSignal<string> = input.required<string>();
 
   protected readonly _headingId: Signal<string> = computed(() => `${this.idPrefix()}-req-heading`);
   protected readonly _ownerHintId: Signal<string> = computed(() => `${this.idPrefix()}-owner-hint`);
+  protected readonly _creationNoteId: Signal<string> = computed(() => `${this.idPrefix()}-creation-note`);
+
+  protected readonly _linkDescribedBy: Signal<string | null> = computed(() => {
+    const req = this.requirements();
+    const ids = [
+      ...(req.resourceOwnerHint ? [this._ownerHintId()] : []),
+      ...(req.creationNote ? [this._creationNoteId()] : []),
+    ];
+    return ids.length > 0 ? ids.join(' ') : null;
+  });
 
   protected readonly _hasUnverifiable: Signal<boolean> = computed(() =>
     this.requirements().permissions.some((permission) => permission.verification === 'unverifiable'),
@@ -107,24 +116,7 @@ export class TokenRequirementsComponent {
     }
   });
 
-  protected readonly _createTokenUrl: Signal<string | null> = computed(() => {
-    const template = this.requirements().creationUrlTemplate;
-    if (!template.includes('{baseUrl}')) {
-      return isHttpUrl(template) ? template : null;
-    }
-    const rawBaseUrl = this.baseUrl().trim();
-    if (!rawBaseUrl) {
-      return null;
-    }
-    try {
-      const parsed = new URL(rawBaseUrl);
-      if (!isHttpUrl(parsed.origin)) {
-        return null;
-      }
-      const url = template.replace('{baseUrl}', parsed.origin);
-      return isHttpUrl(url) ? url : null;
-    } catch {
-      return null;
-    }
-  });
+  protected readonly _createTokenUrl: Signal<string | null> = computed(() =>
+    creationUrl(this.requirements().creationUrlTemplate, this.baseUrl()),
+  );
 }

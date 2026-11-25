@@ -15,6 +15,7 @@ import {
   AccountStatusTag,
   AccountSummary,
   ResolvedTokenExpiry,
+  TokenLink,
   accountProblem,
   accountStatusTag,
   isTokenExpiryWarning,
@@ -166,29 +167,36 @@ interface AccountRowView {
                   [attr.aria-label]="'Token permissions for ' + row.account.name"
                 >
                   <p class="account-list__problem-text">@if (problem.expiry; as expiry) {<span class="sr-only">Warning: </span><fd-token-expiry [expiry]="expiry" [providerName]="row.providerName" />. }{{ problem.message }}</p>
-                  <p class="account-list__problem-text">Missing: {{ problem.missingPermissions.join(', ') }}.</p>
-                  <p class="account-list__problem-text">
-                    <span [id]="'account-denied-repos-' + row.account.id">Repositories:
-                      @for (repository of (reposExpanded ? problem.repositories : problem.repositories.slice(0, visibleRepositoryCount)); track repository.id; let last = $last) {
-                        <a class="account-list__repo-link" [routerLink]="['/settings/repositories', repository.id]">{{ repository.slug }}</a>@if (!last) {<span>, </span>}
+                  @for (reason of problem.reasons; track reason) {
+                    <p class="account-list__problem-text">{{ reason }}</p>
+                  }
+                  @if (problem.missingPermissions.length > 0) {
+                    <p class="account-list__problem-text">Missing: {{ problem.missingPermissions.join('; ') }}.</p>
+                  }
+                  @if (problem.repositories.length > 0) {
+                    <p class="account-list__problem-text">
+                      <span [id]="'account-denied-repos-' + row.account.id">Repositories:
+                        @for (repository of (reposExpanded ? problem.repositories : problem.repositories.slice(0, visibleRepositoryCount)); track repository.id; let last = $last) {
+                          <a class="account-list__repo-link" [routerLink]="['/settings/repositories', repository.id]">{{ repository.slug }}</a>@if (!last) {<span>, </span>}
+                        }
+                      </span>
+                      @if (hiddenRepoCount > 0) {
+                        <button
+                          type="button"
+                          class="account-list__more-btn"
+                          [attr.aria-expanded]="reposExpanded"
+                          [attr.aria-controls]="'account-denied-repos-' + row.account.id"
+                          [attr.aria-label]="reposExpanded
+                            ? 'Show fewer repositories for ' + row.account.name
+                            : '+' + hiddenRepoCount + ' more repositories for ' + row.account.name"
+                          (click)="_toggleRepositories(row.account.id)"
+                        >{{ reposExpanded ? 'Show fewer' : '+' + hiddenRepoCount + ' more' }}</button>
                       }
-                    </span>
-                    @if (hiddenRepoCount > 0) {
-                      <button
-                        type="button"
-                        class="account-list__more-btn"
-                        [attr.aria-expanded]="reposExpanded"
-                        [attr.aria-controls]="'account-denied-repos-' + row.account.id"
-                        [attr.aria-label]="reposExpanded
-                          ? 'Show fewer repositories for ' + row.account.name
-                          : '+' + hiddenRepoCount + ' more repositories for ' + row.account.name"
-                        (click)="_toggleRepositories(row.account.id)"
-                      >{{ reposExpanded ? 'Show fewer' : '+' + hiddenRepoCount + ' more' }}</button>
-                    }
-                  </p>
+                    </p>
+                  }
                   <p class="account-list__problem-text">{{ problem.remedyText }}</p>
                   <div class="account-list__problem-actions">
-                    @if (problem.editToken; as editToken) {
+                    @if (problem.tokenLink; as tokenLink) {
                       @if (problem.expiry) {
                         <button
                           type="button"
@@ -200,11 +208,11 @@ interface AccountRowView {
                       <a
                         class="account-list__btn account-list__link-btn account-list__problem-btn"
                         [class.account-list__btn--primary]="!problem.expiry"
-                        [href]="editToken.url"
+                        [href]="tokenLink.url"
                         target="_blank"
                         rel="noopener noreferrer"
-                        [attr.aria-label]="'Edit token on ' + editToken.host + ' for ' + row.account.name + ' (opens in a new tab)'"
-                      >Edit token on {{ editToken.host }} <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a>
+                        [attr.aria-label]="_tokenLinkVerb(tokenLink) + ' token on ' + tokenLink.host + ' for ' + row.account.name + ' (opens in a new tab)'"
+                      >{{ _tokenLinkVerb(tokenLink) }} token on {{ tokenLink.host }} <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a>
                       @if (!problem.expiry) {
                         <button
                           type="button"
@@ -296,6 +304,10 @@ export class AccountListComponent {
       return new Set([...(previous?.value ?? [])].filter(id => present.has(id)));
     },
   });
+
+  protected _tokenLinkVerb(link: TokenLink): string {
+    return link.mode === 'edit' ? 'Edit' : 'Create';
+  }
 
   protected _isReposExpanded(id: string): boolean {
     return this._expandedRepoIds().has(id);

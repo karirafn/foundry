@@ -46,11 +46,14 @@ public sealed class HandleAsyncDeniedRepositories : IAsyncDisposable
     private GetAccounts.Handler BuildHandler() =>
         new(_dbContext, NullLogger<GetAccounts.Handler>.Instance, TimeProvider.System);
 
-    private async Task<Credential> AddGitHubAccountAsync(string name, params string[] namespaces)
+    private Task<Credential> AddGitHubAccountAsync(string name, params string[] namespaces) =>
+        AddGitHubAccountWithTokenAsync("github_pat_" + "token-value", name, namespaces);
+
+    private async Task<Credential> AddGitHubAccountWithTokenAsync(string token, string name, params string[] namespaces)
     {
         GitHubCredential credential = GitHubCredential.Create(
             AccountName.Create(name).ValueOrThrow(),
-            new IssuedToken("token-value", new TokenExpiry.NotChecked()),
+            new IssuedToken(token, new TokenExpiry.NotChecked()),
             BaseUrl.Create("https://github.com").ValueOrThrow());
         return await AddAccountAsync(credential, namespaces);
     }
@@ -137,18 +140,48 @@ public sealed class HandleAsyncDeniedRepositories : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenClassicTokenLacksAdminRole_ReportsAdminRoleLabel()
+    public async Task WhenGitHubTokenIsNotFineGrained_ReportsTheWrongKindAndListsTheDeniedRepository()
+    {
+        // Arrange
+        await AddGitHubAccountWithTokenAsync("ghp_" + "classic", "my-org", "my-org");
+        await AddRepositoryAsync("my-org/api", GitHubHost, DeniedFor());
+
+        // Act
+        CredentialSummary summary = (await GetAccountsAsync()).ShouldHaveSingleItem();
+
+        // Assert
+        NonConformingTokenSummary nonConforming = summary.NonConformingToken.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => nonConforming.WrongKind.ShouldBe("github-classic"),
+            () => nonConforming.NotAllowed.ShouldBeEmpty(),
+            () => nonConforming.BroadReach.ShouldBeEmpty(),
+            () => summary.DeniedRepositories.ShouldHaveSingleItem().MissingPermissions.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenGitHubTokenIsFineGrained_ReportsNoNonConformingToken()
     {
         // Arrange
         await AddGitHubAccountAsync("my-org", "my-org");
-        await AddRepositoryAsync("my-org/api", GitHubHost, DeniedFor("admin_role"));
 
         // Act
-        IReadOnlyList<CredentialSummary> summaries = await GetAccountsAsync();
+        CredentialSummary summary = (await GetAccountsAsync()).ShouldHaveSingleItem();
 
         // Assert
-        summaries.ShouldHaveSingleItem().DeniedRepositories.ShouldHaveSingleItem()
-            .MissingPermissions.ShouldBe(["Admin role on the repository"]);
+        summary.NonConformingToken.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenGitLabTokenHasNoGitHubPrefix_ReportsNoNonConformingToken()
+    {
+        // Arrange
+        await AddGitLabAccountAsync("my-group", "my-group");
+
+        // Act
+        CredentialSummary summary = (await GetAccountsAsync()).ShouldHaveSingleItem();
+
+        // Assert
+        summary.NonConformingToken.ShouldBeNull();
     }
 
     [Fact]

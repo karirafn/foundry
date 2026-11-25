@@ -126,7 +126,9 @@ internal sealed class AccountTokenVerdicts(
                 CheckVerdict.Rejected,
             Result<TokenValidationOutcome>.Success
             {
-                Value: TokenValidationOutcome.AuthenticatedOutcome or TokenValidationOutcome.ScopesUnverifiableOutcome,
+                Value: TokenValidationOutcome.AuthenticatedOutcome
+                    or TokenValidationOutcome.ScopesUnverifiableOutcome
+                    or TokenValidationOutcome.WrongTokenKindOutcome,
             } => CheckVerdict.Authenticated,
             _ => CheckVerdict.None,
         };

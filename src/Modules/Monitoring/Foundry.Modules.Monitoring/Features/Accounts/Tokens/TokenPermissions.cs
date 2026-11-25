@@ -62,6 +62,13 @@ internal abstract record PermissionVerification
         internal override string? VersionToken => null;
         internal override string WireName => "unverifiable";
     }
+
+    /// <summary>Required, but Foundry has no way to check it.</summary>
+    internal sealed record NotChecked : PermissionVerification
+    {
+        internal override string? VersionToken => null;
+        internal override string WireName => "not-checked";
+    }
 }
 
 /// <summary>A GitHub fine-grained token creation-URL parameter, such as <c>contents=write</c>.</summary>
@@ -73,109 +80,88 @@ internal sealed record TemplateParameter(string Name, string Level)
 /// <param name="Key">The stable identifier a <c>Denied</c> verdict stores; never shown.</param>
 /// <param name="Label">The text the account form shows for the permission.</param>
 /// <param name="TemplateParameter">The GitHub creation-URL parameter that preselects it, when it has one.</param>
-/// <param name="ClassicScope">The GitHub classic OAuth scope that grants it, when it has one.</param>
 /// <param name="VerifiedBy">How Foundry checks the token holds it.</param>
 internal sealed record TokenPermission(
     string Key,
     string Label,
     TemplateParameter? TemplateParameter,
-    string? ClassicScope,
     PermissionVerification VerifiedBy);
 
 /// <summary>
 /// The one list per provider of what an account token needs. The account form, the GitHub creation
-/// link, the classic-scope check, the probes, the GitLab minimum role and the permission-list version
-/// all derive from it, so a permission is added in one place (ADR 0115).
+/// link, the probes, the GitLab minimum role and the permission-list version all derive from it, so a
+/// permission is added in one place (ADR 0115).
 /// </summary>
 internal static class TokenPermissions
 {
     private const string WriteLevel = "write";
     private const string ReadLevel = "read";
-    private const string RepoScope = "repo";
     private const int GitLabMaintainerAccessLevel = 40;
 
     private static readonly IReadOnlyList<TokenPermission> GitHub =
     [
+        // GitHub gives a fine-grained token no way to read which repositories it reaches.
+        new(
+            "repository_access",
+            "Repository access: Only select repositories",
+            TemplateParameter: null,
+            new PermissionVerification.NotChecked()),
         new(
             "contents",
             "Contents (read and write)",
             new TemplateParameter("contents", WriteLevel),
-            RepoScope,
             new PermissionVerification.WriteProbe(WritePermission.Contents)),
         new(
             "issues",
             "Issues (read and write)",
             new TemplateParameter("issues", WriteLevel),
-            RepoScope,
             new PermissionVerification.WriteProbe(WritePermission.Issues)),
         new(
             "pull_requests",
             "Pull requests (read and write)",
             new TemplateParameter("pull_requests", WriteLevel),
-            RepoScope,
             new PermissionVerification.WriteProbe(WritePermission.PullRequests)),
         new(
             "administration",
             "Administration (read and write)",
             new TemplateParameter("administration", WriteLevel),
-            RepoScope,
             new PermissionVerification.WriteProbe(WritePermission.Administration)),
         new(
             "repository_hooks",
             "Webhooks (read and write)",
             new TemplateParameter("repository_hooks", WriteLevel),
-            RepoScope,
             new PermissionVerification.WriteProbe(WritePermission.Webhooks)),
         new(
             "statuses",
             "Commit statuses (read)",
             new TemplateParameter("statuses", ReadLevel),
-            RepoScope,
             new PermissionVerification.ReadProbe(WritePermission.CommitStatuses)),
         new(
             "actions",
-            "Actions (read)",
-            new TemplateParameter("actions", ReadLevel),
-            RepoScope,
-            new PermissionVerification.ReadProbe(WritePermission.Actions)),
+            "Actions (read and write)",
+            new TemplateParameter("actions", WriteLevel),
+            new PermissionVerification.WriteProbe(WritePermission.Actions)),
         new(
             "metadata",
             "Metadata (read)",
             TemplateParameter: null,
-            ClassicScope: null,
             new PermissionVerification.AlwaysGranted()),
         new(
             "workflows",
             "Workflows (read and write)",
             new TemplateParameter("workflows", WriteLevel),
-            ClassicScope: null,
             new PermissionVerification.NotVerified()),
     ];
 
     private static readonly IReadOnlyList<TokenPermission> GitLab =
     [
-        new("api", "api", TemplateParameter: null, ClassicScope: null, new PermissionVerification.Scope()),
+        new("api", "api", TemplateParameter: null, new PermissionVerification.Scope()),
         new(
             "maintainer_role",
             "Maintainer role",
             TemplateParameter: null,
-            ClassicScope: null,
             new PermissionVerification.GitLabRole(GitLabMaintainerAccessLevel)),
     ];
-
-    /// <summary>
-    /// What a classic GitHub token lacks when the Administration or Webhooks probe is refused: its
-    /// <c>repo</c> scope already covers both, so only the user's admin role on the repository can grant them.
-    /// </summary>
-    internal static TokenPermission GitHubClassicAdminRole { get; } = new(
-        "admin_role",
-        "Admin role on the repository",
-        TemplateParameter: null,
-        ClassicScope: null,
-        new PermissionVerification.NotVerified());
-
-    private static readonly FrozenSet<WritePermission> GrantedByClassicAdminRole =
-        [WritePermission.Administration, WritePermission.Webhooks];
 
     private static readonly FrozenDictionary<string, IReadOnlyList<TokenPermission>> ByProvider =
         new Dictionary<string, IReadOnlyList<TokenPermission>>
@@ -197,13 +183,6 @@ internal static class TokenPermissions
     internal static IReadOnlyList<WritePermission> GitHubProbes { get; } = GitHub
         .Select(ProbedPermissionOf)
         .OfType<WritePermission>()
-        .ToList();
-
-    /// <summary>The OAuth scopes a classic GitHub token must carry.</summary>
-    internal static IReadOnlyList<string> GitHubClassicScopes { get; } = GitHub
-        .Select(entry => entry.ClassicScope)
-        .OfType<string>()
-        .Distinct(StringComparer.Ordinal)
         .ToList();
 
     /// <summary>The creation-URL query that preselects every GitHub permission with a template parameter.</summary>
@@ -245,37 +224,16 @@ internal static class TokenPermissions
     internal static string VersionFor(string providerType) =>
         Versions.TryGetValue(providerType, out string? version) ? version : ComputeVersion(providerType, []);
 
-    /// <summary>
-    /// The keys of the GitHub permissions a token lacks, in list order. For a classic token a refused
-    /// Administration or Webhooks probe becomes the single <see cref="GitHubClassicAdminRole"/>.
-    /// </summary>
-    internal static IReadOnlyList<string> GitHubMissingKeys(IReadOnlyCollection<WritePermission> missing, bool isFineGrainedToken)
-    {
-        List<string> keys = [];
-        foreach (TokenPermission entry in GitHub)
-        {
-            if (ProbedPermissionOf(entry) is not { } permission || !missing.Contains(permission))
-            {
-                continue;
-            }
-
-            string key = !isFineGrainedToken && GrantedByClassicAdminRole.Contains(permission)
-                ? GitHubClassicAdminRole.Key
-                : entry.Key;
-
-            if (!keys.Contains(key, StringComparer.Ordinal))
-            {
-                keys.Add(key);
-            }
-        }
-
-        return keys;
-    }
+    /// <summary>The keys of the GitHub permissions a token lacks, in list order.</summary>
+    internal static IReadOnlyList<string> GitHubMissingKeys(IReadOnlyCollection<WritePermission> missing) =>
+        GitHub
+            .Where(entry => ProbedPermissionOf(entry) is { } permission && missing.Contains(permission))
+            .Select(entry => entry.Key)
+            .ToList();
 
     /// <summary>The labels of <paramref name="keys"/> in list order; keys the list no longer holds are skipped.</summary>
     internal static IReadOnlyList<string> LabelsOf(string providerType, IReadOnlyCollection<string> keys) =>
         For(providerType)
-            .Append(GitHubClassicAdminRole)
             .Where(entry => keys.Contains(entry.Key, StringComparer.Ordinal))
             .Select(entry => entry.Label)
             .ToList();

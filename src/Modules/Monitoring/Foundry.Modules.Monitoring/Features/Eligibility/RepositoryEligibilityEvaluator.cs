@@ -265,6 +265,13 @@ internal sealed class RepositoryEligibilityEvaluator(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // A token of the wrong kind is refused whatever it holds, so no probe is sent. The account summary
+        // reads the reason from the token itself, which is why the verdict lists no missing permissions.
+        if (GitHubTokenKind.WrongKindOf(token) is not null)
+        {
+            return new WriteProbeVerdict.Denied(ProbedAt: now) { MissingPermissions = [] };
+        }
+
         Result<WritePermissionProbeResult> probeResult = await gitHubWriteProber.ProbeWriteAccessAsync(
             credential.ApiBaseUrl,
             repo.Slug,
@@ -287,9 +294,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         return probe is WritePermissionProbeResult.Missing missing
             ? new WriteProbeVerdict.Denied(ProbedAt: now)
             {
-                MissingPermissions = TokenPermissions.GitHubMissingKeys(
-                    missing.Permissions,
-                    GitHubTokenKind.IsFineGrainedPat(token)),
+                MissingPermissions = TokenPermissions.GitHubMissingKeys(missing.Permissions),
             }
             : new WriteProbeVerdict.Granted();
     }

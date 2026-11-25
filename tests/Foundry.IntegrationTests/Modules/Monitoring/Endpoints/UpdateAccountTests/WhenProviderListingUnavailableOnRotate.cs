@@ -141,7 +141,7 @@ public sealed class WhenProviderListingUnavailableOnRotate : IAsyncDisposable
             // so write-permission probing succeeds regardless of the token used.
             if (StaticListingFakeHandler.IsProbePost(request))
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+                return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
             }
 
             if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)

@@ -52,7 +52,8 @@ public sealed class WhenNamespacesAreDerived : IAsyncDisposable
             MissingScopes: [],
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
-                TokenExpiry: new TokenExpirySummary("notChecked", null));
+                TokenExpiry: new TokenExpirySummary("notChecked", null),
+                WrongKind: null);
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -129,7 +130,7 @@ public sealed class WhenNamespacesAreDerived : IAsyncDisposable
         {
             if (StaticListingFakeHandler.IsProbePost(request))
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity));
+                return Task.FromResult(new HttpResponseMessage(StaticListingFakeHandler.GrantedProbeStatus(request)));
             }
 
             if (StaticListingFakeHandler.GrantedReadProbeResponse(request) is { } readProbe)

@@ -3809,7 +3809,8 @@
           "namespaces",
           "tokenInvalidSince",
           "tokenExpiry",
-          "deniedRepositories"
+          "deniedRepositories",
+          "nonConformingToken"
         ],
         "type": "object",
         "properties": {
@@ -3853,6 +3854,16 @@
             "items": {
               "$ref": "#/components/schemas/DeniedRepositorySummary"
             }
+          },
+          "nonConformingToken": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NonConformingTokenSummary"
+              }
+            ]
           }
         }
       },
@@ -5063,6 +5074,34 @@
           },
           "holderName": {
             "type": "string"
+          }
+        }
+      },
+      "NonConformingTokenSummary": {
+        "required": [
+          "wrongKind",
+          "notAllowed",
+          "broadReach"
+        ],
+        "type": "object",
+        "properties": {
+          "wrongKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "notAllowed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "broadReach": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6380,7 +6419,9 @@
           "tokenTypeLabel",
           "permissions",
           "creationUrlTemplate",
-          "resourceOwnerHint"
+          "resourceOwnerHint",
+          "closingNote",
+          "creationNote"
         ],
         "type": "object",
         "properties": {
@@ -6400,6 +6441,18 @@
             "type": "string"
           },
           "resourceOwnerHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "closingNote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "creationNote": {
             "type": [
               "null",
               "string"
@@ -7015,7 +7068,8 @@
           "accountName",
           "missingScopes",
           "detectedProvider",
-          "tokenExpiry"
+          "tokenExpiry",
+          "wrongKind"
         ],
         "type": "object",
         "properties": {
@@ -7042,6 +7096,12 @@
           },
           "tokenExpiry": {
             "$ref": "#/components/schemas/TokenExpirySummary"
+          },
+          "wrongKind": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

@@ -11,6 +11,7 @@ function makeAccount(overrides: Partial<AccountSummary> = {}): AccountSummary {
     tokenStatus: 'present',
     deniedRepositories: [],
     tokenInvalidSince: null,
+    nonConformingToken: null,
     namespaces: [],
     ...overrides,
     tokenExpiry: { status: 'notChecked', expiresAt: null },

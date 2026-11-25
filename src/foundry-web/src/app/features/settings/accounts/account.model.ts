@@ -18,6 +18,7 @@ export type TakeoverValidationResponse = Schemas['TakeoverValidationResponse'];
 export type TokenRequirements = Schemas['TokenRequirements'];
 export type TokenPermissionRequirement = Schemas['TokenPermissionRequirement'];
 export type DeniedRepositorySummary = Schemas['DeniedRepositorySummary'];
+export type NonConformingTokenSummary = Schemas['NonConformingTokenSummary'];
 
 // Client-side refinements layered over the generated string wire type.
 // The API returns these fields as open strings so they are intentionally not generated.
@@ -37,6 +38,7 @@ export type TokenValidationKind =
   | 'authenticated'
   | 'authenticationFailed'
   | 'scopesUnverifiable'
+  | 'wrongTokenKind'
   | 'identityUnresolved'
   | 'providerMismatch';
 
@@ -106,6 +108,7 @@ export type AccountStatusTag =
   | { readonly kind: 'token-invalid'; readonly label: 'Token invalid'; readonly tone: 'error' }
   | { readonly kind: 'token-expired'; readonly label: 'Token expired'; readonly tone: 'warning' }
   | { readonly kind: 'token-expiring'; readonly label: 'Token expires soon'; readonly tone: 'warning' }
+  | { readonly kind: 'wrong-token-kind'; readonly label: 'Wrong token kind'; readonly tone: 'warning' }
   | { readonly kind: 'missing-permissions'; readonly label: 'Missing permissions'; readonly tone: 'warning' };
 
 /** A problem with the token itself: unreadable, invalid or near its expiry. */
@@ -120,7 +123,14 @@ export interface TokenProblem {
 }
 
 /** How the operator gives the token what it is missing; each has its own remedy text and actions. */
-export type MissingPermissionsRemedy = 'github-fine-grained' | 'github-classic' | 'gitlab';
+export type MissingPermissionsRemedy = 'github-fine-grained' | 'github-wrong-kind' | 'gitlab';
+
+/** A link to the provider's token page: `edit` opens the token list, `create` opens a new token. */
+export interface TokenLink {
+  readonly url: string;
+  readonly host: string;
+  readonly mode: 'edit' | 'create';
+}
 
 /** A present token that lacks permissions Foundry needs on some of the account's repositories. */
 export interface MissingPermissionsProblem {
@@ -132,10 +142,12 @@ export interface MissingPermissionsProblem {
   /** The union of every denied repository's missing labels, in permission-list order. */
   readonly missingPermissions: readonly string[];
   readonly repositories: readonly DeniedRepositorySummary[];
+  /** Why the token as a whole fails Foundry's requirements, one line each, such as "Wrong token kind: classic token." */
+  readonly reasons: readonly string[];
   readonly remedy: MissingPermissionsRemedy;
   readonly remedyText: string;
-  /** Where a GitHub fine-grained token's permissions are edited; null for the other remedies. */
-  readonly editToken: { readonly url: string; readonly host: string } | null;
+  /** Where the operator edits or replaces the token; null when the remedy is not on the provider's token page. */
+  readonly tokenLink: TokenLink | null;
 }
 
 export type AccountProblem = TokenProblem | MissingPermissionsProblem;
@@ -145,6 +157,7 @@ const TOKEN_UNREADABLE_TAG: AccountStatusTag = { kind: 'token-unreadable', label
 const TOKEN_INVALID_TAG: AccountStatusTag = { kind: 'token-invalid', label: 'Token invalid', tone: 'error' };
 const TOKEN_EXPIRED_TAG: AccountStatusTag = { kind: 'token-expired', label: 'Token expired', tone: 'warning' };
 const TOKEN_EXPIRING_TAG: AccountStatusTag = { kind: 'token-expiring', label: 'Token expires soon', tone: 'warning' };
+const WRONG_TOKEN_KIND_TAG: AccountStatusTag = { kind: 'wrong-token-kind', label: 'Wrong token kind', tone: 'warning' };
 const MISSING_PERMISSIONS_TAG: AccountStatusTag = {
   kind: 'missing-permissions',
   label: 'Missing permissions',
@@ -174,6 +187,9 @@ export function accountStatusTag(account: AccountSummary): AccountStatusTag | nu
   const status = resolveTokenStatus(account);
   switch (status) {
     case 'present':
+      if (nonConformingToken(account)?.wrongKind) {
+        return WRONG_TOKEN_KIND_TAG;
+      }
       return deniedRepositories(account).length > 0
         ? MISSING_PERMISSIONS_TAG
         : expiryStatusTag(resolveTokenExpiry(account.tokenExpiry));
@@ -242,9 +258,6 @@ function expiryProblem(expiry: ResolvedTokenExpiry, provider: string): TokenProb
   }
 }
 
-/** The label a classic GitHub token reports when only the user's admin role on the repository can grant the access. */
-export const GITHUB_CLASSIC_ADMIN_ROLE_LABEL = 'Admin role on the repository';
-
 const RECHECK_SENTENCE =
   "Foundry re-checks these repositories every hour; a repository's Re-check button checks it right away.";
 
@@ -272,45 +285,66 @@ function unionInListOrder(repositories: readonly DeniedRepositorySummary[]): str
   return union;
 }
 
+/** Why the account's token as a whole fails Foundry's requirements, or null; a response predating the field has none. */
+export function nonConformingToken(account: AccountSummary): NonConformingTokenSummary | null {
+  return (account as { nonConformingToken?: NonConformingTokenSummary | null }).nonConformingToken ?? null;
+}
+
+/** The token kind a `wrongKind` value names, as the account row shows it after "Wrong token kind: ". */
+function wrongKindLabel(wrongKind: string): string {
+  switch (wrongKind) {
+    case 'github-classic':
+      return 'classic token';
+    default:
+      return 'not a fine-grained personal access token';
+  }
+}
+
 function missingPermissionsProblem(account: AccountSummary): MissingPermissionsProblem | null {
   const repositories = deniedRepositories(account);
-  if (repositories.length === 0) {
+  const wrongKind = nonConformingToken(account)?.wrongKind ?? null;
+  if (repositories.length === 0 && wrongKind === null) {
     return null;
   }
 
   const missingPermissions = unionInListOrder(repositories);
   const count = repositories.length;
+  const repositoryNoun = count === 1 ? 'repository' : 'repositories';
   const expiry = resolveTokenExpiry(account.tokenExpiry);
-  const remedy = missingPermissionsRemedy(account.providerType, missingPermissions);
+  const remedy = missingPermissionsRemedy(account.providerType, wrongKind);
 
   return {
     kind: 'missing-permissions',
     tone: 'warning',
     ...(isTokenExpiryWarning(expiry) ? { expiry } : {}),
     message:
-      `This token is missing permissions Foundry needs, so Foundry won't start work on ${count} `
-      + `${count === 1 ? 'repository' : 'repositories'} until it has them.`,
+      wrongKind === null
+        ? `This token is missing permissions Foundry needs, so Foundry won't start work on ${count} `
+          + `${repositoryNoun} until it has them.`
+        : `This token doesn't meet Foundry's requirements, so Foundry won't start work on ${count} `
+          + `${repositoryNoun} until it does.`,
     missingPermissions,
     repositories,
+    reasons: wrongKind === null ? [] : [`Wrong token kind: ${wrongKindLabel(wrongKind)}.`],
     remedy,
     remedyText: remedyText(remedy, account.name),
-    editToken: remedy === 'github-fine-grained' ? githubEditTokenLink(account.baseUrl) : null,
+    tokenLink: tokenLink(remedy, account.baseUrl),
   };
 }
 
-function missingPermissionsRemedy(providerType: string, missingPermissions: readonly string[]): MissingPermissionsRemedy {
+function missingPermissionsRemedy(providerType: string, wrongKind: string | null): MissingPermissionsRemedy {
   if (providerType.toLowerCase() === 'gitlab') {
     return 'gitlab';
   }
-  return missingPermissions.includes(GITHUB_CLASSIC_ADMIN_ROLE_LABEL) ? 'github-classic' : 'github-fine-grained';
+  return wrongKind === null ? 'github-fine-grained' : 'github-wrong-kind';
 }
 
 function remedyText(remedy: MissingPermissionsRemedy, name: string): string {
   switch (remedy) {
     case 'github-fine-grained':
       return `Edit the token's permissions on GitHub, or create a new token, then re-check. ${RECHECK_SENTENCE}`;
-    case 'github-classic':
-      return `Ask a repository admin to give the token's user, ${name}, the Admin role on these repositories, then re-check. ${RECHECK_SENTENCE}`;
+    case 'github-wrong-kind':
+      return `Create a fine-grained personal access token on GitHub, then replace this one. A classic token can't be converted. ${RECHECK_SENTENCE}`;
     case 'gitlab':
       return `Give the token's user, ${name}, the Maintainer role on these repositories, then re-check. ${RECHECK_SENTENCE}`;
     default:
@@ -318,14 +352,47 @@ function remedyText(remedy: MissingPermissionsRemedy, name: string): string {
   }
 }
 
-/** GitHub's fine-grained token list on the account's host: the creation URL's origin, without `/new`. */
-function githubEditTokenLink(baseUrl: string): { readonly url: string; readonly host: string } | null {
+const GITHUB_TOKEN_LIST_TEMPLATE = '{baseUrl}/settings/personal-access-tokens';
+const GITHUB_NEW_TOKEN_TEMPLATE = '{baseUrl}/settings/personal-access-tokens/new';
+
+/** Where the remedy sends the operator on the account's host: GitHub's token list to edit, or its new-token page. */
+function tokenLink(remedy: MissingPermissionsRemedy, baseUrl: string): TokenLink | null {
+  const mode = remedy === 'github-fine-grained' ? 'edit' : remedy === 'github-wrong-kind' ? 'create' : null;
+  if (mode === null) {
+    return null;
+  }
+  const url = creationUrl(mode === 'edit' ? GITHUB_TOKEN_LIST_TEMPLATE : GITHUB_NEW_TOKEN_TEMPLATE, baseUrl);
+  return url === null ? null : { url, host: new URL(url).host, mode };
+}
+
+function isHttpUrl(url: string): boolean {
   try {
-    const parsed = new URL(baseUrl);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The provider page `template` points at on the host of `baseUrl`, or null when either is not an http(s) URL.
+ * A template without `{baseUrl}` is used as is.
+ */
+export function creationUrl(template: string, baseUrl: string): string | null {
+  if (!template.includes('{baseUrl}')) {
+    return isHttpUrl(template) ? template : null;
+  }
+  const rawBaseUrl = baseUrl.trim();
+  if (!rawBaseUrl) {
+    return null;
+  }
+  try {
+    const parsed = new URL(rawBaseUrl);
+    if (!isHttpUrl(parsed.origin)) {
       return null;
     }
-    return { url: `${parsed.origin}/settings/personal-access-tokens`, host: parsed.host };
+    const url = template.replace('{baseUrl}', parsed.origin);
+    return isHttpUrl(url) ? url : null;
   } catch {
     return null;
   }
@@ -356,6 +423,7 @@ const KNOWN_TOKEN_VALIDATION_KINDS: ReadonlySet<TokenValidationKind> = new Set<T
   'authenticated',
   'authenticationFailed',
   'scopesUnverifiable',
+  'wrongTokenKind',
   'identityUnresolved',
   'providerMismatch',
 ]);
@@ -380,4 +448,23 @@ export function providerDisplayName(provider: string | null): string {
       }
       return provider.charAt(0).toUpperCase() + provider.slice(1);
   }
+}
+
+/** What the validation result says about a token Foundry refuses for its kind; an unknown kind reads generically. */
+export function wrongTokenKindMessage(wrongKind: string | null | undefined): string {
+  switch (wrongKind) {
+    case 'github-classic':
+      return 'This is a classic token. Foundry needs a fine-grained personal access token (it starts with github_pat_).';
+    default:
+      return 'Foundry needs a fine-grained personal access token.';
+  }
+}
+
+/** The provider's token creation page for the requirements on the host of `baseUrl`, or null when there is none. */
+export function createTokenLink(
+  requirements: TokenRequirements | null,
+  baseUrl: string,
+): { readonly url: string; readonly host: string } | null {
+  const url = requirements ? creationUrl(requirements.creationUrlTemplate, baseUrl) : null;
+  return url === null ? null : { url, host: new URL(url).host };
 }

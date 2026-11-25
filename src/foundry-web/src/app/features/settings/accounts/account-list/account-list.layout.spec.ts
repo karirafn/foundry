@@ -13,6 +13,7 @@ const BASE: AccountSummary = {
   tokenStatus: 'present',
   deniedRepositories: [],
   tokenInvalidSince: null,
+  nonConformingToken: null,
   namespaces: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
@@ -40,6 +41,7 @@ const ACCOUNTS: AccountSummary[] = [
     name: 'octo-org-automation-account-with-a-long-name',
     tokenStatus: 'invalid',
     tokenInvalidSince: '2026-11-12T15:04:05Z',
+    nonConformingToken: null,
     namespaces: ['octo-org'],
   },
   {

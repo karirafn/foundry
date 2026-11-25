@@ -47,12 +47,11 @@ public sealed class For
     }
 
     [Fact]
-    public void EveryEntryKey_IsUniqueAcrossProvidersAndTheClassicAdminRole()
+    public void EveryEntryKey_IsUniqueAcrossProviders()
     {
         // Arrange
         IEnumerable<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitHub)
-            .Concat(TokenPermissions.For(ProviderTypes.GitLab))
-            .Append(TokenPermissions.GitHubClassicAdminRole);
+            .Concat(TokenPermissions.For(ProviderTypes.GitLab));
 
         // Act
         List<string> keys = entries.Select(entry => entry.Key).ToList();
@@ -83,18 +82,6 @@ public sealed class For
     }
 
     [Fact]
-    public void WhenProviderIsGitHub_ClassicScopesAreRepo()
-    {
-        // Arrange
-
-        // Act
-        IReadOnlyList<string> scopes = TokenPermissions.GitHubClassicScopes;
-
-        // Assert
-        scopes.ShouldBe(["repo"]);
-    }
-
-    [Fact]
     public void WhenProviderIsGitHub_TemplateQueryListsEveryTemplateParameterInOrder()
     {
         // Arrange
@@ -105,7 +92,7 @@ public sealed class For
         // Assert
         query.ShouldBe(
             "contents=write&issues=write&pull_requests=write&administration=write&repository_hooks=write"
-            + "&statuses=read&actions=read&workflows=write");
+            + "&statuses=read&actions=write&workflows=write");
     }
 
     [Fact]
@@ -136,6 +123,52 @@ public sealed class For
     }
 
     [Fact]
+    public void WhenProviderIsGitHub_ActionsIsReadAndWriteVerifiedByAWriteProbe()
+    {
+        // Arrange
+        IReadOnlyList<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitHub);
+
+        // Act
+        TokenPermission actions = entries.Single(entry => entry.Key == "actions");
+
+        // Assert
+        actions.ShouldSatisfyAllConditions(
+            () => actions.Label.ShouldBe("Actions (read and write)"),
+            () => actions.TemplateParameter.ShouldBe(new TemplateParameter("actions", "write")),
+            () => actions.VerifiedBy.ShouldBe(new PermissionVerification.WriteProbe(WritePermission.Actions)));
+    }
+
+    [Fact]
+    public void WhenProviderIsGitHub_RepositoryAccessIsListedFirstAndNotChecked()
+    {
+        // Arrange
+
+        // Act
+        TokenPermission first = TokenPermissions.For(ProviderTypes.GitHub)[0];
+
+        // Assert
+        first.ShouldSatisfyAllConditions(
+            () => first.Label.ShouldBe("Repository access: Only select repositories"),
+            () => first.TemplateParameter.ShouldBeNull(),
+            () => first.VerifiedBy.ShouldBeOfType<PermissionVerification.NotChecked>(),
+            () => first.VerifiedBy.WireName.ShouldBe("not-checked"));
+    }
+
+    [Fact]
+    public void VersionFor_GitHub_DiffersFromTheListThatProbedActionsForReadOnly()
+    {
+        // Arrange
+        // The version the GitHub list had while Actions was verified by a read probe.
+        const string previousGitHubVersion = "github-580e55d623cbf659";
+
+        // Act
+        string version = TokenPermissions.VersionFor(ProviderTypes.GitHub);
+
+        // Assert
+        version.ShouldNotBe(previousGitHubVersion);
+    }
+
+    [Fact]
     public void VersionFor_DiffersBetweenProviders()
     {
         // Arrange
@@ -163,42 +196,16 @@ public sealed class For
     }
 
     [Fact]
-    public void GitHubMissingKeys_ForAFineGrainedToken_ReturnsEachMissingPermissionInListOrder()
+    public void GitHubMissingKeys_ReturnsEachMissingPermissionInListOrder()
     {
         // Arrange
         WritePermission[] missing = [WritePermission.Webhooks, WritePermission.Administration];
 
         // Act
-        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing, isFineGrainedToken: true);
+        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing);
 
         // Assert
         keys.ShouldBe(["administration", "repository_hooks"]);
-    }
-
-    [Fact]
-    public void GitHubMissingKeys_ForAClassicToken_ReportsAdministrationAndWebhooksAsTheAdminRole()
-    {
-        // Arrange
-        WritePermission[] missing = [WritePermission.Administration, WritePermission.Webhooks];
-
-        // Act
-        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing, isFineGrainedToken: false);
-
-        // Assert
-        keys.ShouldBe(["admin_role"]);
-    }
-
-    [Fact]
-    public void GitHubMissingKeys_ForAClassicToken_KeepsOtherPermissions()
-    {
-        // Arrange
-        WritePermission[] missing = [WritePermission.Contents, WritePermission.Webhooks];
-
-        // Act
-        IReadOnlyList<string> keys = TokenPermissions.GitHubMissingKeys(missing, isFineGrainedToken: false);
-
-        // Assert
-        keys.ShouldBe(["contents", "admin_role"]);
     }
 
     [Fact]
@@ -209,11 +216,11 @@ public sealed class For
         // Act
         IReadOnlyList<string> labels = TokenPermissions.LabelsOf(
             ProviderTypes.GitHub,
-            ["repository_hooks", "administration", "admin_role"]);
+            ["repository_hooks", "administration"]);
 
         // Assert
         labels.ShouldBe(
-            ["Administration (read and write)", "Webhooks (read and write)", "Admin role on the repository"]);
+            ["Administration (read and write)", "Webhooks (read and write)"]);
     }
 
     [Fact]

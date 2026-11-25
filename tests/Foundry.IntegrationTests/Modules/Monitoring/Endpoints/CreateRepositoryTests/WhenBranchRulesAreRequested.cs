@@ -29,7 +29,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateRepository
 
 public sealed class WhenBranchRulesAreRequested : IAsyncDisposable
 {
-    private const string AccountToken = "ghp_account_token";
+    private const string AccountToken = "github_pat_account_token";
 
     private readonly ProviderState _state = new();
     private readonly FoundryWebAppFactory _factory;
