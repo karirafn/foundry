@@ -77,6 +77,25 @@ public sealed class FeedbackCutoff
 
     [Theory]
     [MemberData(nameof(Transitions))]
+    public void WhenSpecChangedTrigger_CutoffIsRunStartedAt(string transition)
+    {
+        // Arrange
+        TriageInProgressIssue triaging = TriageQueuedIssue
+            .HoldingOpenWork(new IssueBuilder().TriageQueued(), OpenWork.Of("feat/1-fix", "https://github.com/o/r/pull/2"), RunStartedAt)
+            .Claim(WorkerRunId.New(), RunStartedAt);
+        RevisionInProgressIssue revisionInProgress =
+            ((RevisionQueuedIssue)triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Feature, RunStartedAt), [], RunStartedAt))
+                .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
+
+        // Act
+        DateTimeOffset cutoff = Complete(revisionInProgress, transition);
+
+        // Assert
+        cutoff.ShouldBe(RunStartedAt);
+    }
+
+    [Theory]
+    [MemberData(nameof(Transitions))]
     public void WhenNonFeedbackTrigger_CommentPostedWhileWaitingIsAfterCutoff(string transition)
     {
         // Arrange
