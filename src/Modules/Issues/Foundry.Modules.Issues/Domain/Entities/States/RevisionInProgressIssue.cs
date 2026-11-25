@@ -187,7 +187,8 @@ public sealed class RevisionInProgressIssue : Issue
     // RebaseConflict) consumed no comments, so it keeps the cutoff of the state it started from: a comment posted
     // while the issue waited on checks or a rebase, or while the run was working, is not dropped (issue #925).
     // Without a carried cutoff (a ReviewFeedback trigger with no consumed timestamp, an InputProvided trigger whose
-    // answer must not be read again, or a row that predates the field) it falls back to the run's start time.
+    // answer must not be read again, a SpecChanged trigger, or a row that predates the field) it falls back to the
+    // run's start time.
     private DateTimeOffset FeedbackCutoffAt(DateTimeOffset runStartedAt) =>
         Trigger switch
         {

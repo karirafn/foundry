@@ -17,7 +17,7 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.IssueTests;
 
 /// <summary>
 /// An issue counts its revision rounds: a revision trigger (review findings, a person's feedback, failed checks, a
-/// rebase conflict) starts a new round, and every other transition (a retry and a resume after answers included)
+/// rebase conflict, a rewritten spec) starts a new round, and every other transition (a retry and a resume after answers included)
 /// stays in the round it came from.
 /// </summary>
 public sealed class Round
@@ -57,6 +57,7 @@ public sealed class Round
         ["FromRevisionFailed"] = false,
         ["FromAwaitingInput"] = false,
         ["FromRevisionBlocked"] = false,
+        ["FromTriage"] = true,
     };
 
     public static TheoryData<string> Factories => [.. StartsRoundByFactory.Keys];
@@ -235,6 +236,13 @@ public sealed class Round
             {
                 RevisionBlockedIssue blocked = Builder().RevisionBlocked([2]);
                 return (blocked, () => blocked.Unblock(Now));
+            }
+            case "FromTriage":
+            {
+                TriageInProgressIssue triaging = TriageQueuedIssue
+                    .HoldingOpenWork(Builder().TriageQueued(), OpenWork.Of("feat/1-fix", "https://github.com/o/r/pull/2"), Now)
+                    .Claim(WorkerRunId.New(), Now);
+                return (triaging, () => (RevisionQueuedIssue)triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Feature, Now), [], Now));
             }
             case "FromRevisionFailed":
             {

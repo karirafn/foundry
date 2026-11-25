@@ -154,6 +154,17 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// </summary>
     public RecordedReviewVerdict? ReviewVerdict { get; private set; }
 
+    /// <summary>
+    /// The fingerprint of the spec the issue body Foundry supplied at dispatch states; a triage run's completion records
+    /// it on the issue as the spec it judged. <see langword="null"/> for a run that recorded none.
+    /// </summary>
+    public SpecHash? SuppliedSpecHash { get; private set; }
+
+    protected void StoreSuppliedSpecHash(SpecHash? suppliedSpecHash)
+    {
+        SuppliedSpecHash = suppliedSpecHash;
+    }
+
     protected void StoreSuppliedReviewFacts(SuppliedReviewFacts? suppliedReviewFacts)
     {
         SuppliedReviewFacts = suppliedReviewFacts;
@@ -250,6 +261,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         RecordBase(source.Base, source.PreparedRepositoryId);
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
         StoreSuppliedReviewFacts(source.SuppliedReviewFacts);
+        StoreSuppliedSpecHash(source.SuppliedSpecHash);
         SourceTokenHash = source.SourceTokenHash;
         StoreToolchain(source.Toolchain);
         RefusesNeedsInput = source.RefusesNeedsInput;

@@ -9,6 +9,7 @@ using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -586,7 +587,7 @@ public sealed class RepositoryRoles
             catalog.PrinciplesFor(WorkerRole.Review),
             42,
             review.SystemPromptTemplate,
-            new IssueContent("Add retry", "Retry webhook delivery.", []),
+            new IssueContent("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any),
             toolchain: ToolchainFixtures.With(csharpLs: false));
 
         // Assert
@@ -758,7 +759,7 @@ public sealed class RepositoryRoles
             42,
             implement.SystemPromptTemplate,
             new DispatchContext.Fresh("feat/42-title"),
-            new IssueContent("Add retry", "Retry webhook delivery.", []),
+            new IssueContent("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any),
             timeoutMinutes: 120,
             toolchain: ToolchainFixtures.With(docker: false, csharpLs: false));
 
@@ -871,7 +872,7 @@ public sealed class RepositoryRoles
             principles,
             42,
             triage.SystemPromptTemplate,
-            new IssueContent("Add retry", "Retry webhook delivery.", []),
+            new IssueContent("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any),
             toolchain: ToolchainFixtures.With(csharpLs: false));
 
         // Assert

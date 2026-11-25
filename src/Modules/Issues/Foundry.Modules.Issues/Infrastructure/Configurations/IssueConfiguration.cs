@@ -23,6 +23,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
     private const int UrlMaxLength = 2000;
     private const int DiscriminatorMaxLength = 30;
     private const int IssueKindMaxLength = 50;
+    private const int SpecHashLength = 64;
 
     private static IssueAuthor ConvertToIssueAuthor(string value) =>
         IssueAuthor.Create(value) is Result<IssueAuthor>.Success s
@@ -234,6 +235,26 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasColumnName("triage_verdict");
 
         builder.Ignore(i => i.ConflictingTriageKind);
+
+        builder.Property(i => i.TriagedSpecHash)
+            .HasConversion(new ValueConverter<SpecHash?, string?>(
+                hash => hash!.Value,
+                value => SpecHash.From(value!)))
+            .HasMaxLength(SpecHashLength)
+            .IsUnicode(false)
+            .IsRequired(false)
+            .HasColumnName("triaged_spec_hash");
+
+        // OpenWork is derived: both halves are stored, and a null in either column is no open work.
+        builder.Ignore(i => i.OpenWork);
+        builder.Property<string?>("_openWorkBranchName")
+            .HasMaxLength(IssueColumnLimits.BranchNameMaxLength)
+            .IsRequired(false)
+            .HasColumnName("open_work_branch_name");
+        builder.Property<string?>("_openWorkPullRequestUrl")
+            .HasMaxLength(IssueColumnLimits.PullRequestUrlMaxLength)
+            .IsRequired(false)
+            .HasColumnName("open_work_pull_request_url");
 
         builder.Property(i => i.DetectedAt)
             .HasConversion(

@@ -200,6 +200,36 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
+    /// <summary>
+    /// Triage released an issue that holds <paramref name="openWork"/> with no open blockers: the work resumes as a
+    /// <see cref="RevisionTrigger.SpecChanged"/> revision on its branch and pull request, never a fresh run on a
+    /// recomputed branch. The revision consumes no review comments, so it carries no feedback cutoff and the next review
+    /// cutoff anchors to its run's start.
+    /// </summary>
+    internal static RevisionQueuedIssue FromTriage(
+        Issue source,
+        TriageVerdict.Ready? verdict,
+        OpenWork openWork,
+        DateTimeOffset transitionedAt)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
+        revisionQueued.CopySharedPropertiesFrom(source);
+        if (verdict is not null)
+        {
+            revisionQueued.RecordTriageVerdict(verdict);
+        }
+
+        revisionQueued.ReleaseOpenWork();
+        revisionQueued.BranchName = openWork.BranchName;
+        revisionQueued.PullRequestUrl = openWork.PullRequestUrl;
+        revisionQueued.Trigger = new RevisionTrigger.SpecChanged();
+        revisionQueued.StartRound();
+        revisionQueued.ResetReviewFixAttempts();
+        revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.RebaseConflictAttempts = 0;
+        return revisionQueued;
+    }
+
     internal static RevisionQueuedIssue FromRevisionBlocked(RevisionBlockedIssue source, DateTimeOffset transitionedAt)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);

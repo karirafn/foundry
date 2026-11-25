@@ -10,11 +10,16 @@ namespace Foundry.Modules.Workers.Contracts;
 /// verdict fails through <see cref="WorkerRunFailed"/> instead.
 /// </summary>
 /// <param name="DecidedAt">When Foundry read the verdict.</param>
+/// <param name="TriagedSpecHash">
+/// The fingerprint of the spec the issue body the run was dispatched with states, or <see langword="null"/> for a run
+/// dispatched, or an outbox row written, before runs recorded it.
+/// </param>
 public sealed record TriageRunCompleted(
     Guid IssueId,
     WorkerRunId WorkerRunId,
     TriageResult Result,
-    DateTimeOffset DecidedAt) : IIntegrationEvent;
+    DateTimeOffset DecidedAt,
+    SpecHash? TriagedSpecHash = null) : IIntegrationEvent;
 
 /// <summary>What kind of change triage judged an issue to ask for.</summary>
 public enum TriageKind

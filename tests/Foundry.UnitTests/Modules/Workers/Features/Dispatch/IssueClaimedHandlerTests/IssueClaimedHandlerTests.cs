@@ -1609,7 +1609,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenDispatched_AsksTheTrackerContextOnceWithTheRepositoryTheIssueNumberAndTheContentRead()
     {
         // Arrange
-        IssueContent content = new("Add retry", "Retry webhook delivery.", []);
+        IssueContent content = new("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any);
         StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(content));
         StubTrackerContextQueries trackerContext = new();
         IssueClaimedHandler sut = BuildHandler(issueContentQueries: issueContent, trackerContextQueries: trackerContext);
@@ -1784,7 +1784,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(new IssueContent(
             "Add retry <now>",
             "Retry webhook delivery.",
-            [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)])));
+            [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)],
+            SpecHashFixtures.Any)));
         IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
@@ -1866,7 +1867,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(new IssueContent(
             "Add retry <now>",
             "Retry webhook delivery.",
-            [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)])));
+            [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)],
+            SpecHashFixtures.Any)));
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, issueContentQueries: issueContent);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 

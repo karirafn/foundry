@@ -246,6 +246,39 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenATriageRunCompletes_PublishesTheSpecHashOfTheBodyItWasDispatchedWith()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            StartingRun starting = StartingRun.Begin(Foundry.Modules.Issues.Contracts.IssueId.New(), WorkerRunId.New(), WorkerRole.Triage);
+            starting.RecordSuppliedSpecHash(SpecHashFixtures.Other);
+            seedDb.Set<WorkerRun>().Add(
+                starting.Activate(
+                    Foundry.Modules.Workers.Domain.ValueObjects.ContainerId.From(ContainerId),
+                    null,
+                    Foundry.Modules.Monitoring.Contracts.MonitoredRepositoryId.New()));
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator(), dispatcher);
+        WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
+            new TriageVerdict.Ready(TriageIssueKind.Feature, []),
+            ContainerOutput: null,
+            Summary: null);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem()
+            .TriagedSpecHash.ShouldBe(SpecHashFixtures.Other);
+    }
+
+    [Fact]
     public async Task WhenATriageRunCompletesWithDecisions_PublishesThemOnTheResult()
     {
         // Arrange

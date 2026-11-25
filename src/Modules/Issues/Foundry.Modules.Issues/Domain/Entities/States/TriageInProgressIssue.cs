@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -51,6 +52,12 @@ public sealed class TriageInProgressIssue : Issue
     }
 
     /// <summary>
+    /// The run completed with a verdict on the issue body it was dispatched with: that body's spec fingerprint becomes
+    /// the issue's <see cref="Issue.TriagedSpecHash"/>, which the state the verdict leads to carries.
+    /// </summary>
+    public void RecordTriagedSpec(SpecHash triagedSpecHash) => RecordTriagedSpecHash(triagedSpecHash);
+
+    /// <summary>
     /// Triage judged the issue ready: it records the verdict and any <paramref name="decisions"/> it made as a decided
     /// clarification round (ADR 0123), then goes through the dependency check, queued when it has no open blockers and
     /// blocked otherwise. Decisions are raised with where the check sent the issue, so the thread can be told.
@@ -71,7 +78,7 @@ public sealed class TriageInProgressIssue : Issue
                 MonitoredRepositoryId,
                 IssueNumber,
                 decisions,
-                released is BlockedIssue ? TriageRelease.WaitingOnBlockers : TriageRelease.Queued));
+                released.WaitsOnBlockers ? TriageRelease.WaitingOnBlockers : TriageRelease.Queued));
         }
 
         return released;

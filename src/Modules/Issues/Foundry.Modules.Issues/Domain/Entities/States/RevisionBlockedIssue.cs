@@ -76,6 +76,41 @@ public sealed class RevisionBlockedIssue : Issue
         return blocked;
     }
 
+    /// <summary>
+    /// Triage released an issue that holds <paramref name="openWork"/> while it has open blockers: the
+    /// <see cref="RevisionTrigger.SpecChanged"/> revision on its branch and pull request waits for them, as
+    /// <see cref="RevisionQueuedIssue.FromTriage"/> would queue it.
+    /// </summary>
+    internal static RevisionBlockedIssue FromTriage(
+        Issue source,
+        TriageVerdict.Ready? verdict,
+        OpenWork openWork,
+        DateTimeOffset transitionedAt)
+    {
+        if (source.BlockedBy.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot block an issue without specifying at least one blocker.");
+        }
+
+        RevisionBlockedIssue blocked = new(source.Id, transitionedAt);
+        blocked.CopySharedPropertiesFrom(source);
+        blocked.SetBlockedBy(source.BlockedBy);
+        if (verdict is not null)
+        {
+            blocked.RecordTriageVerdict(verdict);
+        }
+
+        blocked.ReleaseOpenWork();
+        blocked.BranchName = openWork.BranchName;
+        blocked.PullRequestUrl = openWork.PullRequestUrl;
+        blocked.Trigger = new RevisionTrigger.SpecChanged();
+        blocked.StartRound();
+        blocked.ResetReviewFixAttempts();
+        blocked.ResetChecksFixAttempts();
+        blocked.RebaseConflictAttempts = 0;
+        return blocked;
+    }
+
     public RevisionQueuedIssue Unblock(DateTimeOffset transitionedAt)
     {
         RevisionQueuedIssue queued = RevisionQueuedIssue.FromRevisionBlocked(this, transitionedAt);

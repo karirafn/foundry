@@ -51,6 +51,7 @@ internal static class RevisionTriggerJsonConversion
             },
             RevisionTrigger.RebaseConflict => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             RevisionTrigger.InputProvided => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
+            RevisionTrigger.SpecChanged => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{trigger.Discriminator}'"),
         };
 
@@ -83,6 +84,7 @@ internal static class RevisionTriggerJsonConversion
                 dto.HeadSha),
             "rebase_conflict" => new RevisionTrigger.RebaseConflict(),
             "input_provided" => new RevisionTrigger.InputProvided(),
+            "spec_changed" => new RevisionTrigger.SpecChanged(),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{dto.Discriminator}'"),
         };
     }
@@ -104,6 +106,7 @@ internal static class RevisionTriggerJsonConversion
                 && fcA.FailingChecks.SequenceEqual(fcB.FailingChecks),
             (RevisionTrigger.RebaseConflict, RevisionTrigger.RebaseConflict) => true,
             (RevisionTrigger.InputProvided, RevisionTrigger.InputProvided) => true,
+            (RevisionTrigger.SpecChanged, RevisionTrigger.SpecChanged) => true,
             _ => false,
         };
 

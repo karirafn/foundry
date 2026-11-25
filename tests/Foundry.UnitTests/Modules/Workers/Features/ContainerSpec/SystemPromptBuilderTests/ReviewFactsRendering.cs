@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -24,7 +25,7 @@ public sealed class ReviewFactsRendering
                 "Principles.",
                 42,
                 Template,
-                new IssueContent("Add retry", "Retry webhook delivery.", []),
+                new IssueContent("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any),
                 Toolchain.Unrecorded,
                 review: facts is null
                     ? null

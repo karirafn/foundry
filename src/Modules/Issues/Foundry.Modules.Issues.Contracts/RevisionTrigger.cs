@@ -14,6 +14,7 @@ namespace Foundry.Modules.Issues.Contracts;
 [JsonDerivedType(typeof(FailedChecks), "failed_checks")]
 [JsonDerivedType(typeof(RebaseConflict), "rebase_conflict")]
 [JsonDerivedType(typeof(InputProvided), "input_provided")]
+[JsonDerivedType(typeof(SpecChanged), "spec_changed")]
 public abstract record RevisionTrigger
 {
     private RevisionTrigger()
@@ -72,5 +73,15 @@ public abstract record RevisionTrigger
     public sealed record InputProvided : RevisionTrigger
     {
         public override string Discriminator => "input_provided";
+    }
+
+    /// <summary>
+    /// The issue description was rewritten after the issue had open work, and triage judged the rewritten issue ready:
+    /// the worker brings the branch in line with the issue as it now reads. Payload-free: the worker reads the issue
+    /// itself.
+    /// </summary>
+    public sealed record SpecChanged : RevisionTrigger
+    {
+        public override string Discriminator => "spec_changed";
     }
 }

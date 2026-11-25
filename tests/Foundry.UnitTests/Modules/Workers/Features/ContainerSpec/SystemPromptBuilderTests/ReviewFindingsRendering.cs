@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -50,7 +51,7 @@ public sealed class ReviewFindingsRendering
                 1,
                 Template,
                 new DispatchContext.Revision("feat/1-fix", "https://github.com/o/r/pull/1", findings),
-                new IssueContent("Fix", "Body.", []),
+                new IssueContent("Fix", "Body.", [], SpecHashFixtures.Any),
                 timeoutMinutes: 120,
                 toolchain: ToolchainFixtures.With(docker: false, csharpLs: false))
             .ShouldBeOfType<Result<string>.Success>().Value;

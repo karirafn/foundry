@@ -16,7 +16,7 @@ public sealed class ClarificationLog
 {
     private const string Principles = "Engineering principles.";
     private const string Template = "You are implementing GitHub issue #{issueNumber}.\n\n{issueContent}";
-    private static readonly IssueContent Issue = new("Add retry", "Retry webhook delivery.", []);
+    private static readonly IssueContent Issue = new("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any);
 
     private static readonly DateTimeOffset AskedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 

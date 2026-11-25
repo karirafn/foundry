@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -24,7 +25,7 @@ public sealed class TrackerContextRendering
     private const string OpenListUnreadableNote = "Note: the open-issue list could not be read from the tracker.";
     private const string IndexLead = "The repository's open issues, newest first (at most 100):";
 
-    private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", []);
+    private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", [], SpecHashFixtures.Any);
 
     private static TrackerContext ContextWithOpenIssues(params OpenIssue[] openIssues) =>
         new([], [], false, openIssues);

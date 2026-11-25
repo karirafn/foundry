@@ -96,6 +96,8 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
     private const int DivergenceReasonMaxLength = 30;
     private const int SourceTokenHashMaxLength = 64;
 
+    private const int SpecHashMaxLength = 64;
+
     private static readonly ValueConverter<BranchDivergenceReason, string> DivergenceReasonConverter = new(
         reason => BranchDivergenceReasonTokens.ToToken(reason),
         token => DivergenceReasonFromStored(token));
@@ -289,6 +291,14 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.HasIndex(r => r.SourceTokenHash)
             .HasDatabaseName("ix_worker_runs_source_token_hash");
+
+        builder.Property(r => r.SuppliedSpecHash)
+            .HasConversion(new ValueConverter<SpecHash?, string?>(
+                hash => hash!.Value,
+                value => SpecHash.From(value!)))
+            .HasMaxLength(SpecHashMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("supplied_spec_hash");
 
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")

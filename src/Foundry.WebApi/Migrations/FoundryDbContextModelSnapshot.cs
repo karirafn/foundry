@@ -166,6 +166,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("triage_verdict");
 
+                    b.Property<string>("TriagedSpecHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("triaged_spec_hash");
+
                     b.Property<string>("Url")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -178,6 +184,16 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("issue_kind");
+
+                    b.Property<string>("_openWorkBranchName")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("open_work_branch_name");
+
+                    b.Property<string>("_openWorkPullRequestUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("open_work_pull_request_url");
 
                     b.Property<string>("state")
                         .IsRequired()
@@ -1120,6 +1136,12 @@ namespace Foundry.WebApi.Migrations
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
                         .HasColumnName("supplied_review_facts");
+
+                    b.Property<string>("SuppliedSpecHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplied_spec_hash");
 
                     b.Property<string>("Toolchain")
                         .HasColumnType("TEXT")

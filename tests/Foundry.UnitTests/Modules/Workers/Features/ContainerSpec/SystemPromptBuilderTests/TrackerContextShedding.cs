@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -29,7 +30,8 @@ public sealed class TrackerContextShedding
             "The bug body.",
             Enumerable.Range(1, commentCount)
                 .Select(i => new IssueContentComment(i, "bob", $"COMMENT_{i} text", CreatedAt.AddHours(i)))
-                .ToList());
+                .ToList(),
+            SpecHashFixtures.Any);
 
     private static string BodyOf(int number) => new((char)('a' + number - 1), FullBodyBytes);
 
@@ -177,7 +179,8 @@ public sealed class TrackerContextShedding
             "The bug body.",
             Enumerable.Range(1, 3)
                 .Select(i => new IssueContentComment(i, "bob", $"COMMENT_{i} " + new string('c', 50_000), CreatedAt.AddHours(i)))
-                .ToList());
+                .ToList(),
+            SpecHashFixtures.Any);
         TrackerContext withBodies = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
         TrackerContext atMinimum = withBodies with
         {
@@ -211,7 +214,8 @@ public sealed class TrackerContextShedding
             "The bug body.",
             Enumerable.Range(1, 3)
                 .Select(i => new IssueContentComment(i, "bob", $"COMMENT_{i} " + new string('z', 45_000), CreatedAt.AddHours(i)))
-                .ToList());
+                .ToList(),
+            SpecHashFixtures.Any);
         TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
 
         // Act
@@ -431,7 +435,8 @@ public sealed class TrackerContextShedding
             "The bug body.",
             Enumerable.Range(1, 3)
                 .Select(i => new IssueContentComment(i, "bob", $"COMMENT_{i} " + new string('z', 50_000), CreatedAt.AddHours(i)))
-                .ToList());
+                .ToList(),
+            SpecHashFixtures.Any);
         TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
 
         // Act
@@ -453,7 +458,7 @@ public sealed class TrackerContextShedding
         string body = new string('B', 60_000);
         string olderInput = new('o', 30_000);
         string newestInput = new('n', 20_000);
-        IssueContent issue = new("Fix the bug", body, []);
+        IssueContent issue = new("Fix the bug", body, [], SpecHashFixtures.Any);
         TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
 
         // Act
@@ -478,7 +483,8 @@ public sealed class TrackerContextShedding
         IssueContent issue = new(
             "Fix the bug",
             "BODY_MARKER whole.",
-            [new IssueContentComment(1, "bob", "COMMENT_1 text", CreatedAt)]);
+            [new IssueContentComment(1, "bob", "COMMENT_1 text", CreatedAt)],
+            SpecHashFixtures.Any);
         TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
 
         // Act
@@ -500,7 +506,7 @@ public sealed class TrackerContextShedding
     {
         // Arrange
         string newestInput = new('n', 40_000);
-        IssueContent issue = new("Fix the bug", new string('B', 200_000), []);
+        IssueContent issue = new("Fix the bug", new string('B', 200_000), [], SpecHashFixtures.Any);
         TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
 
         // Act
@@ -547,7 +553,8 @@ public sealed class TrackerContextShedding
         IssueContent issue = new(
             "Fix the bug",
             "BODY_MARKER whole.",
-            [new IssueContentComment(1, "bob", "COMMENT_1 text", CreatedAt)]);
+            [new IssueContentComment(1, "bob", "COMMENT_1 text", CreatedAt)],
+            SpecHashFixtures.Any);
         TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
 
         // Act
