@@ -41,6 +41,7 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 /// <param name="Principles">
 /// The role's assembled Worker Principles: the framing followed by its sections; empty when it selects none.
 /// </param>
+/// <param name="DecisionRule">The ask-or-decide rule the role's system prompt carries; empty when it carries none.</param>
 internal sealed record WorkerRoleCard(
     string Name,
     string? Purpose,
@@ -52,7 +53,8 @@ internal sealed record WorkerRoleCard(
     string? VerdictSchema,
     string Model,
     IReadOnlyList<string> PrincipleSections,
-    string Principles);
+    string Principles,
+    string DecisionRule);
 
 /// <summary>The plugin loaded for every role.</summary>
 internal sealed record SharedRolePlugin(
@@ -67,6 +69,7 @@ internal sealed record SharedRolePlugin(
 /// <param name="PromptSections">The system-prompt sections Foundry adds, in assembly order.</param>
 /// <param name="RolePromptSlot">The marker standing for the role's system prompt in <paramref name="PromptSections"/>.</param>
 /// <param name="PrinciplesSlot">The marker standing for the role's Worker Principles in <paramref name="PromptSections"/>.</param>
+/// <param name="DecisionsSlot">The marker standing for the role's ask-or-decide rule in <paramref name="PromptSections"/>.</param>
 /// <param name="PrincipleSections">Every Principle Section name, in the fixed order.</param>
 internal sealed record WorkerRoleCatalogResponse(
     WorkerRoleImage Image,
@@ -75,6 +78,7 @@ internal sealed record WorkerRoleCatalogResponse(
     IReadOnlyList<PromptSectionDescriptor> PromptSections,
     string RolePromptSlot,
     string PrinciplesSlot,
+    string DecisionsSlot,
     IReadOnlyList<string> PrincipleSections);
 
 internal static class GetWorkerRoleCatalog
@@ -104,7 +108,8 @@ internal static class GetWorkerRoleCatalog
                     role.VerdictSchema,
                     models.GetValueOrDefault(role.Role, string.Empty),
                     [.. role.Role.PrincipleSections.InOrder.Select(section => section.ToName())],
-                    catalog.Content.PrinciplesFor(role.Role))),
+                    catalog.Content.PrinciplesFor(role.Role),
+                    catalog.Content.DecisionRuleFor(role.Role))),
             ],
             new SharedRolePlugin(
                 catalog.Content.Shared.Description,
@@ -113,6 +118,7 @@ internal static class GetWorkerRoleCatalog
             SystemPromptBuilder.DescribeSections(timeoutMinutes),
             SystemPromptBuilder.RolePromptSlot,
             SystemPromptBuilder.PrinciplesSlot,
+            SystemPromptBuilder.DecisionsSlot,
             [.. PrincipleSectionNames.All.Select(section => section.ToName())]);
     }
 

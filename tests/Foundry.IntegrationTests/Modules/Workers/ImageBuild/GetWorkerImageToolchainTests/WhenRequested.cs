@@ -117,6 +117,7 @@ public sealed class WhenRequested : IAsyncDisposable
             ["review/prompts/task.md"] = "Review issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
             ["shared/prompts/principles.md"] = "Engineering principles.",
+            ["shared/prompts/decisions.md"] = "Ask only about uncertain business logic.",
             ["shared/prompts/principles/testing.md"] = "Testing:",
             ["shared/prompts/principles/design.md"] = "Design:",
             ["shared/prompts/principles/code.md"] = "Code:",

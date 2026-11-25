@@ -915,7 +915,7 @@ public sealed class RepositoryRoles
         lines.ShouldSatisfyAllConditions(
             () => lines.ShouldContain("- Use the referenced issues and the open-issue list for related work and precedent."),
             () => lines.ShouldContain(
-                "- Ask only what the code, its docs and the supplied issues leave open: intent, priority or a product choice."));
+                "- Ask only what the rule above says to ask, and only what the code, its docs and the supplied issues leave open."));
     }
 
     [Fact]
@@ -974,6 +974,105 @@ public sealed class RepositoryRoles
     private static string ReadSystemPrompt(string roleName) =>
         File.ReadAllText(Path.Combine(RolesDirectory, roleName, WorkerRoleCatalogReader.SystemPromptPath))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    public static TheoryData<string> RolesCarryingTheDecisionRule => ["triage", "implement", "review"];
+
+    [Theory]
+    [MemberData(nameof(RolesCarryingTheDecisionRule))]
+    public void WhenARolePromptIsRendered_CarriesTheRepositoryDecisionRuleOnce(string roleName)
+    {
+        // Arrange
+        WorkerRole role = WorkerRole.FromStored(roleName);
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+        WorkerRoleDefinition definition = catalog.Find(role).ShouldNotBeNull();
+        IssueContent issue = new("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any);
+
+        // Act
+        Result<string> result = role.Capability == WorkerCapability.Restricted
+            ? SystemPromptBuilder.BuildRestricted(
+                catalog.PrinciplesFor(role),
+                42,
+                definition.SystemPromptTemplate,
+                issue,
+                ToolchainFixtures.With(csharpLs: false),
+                decisionRule: catalog.DecisionRuleFor(role))
+            : SystemPromptBuilder.Build(
+                catalog.PrinciplesFor(role),
+                42,
+                definition.SystemPromptTemplate,
+                new DispatchContext.Fresh("feat/42-title"),
+                issue,
+                timeoutMinutes: 120,
+                toolchain: ToolchainFixtures.With(docker: false, csharpLs: false),
+                decisionRule: catalog.DecisionRuleFor(role));
+
+        // Assert
+        string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
+        prompt.Split(catalog.DecisionRule).Length.ShouldBe(2);
+    }
+
+    [Fact]
+    public void TheDecisionRule_IsNotAPrincipleSection()
+    {
+        // Arrange
+        string rule = LoadRepositoryCatalog().DecisionRule;
+
+        // Assert
+        rule.ShouldSatisfyAllConditions(
+            () => rule.ShouldNotMatch(@"\[(testing|design|code|domain)\.\d+\]"),
+            () => rule.ShouldNotContain("conventions win"));
+    }
+
+    [Fact]
+    public void TheDecisionRule_AsksOnlyAboutUncertainBusinessLogicAndImportantDetailsAndDecidesTheRest()
+    {
+        // Arrange
+        string rule = LoadRepositoryCatalog().DecisionRule;
+
+        // Assert
+        rule.ShouldSatisfyAllConditions(
+            () => rule.ShouldContain("uncertain business logic"),
+            () => rule.ShouldContain("important"),
+            () => rule.ShouldContain("`settled_business`"),
+            () => rule.ShouldContain("`implementation_detail`"),
+            () => rule.ShouldContain("`file:line`"));
+    }
+
+    [Fact]
+    public void TheReviewSystemPrompt_RaisesADecisionThatShouldHaveBeenAskedAsAnAdvisoryFinding()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Review.Name);
+
+        // Assert
+        prompt.ShouldContain(
+            "A decision in the clarification log, or one this change makes, that the rule above says should have been asked is an `advisory` finding, never `blocking`");
+    }
+
+    [Fact]
+    public void TheTriageSystemPrompt_JudgesReadinessFromTheIssueAndItsClarificationLogAndReturnsDecisions()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Triage.Name);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("a person could implement it from the issue and its clarification log"),
+            () => prompt.ShouldContain("`decisions`"));
+    }
+
+    [Fact]
+    public void TheImplementSystemPrompt_RecordsDecisionsInThePullRequestAndOverturnsOnlyWhenRunningCodeShowsThemWrong()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Implement.Name);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("`notes`"),
+            () => prompt.ShouldContain("`attention`"),
+            () => prompt.ShouldContain("only when running code shows it wrong"));
+    }
 
     private static WorkerRoleCatalogContent LoadRepositoryCatalog() =>
         WorkerRoleCatalogReader.ReadFromDirectory(RepositoryRoot.WorkersDirectory)

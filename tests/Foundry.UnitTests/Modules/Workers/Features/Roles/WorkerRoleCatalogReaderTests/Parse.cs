@@ -30,6 +30,7 @@ public sealed class Parse
         ["shared/prompts/principles/design.md"] = "Design:\n- Safe defaults.\n",
         ["shared/prompts/principles/code.md"] = "Code:\n- Comments explain why.\n",
         ["shared/prompts/principles/domain.md"] = "Domain modelling:\n- Domain terms.\n",
+        ["shared/prompts/decisions.md"] = "\uFEFFAsk about business logic.\r\nDecide the rest.\r\n",
     };
 
     private static string FillToBytes(string unit, int bytes) =>
@@ -197,6 +198,111 @@ public sealed class Parse
         error.ShouldSatisfyAllConditions(
             () => error.Message.ShouldContain("placeholders Foundry does not fill"),
             () => error.Message.ShouldContain($"roles/{path}"));
+    }
+
+    [Fact]
+    public void WhenTheDecisionRuleFileIsPresent_ReadsItNormalised()
+    {
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(ValidFiles());
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value
+            .DecisionRule.ShouldBe("Ask about business logic.\nDecide the rest.");
+    }
+
+    [Fact]
+    public void WhenTheDecisionRuleFileIsMissing_FailsNamingTheFile()
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files.Remove("shared/prompts/decisions.md");
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
+            () => error.Message.ShouldContain("roles/shared/prompts/decisions.md"));
+    }
+
+    [Fact]
+    public void WhenTheDecisionRuleFileIsBlank_FailsNamingTheFile()
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/decisions.md"] = " \r\n ";
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
+            () => error.Message.ShouldContain("roles/shared/prompts/decisions.md"));
+    }
+
+    [Fact]
+    public void WhenTheDecisionRuleFileContainsAPlaceholder_FailsNamingTheFile()
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/decisions.md"] = "Decide for issue #{issueNumber}.";
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Message.ShouldContain("placeholders Foundry does not fill"),
+            () => error.Message.ShouldContain("roles/shared/prompts/decisions.md"));
+    }
+
+    [Fact]
+    public void WhenThePrinciplesAreAtTheByteCap_TheDecisionRuleDoesNotCountTowardsIt()
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/principles.md"] = FillExactly("a", FramingRoomUnderTheCap(files));
+        files["shared/prompts/decisions.md"] = FillToBytes("b", WorkerRoleCatalogReader.MaxPrinciplesBytes);
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>();
+    }
+
+    [Fact]
+    public void ARoleThatCarriesTheDecisionRule_GetsItsText()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = WorkerRoleCatalogReader.Parse(ValidFiles())
+            .ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
+
+        // Act
+        string rule = catalog.DecisionRuleFor(WorkerRole.Review);
+
+        // Assert
+        rule.ShouldBe("Ask about business logic.\nDecide the rest.");
+    }
+
+    [Fact]
+    public void ARoleThatDoesNotCarryTheDecisionRule_GetsNoText()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = WorkerRoleCatalogReader.Parse(ValidFiles())
+            .ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
+
+        // Act
+        string rule = catalog.DecisionRuleFor(WorkerRole.FromStored("retired-role"));
+
+        // Assert
+        rule.ShouldBeEmpty();
     }
 
     [Theory]

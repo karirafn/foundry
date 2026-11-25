@@ -2,6 +2,9 @@ import { WorkerRoleCard, WorkerRoleCatalog, WorkerRoleModelOptions } from '../wo
 
 export const ROLE_PROMPT_SLOT = '{rolePrompt}';
 export const PRINCIPLES_SLOT = '{principles}';
+export const DECISIONS_SLOT = '{decisions}';
+export const DECISION_RULE =
+  'Ask a person only about uncertain business logic.\n\nDecide everything else yourself.';
 export const PRINCIPLE_SECTIONS: readonly string[] = [
   'Testing',
   'Design',
@@ -38,6 +41,7 @@ export function buildWorkerRole(overrides: Partial<WorkerRoleCard> = {}): Worker
     model: '',
     principleSections: [...PRINCIPLE_SECTIONS],
     principles: IMPLEMENT_PRINCIPLES,
+    decisionRule: DECISION_RULE,
     ...overrides,
   };
 }
@@ -99,6 +103,7 @@ export function buildWorkerRoleCatalog(
     ],
     rolePromptSlot: ROLE_PROMPT_SLOT,
     principlesSlot: PRINCIPLES_SLOT,
+    decisionsSlot: DECISIONS_SLOT,
     principleSections: [...PRINCIPLE_SECTIONS],
     ...overrides,
   };

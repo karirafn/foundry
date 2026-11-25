@@ -37,9 +37,11 @@ const CONDITION_TAGS: Readonly<Record<PromptSectionCondition, ConditionTag>> = {
 const EXCLUDED_TAG: ConditionTag = { label: 'Not included', kind: 'excluded' };
 
 const NO_PRINCIPLES_NOTE = 'This role declares no principle sections, so its prompt has none.';
+const NO_DECISION_RULE_NOTE =
+  'This role does not carry the ask-or-decide rule, so its prompt has none.';
 
 /** Which role-specific slot a section stands for, if any. */
-type SectionSlot = 'rolePrompt' | 'principles' | null;
+type SectionSlot = 'rolePrompt' | 'principles' | 'decisions' | null;
 
 interface SectionView {
   readonly key: string;
@@ -101,6 +103,9 @@ function toTag(condition: PromptSectionCondition): ConditionTag {
                   />
                   <fd-prompt-text [text]="rolePrinciplesText()" />
                 }
+                @case ('decisions') {
+                  <fd-prompt-text [text]="roleDecisionRule()" />
+                }
                 @default {
                   <fd-prompt-text [text]="section.content" />
                 }
@@ -147,6 +152,7 @@ export class PromptAssemblyComponent {
     input.required<readonly PromptSectionDescriptor[]>();
   readonly rolePromptSlot: InputSignal<string> = input.required<string>();
   readonly principlesSlot: InputSignal<string> = input.required<string>();
+  readonly decisionsSlot: InputSignal<string> = input.required<string>();
   /** Every Principle Section name, in the fixed order. */
   readonly principleSections: InputSignal<readonly string[]> = input.required<readonly string[]>();
   readonly roleName: InputSignal<string> = input.required<string>();
@@ -155,13 +161,14 @@ export class PromptAssemblyComponent {
   readonly rolePrincipleSections: InputSignal<readonly string[]> =
     input.required<readonly string[]>();
   readonly rolePrinciplesText: InputSignal<string> = input.required<string>();
+  /** The ask-or-decide rule this role carries; empty when it carries none. */
+  readonly roleDecisionRule: InputSignal<string> = input.required<string>();
 
   protected readonly views: Signal<SectionView[]> = computed(() => {
     let ordinal = 0;
     return this.sections().map((section) => {
       const slot = this.slotOf(section);
-      // Decided from the selected names, never from empty text.
-      const included = slot !== 'principles' || this.rolePrincipleSections().length > 0;
+      const included = this.isIncluded(slot);
       return {
         key: section.key,
         title: splitPromptPlaceholders(section.title),
@@ -170,7 +177,7 @@ export class PromptAssemblyComponent {
         slot,
         included,
         ordinal: included ? ++ordinal : null,
-        note: slot === 'principles' ? this.principlesNote(included) : null,
+        note: this.noteOf(slot, included),
       };
     });
   });
@@ -228,7 +235,30 @@ export class PromptAssemblyComponent {
     if (section.content === this.rolePromptSlot()) {
       return 'rolePrompt';
     }
-    return section.content === this.principlesSlot() ? 'principles' : null;
+    if (section.content === this.principlesSlot()) {
+      return 'principles';
+    }
+    return section.content === this.decisionsSlot() ? 'decisions' : null;
+  }
+
+  private isIncluded(slot: SectionSlot): boolean {
+    switch (slot) {
+      // Decided from the selected names, never from empty text.
+      case 'principles':
+        return this.rolePrincipleSections().length > 0;
+      // The server sends the rule only to a role that carries it.
+      case 'decisions':
+        return this.roleDecisionRule().trim().length > 0;
+      default:
+        return true;
+    }
+  }
+
+  private noteOf(slot: SectionSlot, included: boolean): string | null {
+    if (slot === 'principles') {
+      return this.principlesNote(included);
+    }
+    return slot === 'decisions' && !included ? NO_DECISION_RULE_NOTE : null;
   }
 
   private principlesNote(included: boolean): string {

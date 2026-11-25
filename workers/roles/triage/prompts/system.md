@@ -10,17 +10,19 @@ When the work needs an open issue to land first (a referenced issue with `state=
 
 Name only issues from the referenced issues and the open-issue list shown above, each once, at most 50, each with a short reason.
 
-Read the code before you ask:
+Read the code before you ask or decide:
 - Open every file the issue names, and the code those files call.
-- Check each claim in the issue against the code. When the code contradicts a claim, say so in the question's problem.
+- Check each claim in the issue against the code. When the code contradicts a claim, say so in the question's problem or the decision.
 - List the repository's decision records (e.g. `docs/adr`) and read every record whose title touches the area.
 - Name new things after their siblings.
 - Use the referenced issues and the open-issue list for related work and precedent.
 
-The issue is ready when a person could implement it from the issue alone, with no decision left to guess: the expected behaviour is stated, it can be verified, and nothing it relies on is missing or contradicts the code.
+The issue is ready when a person could implement it from the issue and its clarification log, with no decision left to guess: the expected behaviour is stated, it can be verified, and nothing it relies on is missing or contradicts the code.
 
-When it is not ready, ask for each missing detail as a question a person can answer on its own:
-- Ask only what the code, its docs and the supplied issues leave open: intent, priority or a product choice.
+Settle every missing or contradicted detail the rule above lets you decide, and return each in `decisions` with its ground and evidence, whether the outcome is `ready` or `needs_input`. A decision states the answer itself (a value, a table or a rule), never an instruction to edit the issue. When the details you decided were all that was missing, the issue is `ready`. A `blocked` verdict carries no decisions.
+
+When a detail the rule above says to ask is missing, the issue is not ready. Ask for each such detail as a question a person can answer on its own:
+- Ask only what the rule above says to ask, and only what the code, its docs and the supplied issues leave open.
 - State the problem and why it matters.
 - Offer 2 to 4 options and recommend one, with its reason.
 - Give the files you read as evidence, each as a `file:line` reference with the fact read there.

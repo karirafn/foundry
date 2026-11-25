@@ -27,19 +27,23 @@ internal sealed record WorkerRoleDefinition(
     string? VerdictSchema);
 
 /// <summary>
-/// The roles read from one build context, plus the shared plugin loaded for every role and the Worker Principles each
-/// role selects its sections from.
+/// The roles read from one build context, plus the shared plugin loaded for every role, the Worker Principles each
+/// role selects its sections from, and the ask-or-decide rule the roles that carry it receive.
 /// </summary>
 internal sealed record WorkerRoleCatalogContent(
     IReadOnlyList<WorkerRoleDefinition> Roles,
     RolePlugin Shared,
-    WorkerPrinciples Principles)
+    WorkerPrinciples Principles,
+    string DecisionRule)
 {
     public WorkerRoleDefinition? Find(WorkerRole role) =>
         Roles.FirstOrDefault(definition => definition.Role == role);
 
     /// <summary>The Worker Principles <paramref name="role"/>'s system prompt carries.</summary>
     public string PrinciplesFor(WorkerRole role) => Principles.AssembleFor(role.PrincipleSections);
+
+    /// <summary>The ask-or-decide rule <paramref name="role"/>'s system prompt carries; empty when it carries none.</summary>
+    public string DecisionRuleFor(WorkerRole role) => role.CarriesDecisionRule ? DecisionRule : string.Empty;
 }
 
 /// <summary>

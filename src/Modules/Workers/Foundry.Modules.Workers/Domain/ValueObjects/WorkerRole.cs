@@ -17,7 +17,8 @@ public sealed record WorkerRole
         "triage",
         WorkerCapability.Restricted,
         // Triage judges an issue before any code exists; Testing and Code lines can only be judged in a diff.
-        PrincipleSectionSet.Of(PrincipleSection.Design, PrincipleSection.DomainModelling));
+        PrincipleSectionSet.Of(PrincipleSection.Design, PrincipleSection.DomainModelling),
+        carriesDecisionRule: true);
 
     public static readonly WorkerRole Implement = new(
         "implement",
@@ -26,7 +27,8 @@ public sealed record WorkerRole
             PrincipleSection.Testing,
             PrincipleSection.Design,
             PrincipleSection.Code,
-            PrincipleSection.DomainModelling));
+            PrincipleSection.DomainModelling),
+        carriesDecisionRule: true);
 
     /// <summary>
     /// Judges whether an implementation pull request is correct and meets its issue (ADR 0113). Returns a verdict only.
@@ -35,16 +37,22 @@ public sealed record WorkerRole
         "review",
         WorkerCapability.Restricted,
         // The reviewer judges against exactly the sections the implementer received, never a rule it was not given.
-        Implement.PrincipleSections);
+        Implement.PrincipleSections,
+        carriesDecisionRule: true);
 
     /// <summary>Every role Foundry can dispatch, in display order.</summary>
     public static readonly IReadOnlyList<WorkerRole> All = [Triage, Implement, Review];
 
-    private WorkerRole(string name, WorkerCapability capability, PrincipleSectionSet principleSections)
+    private WorkerRole(
+        string name,
+        WorkerCapability capability,
+        PrincipleSectionSet principleSections,
+        bool carriesDecisionRule)
     {
         Name = name;
         Capability = capability;
         PrincipleSections = principleSections;
+        CarriesDecisionRule = carriesDecisionRule;
     }
 
     public string Name { get; }
@@ -56,13 +64,18 @@ public sealed record WorkerRole
     public PrincipleSectionSet PrincipleSections { get; }
 
     /// <summary>
+    /// Whether this role's system prompt carries the ask-or-decide rule (ADR 0123) from <c>shared/prompts/decisions.md</c>.
+    /// </summary>
+    public bool CarriesDecisionRule { get; }
+
+    /// <summary>
     /// Rehydrates a role recorded on a worker run. Unknown names are kept as recorded so history from a role
     /// that was later removed still loads; such a role is never dispatched, is <see cref="WorkerCapability.Restricted"/>
-    /// so it can never be mistaken for one with full access, and carries no principle sections.
+    /// so it can never be mistaken for one with full access, and carries no principle sections and no decision rule.
     /// </summary>
     public static WorkerRole FromStored(string name) =>
         All.FirstOrDefault(role => string.Equals(role.Name, name, StringComparison.Ordinal))
-            ?? new WorkerRole(name, WorkerCapability.Restricted, PrincipleSectionSet.None);
+            ?? new WorkerRole(name, WorkerCapability.Restricted, PrincipleSectionSet.None, carriesDecisionRule: false);
 
     public override string ToString() => Name;
 }

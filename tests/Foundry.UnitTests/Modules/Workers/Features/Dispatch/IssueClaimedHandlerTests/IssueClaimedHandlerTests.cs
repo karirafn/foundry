@@ -1025,6 +1025,50 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAnImplementRunIsDispatched_SystemPromptCarriesTheDecisionRule()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: StubWorkerRoleCatalogStore.With());
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"]
+            .ShouldContain(StubWorkerRoleCatalogStore.DecisionRuleMarker);
+    }
+
+    [Fact]
+    public async Task WhenATriageRunIsDispatched_SystemPromptCarriesTheDecisionRule()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        WorkerRoleCatalog implementOnly = StubWorkerRoleCatalogStore.Catalog();
+        WorkerRoleDefinition triage = new(
+            WorkerRole.Triage,
+            WorkerCapability.Restricted,
+            new RolePlugin(WorkerRole.Triage.Name, "Triages an issue.", [], []),
+            "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+            "Triage issue #{issueNumber}.",
+            VerdictSchema: null);
+        WorkerRoleCatalog catalog = implementOnly with
+        {
+            Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(context: new DispatchContext.Triage(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"]
+            .ShouldContain(StubWorkerRoleCatalogStore.DecisionRuleMarker);
+    }
+
+    [Fact]
     public async Task WhenRoleHasTaskPromptTemplate_UsesItInWorkerPromptEnvVar()
     {
         // Arrange

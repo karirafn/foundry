@@ -16,6 +16,7 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
     internal const string DesignMarker = "DESIGN_MARKER Design:";
     internal const string CodeMarker = "CODE_MARKER Code:";
     internal const string DomainMarker = "DOMAIN_MARKER Domain modelling:";
+    internal const string DecisionRuleMarker = "DECISION_RULE_MARKER Ask only about uncertain business logic.";
     internal const string DefaultImageTag = "stub-image:v1";
 
     public WorkerRoleCatalog? Current { get; private set; } = current;
@@ -47,7 +48,8 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         WorkerRoleCatalogContent content = new(
             [new WorkerRoleDefinition(WorkerRole.Implement, capability, implementPlugin, systemPrompt, taskPrompt, VerdictSchema: null)],
             sharedPlugin,
-            principles ?? DefaultPrinciples());
+            principles ?? DefaultPrinciples(),
+            DecisionRuleMarker);
 
         return new WorkerRoleCatalog(
             content,

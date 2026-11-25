@@ -30,6 +30,12 @@ internal static class WorkerRoleCatalogReader
     /// <summary>The folder of the Principle Section files, under <c>shared/</c>: one file per section.</summary>
     internal const string PrincipleSectionsFolder = "prompts/principles";
 
+    /// <summary>
+    /// The ask-or-decide rule (ADR 0123), under <c>shared/</c>. It is not a Principle Section: it carries no ids and no
+    /// "repository conventions win" framing, and stays outside <see cref="MaxPrinciplesBytes"/>.
+    /// </summary>
+    internal const string DecisionRulePath = "prompts/decisions.md";
+
     // Role files are small text; the cap keeps a stray large file from being held in memory for the API.
     internal const int MaxFileBytes = 256 * 1024;
 
@@ -45,7 +51,7 @@ internal static class WorkerRoleCatalogReader
     private const string AgentsFolder = "agents/";
     private const string FrontmatterFence = "---";
 
-    // The builder fills placeholders in role templates only, so any placeholder in the principles would reach the worker literally.
+    // The builder fills placeholders in role templates only, so any placeholder in the shared prompts would reach the worker literally.
     private static readonly IReadOnlyList<string> NoPlaceholders = [];
 
     private static readonly EnumerationOptions IncludeHiddenEntries = new()
@@ -148,6 +154,13 @@ internal static class WorkerRoleCatalogReader
             return Result<WorkerRoleCatalogContent>.Fail(((Result<WorkerPrinciples>.Failure)principlesResult).Error);
         }
 
+        Result<string> decisionRuleResult = ReadSharedPromptFile(files, DecisionRulePath);
+
+        if (decisionRuleResult is not Result<string>.Success decisionRule)
+        {
+            return Result<WorkerRoleCatalogContent>.Fail(((Result<string>.Failure)decisionRuleResult).Error);
+        }
+
         List<WorkerRoleDefinition> roles = [];
 
         foreach (WorkerRole role in WorkerRole.All)
@@ -162,7 +175,11 @@ internal static class WorkerRoleCatalogReader
             roles.Add(definition.Value);
         }
 
-        return Result<WorkerRoleCatalogContent>.Ok(new WorkerRoleCatalogContent(roles, shared.Value, principles.Value));
+        return Result<WorkerRoleCatalogContent>.Ok(new WorkerRoleCatalogContent(
+            roles,
+            shared.Value,
+            principles.Value,
+            decisionRule.Value));
     }
 
     /// <summary>
@@ -171,7 +188,7 @@ internal static class WorkerRoleCatalogReader
     /// </summary>
     private static Result<WorkerPrinciples> ReadPrinciples(IReadOnlyDictionary<string, string> files)
     {
-        Result<string> framingResult = ReadPrinciplesFile(files, PrinciplesPath);
+        Result<string> framingResult = ReadSharedPromptFile(files, PrinciplesPath);
 
         if (framingResult is not Result<string>.Success framing)
         {
@@ -182,7 +199,7 @@ internal static class WorkerRoleCatalogReader
 
         foreach (PrincipleSection section in PrincipleSectionNames.All)
         {
-            Result<string> sectionResult = ReadPrinciplesFile(files, PrincipleSectionPath(section));
+            Result<string> sectionResult = ReadSharedPromptFile(files, PrincipleSectionPath(section));
 
             if (sectionResult is not Result<string>.Success text)
             {
@@ -206,7 +223,7 @@ internal static class WorkerRoleCatalogReader
         return Result<WorkerPrinciples>.Ok(principles);
     }
 
-    private static Result<string> ReadPrinciplesFile(IReadOnlyDictionary<string, string> files, string path)
+    private static Result<string> ReadSharedPromptFile(IReadOnlyDictionary<string, string> files, string path)
     {
         string file = $"'{RolesFolder}/{WorkerRole.SharedFolder}/{path}'";
         string? text = ReadPrompt(files, WorkerRole.SharedFolder, path);

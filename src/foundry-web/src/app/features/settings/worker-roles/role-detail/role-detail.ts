@@ -157,11 +157,13 @@ const LOAD_ERROR_FALLBACK = 'Failed to load worker roles';
                   [sections]="view.catalog.promptSections"
                   [rolePromptSlot]="view.catalog.rolePromptSlot"
                   [principlesSlot]="view.catalog.principlesSlot"
+                  [decisionsSlot]="view.catalog.decisionsSlot"
                   [principleSections]="view.catalog.principleSections"
                   [roleName]="view.role.name"
                   [roleSystemPrompt]="view.role.systemPrompt"
                   [rolePrincipleSections]="view.role.principleSections"
                   [rolePrinciplesText]="view.role.principles"
+                  [roleDecisionRule]="view.role.decisionRule"
                 />
                 <section class="role-detail__block" aria-labelledby="role-detail-task-title">
                   <h3 id="role-detail-task-title" class="role-detail__block-title">Task prompt</h3>

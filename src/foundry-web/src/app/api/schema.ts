@@ -1990,6 +1990,7 @@ export interface components {
             model: string;
             principleSections: string[];
             principles: string;
+            decisionRule: string;
         };
         WorkerRoleCatalogResponse: {
             image: components["schemas"]["WorkerRoleImage"];
@@ -1998,6 +1999,7 @@ export interface components {
             promptSections: components["schemas"]["PromptSectionDescriptor"][];
             rolePromptSlot: string;
             principlesSlot: string;
+            decisionsSlot: string;
             principleSections: string[];
         };
         WorkerRoleImage: {
