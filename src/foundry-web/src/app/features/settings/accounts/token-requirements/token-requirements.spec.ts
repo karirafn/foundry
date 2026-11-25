@@ -26,15 +26,32 @@ const GITHUB_REQUIREMENTS: TokenRequirements = {
 
 const GITLAB_REQUIREMENTS: TokenRequirements = {
   providerType: 'gitlab',
-  tokenTypeLabel: 'GitLab personal access token',
+  tokenTypeLabel: 'GitLab fine-grained personal access token',
   permissions: [
-    { label: 'api', verification: 'scope' },
-    { label: 'Maintainer role', verification: 'role' },
+    {
+      label: 'Only selected projects (select each monitored project individually)',
+      verification: 'granted',
+      group: 'Group and project access',
+    },
+    { label: 'Project: Read', verification: 'granted', group: 'On each selected project' },
+    {
+      label: 'Webhook (Integrations): Read, Create, Update, Delete, Trigger',
+      verification: 'granted',
+      group: 'On each selected project',
+    },
+    { label: 'Personal Access Token (System Access): Read', verification: 'granted', group: 'On your user' },
+    { label: 'User (System Access): Read', verification: 'granted', group: 'On your user' },
+    {
+      label: 'Package (Packages and Registry): Read',
+      verification: 'granted',
+      group: "On a package feed's group (optional)",
+    },
+    { label: 'Maintainer role', verification: 'role', group: 'Repository role' },
   ],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
   resourceOwnerHint: null,
-  closingNote: null,
-  creationNote: null,
+  closingNote: 'Foundry rejects a GitLab token that grants anything else or reaches all projects.',
+  creationNote: 'Requires GitLab 19.5 or later. On the page, choose Generate token, then Fine-grained token.',
 };
 
 function render(requirements: TokenRequirements, baseUrl = 'https://github.com', idPrefix = 'test'): HTMLElement {
@@ -49,7 +66,7 @@ function render(requirements: TokenRequirements, baseUrl = 'https://github.com',
 }
 
 function itemFor(el: HTMLElement, label: string): HTMLLIElement {
-  const items = Array.from(el.querySelectorAll<HTMLLIElement>('ul.token-requirements__list > li'));
+  const items = Array.from(el.querySelectorAll<HTMLLIElement>('li.token-requirements__item'));
   const item = items.find((li) => li.querySelector('.token-requirements__label')?.textContent === label);
   if (!item) {
     throw new Error(`No requirement item labelled ${label}`);
@@ -76,13 +93,56 @@ describe('TokenRequirementsComponent', () => {
     expect(item.querySelector('.token-requirements__note')).toBeNull();
   });
 
-  it('should render a scope permission in code with no note', () => {
+  it('should render a granted permission as plain text with no note', () => {
     // Arrange / Act
-    const item = itemFor(render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com'), 'api');
+    const item = itemFor(render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com'), 'Project: Read');
 
     // Assert
-    expect(item.querySelector('.token-requirements__label')?.tagName).toBe('CODE');
+    expect(item.querySelector('.token-requirements__label')?.tagName).toBe('SPAN');
     expect(item.querySelector('.token-requirements__note')).toBeNull();
+  });
+
+  it('should merge consecutive same-group requirements under one heading', () => {
+    // Arrange / Act
+    const el = render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com');
+
+    // Assert
+    const groups = Array.from(el.querySelectorAll('ul.token-requirements__list > li.token-requirements__group'));
+    expect(groups.map((group) => group.querySelector('.token-requirements__group-heading')?.textContent)).toEqual([
+      'Group and project access',
+      'On each selected project',
+      'On your user',
+      "On a package feed's group (optional)",
+      'Repository role',
+    ]);
+    expect(
+      Array.from(groups[1].querySelectorAll('.token-requirements__label'), (label) => label.textContent),
+    ).toEqual(['Project: Read', 'Webhook (Integrations): Read, Create, Update, Delete, Trigger']);
+  });
+
+  it('should label each nested list by its heading, with ids from the prefix', () => {
+    // Arrange / Act
+    const el = render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com', 'wizard');
+
+    // Assert
+    const groups = Array.from(el.querySelectorAll('li.token-requirements__group'));
+    groups.forEach((group, index) => {
+      const heading = group.querySelector('.token-requirements__group-heading');
+      expect(heading?.id).toBe(`wizard-group-${index}`);
+      expect(heading?.tagName).toBe('SPAN');
+      expect(group.querySelector('ul')?.getAttribute('aria-labelledby')).toBe(heading?.id);
+    });
+  });
+
+  it('should keep ungrouped requirements as direct list items', () => {
+    // Arrange / Act
+    const el = render(GITHUB_REQUIREMENTS);
+
+    // Assert
+    expect(el.querySelectorAll('li.token-requirements__group')).toHaveLength(0);
+    expect(el.querySelectorAll('ul.token-requirements__list > li.token-requirements__item')).toHaveLength(
+      GITHUB_REQUIREMENTS.permissions.length,
+    );
   });
 
   it('should note that a role permission is set on each repository', () => {
@@ -189,7 +249,7 @@ describe('TokenRequirementsComponent', () => {
 
   it('should leave out the closing note when there is none', () => {
     // Arrange / Act
-    const el = render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com');
+    const el = render({ ...GITLAB_REQUIREMENTS, closingNote: null }, 'https://gitlab.example.com');
 
     // Assert
     expect(el.querySelector('.token-requirements__closing-note')).toBeNull();
@@ -227,7 +287,7 @@ describe('TokenRequirementsComponent', () => {
 
   it('should leave the link undescribed when there is neither an owner hint nor a creation note', () => {
     // Arrange / Act
-    const el = render(GITLAB_REQUIREMENTS, 'https://gitlab.example.com');
+    const el = render({ ...GITLAB_REQUIREMENTS, creationNote: null }, 'https://gitlab.example.com');
 
     // Assert
     expect(el.querySelector('.token-requirements__link')?.hasAttribute('aria-describedby')).toBe(false);

@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, InputSignal, Signal, computed, input } from '@angular/core';
 import { TokenPermissionRequirement, TokenRequirements, creationUrl } from '../account.model';
 
@@ -20,10 +21,33 @@ export function requirementNote(requirement: TokenPermissionRequirement): string
   }
 }
 
+/** One entry of the requirements list: a requirement on its own, or a run of consecutive requirements under a heading. */
+export type RequirementEntry =
+  | { readonly kind: 'item'; readonly permission: TokenPermissionRequirement }
+  | { readonly kind: 'group'; readonly heading: string; readonly permissions: readonly TokenPermissionRequirement[] };
+
+/** Merges consecutive requirements that share a group under one heading; ungrouped requirements stand alone. */
+export function groupRequirements(permissions: readonly TokenPermissionRequirement[]): RequirementEntry[] {
+  const entries: RequirementEntry[] = [];
+  for (const permission of permissions) {
+    const heading = permission.group ?? null;
+    const last = entries[entries.length - 1];
+    if (heading === null) {
+      entries.push({ kind: 'item', permission });
+    } else if (last?.kind === 'group' && last.heading === heading) {
+      entries[entries.length - 1] = { ...last, permissions: [...last.permissions, permission] };
+    } else {
+      entries.push({ kind: 'group', heading, permissions: [permission] });
+    }
+  }
+  return entries;
+}
+
 /** What an account token needs on a provider, as the account form and setup wizard show it. */
 @Component({
   selector: 'fd-token-requirements',
   standalone: true,
+  imports: [NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let req = requirements();
@@ -39,18 +63,28 @@ export function requirementNote(requirement: TokenPermissionRequirement): string
       <p class="token-requirements__text">
         Create a <strong>{{ req.tokenTypeLabel }}</strong> with the following:
       </p>
+      <ng-template #requirementItem let-permission>
+        <li class="token-requirements__item" [attr.data-verification]="permission.verification">
+          <span class="token-requirements__label">{{ permission.label }}</span>
+          @if (_note(permission); as note) {
+            <span class="token-requirements__note"><span class="token-requirements__note-separator" aria-hidden="true">·</span> {{ note }}</span>
+          }
+        </li>
+      </ng-template>
       <ul class="token-requirements__list" aria-label="Required token permissions">
-        @for (permission of req.permissions; track permission.label) {
-          <li class="token-requirements__item" [attr.data-verification]="permission.verification">
-            @if (permission.verification === 'scope') {
-              <code class="token-requirements__label">{{ permission.label }}</code>
-            } @else {
-              <span class="token-requirements__label">{{ permission.label }}</span>
-            }
-            @if (_note(permission); as note) {
-              <span class="token-requirements__note"><span class="token-requirements__note-separator" aria-hidden="true">·</span> {{ note }}</span>
-            }
-          </li>
+        @for (entry of _entries(); track $index + ':' + (entry.kind === 'group' ? entry.heading : entry.permission.label); let i = $index) {
+          @if (entry.kind === 'group') {
+            <li class="token-requirements__group">
+              <span [id]="idPrefix() + '-group-' + i" class="token-requirements__group-heading">{{ entry.heading }}</span>
+              <ul class="token-requirements__group-list" [attr.aria-labelledby]="idPrefix() + '-group-' + i">
+                @for (permission of entry.permissions; track permission.label) {
+                  <ng-container *ngTemplateOutlet="requirementItem; context: { $implicit: permission }" />
+                }
+              </ul>
+            </li>
+          } @else {
+            <ng-container *ngTemplateOutlet="requirementItem; context: { $implicit: entry.permission }" />
+          }
         }
       </ul>
       @if (req.closingNote) {
@@ -107,6 +141,10 @@ export class TokenRequirementsComponent {
   );
 
   protected readonly _note = requirementNote;
+
+  protected readonly _entries: Signal<RequirementEntry[]> = computed(() =>
+    groupRequirements(this.requirements().permissions),
+  );
 
   protected readonly _resolvedHost: Signal<string> = computed(() => {
     try {

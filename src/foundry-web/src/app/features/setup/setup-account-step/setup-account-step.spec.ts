@@ -41,6 +41,8 @@ const VALID_RESULT: TokenValidationResult = {
   accountName: 'octocat',
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -50,6 +52,8 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
   accountName: null,
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -59,6 +63,8 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   accountName: 'octocat',
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -68,15 +74,8 @@ const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
   accountName: null,
   detectedProvider: null,
   wrongKind: null,
-  tokenExpiry: { status: 'notChecked', expiresAt: null },
-};
-
-const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
-  kind: 'scopesUnverifiable',
-  missingScopes: [],
-  accountName: 'octocat',
-  detectedProvider: null,
-  wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -86,6 +85,8 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
   accountName: null,
   detectedProvider: 'gitlab',
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -721,30 +722,45 @@ describe('SetupAccountStepComponent', () => {
     httpMock.expectOne('/api/accounts/validate-token').flush(VALID_RESULT);
   });
 
-  // Cycle K1: scopesUnverifiable — shows warning + enabled Create
-  it('should show warning message and enable Create when kind is scopesUnverifiable', () => {
-    // Arrange
+  function checkToken(result: TokenValidationResult): HTMLElement {
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
-    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.value = 'glpat_checked';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-
-    // Act
     tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
-    httpMock.expectOne('/api/accounts/validate-token').flush(SCOPES_UNVERIFIABLE_RESULT);
+    httpMock.expectOne('/api/accounts/validate-token').flush(result);
     fixture.detectChanges();
+    return el;
+  }
 
-    // Assert — warning message shown
-    const statusRegion = el.querySelector('[role="status"]');
-    expect(statusRegion?.textContent).toContain("Authenticated as octocat — couldn't verify token scopes");
+  it('should show broad reach and not-allowed permissions separately and disable Create', () => {
+    // Arrange / Act
+    const el = checkToken({ ...VALID_RESULT, broadReach: ['all-projects'], notAllowed: ['delete_project'] });
 
-    // Assert — Create button enabled
-    const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
+    // Assert
+    const errors = [...el.querySelectorAll('[role="status"] .setup-account-step__validation-message--error')].map(
+      (m) => m.textContent ?? '',
+    );
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toContain('This token reaches all projects. Foundry needs a token limited to selected projects.');
+    expect(errors[1]).toContain("This token grants permissions Foundry doesn't allow:");
+    expect(errors[1]).toContain('delete_project');
+    expect(el.querySelector('[role="status"]')?.textContent).not.toContain('Authenticated as');
+    expect((el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('should tell an old GitLab to upgrade, with no create link', () => {
+    // Arrange / Act
+    const el = checkToken({ ...VALID_RESULT, kind: 'wrongTokenKind', wrongKind: 'gitlab-version' });
+
+    // Assert
+    const msg = el.querySelector('[role="status"] .setup-account-step__validation-message--error');
+    expect(msg?.textContent).toContain('Upgrade GitLab to 19.5 or later.');
+    expect(msg?.querySelector('a')).toBeNull();
   });
 
   // Cycle K2: authenticated with non-empty missingScopes — Create DISABLED
@@ -1116,6 +1132,8 @@ describe('SetupAccountStepComponent', () => {
       accountName: null,
       detectedProvider: null,
       wrongKind: null,
+      notAllowed: [],
+      broadReach: [],
       tokenExpiry: { status: 'notChecked', expiresAt: null },
     };
     httpMock.expectOne('/api/accounts/validate-token').flush(unknownResult);
@@ -1128,27 +1146,6 @@ describe('SetupAccountStepComponent', () => {
     // Assert — Create button disabled
     const btn = el.querySelector('button.setup-account-step__create-btn') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-  });
-
-  // Finding 5: warning variants have sr-only "Warning:" prefix
-  it('should include a visually-hidden "Warning:" prefix in scopesUnverifiable warning message', () => {
-    // Arrange
-    const { fixture, httpMock } = setup();
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    const tokenInput = el.querySelector('input[id="setup-token"]') as HTMLInputElement;
-    tokenInput.value = 'ghp_unverifiable';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    tokenInput.dispatchEvent(new Event('blur'));
-    fixture.detectChanges();
-    httpMock.expectOne('/api/accounts/validate-token').flush(SCOPES_UNVERIFIABLE_RESULT);
-    fixture.detectChanges();
-
-    // Assert — sr-only prefix present
-    const statusRegion = el.querySelector('[role="status"]');
-    const srOnly = statusRegion?.querySelector('.sr-only');
-    expect(srOnly?.textContent?.trim()).toBe('Warning:');
   });
 
   // FIX 4: root container exposes role="region" and aria-label so AT can track aria-busy

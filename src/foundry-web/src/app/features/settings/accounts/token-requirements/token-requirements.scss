@@ -43,6 +43,31 @@
     padding: 0;
   }
 
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    min-width: 0;
+  }
+
+  &__group-heading {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__group-list {
+    border-inline-start: 2px solid var(--fd-border-default);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    padding-inline-start: var(--fd-spacing-sm);
+  }
+
   &__item {
     color: var(--fd-text-primary);
     display: flex;
@@ -55,15 +80,6 @@
 
   &__label {
     overflow-wrap: anywhere;
-  }
-
-  code.token-requirements__label {
-    background: var(--fd-bg-card-hover);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    font-family: var(--fd-font-mono);
-    font-size: 0.8125rem;
-    padding: 2px var(--fd-spacing-sm);
   }
 
   &__note {

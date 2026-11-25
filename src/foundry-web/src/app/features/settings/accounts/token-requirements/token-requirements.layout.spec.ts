@@ -20,19 +20,45 @@ const REQUIREMENTS: TokenRequirements = {
   creationNote: null,
 };
 
+const GITLAB_REQUIREMENTS: TokenRequirements = {
+  providerType: 'gitlab',
+  tokenTypeLabel: 'GitLab fine-grained personal access token',
+  permissions: [
+    {
+      label: 'Only selected projects (select each monitored project individually)',
+      verification: 'granted',
+      group: 'Group and project access',
+    },
+    { label: 'Merge Request (Repository): Read, Create, Update, Merge', verification: 'granted', group: 'On each selected project' },
+    {
+      label: 'Webhook (Integrations): Read, Create, Update, Delete, Trigger',
+      verification: 'granted',
+      group: 'On each selected project',
+    },
+    { label: 'Personal Access Token (System Access): Read', verification: 'granted', group: 'On your user' },
+    { label: 'Package (Packages and Registry): Read', verification: 'granted', group: "On a package feed's group (optional)" },
+    { label: 'Maintainer role', verification: 'role', group: 'Repository role' },
+  ],
+  creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
+  resourceOwnerHint: null,
+  closingNote: 'Foundry rejects a GitLab token that grants anything else or reaches all projects.',
+  creationNote: 'Requires GitLab 19.5 or later. On the page, choose Generate token, then Fine-grained token.',
+};
+
 @Component({
   selector: 'fd-token-requirements-layout-host',
   imports: [TokenRequirementsComponent],
-  template: `<div class="host" [style.width.px]="width()"><fd-token-requirements [requirements]="requirements" baseUrl="https://github.com" idPrefix="layout" /></div>`,
+  template: `<div class="host" [style.width.px]="width()"><fd-token-requirements [requirements]="requirements()" baseUrl="https://github.com" idPrefix="layout" /></div>`,
 })
 class HostComponent {
   readonly width = input.required<number>();
-  readonly requirements = REQUIREMENTS;
+  readonly requirements = input<TokenRequirements>(REQUIREMENTS);
 }
 
-async function render(width: number): Promise<HTMLElement> {
+async function render(width: number, requirements: TokenRequirements = REQUIREMENTS): Promise<HTMLElement> {
   const fixture = TestBed.createComponent(HostComponent);
   fixture.componentRef.setInput('width', width);
+  fixture.componentRef.setInput('requirements', requirements);
   await fixture.whenStable();
   return (fixture.nativeElement as HTMLElement).querySelector('.host') as HTMLElement;
 }
@@ -89,4 +115,39 @@ describe('token requirements layout', () => {
       expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth);
     });
   }
+
+  it('fits the grouped GitLab list at 360px with no horizontal overflow and wraps the webhook row', async () => {
+    // Arrange
+    const host = await render(360, GITLAB_REQUIREMENTS);
+
+    // Act
+    const hostRight = host.getBoundingClientRect().right;
+    const overflowing = Array.from(host.querySelectorAll('*'))
+      .filter((el) => el.getBoundingClientRect().right > hostRight + 0.5)
+      .map((el) => el.className);
+    const webhook = Array.from(host.querySelectorAll('.token-requirements__label')).find((label) =>
+      label.textContent?.startsWith('Webhook'),
+    ) as HTMLElement;
+    const lineHeight = parseFloat(getComputedStyle(webhook).lineHeight);
+
+    // Assert
+    expect(overflowing).toEqual([]);
+    expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth);
+    expect(webhook.getBoundingClientRect().height).toBeGreaterThan(lineHeight * 1.5);
+  });
+
+  it('indents each group list under its heading with a start border', async () => {
+    // Arrange
+    const host = await render(600, GITLAB_REQUIREMENTS);
+
+    // Act
+    const heading = host.querySelector('.token-requirements__group-heading') as HTMLElement;
+    const list = host.querySelector('.token-requirements__group-list') as HTMLElement;
+    const style = getComputedStyle(list);
+
+    // Assert
+    expect(getComputedStyle(heading).fontWeight).toBe('600');
+    expect(style.borderInlineStartWidth).toBe('2px');
+    expect(list.getBoundingClientRect().left).toBeGreaterThanOrEqual(heading.getBoundingClientRect().left);
+  });
 });

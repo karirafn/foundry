@@ -22,6 +22,12 @@ import {
   providerDisplayName,
   resolveTokenExpiry,
   wrongTokenKindMessage,
+  wrongTokenKindOffersCreateLink,
+  isConformingToken,
+  isSaveEligible,
+  validationNotAllowed,
+  validationBroadReach,
+  broadReachMessage,
 } from '../../settings/accounts/account.model';
 import { ProviderSelectorComponent } from '../../settings/accounts/provider-selector/provider-selector';
 import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
@@ -124,7 +130,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
             @let previewExpiry = _resolveTokenExpiry(result.tokenExpiry);
             @switch (_kindOf(result)) {
               @case ('authenticated') {
-                @if (result.missingScopes.length === 0) {
+                @if (_isConformingToken(result)) {
                   <span class="setup-account-step__validation-block">
                     <span class="setup-account-step__validation-dot setup-account-step__validation-dot--valid" aria-hidden="true"></span>
                     <span class="setup-account-step__validation-message setup-account-step__validation-message--valid">
@@ -151,6 +157,30 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                     </span>
                   }
                 } @else {
+                  @let broadReach = _broadReach(result);
+                  @let notAllowed = _notAllowed(result);
+                  @if (broadReach.length > 0) {
+                    <span class="setup-account-step__validation-block">
+                      <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                      <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                        <span class="sr-only">Error: </span>{{ _broadReachMessage(broadReach) }}
+                      </span>
+                    </span>
+                  }
+                  @if (notAllowed.length > 0) {
+                    <span class="setup-account-step__validation-block">
+                      <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
+                      <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
+                        <span class="sr-only">Error: </span>This token grants permissions Foundry doesn't allow:
+                        <ul class="setup-account-step__validation-list">
+                          @for (label of notAllowed; track label) {
+                            <li>{{ label }}</li>
+                          }
+                        </ul>
+                      </span>
+                    </span>
+                  }
+                  @if (result.missingScopes.length > 0) {
                   <span class="setup-account-step__validation-block">
                     <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
                     <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
@@ -162,33 +192,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                       </ul>
                     </span>
                   </span>
-                }
-              }
-              @case ('scopesUnverifiable') {
-                <span class="setup-account-step__validation-block">
-                  <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
-                  <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
-                    <span class="sr-only">Warning: </span>Authenticated as <span class="setup-account-step__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
-                  </span>
-                </span>
-                @if (previewExpiry.status === 'expiringSoon') {
-                  <span class="setup-account-step__validation-block">
-                    <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
-                    <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
-                      <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — pick a longer-lived token to avoid replacing it again soon
-                    </span>
-                  </span>
-                } @else if (previewExpiry.status === 'expired') {
-                  <span class="setup-account-step__validation-block">
-                    <span class="setup-account-step__validation-dot setup-account-step__validation-dot--warning" aria-hidden="true"></span>
-                    <span class="setup-account-step__validation-message setup-account-step__validation-message--warning">
-                      <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — {{ _provider() }} can reject it at any time; create a new token
-                    </span>
-                  </span>
-                } @else if (previewExpiry.status !== 'notChecked') {
-                  <span class="setup-account-step__validation-block">
-                    <span class="setup-account-step__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
-                  </span>
+                  }
                 }
               }
               @case ('wrongTokenKind') {
@@ -196,7 +200,7 @@ const GITLAB_BASE_URL = 'https://gitlab.com';
                   <span class="setup-account-step__validation-dot setup-account-step__validation-dot--error" aria-hidden="true"></span>
                   <span class="setup-account-step__validation-message setup-account-step__validation-message--error">
                     <span class="sr-only">Error: </span>{{ _wrongTokenKindMessage(result.wrongKind) }}
-                    @if (_createTokenLink(); as link) {
+                    @if (_wrongTokenKindOffersCreateLink(result.wrongKind) && _createTokenLink(); as link) {
                       <a class="setup-account-step__validation-link" [href]="link.url" target="_blank" rel="noopener noreferrer">
                         Create a fine-grained token on {{ link.host }}
                         <span aria-hidden="true">↗</span>
@@ -297,6 +301,11 @@ export class SetupAccountStepComponent {
   );
 
   protected readonly _wrongTokenKindMessage = wrongTokenKindMessage;
+  protected readonly _wrongTokenKindOffersCreateLink = wrongTokenKindOffersCreateLink;
+  protected readonly _isConformingToken = isConformingToken;
+  protected readonly _notAllowed = validationNotAllowed;
+  protected readonly _broadReach = validationBroadReach;
+  protected readonly _broadReachMessage = broadReachMessage;
 
   /** Tracks the last (token, baseUrl, providerType) triple sent to resolution to avoid duplicate calls. */
   private readonly _lastResolvedPair: WritableSignal<{ token: string; baseUrl: string; providerType: string } | null> = signal(null);
@@ -326,16 +335,8 @@ export class SetupAccountStepComponent {
       return false;
     }
     const result = this._accountService.validationResult();
-    return result !== null && SetupAccountStepComponent._isSaveEligible(result);
+    return result !== null && isSaveEligible(result);
   });
-
-  private static _isSaveEligible(result: TokenValidationResult): boolean {
-    const kind = narrowTokenValidationKind(result);
-    if (kind === 'scopesUnverifiable') {
-      return true;
-    }
-    return kind === 'authenticated' && result.missingScopes.length === 0;
-  }
 
   constructor() {
     effect(() => {

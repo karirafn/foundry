@@ -39,6 +39,8 @@ const VALID_RESULT: TokenValidationResult = {
   accountName: 'octocat',
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -48,6 +50,8 @@ const AUTH_FAIL_RESULT: TokenValidationResult = {
   accountName: null,
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -57,6 +61,8 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   accountName: 'octocat',
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -66,15 +72,8 @@ const IDENTITY_UNRESOLVED_RESULT: TokenValidationResult = {
   accountName: null,
   detectedProvider: null,
   wrongKind: null,
-  tokenExpiry: { status: 'notChecked', expiresAt: null },
-};
-
-const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
-  kind: 'scopesUnverifiable',
-  missingScopes: [],
-  accountName: 'octocat',
-  detectedProvider: null,
-  wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -84,6 +83,8 @@ const PROVIDER_MISMATCH_RESULT: TokenValidationResult = {
   accountName: null,
   detectedProvider: 'gitlab',
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -1011,7 +1012,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, wrongKind: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, wrongKind: null, notAllowed: [], broadReach: [], tokenExpiry: { status: 'notChecked', expiresAt: null } },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1105,7 +1106,7 @@ describe('AccountFormComponent', () => {
     // Arrange
     const { el, fixture } = setup({
       account: MOCK_ACCOUNT,
-      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, wrongKind: null, tokenExpiry: { status: 'notChecked', expiresAt: null } },
+      validationResult: { kind: 'authenticated', missingScopes: [], accountName: 'new-identity', detectedProvider: null, wrongKind: null, notAllowed: [], broadReach: [], tokenExpiry: { status: 'notChecked', expiresAt: null } },
     });
 
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
@@ -1695,32 +1696,74 @@ describe('AccountFormComponent', () => {
     expect(panel?.textContent).toContain('current holder');
   });
 
-  // Cycle K1: scopesUnverifiable — shows warning dot + authenticated-as message, Save enabled
-  it('should show warning dot and "Authenticated as … could not verify" when kind is scopesUnverifiable', () => {
-    // Arrange
-    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+  function checkToken(result: TokenValidationResult): { el: HTMLElement } {
+    const { el, fixture } = setup({ account: null, validationResult: result });
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.value = 'glpat_checked';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-
-    // Act
     tokenInput.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
+    return { el };
+  }
 
-    // Assert — warning tone
-    const dot = el.querySelector('.account-form__validation-dot--warning');
-    expect(dot).toBeTruthy();
-    const msg = el.querySelector('.account-form__validation-message--warning');
-    expect(msg?.textContent).toContain("Authenticated as octocat — couldn't verify token scopes");
+  it('should list not-allowed permissions as an error, hide the authenticated line and disable save', () => {
+    // Arrange / Act
+    const { el } = checkToken({ ...VALID_RESULT, notAllowed: ['Webhook (Integrations): Test', 'delete_project'] });
+
+    // Assert
+    const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
+    expect(msg?.querySelector('.sr-only')?.textContent).toBe('Error: ');
+    expect(msg?.textContent).toContain("This token grants permissions Foundry doesn't allow:");
+    expect([...(msg?.querySelectorAll('li') ?? [])].map((li) => li.textContent)).toEqual([
+      'Webhook (Integrations): Test',
+      'delete_project',
+    ]);
+    expect(el.querySelector('[role="status"]')?.textContent).not.toContain('Authenticated as');
+    expect((el.querySelector('.account-form__save-btn') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  // Cycle K2: scopesUnverifiable — Save button is ENABLED (the key behavioral fix)
-  it('should enable save when kind is scopesUnverifiable', () => {
+  it('should name each broad reach in one sentence and disable save', () => {
+    // Arrange / Act
+    const { el } = checkToken({ ...VALID_RESULT, broadReach: ['all-projects', 'personal-projects', 'instance'] });
+
+    // Assert
+    const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
+    expect(msg?.textContent).toContain(
+      'This token reaches all projects, your personal projects and the whole instance. Foundry needs a token limited to selected projects.',
+    );
+    expect((el.querySelector('.account-form__save-btn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('should show broad reach, not allowed and missing as separate blocks in that order', () => {
+    // Arrange / Act
+    const { el } = checkToken({
+      ...VALID_RESULT,
+      broadReach: ['instance'],
+      notAllowed: ['test_webhook'],
+      missingScopes: ['Webhook (Integrations): Trigger'],
+    });
+
+    // Assert
+    const messages = [...el.querySelectorAll('[role="status"] .account-form__validation-message')].map(
+      (m) => m.textContent ?? '',
+    );
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toContain('This token reaches the whole instance.');
+    expect(messages[1]).toContain('test_webhook');
+    expect(messages[2]).toContain('Missing permissions:');
+    expect(messages[2]).toContain('Webhook (Integrations): Trigger');
+  });
+
+  it.each([
+    ['gitlab-legacy', 'This is a legacy personal access token. Foundry needs a fine-grained personal access token.'],
+    ['gitlab-resource-token', 'This is a group or project access token. Foundry needs a fine-grained personal access token.'],
+  ])('should explain the %s wrong kind with a create link', async (wrongKind, message) => {
     // Arrange
-    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
+    const { el, fixture } = setup({ account: null, validationResult: { ...VALID_RESULT, kind: 'wrongTokenKind', wrongKind } });
+    await fixture.whenStable();
     const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_unverifiable';
+    tokenInput.value = 'glpat_checked';
     tokenInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
@@ -1729,8 +1772,21 @@ describe('AccountFormComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
+    const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
+    expect(msg?.textContent).toContain(message);
+    expect(msg?.querySelector('a.account-form__validation-link')).toBeTruthy();
+  });
+
+  it('should tell an old GitLab to upgrade, with no create link', () => {
+    // Arrange / Act
+    const { el } = checkToken({ ...VALID_RESULT, kind: 'wrongTokenKind', wrongKind: 'gitlab-version' });
+
+    // Assert
+    const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
+    expect(msg?.textContent).toContain(
+      "This GitLab is older than 19.5, which doesn't support fine-grained tokens. Upgrade GitLab to 19.5 or later.",
+    );
+    expect(msg?.querySelector('a')).toBeNull();
   });
 
   // Cycle K3: authenticated with non-empty missingScopes — shows warning, Save DISABLED
@@ -1867,6 +1923,8 @@ describe('AccountFormComponent', () => {
         accountName: null,
         detectedProvider: null,
         wrongKind: null,
+        notAllowed: [],
+        broadReach: [],
         tokenExpiry: { status: 'notChecked', expiresAt: null },
       },
     });
@@ -1884,23 +1942,6 @@ describe('AccountFormComponent', () => {
     // Assert — Save disabled
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-  });
-
-  // Finding 5: warning variants have sr-only "Warning:" prefix
-  it('should include a visually-hidden "Warning:" prefix in scopesUnverifiable warning message', () => {
-    // Arrange
-    const { el, fixture } = setup({ account: null, validationResult: SCOPES_UNVERIFIABLE_RESULT });
-    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
-    tokenInput.value = 'ghp_unverifiable';
-    tokenInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    tokenInput.dispatchEvent(new Event('blur'));
-    fixture.detectChanges();
-
-    // Assert
-    const region = el.querySelector('#account-token-validation');
-    const srOnly = region?.querySelector('.sr-only');
-    expect(srOnly?.textContent?.trim()).toBe('Warning:');
   });
 
   it('should include a visually-hidden "Error:" prefix in authenticationFailed error message', () => {

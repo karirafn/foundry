@@ -220,7 +220,7 @@ describe('account.model missing permissions', () => {
       expect(problem.reasons).toEqual(['Wrong token kind: not a fine-grained personal access token.']);
     });
 
-    it('should give a GitLab token below Maintainer the GitLab remedy', () => {
+    it('should prepend the Maintainer sentence to the GitLab token remedy when the role is missing', () => {
       // Act
       const problem = permissionsProblem({
         ...GITLAB_ACCOUNT,
@@ -228,11 +228,90 @@ describe('account.model missing permissions', () => {
       });
 
       // Assert
-      expect(problem.remedy).toBe('gitlab');
+      expect(problem.remedy).toBe('gitlab-token');
       expect(problem.missingPermissions).toEqual(['Maintainer role']);
       expect(problem.remedyText).toBe(
-        `Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. ${RECHECK}`,
+        "Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. "
+          + 'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, '
+          + `then replace this one. ${RECHECK}`,
       );
+      expect(problem.tokenLink).toEqual({
+        url: 'https://gitlab.example.com/-/user_settings/personal_access_tokens',
+        host: 'gitlab.example.com',
+        mode: 'create',
+      });
+    });
+
+    it('should list a GitLab token reaching too much and holding extra permissions as reasons', () => {
+      // Act
+      const account: AccountSummary = {
+        ...GITLAB_ACCOUNT,
+        deniedRepositories: [denied('group/app'), denied('group/lib')],
+        nonConformingToken: {
+          wrongKind: null,
+          notAllowed: ['Webhook (Integrations): Test', 'delete_project'],
+          broadReach: ['all-projects', 'instance'],
+        },
+      };
+      const problem = permissionsProblem(account);
+
+      // Assert
+      expect(accountStatusTag(account)?.label).toBe('Token reaches too much');
+      expect(problem.message).toBe(
+        "This token doesn't meet Foundry's requirements, so Foundry won't start work on 2 repositories until it does.",
+      );
+      expect(problem.reasons).toEqual([
+        'Reaches: all projects; the instance.',
+        'Not allowed: Webhook (Integrations): Test; delete_project.',
+      ]);
+      expect(problem.remedyText).toBe(
+        'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, '
+          + `then replace this one. ${RECHECK}`,
+      );
+    });
+
+    it('should tag a GitLab token holding only extra permissions as Extra permissions', () => {
+      // Act
+      const tag = accountStatusTag({
+        ...GITLAB_ACCOUNT,
+        deniedRepositories: [denied('group/app')],
+        nonConformingToken: { wrongKind: null, notAllowed: ['delete_project'], broadReach: [] },
+      });
+
+      // Assert
+      expect(tag?.label).toBe('Extra permissions');
+    });
+
+    it.each([
+      ['gitlab-legacy', 'Wrong token kind: legacy personal access token.'],
+      ['gitlab-resource-token', 'Wrong token kind: group or project access token.'],
+    ])('should name the %s wrong kind and point at a new token', (wrongKind, reason) => {
+      // Act
+      const account: AccountSummary = {
+        ...GITLAB_ACCOUNT,
+        deniedRepositories: [denied('group/app')],
+        nonConformingToken: { wrongKind, notAllowed: [], broadReach: ['instance'] },
+      };
+      const problem = permissionsProblem(account);
+
+      // Assert
+      expect(accountStatusTag(account)?.label).toBe('Wrong token kind');
+      expect(problem.reasons[0]).toBe(reason);
+      expect(problem.remedy).toBe('gitlab-token');
+    });
+
+    it('should tell an old GitLab to upgrade, with no token link', () => {
+      // Act
+      const problem = permissionsProblem({
+        ...GITLAB_ACCOUNT,
+        deniedRepositories: [denied('group/app')],
+        nonConformingToken: { wrongKind: 'gitlab-version', notAllowed: [], broadReach: [] },
+      });
+
+      // Assert
+      expect(problem.reasons).toEqual(['Wrong token kind: GitLab older than 19.5.']);
+      expect(problem.remedy).toBe('gitlab-version');
+      expect(problem.remedyText).toBe(`Upgrade GitLab to 19.5 or later, then re-check. ${RECHECK}`);
       expect(problem.tokenLink).toBeNull();
     });
 
