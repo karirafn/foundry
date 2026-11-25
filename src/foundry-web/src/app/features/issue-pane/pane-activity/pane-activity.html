@@ -45,8 +45,10 @@
     </ul>
   }
 
-  <!-- Mounted for the whole run, so lines stream in before the log is opened. -->
-  @for (id of runId() ? [runId()] : []; track id) {
+  <!-- Mounted for the whole run, so lines stream in before the log is opened. A one-item loop keyed by
+       the run id remounts the log view when the run changes; the key is a wrapper field because an
+       identity key over a freshly built array makes Angular warn (NG0956) on every change. -->
+  @for (log of runId() ? [{ id: runId() }] : []; track log.id) {
     <fd-log-view
       style="--fd-log-view-max-height: 16rem"
       mode="stream"

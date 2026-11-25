@@ -280,6 +280,7 @@ describe('IssuePaneComponent', () => {
 
   it('shows a load failure in the status with a Retry that reloads the detail', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { el, httpMock, render } = await setup();
     httpMock.expectOne('/api/issues/f').flush('boom', { status: 500, statusText: 'Server Error' });
     await render();
@@ -290,6 +291,7 @@ describe('IssuePaneComponent', () => {
     // Assert
     httpMock.expectOne('/api/issues/f');
     expect(el.querySelector('fd-pane-status [role="alert"]')?.textContent).toContain('Failed to load issue details');
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
   });
 
   it('loads the worker run for the status and links its pull request in the header', async () => {
@@ -338,6 +340,7 @@ describe('IssuePaneComponent', () => {
 
   it('says the issue is no longer tracked when its detail is gone', async () => {
     // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { el, httpMock, render } = await setup();
 
     // Act
@@ -347,6 +350,7 @@ describe('IssuePaneComponent', () => {
     // Assert
     expect(el.textContent).toContain('This issue is no longer tracked.');
     expect(el.querySelector('fd-pane-facts')).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 404 }));
   });
 
   it('has a named close button that asks to close the pane', async () => {

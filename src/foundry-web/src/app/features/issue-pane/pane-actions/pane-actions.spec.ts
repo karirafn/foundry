@@ -739,6 +739,7 @@ describe('PaneActionsComponent', () => {
 
     it('discards once confirmed and announces it across the reload', async () => {
       // Arrange
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const { fixture, el, button, render, confirm, workerRuns, succeeded } = setup('publish_blocked', ['discard_run']);
       button('Discard run')!.click();
       render();
@@ -750,6 +751,8 @@ describe('PaneActionsComponent', () => {
       render();
 
       // Assert
+      // Replacing the whole action set re-creates every row, which Angular reports in dev mode.
+      expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('NG0956'));
       expect(workerRuns.requestDiscard).toHaveBeenCalledWith('run-1');
       expect(el.querySelector('.pane-actions__success--discard')?.textContent?.trim()).toBe(
         'Run discarded. Issue status is updating.',

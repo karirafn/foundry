@@ -5,7 +5,10 @@
   (closed)="closed.emit()"
 />
 
-@for (id of [issueId()]; track id) {
+<!-- A one-item loop keyed by the issue id, so the body remounts and replays its enter animation when the
+     pane swaps to another issue. The key is a field of a wrapper object rather than the item itself:
+     an identity key over a freshly built array makes Angular warn (NG0956) on every swap. -->
+@for (pane of [{ id: issueId() }]; track pane.id) {
   <div class="issue-pane__body" animate.enter="issue-pane__body--enter">
     @if (untracked()) {
       <p class="issue-pane__untracked">This issue is no longer tracked.</p>
