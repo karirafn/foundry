@@ -5,10 +5,16 @@ LABEL dev.foundry.image=worker
 # Every toolchain is installed unconditionally (ADR 0109); /opt/foundry/toolchain.sh reports what
 # the image has.
 
-# .NET SDK — uses apt GPG signing key for authenticity verification.
+# .NET SDKs — every channel Microsoft's release index lists as active or maintenance, selected by
+# install-dotnet-sdks.sh (ADR 0109); no SDK version is named here. The index is ADDed rather than
+# fetched inside the RUN because Docker re-fetches an ADD URL on every build and invalidates the cache
+# only when its content changes, so the SDK layer rebuilds exactly when a release changes the index.
+# Packages come from Microsoft's apt feed, verified against its GPG signing key.
 # csharp-ls (the C# language server registered by the baked csharp-lsp plugin) is pinned in
 # .config/dotnet-tools.json, the single source of its version, which Dependabot tracks.
 COPY .config/dotnet-tools.json /tmp/dotnet-tools.json
+COPY install-dotnet-sdks.sh /tmp/install-dotnet-sdks.sh
+ADD https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json /tmp/releases-index.json
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl gnupg && \
     curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
@@ -16,12 +22,12 @@ RUN apt-get update && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/microsoft-debian-bookworm-prod bookworm main" \
         > /etc/apt/sources.list.d/microsoft.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends dotnet-sdk-10.0 dotnet-sdk-11.0 && \
+    bash /tmp/install-dotnet-sdks.sh /tmp/releases-index.json && \
     dotnet tool install --tool-path /usr/local/bin dotnet-ef && \
     csharp_ls_version=$(jq -er '.tools["csharp-ls"].version' /tmp/dotnet-tools.json) && \
     dotnet tool install --tool-path /usr/local/bin csharp-ls --version "$csharp_ls_version" && \
     rm -rf /var/lib/apt/lists/* && \
-    rm -f /tmp/dotnet-tools.json
+    rm -f /tmp/dotnet-tools.json /tmp/install-dotnet-sdks.sh /tmp/releases-index.json
 
 # Claude Code plugin registering csharp-ls as the C# LSP server. The entrypoint loads it when
 # csharp-ls is on PATH.

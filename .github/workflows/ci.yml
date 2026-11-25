@@ -141,7 +141,7 @@ jobs:
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: bats workers/tests/entrypoint.bats workers/tests/shared-hooks.bats workers/tests/toolchain.bats
+        run: bats workers/tests/entrypoint.bats workers/tests/shared-hooks.bats workers/tests/toolchain.bats workers/tests/install_dotnet_sdks.bats
 
       - name: Build publisher image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
@@ -241,11 +241,27 @@ jobs:
           done
           echo "PASS: $output"
 
-      - name: Image contract check — net10.0 and net11.0 console projects build and run
+      - name: Image contract check — every supported .NET SDK is installed, and a console project builds and runs on each
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        # Run in the probe shape; the projects live under /tmp, the scratch volume of the read-only root
+        # The installed majors must equal the channels install-dotnet-sdks.sh selects from the live index; a mismatch
+        # (an apt package that lags a release, or a changed index format) is a signal to the image maintainer.
+        # Each project runs in the probe shape and lives under /tmp, the scratch volume of the read-only root.
         run: |
-          for tfm in net10.0 net11.0; do
+          curl -fsSL https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json \
+            -o "$RUNNER_TEMP/releases-index.json"
+          channels=$(bash workers/install-dotnet-sdks.sh --list "$RUNNER_TEMP/releases-index.json")
+          expected=$(sort -V <<<"$channels")
+          sdks=$(docker run --rm --user node --read-only --cap-drop ALL -v /home/node -v /tmp \
+            --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env DOTNET_NOLOGO=1 \
+            --entrypoint dotnet foundry-worker:ci --list-sdks)
+          # dotnet --list-sdks prints one "<version> [<path>]" line per SDK, e.g. "10.0.404 [/usr/share/dotnet/sdk]"
+          installed=$(awk '{ split($1, v, "."); print v[1] "." v[2] }' <<<"$sdks" | sort -uV)
+          [ "$installed" = "$expected" ] \
+            || { echo "FAIL: installed SDK channels [$(echo $installed)] differ from the index's supported channels [$(echo $expected)]"; exit 1; }
+          echo "PASS: installed SDK channels [$(echo $installed)] match the index"
+
+          for channel in $installed; do
+            tfm="net$channel"
             docker run --rm --user node --read-only --cap-drop ALL -v /home/node -v /tmp --workdir /tmp \
               --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env DOTNET_NOLOGO=1 --env TFM="$tfm" \
               --entrypoint bash foundry-worker:ci -c '

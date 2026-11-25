@@ -43,7 +43,7 @@ package() {
 stub_every_tool() {
     stub node "v22.22.3"
     package "$CLAUDE_CODE_DIR/node_modules/@anthropic-ai/claude-code" "2.1.319"
-    stub dotnet "10.0.100"
+    stub dotnet "10.0.404 [/usr/share/dotnet/sdk]"
     stub csharp-ls "csharp-ls, 0.28.0 (Release)+0123abcd"
     stub npm "$NPM_ROOT"
     package "$NPM_ROOT/@angular/cli" "21.2.30"
@@ -68,7 +68,7 @@ json_of() {
     run_script --separate-stderr
 
     [ "$status" -eq 0 ]
-    expected='[{"name":"node","version":"22.22.3"},{"name":"claude-code","version":"2.1.319"},{"name":"dotnet-sdk","version":"10.0.100"},{"name":"csharp-ls","version":"0.28.0"},{"name":"angular-cli","version":"21.2.30"},{"name":"chromium","version":"156.0.8078.79"},{"name":"docker","version":"29.9.3"},{"name":"playwright-core","version":"1.65.1"},{"name":"gh","version":"2.63.0"},{"name":"glab","version":"1.46.1"},{"name":"git","version":"2.39.5"}]'
+    expected='[{"name":"node","version":"22.22.3"},{"name":"claude-code","version":"2.1.319"},{"name":"dotnet-sdk","version":"10.0.404"},{"name":"csharp-ls","version":"0.28.0"},{"name":"angular-cli","version":"21.2.30"},{"name":"chromium","version":"156.0.8078.79"},{"name":"docker","version":"29.9.3"},{"name":"playwright-core","version":"1.65.1"},{"name":"gh","version":"2.63.0"},{"name":"glab","version":"1.46.1"},{"name":"git","version":"2.39.5"}]'
     [ "$output" = "FOUNDRY_TOOLCHAIN $expected" ]
 }
 
@@ -136,4 +136,29 @@ json_of() {
 
     [ "$status" -eq 0 ]
     json_of "$output" | jq -e 'map(.name) | index("chromium") == null'
+}
+
+# The line format of `dotnet --list-sdks`, captured from the worker image (SDKs 10.0.404 and 11.0.100):
+#   10.0.404 [/usr/share/dotnet/sdk]
+@test "every SDK in dotnet --list-sdks is reported as its own dotnet-sdk entry" {
+    stub_every_tool
+    printf '#!/bin/bash\n[ "$1" = --list-sdks ] || exit 1\nprintf "10.0.404 [/usr/share/dotnet/sdk]\\n11.0.100 [/usr/share/dotnet/sdk]\\n"\n' >"$STUB_DIR/dotnet"
+    chmod +x "$STUB_DIR/dotnet"
+
+    run_script --separate-stderr
+
+    [ "$status" -eq 0 ]
+    sdks="$(json_of "$output" | jq -c '[.[] | select(.name == "dotnet-sdk") | .version]')"
+    [ "$sdks" = '["10.0.404","11.0.100"]' ]
+}
+
+@test "a version-numbered SDK path does not leak into the reported version" {
+    stub_every_tool
+    stub dotnet "11.0.100-rc.2.26512.3 [/opt/dotnet-12.0.1/sdk]"
+
+    run_script --separate-stderr
+
+    [ "$status" -eq 0 ]
+    sdks="$(json_of "$output" | jq -c '[.[] | select(.name == "dotnet-sdk") | .version]')"
+    [ "$sdks" = '["11.0.100-rc.2.26512.3"]' ]
 }
