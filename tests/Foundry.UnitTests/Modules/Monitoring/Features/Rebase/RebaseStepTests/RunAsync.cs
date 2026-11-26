@@ -77,7 +77,7 @@ public sealed class RunAsync : IAsyncDisposable
 
     private RebaseStep BuildSut(params RebasePendingIssueInfo[] pending) =>
         new(
-            new StubIssueQueries(pending.Length == 0 ? [new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt)] : pending),
+            new StubIssueQueries(pending.Length == 0 ? [new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: false)] : pending),
             _dbContext,
             _dispatcher,
             _nudgeQueue,
@@ -589,7 +589,7 @@ public sealed class RunAsync : IAsyncDisposable
         _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.UpToDate(NewHead)));
 
         // Act
-        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt.AddHours(1)))
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt.AddHours(1), CheckOnly: false))
             .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
 
         // Assert

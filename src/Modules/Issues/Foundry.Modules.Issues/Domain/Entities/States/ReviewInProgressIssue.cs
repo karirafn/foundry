@@ -88,7 +88,10 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
     /// <item><b>Fix:</b> <see cref="ReviewVerdictOutcome.ChangesRequested"/> while the round has review fix runs left
     /// (<see cref="Issue.ReviewMaxFixRuns"/>) → a <see cref="RevisionTrigger.ReviewFindings"/> revision addressing
     /// <paramref name="findings"/>.</item>
-    /// <item><b>Person:</b> everything else → <see cref="ReviewIssue"/>.</item>
+    /// <item><b>Person:</b> <see cref="ReviewVerdictOutcome.ChangesRequested"/> with the round's fix runs spent →
+    /// <see cref="ReviewIssue"/>.</item>
+    /// <item><b>Before ready:</b> any other approval → <see cref="RebasePendingIssue"/> with
+    /// <see cref="RebasePendingReason.BeforeReady"/>, so a person receives it up to date (ADR 0128).</item>
     /// </list>
     /// The verdict is recorded as the issue's <see cref="Issue.LatestReview"/>, with the <paramref name="patchId"/> of
     /// the diff it judged, so a later review of an unchanged change can carry an approval.
@@ -129,13 +132,19 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
             return mergePending;
         }
 
-        return ToReview(reviewOutcome: null, transitionedAt);
+        if (outcome is ReviewVerdictOutcome.ChangesRequested)
+        {
+            return ToReview(transitionedAt);
+        }
+
+        return MarkRebasePendingBeforeReady(reviewOutcome: null, transitionedAt);
     }
 
     /// <summary>
     /// The review run failed. A failure whose category retries automatically, with
     /// <paramref name="consecutiveAutoRetryableFailures"/> (this failure included) short of its schedule, waits for that
-    /// retry; any other failure skips the review and hands the green pull request to a person (ADR 0113).
+    /// retry; any other failure skips the review and hands the green pull request to a person (ADR 0113), through the
+    /// Before Ready rebase (ADR 0128).
     /// </summary>
     public Issue MarkRunFailed(
         string failureReason,
@@ -154,12 +163,23 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
             return failed;
         }
 
-        return ToReview(new ReviewOutcome.Skipped(failureCategory.Value), failedAt);
+        return MarkRebasePendingBeforeReady(new ReviewOutcome.Skipped(failureCategory.Value), failedAt);
     }
 
-    private ReviewIssue ToReview(ReviewOutcome? reviewOutcome, DateTimeOffset transitionedAt)
+    private RebasePendingIssue MarkRebasePendingBeforeReady(ReviewOutcome? reviewOutcome, DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = ReviewIssue.FromReviewInProgress(this, reviewOutcome, transitionedAt);
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromReviewInProgress(this, reviewOutcome, transitionedAt);
+        AddDomainEvent(new Events.IssueRebasePending(
+            Id,
+            MonitoredRepositoryId,
+            rebasePending.IssueNumber,
+            rebasePending.EnteredRebasePendingAt));
+        return rebasePending;
+    }
+
+    private ReviewIssue ToReview(DateTimeOffset transitionedAt)
+    {
+        ReviewIssue review = ReviewIssue.FromReviewInProgress(this, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }

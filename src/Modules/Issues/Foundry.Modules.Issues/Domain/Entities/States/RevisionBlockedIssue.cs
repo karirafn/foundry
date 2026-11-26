@@ -108,6 +108,7 @@ public sealed class RevisionBlockedIssue : Issue
         blocked.StartRound();
         blocked.ResetReviewFixAttempts();
         blocked.ResetChecksFixAttempts();
+        blocked.ResetBeforeReadyRounds();
         blocked.RebaseConflictAttempts = 0;
         return blocked;
     }

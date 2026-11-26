@@ -161,6 +161,20 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public int ChecksFixAttempts { get; private set; }
 
     /// <summary>
+    /// The most Before Ready rebases (<see cref="RebasePendingReason.BeforeReady"/>) the current code may spend before
+    /// the next one only reads whether the branch fell behind (ADR 0128). Bounds a rebase, checks and review loop.
+    /// </summary>
+    public const int MaxBeforeReadyRounds = 3;
+
+    /// <summary>
+    /// How many Before Ready rebases the current code has spent: every one that did not find the branch up to date.
+    /// Carried through every transition with the shared properties, so no state drops it; only new code (an implement
+    /// run that opened a pull request, a revision driven by review findings, failed checks, a person or a rewritten
+    /// spec, or a person's push) starts it again at zero.
+    /// </summary>
+    public int BeforeReadyRounds { get; private set; }
+
+    /// <summary>
     /// The issue's most recent review verdict (ADR 0113), or <see langword="null"/> when no review completed. Carried
     /// through every transition with the shared properties, so a later review of an unchanged change can carry it.
     /// </summary>
@@ -296,6 +310,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         MarkedReadyPullRequestUrl = source.MarkedReadyPullRequestUrl;
         ReviewFixAttempts = source.ReviewFixAttempts;
         ChecksFixAttempts = source.ChecksFixAttempts;
+        BeforeReadyRounds = source.BeforeReadyRounds;
         LatestReview = source.LatestReview;
         TriagedSpecHash = source.TriagedSpecHash;
         _openWorkBranchName = source._openWorkBranchName;
@@ -343,6 +358,18 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     private protected void ExhaustChecksFixAttempts()
     {
         ChecksFixAttempts = ChecksPendingIssue.ChecksMaxFixPushes;
+    }
+
+    /// <summary>A Before Ready rebase did not find the branch up to date: it spends one of the code's rounds.</summary>
+    private protected void RecordBeforeReadyRound()
+    {
+        BeforeReadyRounds++;
+    }
+
+    /// <summary>New code reached the branch: the Before Ready rebase gets its full rounds again.</summary>
+    private protected void ResetBeforeReadyRounds()
+    {
+        BeforeReadyRounds = 0;
     }
 
     /// <summary>Records the verdict a review run completed with; the next state carries it.</summary>

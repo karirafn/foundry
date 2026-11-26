@@ -281,14 +281,36 @@ public sealed class IssueBuilder
 
     /// <summary>
     /// Builds a <see cref="ReviewIssue"/> whose review failed open (ADR 0113): the review run of
-    /// <see cref="ReviewInProgress"/> failed with <c>verdict_invalid</c>, which is never retried automatically.
+    /// <see cref="ReviewInProgress"/> failed with <c>verdict_invalid</c>, which is never retried automatically, and its
+    /// Before Ready rebase found the branch up to date (ADR 0128).
     /// </summary>
     public ReviewIssue ReviewSkipped() =>
-        (ReviewIssue)ReviewInProgress().MarkRunFailed(
+        (ReviewIssue)RebasePendingBeforeReadyFromSkippedReview()
+            .ResolveRebase(new RebaseOutcome.UpToDate(), _transitionedAt);
+
+    /// <summary>
+    /// Builds a Before Ready <see cref="RebasePendingIssue"/> (ADR 0128) whose review failed open: the review run of
+    /// <see cref="ReviewInProgress"/> failed with <c>verdict_invalid</c>, which is never retried automatically.
+    /// </summary>
+    public RebasePendingIssue RebasePendingBeforeReadyFromSkippedReview() =>
+        (RebasePendingIssue)ReviewInProgress().MarkRunFailed(
             _failureReason,
             FailureCategory.VerdictInvalid,
             consecutiveAutoRetryableFailures: 0,
             _failedAt);
+
+    /// <summary>
+    /// Builds a Before Ready <see cref="RebasePendingIssue"/> (ADR 0128): the checks gate read the configured outcome
+    /// (<see cref="WithChecksOutcome"/>, passed by default) on the configured verified head, with Review Pull Requests
+    /// and Merge When Checks Pass off.
+    /// </summary>
+    public RebasePendingIssue RebasePendingBeforeReady() =>
+        (RebasePendingIssue)ChecksPending().ResolveVerdict(
+            _checksOutcome,
+            autoMerge: false,
+            reviewPullRequests: false,
+            _verifiedHeadSha,
+            _transitionedAt);
 
     /// <summary>Builds a <see cref="ReviewFailedIssue"/>: the review run failed transiently on its first attempt.</summary>
     public ReviewFailedIssue ReviewFailed() =>

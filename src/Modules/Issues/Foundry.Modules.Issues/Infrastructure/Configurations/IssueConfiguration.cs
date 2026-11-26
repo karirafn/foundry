@@ -220,6 +220,11 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasDefaultValue(0)
             .HasColumnName("checks_fix_attempts");
 
+        builder.Property(i => i.BeforeReadyRounds)
+            .IsRequired()
+            .HasDefaultValue(0)
+            .HasColumnName("before_ready_rounds");
+
         builder.Property(i => i.LatestReview)
             .HasConversion(LatestReviewJsonConversion.Converter, LatestReviewJsonConversion.Comparer)
             .HasColumnType("TEXT")

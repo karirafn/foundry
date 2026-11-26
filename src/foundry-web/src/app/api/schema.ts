@@ -1458,6 +1458,10 @@ export interface components {
             reviewSkippedReason?: null | string;
             /** Format: uuid */
             reviewRunId?: null | string;
+            /** Format: int32 */
+            beforeReadyRounds?: null | number | string;
+            /** Format: int32 */
+            beforeReadyRoundLimit?: null | number | string;
         };
         IssueSummary: {
             /** Format: uuid */

@@ -73,6 +73,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.RecordPersonFeedback(comments, omittedCommentCount, newestCommentAt, transitionedAt);
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
@@ -92,6 +93,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.RecordPersonFeedback(comments, omittedCommentCount, newestCommentAt, transitionedAt);
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
@@ -111,6 +113,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.RecordPersonFeedback(comments, omittedCommentCount, newestCommentAt, transitionedAt);
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
@@ -133,6 +136,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.RecordReviewFix();
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
@@ -150,6 +154,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks, headSha);
         revisionQueued.RecordChecksFix();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.StartRound();
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
@@ -196,6 +201,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = target.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.InputProvided();
         revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.RebaseConflictAttempts = 0;
         return revisionQueued;
     }
@@ -227,6 +233,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.StartRound();
         revisionQueued.ResetReviewFixAttempts();
         revisionQueued.ResetChecksFixAttempts();
+        revisionQueued.ResetBeforeReadyRounds();
         revisionQueued.RebaseConflictAttempts = 0;
         return revisionQueued;
     }

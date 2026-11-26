@@ -4,6 +4,7 @@ using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
@@ -52,5 +53,27 @@ public sealed class RebasePendingIssueConfiguration : IEntityTypeConfiguration<R
             .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
             .IsUnicode(false)
             .HasColumnName("owed_checks_retry_head_sha");
+
+        // A Before Ready rebase holds the outcomes and head it hands to review in the review state's columns.
+        builder.Property(i => i.ChecksOutcome)
+            .HasConversion((ValueConverter)ChecksOutcomeJsonConversion.Converter, ChecksOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("checks_outcome");
+
+        builder.Property(i => i.ReviewOutcome)
+            .HasConversion(ReviewOutcomeJsonConversion.Converter, ReviewOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("review_outcome");
+
+        builder.Property(i => i.VerifiedHeadSha)
+            .HasMaxLength(IssueColumnLimits.HeadShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("verified_head_sha");
+
+        builder.Property(i => i.AutoMerge)
+            .HasDefaultValue(false)
+            .HasColumnName("review_auto_merge");
     }
 }

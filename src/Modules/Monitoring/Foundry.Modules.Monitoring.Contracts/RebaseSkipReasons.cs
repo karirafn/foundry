@@ -38,4 +38,10 @@ public static class RebaseSkipReasons
 
     /// <summary>The provider refused the rebase with an error the classifier does not recognise.</summary>
     public const string UnrecognisedError = "unrecognised-error";
+
+    /// <summary>
+    /// A Before Ready rebase that spent its rounds (ADR 0128) found the branch behind the default branch again; it
+    /// only read the branch, so the pull request enters review behind.
+    /// </summary>
+    public const string FellBehind = "fell-behind";
 }

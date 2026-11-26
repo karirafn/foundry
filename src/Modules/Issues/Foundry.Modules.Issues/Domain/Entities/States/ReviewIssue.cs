@@ -122,13 +122,37 @@ public sealed class ReviewIssue : Issue
     }
 
     /// <summary>
-    /// The review step handed the pull request to a person: the reviewer approved it for a person, requested changes,
-    /// approved it without auto-merge, or its run failed open with <paramref name="reviewOutcome"/> recorded. The
-    /// reviewed commit is the Verified Head, so a person's push since sends the issue back through the checks gate.
+    /// A Before Ready rebase (ADR 0128) left the branch as it was: the issue keeps the checks verdict, review outcome
+    /// and Verified Head it reached the rebase with, and records the rebase's own outcome. A branch that was up to date
+    /// or is now rebased resets the conflict attempts, as a successful sync does.
+    /// </summary>
+    internal static ReviewIssue FromBeforeReady(
+        RebasePendingIssue source,
+        RebaseOutcome rebaseOutcome,
+        DateTimeOffset transitionedAt)
+    {
+        ReviewIssue review = new(source.Id, transitionedAt);
+        review.CopySharedPropertiesFrom(source);
+        review.WorkerRunId = source.WorkerRunId;
+        review.BranchName = source.BranchName;
+        review.PullRequestUrl = source.PullRequestUrl;
+        review.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        review.ChecksOutcome = source.ChecksOutcome
+            ?? throw new InvalidOperationException("A before-ready rebase carries the checks verdict it enters review with.");
+        review.RebaseOutcome = rebaseOutcome;
+        review.RebaseConflictAttempts = rebaseOutcome is RebaseOutcome.UpToDate ? 0 : source.RebaseConflictAttempts;
+        review.VerifiedHeadSha = source.VerifiedHeadSha;
+        review.ReviewOutcome = source.ReviewOutcome;
+        review.AutoMerge = source.AutoMerge;
+        return review;
+    }
+
+    /// <summary>
+    /// The reviewer requested changes with the round's review fix runs spent, so the pull request goes to a person as it
+    /// stands: it is not one a person could merge, so it skips the Before Ready rebase (ADR 0128). The reviewed commit is the Verified Head, so a person's push since sends the issue back through the checks gate.
     /// </summary>
     internal static ReviewIssue FromReviewInProgress(
         ReviewInProgressIssue source,
-        ReviewOutcome? reviewOutcome,
         DateTimeOffset transitionedAt)
     {
         ReviewIssue review = new(source.Id, transitionedAt);
@@ -141,7 +165,6 @@ public sealed class ReviewIssue : Issue
         review.RebaseOutcome = source.RebaseOutcome;
         review.RebaseConflictAttempts = source.RebaseConflictAttempts;
         review.VerifiedHeadSha = source.ReviewedCommit;
-        review.ReviewOutcome = reviewOutcome;
         review.AutoMerge = source.AutoMerge;
         return review;
     }

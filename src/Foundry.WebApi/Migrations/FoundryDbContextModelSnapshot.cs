@@ -80,6 +80,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("author");
 
+                    b.Property<int>("BeforeReadyRounds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("before_ready_rounds");
+
                     b.Property<string>("BlockedBy")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -2542,6 +2548,12 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 
+                    b.Property<bool>("AutoMerge")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("review_auto_merge");
+
                     b.Property<string>("BranchName")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -2556,6 +2568,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("merge_head_sha");
+
+                    b.Property<string>("ChecksOutcome")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("checks_outcome");
 
                     b.Property<DateTimeOffset>("EnteredRebasePendingAt")
                         .HasColumnType("TEXT")
@@ -2592,6 +2610,19 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("rebase_conflict_attempts");
+
+                    b.Property<string>("ReviewOutcome")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("review_outcome");
+
+                    b.Property<string>("VerifiedHeadSha")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verified_head_sha");
 
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()
@@ -2963,11 +2994,13 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("rebase_outcome");
 
                     b.Property<string>("ReviewOutcome")
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
                         .HasColumnName("review_outcome");
 
                     b.Property<string>("VerifiedHeadSha")
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(64)
                         .IsUnicode(false)
                         .HasColumnType("TEXT")

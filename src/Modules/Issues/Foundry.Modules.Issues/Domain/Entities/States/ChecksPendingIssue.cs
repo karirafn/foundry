@@ -94,9 +94,12 @@ public sealed class ChecksPendingIssue : Issue
             ? 0
             : source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = rebaseOutcome;
-        checksPending.Reason = source.Reason is RebasePendingReason.CatchUp
-            ? new ChecksPendingReason.CatchUp()
-            : new ChecksPendingReason.AfterRun();
+        checksPending.Reason = source.Reason switch
+        {
+            RebasePendingReason.CatchUp => new ChecksPendingReason.CatchUp(),
+            RebasePendingReason.BeforeReady => new ChecksPendingReason.BeforeReady(),
+            _ => new ChecksPendingReason.AfterRun(),
+        };
 
         // A rebase moved the head off the commit the retry was owed for; the new head is gated as new commits are.
         checksPending.OwedChecksRetryHeadSha = rebaseOutcome is RebaseOutcome.Rebased
@@ -160,12 +163,14 @@ public sealed class ChecksPendingIssue : Issue
     /// <summary>
     /// New commits reached a review issue's pull request: the checks gate starts over with a fresh fix budget,
     /// because every new budget follows a person's push, the same rule review feedback follows. The push starts a
-    /// person's round, so the reviewer's fix budget starts over too (ADR 0106, ADR 0113).
+    /// person's round, so the reviewer's fix budget and the Before Ready rounds start over too (ADR 0106, ADR 0113,
+    /// ADR 0128).
     /// </summary>
     internal static ChecksPendingIssue FromReview(ReviewIssue source, DateTimeOffset transitionedAt)
     {
         ChecksPendingIssue checksPending = FromReviewKeepingReviewFixes(source, transitionedAt);
         checksPending.ResetReviewFixAttempts();
+        checksPending.ResetBeforeReadyRounds();
         return checksPending;
     }
 
@@ -207,6 +212,10 @@ public sealed class ChecksPendingIssue : Issue
     /// reviewing that head (ADR 0113). The review's verdict then decides between merge and review.</item>
     /// <item><b>Merge:</b> <see cref="ChecksOutcome.Passed"/> with <paramref name="autoMerge"/> on and a known
     /// <paramref name="headSha"/> → <see cref="MergePendingIssue"/>, pinned to that head (ADR 0105).</item>
+    /// <item><b>Before ready:</b> any other <see cref="ChecksOutcome.Passed"/> or <see cref="ChecksOutcome.NoneDetected"/>
+    /// with a known <paramref name="headSha"/> → <see cref="RebasePendingIssue"/> with
+    /// <see cref="RebasePendingReason.BeforeReady"/>, so a person receives it up to date with the default branch
+    /// (ADR 0128).</item>
     /// <item><b>Fix:</b> <see cref="ChecksOutcome.StillFailing"/> naming a failing check whose script ran, under the
     /// fix cap → a <see cref="RevisionTrigger.FailedChecks"/> revision naming only such checks (issue #968).</item>
     /// <item><b>Review:</b> everything else → <see cref="ReviewIssue"/> carrying the outcome.</item>
@@ -237,6 +246,12 @@ public sealed class ChecksPendingIssue : Issue
             return MarkMergePending(passed, headSha, transitionedAt);
         }
 
+        if (checksOutcome is ChecksOutcome.Passed or ChecksOutcome.NoneDetected
+            && !string.IsNullOrWhiteSpace(headSha))
+        {
+            return MarkRebasePendingBeforeReady(checksOutcome, headSha, transitionedAt);
+        }
+
         if (checksOutcome is ChecksOutcome.StillFailing stillFailing && CanFixChecks(stillFailing.FailingChecks))
         {
             return FixChecks(stillFailing.FailingChecks, transitionedAt, headSha);
@@ -259,6 +274,20 @@ public sealed class ChecksPendingIssue : Issue
             transitionedAt);
         AddDomainEvent(new Events.IssueReviewQueued(Id, MonitoredRepositoryId));
         return queued;
+    }
+
+    private RebasePendingIssue MarkRebasePendingBeforeReady(
+        ChecksOutcome checksOutcome,
+        string headSha,
+        DateTimeOffset transitionedAt)
+    {
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromChecksPending(this, checksOutcome, headSha, transitionedAt);
+        AddDomainEvent(new Events.IssueRebasePending(
+            Id,
+            MonitoredRepositoryId,
+            rebasePending.IssueNumber,
+            rebasePending.EnteredRebasePendingAt));
+        return rebasePending;
     }
 
     private MergePendingIssue MarkMergePending(ChecksOutcome.Passed passed, string headSha, DateTimeOffset transitionedAt)

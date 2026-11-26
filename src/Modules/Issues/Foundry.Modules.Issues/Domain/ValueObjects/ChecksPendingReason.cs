@@ -21,6 +21,7 @@ public abstract record ChecksPendingReason
         HeadMoved => HeadMovedDiscriminator,
         ChecksRerun => ChecksRerunDiscriminator,
         CatchUp => CatchUpDiscriminator,
+        BeforeReady => BeforeReadyDiscriminator,
         _ => throw new UnreachableException($"Unknown {nameof(ChecksPendingReason)} variant: {GetType().Name}"),
     };
 
@@ -28,6 +29,7 @@ public abstract record ChecksPendingReason
     public const string HeadMovedDiscriminator = "head_moved";
     public const string ChecksRerunDiscriminator = "checks_rerun";
     public const string CatchUpDiscriminator = "catch_up";
+    public const string BeforeReadyDiscriminator = "before_ready";
 
     /// <summary>
     /// Rebuilds a reason from its <paramref name="discriminator"/>. Returns <see langword="null"/> for an unknown
@@ -40,6 +42,7 @@ public abstract record ChecksPendingReason
             HeadMovedDiscriminator => new HeadMoved(),
             ChecksRerunDiscriminator => new ChecksRerun(),
             CatchUpDiscriminator => new CatchUp(),
+            BeforeReadyDiscriminator => new BeforeReady(),
             _ => null,
         };
 
@@ -57,4 +60,10 @@ public abstract record ChecksPendingReason
     /// its checks run again on the rebased commits before it merges (ADR 0111).
     /// </summary>
     public sealed record CatchUp : ChecksPendingReason;
+
+    /// <summary>
+    /// A pull request a person could merge rebased before it was marked ready; its checks run again on the rebased
+    /// commits before it enters review (ADR 0128).
+    /// </summary>
+    public sealed record BeforeReady : ChecksPendingReason;
 }
