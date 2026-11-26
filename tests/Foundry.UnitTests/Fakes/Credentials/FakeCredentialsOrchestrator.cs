@@ -287,9 +287,15 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         string containerId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Cancellation ends the enumeration without throwing, matching
+        // DockerContainerRuntime.StreamLogsAsync.
         foreach (string line in _logLines)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                yield break;
+            }
+
             await Task.CompletedTask;
             yield return line;
         }
@@ -298,7 +304,19 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         {
             // Block until the cancellation token fires — simulates a CLI that stays alive
             // (e.g., one that refuses a code locally and keeps waiting for another).
+            await WaitUntilCancelledAsync(cancellationToken);
+        }
+    }
+
+    // A yield cannot sit inside a try/catch, so the blocking wait swallows its own cancellation.
+    private static async Task WaitUntilCancelledAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
             await Task.Delay(Timeout.Infinite, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
         }
     }
 
