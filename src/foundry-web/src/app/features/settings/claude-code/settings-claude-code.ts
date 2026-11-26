@@ -206,6 +206,7 @@ const RULE_FORMAT_TEXT =
               [loginPhase]="settingsService.loginPhase()"
               [loginUrl]="settingsService.loginUrl()"
               [loginError]="settingsService.loginError()"
+              [codeError]="settingsService.codeError()"
               (startLogin)="onStartLogin()"
               (submitCode)="settingsService.submitLoginCode($event)"
               (cancel)="onCancelLogin()"

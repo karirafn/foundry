@@ -10,6 +10,7 @@ function setup(inputs: {
   loginPhase?: LoginPhase | null;
   loginUrl?: string | null;
   loginError?: LoginError | null;
+  codeError?: string | null;
 }): ComponentFixture<OAuthPanelComponent> {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -23,6 +24,7 @@ function setup(inputs: {
   fixture.componentRef.setInput('loginPhase', inputs.loginPhase ?? null);
   fixture.componentRef.setInput('loginUrl', inputs.loginUrl ?? null);
   fixture.componentRef.setInput('loginError', inputs.loginError ?? null);
+  fixture.componentRef.setInput('codeError', inputs.codeError ?? null);
   fixture.detectChanges();
   return fixture;
 }
@@ -311,6 +313,22 @@ describe('OAuthPanelComponent', () => {
 
       // Assert
       expect(emittedCode).toBe('test-code');
+    });
+
+    it('should forward codeError to the login flow', () => {
+      // Arrange
+      const fixture = setup({
+        status: 'NotConfigured',
+        loginPhase: 'WaitingForAuthorization',
+        loginUrl: 'https://claude.ai',
+        codeError: 'Authorization code must not be empty.',
+      });
+
+      // Act
+      const message = (fixture.nativeElement as HTMLElement).querySelector('fd-oauth-login-flow .login-flow__code-error');
+
+      // Assert
+      expect(message?.textContent?.trim()).toBe('Authorization code must not be empty.');
     });
   });
 

@@ -682,6 +682,29 @@ describe('SetupAuthStepComponent', () => {
     expect(el.querySelector('#api-key-unreadable-note')).toBeTruthy();
   });
 
+  it('should show a refused code reason from the service under the code input', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    el.querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click();
+    const service = fixture.componentInstance['_settingsService'];
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('WaitingForAuthorization');
+    fixture.detectChanges();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    service.submitLoginCode('INVALID-CODE');
+    TestBed.inject(HttpTestingController).expectOne('/api/credentials/login/code').flush(
+      { title: 'Bad Request', status: 400, detail: 'Authorization code must not be empty.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.login-flow__code-error')?.textContent?.trim()).toBe('Authorization code must not be empty.');
+  });
+
   // Finding 9: startLoginError rendered in OAuth section
   it('should show startLoginError when loginPhase is null and error is non-null in OAuth mode', () => {
     // Arrange

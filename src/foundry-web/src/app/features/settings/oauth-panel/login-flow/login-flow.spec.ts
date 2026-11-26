@@ -7,6 +7,7 @@ function setup(inputs: {
   url?: string | null;
   error?: LoginError | null;
   accountEmail?: string | null;
+  codeError?: string | null;
 }): ComponentFixture<LoginFlowComponent> {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -17,8 +18,32 @@ function setup(inputs: {
   fixture.componentRef.setInput('url', inputs.url ?? null);
   fixture.componentRef.setInput('error', inputs.error ?? null);
   fixture.componentRef.setInput('accountEmail', inputs.accountEmail ?? null);
+  fixture.componentRef.setInput('codeError', inputs.codeError ?? null);
   fixture.detectChanges();
   return fixture;
+}
+
+const SERVER_DETAIL = "That doesn't look like the full code. Copy all of it, including the # in the middle.";
+
+function codeInput(fixture: ComponentFixture<LoginFlowComponent>): HTMLInputElement {
+  return (fixture.nativeElement as HTMLElement).querySelector('input[aria-label="Authorization code"]') as HTMLInputElement;
+}
+
+function typeCode(fixture: ComponentFixture<LoginFlowComponent>, value: string): void {
+  const input = codeInput(fixture);
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+  fixture.detectChanges();
+}
+
+function clickSignIn(fixture: ComponentFixture<LoginFlowComponent>): void {
+  const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('button');
+  const signInBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Sign in') as HTMLButtonElement;
+  signInBtn.click();
+}
+
+function liveRegion(fixture: ComponentFixture<LoginFlowComponent>): HTMLElement {
+  return (fixture.nativeElement as HTMLElement).querySelector('.login-flow__sr-live') as HTMLElement;
 }
 
 describe('LoginFlowComponent', () => {
@@ -301,6 +326,160 @@ describe('LoginFlowComponent', () => {
 
       // Assert
       expect(el.textContent).toContain('Paste the code from your browser');
+    });
+  });
+
+  describe('refused code', () => {
+    const url = 'https://claude.ai/oauth/authorize?code=abc123';
+
+    it('should mark the code input invalid when a code error is shown', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url, codeError: SERVER_DETAIL });
+
+      // Act
+      const input = codeInput(fixture);
+
+      // Assert
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('should describe the code input by the error before the hint', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url, codeError: SERVER_DETAIL });
+
+      // Act
+      const input = codeInput(fixture);
+
+      // Assert
+      expect(input.getAttribute('aria-describedby')).toBe('login-flow-code-error login-flow-code-hint');
+    });
+
+    it('should show the code error verbatim below the input', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url, codeError: SERVER_DETAIL });
+
+      // Act
+      const message = (fixture.nativeElement as HTMLElement).querySelector('#login-flow-code-error.login-flow__code-error');
+
+      // Assert
+      expect(message?.textContent?.trim()).toBe(SERVER_DETAIL);
+    });
+
+    it('should show no error, no aria-invalid and only the hint description without a code error', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url });
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const input = codeInput(fixture);
+
+      // Assert
+      expect(el.querySelector('.login-flow__code-error')).toBeNull();
+      expect(input.hasAttribute('aria-invalid')).toBe(false);
+      expect(input.getAttribute('aria-describedby')).toBe('login-flow-code-hint');
+    });
+
+    it('should announce the code error in the live region', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url, codeError: SERVER_DETAIL });
+
+      // Act
+      const text = liveRegion(fixture).textContent?.trim();
+
+      // Assert
+      expect(text).toBe(SERVER_DETAIL);
+    });
+
+    it('should hide the error and aria-invalid on the first edit without changing the live region', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url, codeError: SERVER_DETAIL });
+      const liveBefore = liveRegion(fixture).textContent;
+
+      // Act
+      typeCode(fixture, 'INVALID-CODE#');
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('.login-flow__code-error')).toBeNull();
+      expect(codeInput(fixture).hasAttribute('aria-invalid')).toBe(false);
+      expect(liveRegion(fixture).textContent).toBe(liveBefore);
+    });
+
+    it('should refill, focus and select the submitted code when the refused session returns to waiting', async () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url });
+      typeCode(fixture, 'INVALID-CODE');
+      clickSignIn(fixture);
+      fixture.componentRef.setInput('phase', 'SigningIn');
+      fixture.detectChanges();
+
+      // Act
+      fixture.componentRef.setInput('phase', 'WaitingForAuthorization');
+      fixture.componentRef.setInput('codeError', SERVER_DETAIL);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      const input = codeInput(fixture);
+      expect(input.value).toBe('INVALID-CODE');
+      expect(document.activeElement).toBe(input);
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe('INVALID-CODE'.length);
+    });
+
+    it('should keep the code on submit and empty it once the session fails and restarts', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url });
+      typeCode(fixture, 'some-code');
+
+      // Act
+      clickSignIn(fixture);
+      fixture.detectChanges();
+      const valueAfterSubmit = codeInput(fixture).value;
+      for (const phase of ['Failed', 'Starting', 'WaitingForAuthorization'] as const) {
+        fixture.componentRef.setInput('phase', phase);
+        fixture.detectChanges();
+      }
+
+      // Assert
+      expect(valueAfterSubmit).toBe('some-code');
+      expect(codeInput(fixture).value).toBe('');
+    });
+
+    it('should show the message again when an edited code is refused for the same reason', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url, codeError: SERVER_DETAIL });
+      typeCode(fixture, 'INVALID-CODE2');
+      clickSignIn(fixture);
+      fixture.componentRef.setInput('phase', 'SigningIn');
+      fixture.componentRef.setInput('codeError', null);
+      fixture.detectChanges();
+
+      // Act
+      fixture.componentRef.setInput('phase', 'WaitingForAuthorization');
+      fixture.componentRef.setInput('codeError', SERVER_DETAIL);
+      fixture.detectChanges();
+
+      // Assert
+      const message = (fixture.nativeElement as HTMLElement).querySelector('.login-flow__code-error');
+      expect(message?.textContent?.trim()).toBe(SERVER_DETAIL);
+    });
+
+    it('should emit submitCode again when the same code is resubmitted', () => {
+      // Arrange
+      const fixture = setup({ phase: 'WaitingForAuthorization', url });
+      const emitted: string[] = [];
+      fixture.componentInstance.submitCode.subscribe((code: string) => emitted.push(code));
+      typeCode(fixture, 'INVALID-CODE');
+      clickSignIn(fixture);
+      fixture.componentRef.setInput('codeError', SERVER_DETAIL);
+      fixture.detectChanges();
+
+      // Act
+      clickSignIn(fixture);
+
+      // Assert
+      expect(emitted).toEqual(['INVALID-CODE', 'INVALID-CODE']);
     });
   });
 

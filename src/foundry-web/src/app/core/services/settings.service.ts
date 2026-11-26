@@ -37,6 +37,7 @@ const SAVE_WORKER_ENVIRONMENT_ERROR = 'Failed to save worker environment';
 const SAVE_CLAUDE_CODE_ERROR = 'Failed to save Claude Code settings';
 const SAVE_HOSTS_ERROR = 'Failed to save provider hosts';
 const START_LOGIN_ERROR = 'Failed to start login';
+export const SUBMIT_CODE_ERROR = "Couldn't submit the code. Check your connection and try again.";
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -63,6 +64,7 @@ export class SettingsService {
 
         if (update.phase === 'SigningIn' || update.phase === 'Succeeded' || update.phase === 'Failed') {
           this._codeSubmittingSignal.set(false);
+          this._codeErrorSignal.set(null);
         }
 
         if (update.phase === 'Succeeded') {
@@ -234,6 +236,9 @@ export class SettingsService {
   private readonly _codeSubmittingSignal: WritableSignal<boolean> = signal(false);
   readonly codeSubmitting: Signal<boolean> = this._codeSubmittingSignal.asReadonly();
 
+  private readonly _codeErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly codeError: Signal<string | null> = this._codeErrorSignal.asReadonly();
+
   private readonly _startLoginErrorSignal: WritableSignal<string | null> = signal(null);
   readonly startLoginError: Signal<string | null> = this._startLoginErrorSignal.asReadonly();
 
@@ -355,6 +360,7 @@ export class SettingsService {
     this._loginUrlSignal.set(null);
     this._loginErrorSignal.set(null);
     this._codeSubmittingSignal.set(false);
+    this._codeErrorSignal.set(null);
 
     this._http.post<{ sessionId: string }>('/api/credentials/login/start', null).subscribe({
       next: () => {
@@ -369,6 +375,7 @@ export class SettingsService {
   }
 
   submitLoginCode(code: string): void {
+    this._codeErrorSignal.set(null);
     this._codeSubmittingSignal.set(true);
     this._loginPhaseSignal.set('SigningIn');
 
@@ -378,6 +385,7 @@ export class SettingsService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
+        this._codeErrorSignal.set(extractErrorMessage(err) ?? SUBMIT_CODE_ERROR);
         this._codeSubmittingSignal.set(false);
         // Revert optimistic SigningIn if the HTTP call itself failed (network/4xx before SignalR)
         this._loginPhaseSignal.update((current) => current === 'SigningIn' ? 'WaitingForAuthorization' : current);
@@ -390,6 +398,7 @@ export class SettingsService {
     this._loginUrlSignal.set(null);
     this._loginErrorSignal.set(null);
     this._codeSubmittingSignal.set(false);
+    this._codeErrorSignal.set(null);
     this._startLoginErrorSignal.set(null);
   }
 

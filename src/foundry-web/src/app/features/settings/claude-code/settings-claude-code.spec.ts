@@ -448,6 +448,28 @@ describe('SettingsClaudeCodeComponent', () => {
     expect(group?.textContent).toContain('Signing in will pause dispatch');
   });
 
+  it('should show a refused code reason from the service under the code input', () => {
+    // Arrange
+    const { fixture, service, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_OAUTH);
+    (service as unknown as { _loginPhaseSignal: { set: (v: string) => void } })._loginPhaseSignal.set('WaitingForAuthorization');
+    fixture.detectChanges();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    service.submitLoginCode('INVALID-CODE');
+    httpMock.expectOne('/api/credentials/login/code').flush(
+      { title: 'Bad Request', status: 400, detail: 'Authorization code must not be empty.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+    fixture.detectChanges();
+
+    // Assert
+    const message = (fixture.nativeElement as HTMLElement).querySelector('.login-flow__code-error');
+    expect(message?.textContent?.trim()).toBe('Authorization code must not be empty.');
+  });
+
   it('should reset drain-gate state when login phase becomes null (succeeds)', () => {
     // Arrange — enter draining state via switch account
     const { fixture, service, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);

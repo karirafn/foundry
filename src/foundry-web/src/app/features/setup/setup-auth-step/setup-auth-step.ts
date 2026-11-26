@@ -119,6 +119,7 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
               [loginPhase]="_settingsService.loginPhase()"
               [loginUrl]="_settingsService.loginUrl()"
               [loginError]="_settingsService.loginError()"
+              [codeError]="_settingsService.codeError()"
               (startLogin)="_settingsService.startLogin()"
               (submitCode)="_settingsService.submitLoginCode($event)"
               (cancel)="cancelLogin()"
