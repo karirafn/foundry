@@ -116,7 +116,9 @@ one to 50 `{issue, reason}` objects naming open issues that must land first, eac
 The schema's conditional stays flat (`needs_input` requires `questions`); the typed parser requires a non-empty
 `blockedBy` for `blocked`, collapses each reason to one line without format characters (a reason blank after that
 breaks the verdict), and the resolver rejects an issue outside the run's supplied open issues, a duplicate or an
-over-cap list as `verdict_invalid`. Foundry records `ready` and `blocked` as `done`. A `blocked` verdict the resolver
+over-cap list as `verdict_invalid`. A `ready` verdict carries `demand` (`routine` or `demanding`) and `demandReason`
+(one line of 1 to 200 characters); the schema lists both as optional and the typed parser requires them for `ready`
+and refuses them for `needs_input` and `blocked`. Foundry records `ready` and `blocked` as `done`. A `blocked` verdict the resolver
 rejects is recorded as `invalid`.
 
 `review/verdict.schema.json` requires `summary` (1 to 2000 characters), `findings` (0 to 50

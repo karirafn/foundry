@@ -23,10 +23,10 @@ public sealed class TryParse
     public void WhenOutcomeIsReady_ParsesAReadyVerdictWithItsKind(string kindToken, string expected)
     {
         // Act
-        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"{{kindToken}}"}"""));
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"{{kindToken}}","demand":"routine","demandReason":"none"}"""));
 
         // Assert
-        verdict.ShouldBe(new TriageVerdict.Ready(Enum.Parse<TriageIssueKind>(expected), []));
+        verdict.ShouldBe(new TriageVerdict.Ready(Enum.Parse<TriageIssueKind>(expected), [], ImplementDemand.Routine, "none"));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class TryParse
     }
 
     [Theory]
-    [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.Ready))]
+    [InlineData("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.Ready))]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}],"blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.NeedsInput))]
     public void WhenAWellFormedBlockedByAccompaniesAnotherOutcome_ItIsIgnored(string json, string expectedType)
     {
@@ -154,8 +154,8 @@ public sealed class TryParse
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"reason":"x"}]}""")]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"x","extra":1}]}""")]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"x"},{"issue":16}]}""")]
-    [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[]}""")]
-    [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15}]}""")]
+    [InlineData("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","blockedBy":[]}""")]
+    [InlineData("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","blockedBy":[{"issue":15}]}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}],"blockedBy":"x"}""")]
     public void WhenTheBlockedVerdictBreaksTheSchema_ReturnsNull(string json)
     {
@@ -172,16 +172,16 @@ public sealed class TryParse
     [InlineData("""{"kind":"feature"}""")]
     [InlineData("""{"outcome":"done","kind":"feature"}""")]
     [InlineData("""{"outcome":"too_big","kind":"feature"}""")]
-    [InlineData("""{"outcome":"ready","kind":"chore"}""")]
-    [InlineData("""{"outcome":"ready","kind":"Feature"}""")]
+    [InlineData("""{"outcome":"ready","kind":"chore","demand":"routine","demandReason":"none"}""")]
+    [InlineData("""{"outcome":"ready","kind":"Feature","demand":"routine","demandReason":"none"}""")]
     [InlineData("""{"outcome":"ready","kind":1}""")]
     [InlineData("""{"outcome":1,"kind":"feature"}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature"}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[]}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""")]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Which?"}]}""")]
-    [InlineData("""{"outcome":"ready","kind":"feature","questions":[]}""")]
-    [InlineData("""{"outcome":"ready","kind":"feature","summary":"extra property"}""")]
+    [InlineData("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","questions":[]}""")]
+    [InlineData("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","summary":"extra property"}""")]
     public void WhenTheOutputBreaksTheSchema_ReturnsNull(string json)
     {
         // Act

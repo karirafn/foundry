@@ -266,7 +266,7 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
         ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
         WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator(), dispatcher);
         WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
-            new TriageVerdict.Ready(TriageIssueKind.Feature, []),
+            new TriageVerdict.Ready(TriageIssueKind.Feature, [], ImplementDemand.Routine, "none"),
             ContainerOutput: null,
             Summary: null);
 
@@ -290,7 +290,7 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
         WorkerOutcomeApplier sut = BuildApplier(db, orchestrator, dispatcher);
         TriageDecision decision = TriageDecisionBuilder.Build();
         WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
-            new TriageVerdict.Ready(TriageIssueKind.Feature, [decision]),
+            new TriageVerdict.Ready(TriageIssueKind.Feature, [decision], ImplementDemand.Routine, "none"),
             ContainerOutput: null,
             Summary: null);
 
@@ -300,6 +300,33 @@ public sealed partial class ApplyAsync : WorkerDispatchServiceTestBase
         // Assert
         dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem()
             .Result.ShouldBeOfType<TriageResult.Ready>().Decisions.ShouldBe([decision]);
+    }
+
+    [Theory]
+    [InlineData(ImplementDemand.Routine, "none")]
+    [InlineData(ImplementDemand.Demanding, "Adds a persistence schema column.")]
+    public async Task WhenATriageRunCompletesReady_PublishesItsDemandAndReasonOnTheResult(ImplementDemand demand, string reason)
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator(), dispatcher);
+        WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
+            new TriageVerdict.Ready(TriageIssueKind.Feature, [], demand, reason),
+            ContainerOutput: null,
+            Summary: null);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        TriageResult.Ready ready = dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem()
+            .Result.ShouldBeOfType<TriageResult.Ready>();
+        ready.ShouldSatisfyAllConditions(
+            () => ready.Demand.ShouldBe(demand),
+            () => ready.DemandReason.ShouldBe(reason));
     }
 
     [Fact]

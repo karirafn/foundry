@@ -330,9 +330,39 @@ public sealed class RepositoryRoles
             () => conditionallyRequired.ShouldBe([TriageVerdict.QuestionsProperty]),
             () => schema["properties"]![TriageVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
             () => schema["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(
-                [TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty, TriageVerdict.QuestionsProperty, TriageVerdict.DecisionsProperty, TriageVerdict.BlockedByProperty],
+                [
+                    TriageVerdict.OutcomeProperty,
+                    TriageVerdict.KindProperty,
+                    TriageVerdict.DemandProperty,
+                    TriageVerdict.DemandReasonProperty,
+                    TriageVerdict.QuestionsProperty,
+                    TriageVerdict.DecisionsProperty,
+                    TriageVerdict.BlockedByProperty,
+                ],
                 ignoreOrder: true),
             () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
+    }
+
+    [Fact]
+    public void TheTriageVerdictSchema_DemandMatchesTheTypedReadyVerdict()
+    {
+        // Arrange
+        JsonObject schema = ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Triage.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+        // Act
+        JsonNode demand = schema["properties"]![TriageVerdict.DemandProperty]!;
+        JsonNode reason = schema["properties"]![TriageVerdict.DemandReasonProperty]!;
+
+        // Assert
+        schema.ShouldSatisfyAllConditions(
+            () => demand["type"]!.GetValue<string>().ShouldBe("string"),
+            () => demand["enum"]!.AsArray().Select(node => node!.GetValue<string>()).ShouldBe(TriageVerdict.DemandTokens.Keys, ignoreOrder: true),
+            () => demand["description"]!.GetValue<string>().ShouldEndWith("Only with outcome ready."),
+            () => reason["type"]!.GetValue<string>().ShouldBe("string"),
+            () => reason["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => reason["maxLength"]!.GetValue<int>().ShouldBe(TriageResult.Ready.DemandReasonMaxLength),
+            () => reason["pattern"]!.GetValue<string>().ShouldBe("^[^\\r\\n]+$"),
+            () => reason["description"]!.GetValue<string>().ShouldEndWith("Only with outcome ready."));
     }
 
     [Fact]
@@ -371,10 +401,10 @@ public sealed class RepositoryRoles
     }
 
     [Theory]
-    [InlineData("""{"outcome":"ready","kind":"documentation"}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"ready","kind":"documentation","demand":"routine","demandReason":"none"}""", RunVerdictStatus.Done)]
     [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","problem":"Two are configured.","impact":"Migrations target the wrong one.","options":["SQLite","Postgres"],"recommendation":{"option":"b","reason":"Production runs it."},"evidence":["src/Db.cs:12 opens SQLite"]}]}""", RunVerdictStatus.NeedsInput)]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"The retry policy lands there."}]}""", RunVerdictStatus.Done)]
-    [InlineData("""{"outcome":"ready","kind":"feature","decisions":[{"question":"Which retry cap?","decision":"Three attempts.","ground":"settled_business","evidence":["src/Retry.cs:8 caps at three"]}]}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","decisions":[{"question":"Which retry cap?","decision":"Three attempts.","ground":"settled_business","evidence":["src/Retry.cs:8 caps at three"]}]}""", RunVerdictStatus.Done)]
     public void ASampleMatchingTheTriageVerdictSchema_ParsesWithTheTriageVerdictParser(string sample, RunVerdictStatus expected)
     {
         // Act

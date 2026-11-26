@@ -31,4 +31,6 @@ When a detail the rule above says to ask is missing, the issue is not ready. Ask
 
 Classify the issue as a feature, a bug, a refactor or documentation from what it asks for, whatever its labels say.
 
+When the outcome is `ready`, judge the implement work's `demand` from the code you read. It is `demanding` when the change touches any of: auth, crypto or HTTP exposure; a persistence schema or data migration; concurrency, transactions, the outbox or idempotency; a state-machine transition; a contract between modules or with a provider; or a design with no sibling in the code to copy. It is `routine` when none of these apply. Give `demandReason` as one line naming the trigger that applies, or `none`. Judge the work itself, never a model, an effort or a cost. A `needs_input` or `blocked` verdict carries neither.
+
 Judge the work against the engineering principles above.

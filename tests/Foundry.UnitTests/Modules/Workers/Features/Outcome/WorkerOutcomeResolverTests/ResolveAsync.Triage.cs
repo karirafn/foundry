@@ -21,7 +21,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerOutcomeResolv
 public sealed partial class ResolveAsync
 {
     private const string ReadyOutput =
-        """{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"ready","kind":"bug"}}""";
+        """{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none"}}""";
 
     private static ActiveRun CreateTriageRun()
     {
@@ -67,7 +67,7 @@ public sealed partial class ResolveAsync
 
         // Assert
         outcome.ShouldBeOfType<WorkerOutcome.TriageCompleted>()
-            .Verdict.ShouldBe(new TriageVerdict.Ready(TriageIssueKind.Bug, []));
+            .Verdict.ShouldBe(new TriageVerdict.Ready(TriageIssueKind.Bug, [], ImplementDemand.Routine, "none"));
     }
 
     [Theory]
@@ -79,7 +79,7 @@ public sealed partial class ResolveAsync
         // Arrange
         WorkerOutcomeResolver sut = BuildTriageResolver();
         string output =
-            $$$"""{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"ready","kind":"bug","decisions":[{{{decision}}}]}}""";
+            $$$"""{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none","decisions":[{{{decision}}}]}}""";
 
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
