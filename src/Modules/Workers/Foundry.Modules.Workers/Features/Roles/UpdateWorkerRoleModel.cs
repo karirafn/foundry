@@ -20,21 +20,14 @@ internal sealed record WorkerRoleModelResponse(string Role, string Model);
 internal static class UpdateWorkerRoleModel
 {
     internal const string RoleNotFoundCode = "Worker.RoleNotFound";
-    internal const string ModelNotListedCode = "Worker.RoleModelNotListed";
-    internal const string ModelTooLongCode = "Worker.RoleModelTooLong";
+    internal const string RoleModelPerDemandCode = "Worker.RoleModelPerDemand";
 
     internal static Error RoleNotFound(string role) =>
         new(RoleNotFoundCode, $"There is no worker role named '{role}'.") { Kind = ErrorKind.NotFound };
 
-    internal static readonly Error ModelTooLong =
-        new(ModelTooLongCode, $"The model must not exceed {WorkerRoleSettings.MaxModelLength} characters.");
-
-    internal static Error ModelNotListed(string model, string? refreshError) =>
-        new(
-            ModelNotListedCode,
-            refreshError is null
-                ? $"'{model}' is not a Claude Code alias or a model listed by the Models API. Pick one from the list."
-                : $"'{model}' is not a Claude Code alias, and the model list could not be refreshed: {refreshError}");
+    internal static readonly Error RoleModelPerDemand = new(
+        RoleModelPerDemandCode,
+        "The implement role's model is set per demand: use PUT /api/worker-roles/implement/demand-models/{demand}.");
 
     internal sealed record Command(string Role, string Model) : ICommand<WorkerRoleModelResponse>;
 
@@ -51,23 +44,19 @@ internal static class UpdateWorkerRoleModel
                 return Result<WorkerRoleModelResponse>.Fail(RoleNotFound(command.Role));
             }
 
-            string model = command.Model.Trim();
-
-            if (model.Length > WorkerRoleSettings.MaxModelLength)
+            if (role == WorkerRole.Implement)
             {
-                return Result<WorkerRoleModelResponse>.Fail(ModelTooLong);
+                return Result<WorkerRoleModelResponse>.Fail(RoleModelPerDemand);
             }
 
-            if (model.Length > 0 && !ClaudeModelAliases.IsAlias(model))
-            {
-                // Validated against the current cached list; it is fetched first when it never was.
-                ClaudeModelList list = await modelCatalog.GetAsync(cancellationToken);
+            Result<string> validated = await RoleModelValidation.ValidateAsync(command.Model, modelCatalog, cancellationToken);
 
-                if (!list.Lists(model))
-                {
-                    return Result<WorkerRoleModelResponse>.Fail(ModelNotListed(model, list.RefreshError));
-                }
+            if (validated is Result<string>.Failure failure)
+            {
+                return Result<WorkerRoleModelResponse>.Fail(failure.Error);
             }
+
+            string model = ((Result<string>.Success)validated).Value;
 
             WorkerRoleSettings? settings = await dbContext.Set<WorkerRoleSettings>().FindAsync([role], cancellationToken);
 
@@ -110,7 +99,7 @@ internal static class UpdateWorkerRoleModel
                         });
                 })
                 .WithName("UpdateWorkerRoleModel")
-                .WithSummary("Sets a worker role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API")
+                .WithSummary("Sets the triage or review role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API; the implement role's model is set per demand")
                 .Produces<WorkerRoleModelResponse>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

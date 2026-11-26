@@ -94,6 +94,7 @@ public static class WorkersModule
         });
         services.AddSingleton<IClaudeModelCatalog, ClaudeModelCatalog>();
         services.AddCommandHandler<UpdateWorkerRoleModel.Command, WorkerRoleModelResponse, UpdateWorkerRoleModel.Handler>();
+        services.AddCommandHandler<UpdateImplementDemandModel.Command, ImplementDemandModel, UpdateImplementDemandModel.Handler>();
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();

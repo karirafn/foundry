@@ -42,7 +42,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
     private async Task<Result<WorkerRoleModelResponse>> SaveAsync(
         string model,
-        string role = "implement",
+        string role = "triage",
         IClaudeModelCatalog? catalog = null)
     {
         await using FoundryDbContext db = CreateDbContext();
@@ -54,7 +54,7 @@ public sealed class HandleAsync : IAsyncLifetime
     {
         await using FoundryDbContext db = CreateDbContext();
         WorkerRoleSettings? settings = await db.Set<WorkerRoleSettings>()
-            .FindAsync([WorkerRole.Implement], TestContext.Current.CancellationToken);
+            .FindAsync([WorkerRole.Triage], TestContext.Current.CancellationToken);
         return settings?.Model;
     }
 
@@ -66,7 +66,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<WorkerRoleModelResponse>.Success>().Value
-            .ShouldBe(new WorkerRoleModelResponse("implement", ListedModel));
+            .ShouldBe(new WorkerRoleModelResponse("triage", ListedModel));
         (await StoredModelAsync()).ShouldBe(ListedModel);
     }
 
@@ -114,7 +114,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         Error error = result.ShouldBeOfType<Result<WorkerRoleModelResponse>.Failure>().Error;
         error.ShouldSatisfyAllConditions(
-            () => error.Code.ShouldBe(UpdateWorkerRoleModel.ModelNotListedCode),
+            () => error.Code.ShouldBe(RoleModelValidation.ModelNotListedCode),
             () => error.Message.ShouldContain("claude-typo"));
         (await StoredModelAsync()).ShouldBeNull();
     }
@@ -131,7 +131,7 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         Error error = result.ShouldBeOfType<Result<WorkerRoleModelResponse>.Failure>().Error;
         error.ShouldSatisfyAllConditions(
-            () => error.Code.ShouldBe(UpdateWorkerRoleModel.ModelNotListedCode),
+            () => error.Code.ShouldBe(RoleModelValidation.ModelNotListedCode),
             () => error.Message.ShouldContain("HTTP 401"));
     }
 
@@ -143,7 +143,21 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<WorkerRoleModelResponse>.Failure>().Error.Code
-            .ShouldBe(UpdateWorkerRoleModel.ModelTooLongCode);
+            .ShouldBe(RoleModelValidation.ModelTooLongCode);
+    }
+
+    [Fact]
+    public async Task WhenRoleIsImplement_RefusesBecauseItsModelIsSetPerDemand()
+    {
+        // Act
+        Result<WorkerRoleModelResponse> result = await SaveAsync("opus", role: "implement");
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerRoleModelResponse>.Failure>().Error.Code
+            .ShouldBe(UpdateWorkerRoleModel.RoleModelPerDemandCode);
+        await using FoundryDbContext db = CreateDbContext();
+        (await db.Set<WorkerRoleSettings>().FindAsync([WorkerRole.Implement], TestContext.Current.CancellationToken))
+            .ShouldBeNull();
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
@@ -34,8 +35,11 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 /// <param name="Agents">The role plugin's agents.</param>
 /// <param name="VerdictSchema">The JSON schema of the role's verdict; <see langword="null"/> when the role has none.</param>
 /// <param name="Model">
-/// The role's model setting: a Claude Code alias or a model ID; empty for the CLI's account default. The only editable
-/// part of a role (ADR 0095).
+/// The role's model setting: a Claude Code alias or a model ID; empty for the CLI's account default, and always empty
+/// for the implement role, whose model is set per demand (ADR 0095).
+/// </param>
+/// <param name="DemandModels">
+/// The implement role's Tier Models, routine first, then demanding; empty for every other role.
 /// </param>
 /// <param name="PrincipleSections">The Principle Sections the role's system prompt carries, in the fixed order.</param>
 /// <param name="Principles">
@@ -52,6 +56,7 @@ internal sealed record WorkerRoleCard(
     IReadOnlyList<RolePluginComponent> Agents,
     string? VerdictSchema,
     string Model,
+    IReadOnlyList<ImplementDemandModel> DemandModels,
     IReadOnlyList<string> PrincipleSections,
     string Principles,
     string DecisionRule);
@@ -87,12 +92,21 @@ internal static class GetWorkerRoleCatalog
         "Worker.RoleCatalogNotLoaded",
         "The worker role catalog is not loaded yet. It is read during the worker image build; wait for the build to finish.");
 
+    private static readonly ImplementDemand[] TierOrder = [ImplementDemand.Routine, ImplementDemand.Demanding];
+
     internal static WorkerRoleCatalogResponse ToResponse(
         WorkerRoleCatalog catalog,
         int timeoutMinutes,
-        IReadOnlyDictionary<WorkerRole, string> models)
+        IReadOnlyDictionary<WorkerRole, string> models,
+        IReadOnlyDictionary<ImplementDemand, ImplementTierSettings> tiers)
     {
         WorkerImageProvenance image = catalog.Image;
+        ImplementDemandModel[] demandModels =
+        [
+            .. TierOrder.Select(demand => tiers.TryGetValue(demand, out ImplementTierSettings? tier)
+                ? new ImplementDemandModel(demand, tier.Model, tier.Effort)
+                : new ImplementDemandModel(demand, string.Empty, string.Empty)),
+        ];
 
         return new WorkerRoleCatalogResponse(
             new WorkerRoleImage(image.Tag, image.ImageId, image.LoadedAt, image.Commit, image.Verified),
@@ -106,7 +120,8 @@ internal static class GetWorkerRoleCatalog
                     role.Plugin.Skills,
                     role.Plugin.Agents,
                     role.VerdictSchema,
-                    models.GetValueOrDefault(role.Role, string.Empty),
+                    role.Role == WorkerRole.Implement ? string.Empty : models.GetValueOrDefault(role.Role, string.Empty),
+                    role.Role == WorkerRole.Implement ? demandModels : [],
                     [.. role.Role.PrincipleSections.InOrder.Select(section => section.ToName())],
                     catalog.Content.PrinciplesFor(role.Role),
                     catalog.Content.DecisionRuleFor(role.Role))),
@@ -146,7 +161,11 @@ internal static class GetWorkerRoleCatalog
                         .AsNoTracking()
                         .ToDictionaryAsync(settings => settings.Role, settings => settings.Model, cancellationToken);
 
-                    return TypedResults.Ok(ToResponse(catalog, timeoutMinutes, models));
+                    Dictionary<ImplementDemand, ImplementTierSettings> tiers = await dbContext.Set<ImplementTierSettings>()
+                        .AsNoTracking()
+                        .ToDictionaryAsync(tier => tier.Demand, cancellationToken);
+
+                    return TypedResults.Ok(ToResponse(catalog, timeoutMinutes, models, tiers));
                 })
                 .WithName("GetWorkerRoleCatalog")
                 .WithSummary("Returns the worker roles of the running worker image, read-only, with the system-prompt sections Foundry adds")
@@ -166,6 +185,7 @@ internal static class WorkerRoleEndpoints
         GetWorkerRoleCatalog.Endpoint.Map(group);
         GetWorkerRoleModels.Endpoint.Map(group);
         UpdateWorkerRoleModel.Endpoint.Map(group);
+        UpdateImplementDemandModel.Endpoint.Map(group);
 
         return routes;
     }

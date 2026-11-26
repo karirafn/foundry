@@ -37,7 +37,7 @@ public sealed class Build
         RunInput snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -72,7 +72,7 @@ public sealed class Build
         RunInput snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert — CI/CD files are published like any other file; pull request review is the gate (ADR 0100).
         DenyRules(json).ShouldNotContain(rule => rule.StartsWith("Edit(", StringComparison.Ordinal));
@@ -85,7 +85,7 @@ public sealed class Build
         RunInput snapshot = Snapshot(model: "claude-opus-4-5");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -100,7 +100,7 @@ public sealed class Build
         RunInput snapshot = Snapshot(model: "opus[1m]");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -115,7 +115,7 @@ public sealed class Build
         RunInput snapshot = Snapshot(model: string.Empty);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -131,7 +131,7 @@ public sealed class Build
             additionalDenyRules: ["Bash(rm -rf:*)", "Bash(curl:*)"]);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -149,7 +149,7 @@ public sealed class Build
         RunInput snapshot = Snapshot(additionalDenyRules: "Edit(**/.github/workflows/**)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         DenyRules(json)[^1].ShouldBe("Edit(**/.github/workflows/**)");
@@ -162,7 +162,7 @@ public sealed class Build
         RunInput snapshot = Snapshot(model: "claude-opus-4-5", additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -177,7 +177,7 @@ public sealed class Build
         RunInput snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -196,7 +196,7 @@ public sealed class Build
         RunInput snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -215,7 +215,7 @@ public sealed class Build
             additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -239,7 +239,7 @@ public sealed class Build
         RunInput snapshot = Snapshot(model, "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
 
         // Assert — the object form, not `false`, so a CLI older than v2.1.281 does not skip the whole file.
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -253,5 +253,35 @@ public sealed class Build
             () => attribution.EnumerateObject().Count().ShouldBe(3));
     }
 
-    private sealed record RunInput(ClaudeCodeSettingsSnapshot ClaudeCode, string Model);
+    [Fact]
+    public void WhenEffortIsSet_WritesATopLevelEffortLevel()
+    {
+        // Arrange
+        RunInput snapshot = Snapshot("sonnet") with { Effort = "high" };
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+        doc.RootElement.GetProperty("effortLevel").GetString().ShouldBe("high");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void WhenEffortIsEmpty_OmitsEffortLevel(string effort)
+    {
+        // Arrange
+        RunInput snapshot = Snapshot("sonnet") with { Effort = effort };
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model, snapshot.Effort);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+        doc.RootElement.TryGetProperty("effortLevel", out _).ShouldBeFalse();
+    }
+
+    private sealed record RunInput(ClaudeCodeSettingsSnapshot ClaudeCode, string Model, string Effort = "");
 }

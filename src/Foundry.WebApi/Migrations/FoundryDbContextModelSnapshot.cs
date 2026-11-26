@@ -972,6 +972,33 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("dispatch_reservations", (string)null);
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.ImplementTierSettings", b =>
+                {
+                    b.Property<string>("Demand")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("demand");
+
+                    b.Property<string>("Effort")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effort");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model");
+
+                    b.HasKey("Demand");
+
+                    b.ToTable("implement_tier_settings", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerImageToolchain", b =>
                 {
                     b.Property<string>("ImageId")
