@@ -46,7 +46,7 @@ public sealed class ResolveVerdict
     }
 
     [Fact]
-    public void WhenApprovedWithoutAutoMerge_ReturnsReview()
+    public void WhenApprovedWithoutAutoMerge_RebasesBeforeReady()
     {
         // Arrange
         ReviewInProgressIssue reviewing = new IssueBuilder().WithVerifiedHeadSha(Head).WithAutoMerge(false).ReviewInProgress();
@@ -55,15 +55,17 @@ public sealed class ResolveVerdict
         Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
-        ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
-        review.ShouldSatisfyAllConditions(
-            () => review.VerifiedHeadSha.ShouldBe(Head),
-            () => review.ReviewOutcome.ShouldBeNull(),
-            () => reviewing.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem());
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.VerifiedHeadSha.ShouldBe(Head),
+            () => rebasePending.ReviewOutcome.ShouldBeNull(),
+            () => reviewing.DomainEvents.OfType<IssueRebasePending>().ShouldHaveSingleItem(),
+            () => reviewing.DomainEvents.OfType<IssueInReview>().ShouldBeEmpty());
     }
 
     [Fact]
-    public void WhenApprovedOnNoChecksWithAutoMerge_ReturnsReviewBecauseAPullRequestWithoutChecksNeverMergesItself()
+    public void WhenApprovedOnNoChecksWithAutoMerge_RebasesBeforeReadyBecauseAPullRequestWithoutChecksNeverMergesItself()
     {
         // Arrange
         ReviewInProgressIssue reviewing = new IssueBuilder()
@@ -75,11 +77,14 @@ public sealed class ResolveVerdict
         Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
-        next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>();
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>());
     }
 
     [Fact]
-    public void WhenApprovedAfterPersonFeedback_ReturnsReview()
+    public void WhenApprovedAfterPersonFeedback_RebasesBeforeReady()
     {
         // Arrange
         ChecksPendingIssue checksPending = new IssueBuilder()
@@ -97,11 +102,14 @@ public sealed class ResolveVerdict
         Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.Approved, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
-        next.ShouldBeOfType<ReviewIssue>().HasPersonFeedback.ShouldBeTrue();
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.HasPersonFeedback.ShouldBeTrue());
     }
 
     [Fact]
-    public void WhenApprovedForPerson_ReturnsReviewEvenWithAutoMerge()
+    public void WhenApprovedForPerson_RebasesBeforeReadyEvenWithAutoMerge()
     {
         // Arrange
         ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
@@ -110,7 +118,10 @@ public sealed class ResolveVerdict
         Issue next = reviewing.ResolveVerdict(ReviewVerdictOutcome.ApprovedForPerson, patchId: null, NoFindings, DateTimeOffset.UtcNow);
 
         // Assert
-        next.ShouldBeOfType<ReviewIssue>().ReviewOutcome.ShouldBeNull();
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ReviewOutcome.ShouldBeNull());
     }
 
     [Fact]

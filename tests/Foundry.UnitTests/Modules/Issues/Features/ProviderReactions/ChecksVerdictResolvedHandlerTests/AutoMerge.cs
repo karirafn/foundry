@@ -114,7 +114,7 @@ public sealed class AutoMerge : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenPassedWithoutAutoMerge_TransitionsToReview()
+    public async Task WhenPassedWithoutAutoMerge_TransitionsToRebasePendingBeforeReady()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -126,9 +126,12 @@ public sealed class AutoMerge : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        ReviewIssue review = (await LoadAsync(repositoryId)).ShouldBeOfType<ReviewIssue>();
-        review.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
-        review.MergeOutcome.ShouldBeNull();
+        RebasePendingIssue rebasePending = (await LoadAsync(repositoryId)).ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
+            () => _dispatcher.DispatchedEvents.OfType<IssueRebasePending>().ShouldHaveSingleItem(),
+            () => _dispatcher.DispatchedEvents.OfType<IssueMergePending>().ShouldBeEmpty());
     }
 
     [Fact]
@@ -147,8 +150,26 @@ public sealed class AutoMerge : IAsyncDisposable
         (await LoadAsync(repositoryId)).ShouldBeOfType<ReviewIssue>();
     }
 
+    [Fact]
+    public async Task WhenNoneDetectedAndAutoMerge_TransitionsToRebasePendingBeforeReady()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPending(repositoryId);
+
+        // Act
+        await _sut.HandleAsync(
+            new ChecksVerdictResolved(repositoryId, 1, "none_detected", [], VerifiedHead, AutoMerge: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        RebasePendingIssue rebasePending = (await LoadAsync(repositoryId)).ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>());
+    }
+
     [Theory]
-    [InlineData("none_detected", typeof(ChecksOutcome.NoneDetected))]
     [InlineData("unfinished", typeof(ChecksOutcome.Unfinished))]
     [InlineData("unreadable", typeof(ChecksOutcome.Unreadable))]
     public async Task WhenNotPassedAndAutoMerge_TransitionsToReview(string outcome, Type expectedOutcome)

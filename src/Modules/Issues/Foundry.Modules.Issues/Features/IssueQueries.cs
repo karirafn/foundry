@@ -221,14 +221,20 @@ internal sealed class IssueQueries(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)
     {
-        return await db.Set<RebasePendingIssue>()
+        // The reason is a JSON column, so the check-only flag is read in memory over the repository's few rebases.
+        List<RebasePendingIssue> issues = await db.Set<RebasePendingIssue>()
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
-            .Select(i => new RebasePendingIssueInfo(
+            .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. issues.Select(i => new RebasePendingIssueInfo(
                 i.IssueNumber,
                 i.PullRequestUrl,
-                i.EnteredRebasePendingAt))
-            .ToListAsync(cancellationToken);
+                i.EnteredRebasePendingAt,
+                i.Reason is RebasePendingReason.BeforeReady { CheckOnly: true })),
+        ];
     }
 
     public async Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
@@ -1204,7 +1210,13 @@ internal sealed class IssueQueries(
                 TransientRetry: null,
                 RebaseOutcome: checksPending.RebaseOutcome?.Discriminator,
                 RebaseSkippedReason: (checksPending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason,
-                ChecksPendingReason: checksPending.Reason.Discriminator),
+                ChecksPendingReason: checksPending.Reason.Discriminator,
+                BeforeReadyRounds: checksPending.Reason is ChecksPendingReason.BeforeReady
+                    ? checksPending.BeforeReadyRounds
+                    : null,
+                BeforeReadyRoundLimit: checksPending.Reason is ChecksPendingReason.BeforeReady
+                    ? Issue.MaxBeforeReadyRounds
+                    : null),
 
             RebasePendingIssue rebasePending => new IssueStateDetails(
                 WorkerRunId: rebasePending.WorkerRunId.Value,
@@ -1215,7 +1227,13 @@ internal sealed class IssueQueries(
                 CompletedAt: null,
                 BlockedBy: null,
                 TransientRetry: null,
-                RebasePendingReason: rebasePending.Reason.Discriminator),
+                RebasePendingReason: rebasePending.Reason.Discriminator,
+                BeforeReadyRounds: rebasePending.Reason is RebasePendingReason.BeforeReady
+                    ? rebasePending.BeforeReadyRounds
+                    : null,
+                BeforeReadyRoundLimit: rebasePending.Reason is RebasePendingReason.BeforeReady
+                    ? Issue.MaxBeforeReadyRounds
+                    : null),
 
             MergePendingIssue mergePending => new IssueStateDetails(
                 WorkerRunId: mergePending.WorkerRunId.Value,

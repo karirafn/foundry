@@ -11,7 +11,8 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// A worker run left an open pull request, or a merge was refused because the pull request fell behind (ADR 0111),
 /// and Foundry is rebasing its branch onto the default branch
 /// through the provider (ADR 0087). The issue leaves this state for checks-pending once the rebase step
-/// resolves a <see cref="RebaseOutcome"/>, so no checks verdict is ever read against the pre-rebase head.
+/// resolves a <see cref="RebaseOutcome"/>, so no checks verdict is ever read against the pre-rebase head. A pull request
+/// a person could merge as it stands also passes through here before it enters review (ADR 0128).
 /// </summary>
 public sealed class RebasePendingIssue : Issue
 {
@@ -81,6 +82,30 @@ public sealed class RebasePendingIssue : Issue
     /// </summary>
     public string? OwedChecksRetryHeadSha { get; private set; }
 
+    /// <summary>
+    /// For a <see cref="RebasePendingReason.BeforeReady"/> rebase, the checks verdict the pull request reached review
+    /// with, handed to <see cref="ReviewIssue"/>. <see langword="null"/> for every other reason.
+    /// </summary>
+    public ChecksOutcome? ChecksOutcome { get; private set; }
+
+    /// <summary>
+    /// For a <see cref="RebasePendingReason.BeforeReady"/> rebase, why the review step did not judge the pull request
+    /// (<see cref="ValueObjects.ReviewOutcome.Skipped"/> when its run failed open); <see langword="null"/> otherwise.
+    /// </summary>
+    public ReviewOutcome? ReviewOutcome { get; private set; }
+
+    /// <summary>
+    /// For a <see cref="RebasePendingReason.BeforeReady"/> rebase, the head the checks verdict or the review judged,
+    /// handed to <see cref="ReviewIssue"/> as its Verified Head. <see langword="null"/> for every other reason.
+    /// </summary>
+    public string? VerifiedHeadSha { get; private set; }
+
+    /// <summary>
+    /// For a <see cref="RebasePendingReason.BeforeReady"/> rebase from the review step, the repository's Merge When
+    /// Checks Pass the review carried, kept for Retry review. False otherwise.
+    /// </summary>
+    public bool AutoMerge { get; private set; }
+
     internal static RebasePendingIssue FromInProgress(
         InProgressIssue source,
         string branchName,
@@ -97,6 +122,7 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.EnteredRebasePendingAt = DateTimeOffset.UtcNow;
         rebasePending.FeedbackCutoffAt = feedbackCutoffAt;
         rebasePending.ResetChecksFixAttempts();
+        rebasePending.ResetBeforeReadyRounds();
         rebasePending.RebaseConflictAttempts = 0;
         rebasePending.Reason = reason;
         return rebasePending;
@@ -150,6 +176,59 @@ public sealed class RebasePendingIssue : Issue
     }
 
     /// <summary>
+    /// The review step handed over a pull request a person could merge (approved, approved for a person, or a review
+    /// that failed open with <paramref name="reviewOutcome"/>): it rebases before it is marked ready (ADR 0128).
+    /// </summary>
+    internal static RebasePendingIssue FromReviewInProgress(
+        ReviewInProgressIssue source,
+        ReviewOutcome? reviewOutcome,
+        DateTimeOffset transitionedAt)
+    {
+        RebasePendingIssue rebasePending = EnterBeforeReady(source, transitionedAt);
+        rebasePending.WorkerRunId = source.WorkerRunId;
+        rebasePending.BranchName = source.BranchName;
+        rebasePending.PullRequestUrl = source.PullRequestUrl;
+        rebasePending.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        rebasePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        rebasePending.ChecksOutcome = source.ChecksOutcome;
+        rebasePending.ReviewOutcome = reviewOutcome;
+        rebasePending.VerifiedHeadSha = source.ReviewedCommit;
+        rebasePending.AutoMerge = source.AutoMerge;
+        return rebasePending;
+    }
+
+    /// <summary>
+    /// The checks gate read a green or check-less verdict on <paramref name="headSha"/> that goes to a person without
+    /// a review run: the pull request rebases before it is marked ready (ADR 0128).
+    /// </summary>
+    internal static RebasePendingIssue FromChecksPending(
+        ChecksPendingIssue source,
+        ChecksOutcome checksOutcome,
+        string headSha,
+        DateTimeOffset transitionedAt)
+    {
+        RebasePendingIssue rebasePending = EnterBeforeReady(source, transitionedAt);
+        rebasePending.WorkerRunId = source.WorkerRunId;
+        rebasePending.BranchName = source.BranchName;
+        rebasePending.PullRequestUrl = source.PullRequestUrl;
+        rebasePending.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        rebasePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        rebasePending.ChecksOutcome = checksOutcome;
+        rebasePending.VerifiedHeadSha = headSha;
+        return rebasePending;
+    }
+
+    private static RebasePendingIssue EnterBeforeReady(Issue source, DateTimeOffset transitionedAt)
+    {
+        RebasePendingIssue rebasePending = new(source.Id, transitionedAt);
+        rebasePending.CopySharedPropertiesFrom(source);
+        rebasePending.EnteredRebasePendingAt = transitionedAt;
+        rebasePending.Reason = new RebasePendingReason.BeforeReady(
+            CheckOnly: source.BeforeReadyRounds >= MaxBeforeReadyRounds);
+        return rebasePending;
+    }
+
+    /// <summary>
     /// Applies the rebase step's <paramref name="rebaseOutcome"/>:
     /// <list type="bullet">
     /// <item>A <see cref="RebaseOutcome.Conflict"/> below <see cref="MaxRebaseConflictAttempts"/> queues a
@@ -157,9 +236,14 @@ public sealed class RebasePendingIssue : Issue
     /// <item>A <see cref="RebasePendingReason.CatchUp"/> rebase that did not bring the branch up to date
     /// (<see cref="RebaseOutcome.Skipped"/>, <see cref="RebaseOutcome.Disabled"/>, or a conflict at the cap) goes to
     /// review as <c>skipped(catch_up_failed)</c>: without the rebase the merge would be refused again.</item>
+    /// <item>A <see cref="RebasePendingReason.BeforeReady"/> rebase that did not rebase the branch
+    /// (<see cref="RebaseOutcome.UpToDate"/>, <see cref="RebaseOutcome.Disabled"/>, <see cref="RebaseOutcome.Skipped"/>,
+    /// or a conflict at the cap) enters review recording that outcome (ADR 0128).</item>
     /// <item>Anything else moves on to the checks gate; an <see cref="RebasePendingReason.AfterRun"/> conflict at the
     /// cap fails open there.</item>
     /// </list>
+    /// A <see cref="RebasePendingReason.BeforeReady"/> rebase spends one of <see cref="Issue.MaxBeforeReadyRounds"/> on
+    /// every outcome except <see cref="RebaseOutcome.UpToDate"/>.
     /// </summary>
     public Issue ResolveRebase(RebaseOutcome rebaseOutcome, DateTimeOffset transitionedAt)
     {
@@ -171,6 +255,11 @@ public sealed class RebasePendingIssue : Issue
         if (Reason is RebasePendingReason.CatchUp && !IsSynced(rebaseOutcome))
         {
             return FailCatchUp(rebaseOutcome, transitionedAt);
+        }
+
+        if (Reason is RebasePendingReason.BeforeReady && rebaseOutcome is not RebaseOutcome.Rebased)
+        {
+            return EnterReview(rebaseOutcome, transitionedAt);
         }
 
         return MarkChecksPending(rebaseOutcome, transitionedAt);
@@ -187,6 +276,7 @@ public sealed class RebasePendingIssue : Issue
                 $"Rebase conflict attempts ({RebaseConflictAttempts}) already reached the cap ({MaxRebaseConflictAttempts}).");
         }
 
+        SpendBeforeReadyRound(new RebaseOutcome.Conflict());
         RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRebaseConflict(this, transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
@@ -201,6 +291,27 @@ public sealed class RebasePendingIssue : Issue
         ReviewIssue review = ReviewIssue.FromFailedCatchUp(this, rebaseOutcome, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
+    }
+
+    /// <summary>
+    /// A Before Ready rebase left the branch as it was: the pull request enters review with the verdicts and head it
+    /// reached this state with, and the rebase's own outcome.
+    /// </summary>
+    private ReviewIssue EnterReview(RebaseOutcome rebaseOutcome, DateTimeOffset transitionedAt)
+    {
+        SpendBeforeReadyRound(rebaseOutcome);
+        ReviewIssue review = ReviewIssue.FromBeforeReady(this, rebaseOutcome, transitionedAt);
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        return review;
+    }
+
+    // Applied before the next state copies the shared properties, so that state carries the spent round.
+    private void SpendBeforeReadyRound(RebaseOutcome rebaseOutcome)
+    {
+        if (Reason is RebasePendingReason.BeforeReady && rebaseOutcome is not RebaseOutcome.UpToDate)
+        {
+            RecordBeforeReadyRound();
+        }
     }
 
     private static bool IsSynced(RebaseOutcome rebaseOutcome) =>
@@ -218,6 +329,14 @@ public sealed class RebasePendingIssue : Issue
             throw new InvalidOperationException(
                 $"A catch-up rebase that resolved '{rebaseOutcome.Discriminator}' goes to review, not to the checks gate.");
         }
+
+        if (Reason is RebasePendingReason.BeforeReady && rebaseOutcome is not RebaseOutcome.Rebased)
+        {
+            throw new InvalidOperationException(
+                $"A before-ready rebase that resolved '{rebaseOutcome.Discriminator}' goes to review, not to the checks gate.");
+        }
+
+        SpendBeforeReadyRound(rebaseOutcome);
 
         ChecksPendingIssue checksPending = ChecksPendingIssue.FromRebasePending(this, rebaseOutcome, transitionedAt);
         AddDomainEvent(new Events.IssueChecksPending(

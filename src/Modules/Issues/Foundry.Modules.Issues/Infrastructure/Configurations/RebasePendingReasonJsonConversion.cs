@@ -11,7 +11,8 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 /// <summary>
 /// Maps <see cref="RebasePendingReason"/> to the flat JSON <c>{"discriminator":"catch_up"}</c> stored in the
-/// <c>rebase_pending_reason</c> column, the same shape <see cref="RebaseOutcomeJsonConversion"/> stores.
+/// <c>rebase_pending_reason</c> column, the same shape <see cref="RebaseOutcomeJsonConversion"/> stores. A
+/// <see cref="RebasePendingReason.BeforeReady"/> reason adds its flag: <c>{"discriminator":"before_ready","check_only":true}</c>.
 /// </summary>
 internal static class RebasePendingReasonJsonConversion
 {
@@ -25,17 +26,27 @@ internal static class RebasePendingReasonJsonConversion
         reason => reason);
 
     private static string Serialize(RebasePendingReason reason) =>
-        JsonSerializer.Serialize(new RebasePendingReasonDto(reason.Discriminator), (JsonSerializerOptions?)null);
+        JsonSerializer.Serialize(
+            new RebasePendingReasonDto(
+                reason.Discriminator,
+                reason is RebasePendingReason.BeforeReady beforeReady ? beforeReady.CheckOnly : null),
+            (JsonSerializerOptions?)null);
 
     private static RebasePendingReason Deserialize(string json)
     {
         RebasePendingReasonDto dto = JsonSerializer.Deserialize<RebasePendingReasonDto>(json, (JsonSerializerOptions?)null)
             ?? throw new UnreachableException("Stored rebase_pending_reason JSON deserialised to null.");
 
-        return RebasePendingReason.FromDiscriminator(dto.Discriminator)
+        RebasePendingReason reason = RebasePendingReason.FromDiscriminator(dto.Discriminator)
             ?? throw new UnreachableException($"Unknown RebasePendingReason discriminator: '{dto.Discriminator}'");
+
+        return reason is RebasePendingReason.BeforeReady && dto.CheckOnly is true
+            ? new RebasePendingReason.BeforeReady(CheckOnly: true)
+            : reason;
     }
 
     private sealed record RebasePendingReasonDto(
-        [property: JsonPropertyName("discriminator")] string Discriminator);
+        [property: JsonPropertyName("discriminator")] string Discriminator,
+        [property: JsonPropertyName("check_only"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        bool? CheckOnly = null);
 }

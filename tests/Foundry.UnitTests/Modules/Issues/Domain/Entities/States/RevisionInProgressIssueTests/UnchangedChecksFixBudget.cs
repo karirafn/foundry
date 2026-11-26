@@ -73,7 +73,7 @@ public sealed class UnchangedChecksFixBudget
     }
 
     [Fact]
-    public void WhenFailedChecksRunPushesNoCommit_AndChecksPassWithoutAutoMerge_GoesToReview()
+    public void WhenFailedChecksRunPushesNoCommit_AndChecksPassWithoutAutoMerge_RebasesBeforeReady()
     {
         // Arrange
         ChecksPendingIssue checksPending = FirstFixRun()
@@ -84,7 +84,10 @@ public sealed class UnchangedChecksFixBudget
         Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
-        next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>());
     }
 
     [Fact]

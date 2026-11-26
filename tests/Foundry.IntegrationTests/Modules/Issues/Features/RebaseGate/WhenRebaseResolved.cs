@@ -70,19 +70,37 @@ public sealed class WhenRebaseResolved : IAsyncDisposable
     }
 
     [Fact]
-    public async Task SkippedOutcome_IsPersistedThroughChecksPendingIntoReview()
+    public async Task SkippedOutcome_IsPersistedOnChecksPending()
     {
         // Arrange
         RebasePendingIssue rebasePending = await SeedRebasePendingIssueAsync();
 
         // Act
         await HandleAsync(new RebaseResolved(RepositoryId, 1, "skipped", RebaseSkipReasons.Timeout));
+
+        // Assert
+        ChecksPendingIssue checksPending = (await LoadAsync(rebasePending)).ShouldBeOfType<ChecksPendingIssue>();
+        checksPending.RebaseOutcome.ShouldBe(new RebaseOutcome.Skipped(RebaseSkipReasons.Timeout));
+    }
+
+    [Fact]
+    public async Task BeforeReadyRebaseThatFellBehind_IsPersistedIntoReviewWithItsSpentRound()
+    {
+        // Arrange
+        RebasePendingIssue rebasePending = await SeedRebasePendingIssueAsync();
+        await HandleAsync(new RebaseResolved(RepositoryId, 1, "skipped", RebaseSkipReasons.Timeout));
         await HandleAsync(new ChecksVerdictResolved(RepositoryId, 1, "passed", [], "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e"));
+
+        // Act
+        await HandleAsync(new RebaseResolved(RepositoryId, 1, "skipped", RebaseSkipReasons.FellBehind));
 
         // Assert
         ReviewIssue review = (await LoadAsync(rebasePending)).ShouldBeOfType<ReviewIssue>();
-        review.RebaseOutcome.ShouldBe(new RebaseOutcome.Skipped(RebaseSkipReasons.Timeout));
-        review.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
+        review.ShouldSatisfyAllConditions(
+            () => review.RebaseOutcome.ShouldBe(new RebaseOutcome.Skipped(RebaseSkipReasons.FellBehind)),
+            () => review.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
+            () => review.VerifiedHeadSha.ShouldBe("4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e"),
+            () => review.BeforeReadyRounds.ShouldBe(1));
     }
 
     [Fact]

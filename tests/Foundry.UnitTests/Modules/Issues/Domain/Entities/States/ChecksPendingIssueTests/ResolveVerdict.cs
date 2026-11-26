@@ -67,7 +67,7 @@ public sealed class ResolveVerdict
     }
 
     [Fact]
-    public void WhenPassedWithoutAutoMerge_ReturnsReview()
+    public void WhenPassedWithoutAutoMerge_RebasesBeforeReadyVerifiedAtHead()
     {
         // Arrange
         ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
@@ -76,8 +76,10 @@ public sealed class ResolveVerdict
         Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
-        ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
-        review.VerifiedHeadSha.ShouldBe(Head);
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.VerifiedHeadSha.ShouldBe(Head));
     }
 
     [Theory]
@@ -97,7 +99,7 @@ public sealed class ResolveVerdict
     }
 
     [Fact]
-    public void WhenPassedAndAutoMergeAfterPersonFeedback_ReturnsReviewWithPassed()
+    public void WhenPassedAndAutoMergeAfterPersonFeedback_RebasesBeforeReadyWithPassed()
     {
         // Arrange
         ChecksPendingIssue checksPending = new IssueBuilder()
@@ -108,16 +110,32 @@ public sealed class ResolveVerdict
         Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
 
         // Assert
-        ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
-        review.ShouldSatisfyAllConditions(
-            () => review.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
-            () => review.HasPersonFeedback.ShouldBeTrue(),
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
+            () => rebasePending.HasPersonFeedback.ShouldBeTrue(),
             () => checksPending.DomainEvents.OfType<IssueMergePending>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public void WhenNoneDetectedAndAutoMerge_RebasesBeforeReadyWithTheOutcome()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        Issue next = checksPending.ResolveVerdict(new ChecksOutcome.NoneDetected(), autoMerge: true, reviewPullRequests: false, Head, DateTimeOffset.UtcNow);
+
+        // Assert
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBe(new ChecksOutcome.NoneDetected()));
     }
 
     public static TheoryData<ChecksOutcome> NotPassedOutcomes() =>
     [
-        new ChecksOutcome.NoneDetected(),
         new ChecksOutcome.Unfinished(),
         new ChecksOutcome.Unreadable(),
         new ChecksOutcome.StillFailing([]),

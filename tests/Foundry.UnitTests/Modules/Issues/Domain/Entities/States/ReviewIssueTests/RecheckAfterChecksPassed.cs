@@ -135,7 +135,7 @@ public sealed class RecheckAfterChecksPassed
     }
 
     [Fact]
-    public void WhenGateReadsGreenAndAutoMergeIsOff_RoutesToReviewWithPassed()
+    public void WhenGateReadsGreenAndAutoMergeIsOff_RebasesBeforeReadyWithPassed()
     {
         // Arrange
         ReviewIssue review = new IssueBuilder().WithChecksOutcome(new ChecksOutcome.StillFailing([])).Review();
@@ -145,7 +145,10 @@ public sealed class RecheckAfterChecksPassed
         Issue next = checksPending.ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: false, "0a1b2c3d", TransitionedAt);
 
         // Assert
-        next.ShouldBeOfType<ReviewIssue>().ChecksOutcome.ShouldBe(new ChecksOutcome.Passed());
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBe(new ChecksOutcome.Passed()));
     }
 
     [Fact]

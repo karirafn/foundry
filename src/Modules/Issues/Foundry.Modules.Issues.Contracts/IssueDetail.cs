@@ -144,16 +144,18 @@ public sealed record TriageVerdictDetails(
 /// <paramref name="SideBranchUrl"/> and <paramref name="DivergenceReason"/> are set only for <c>branch_diverged</c>: the
 /// issue branch and the side branch the run's work was pushed to, with their web URLs on the provider, and why
 /// (<c>branch-moved</c> or <c>force-push-protected</c>). <paramref name="ChecksPendingReason"/> is set only for
-/// <c>checks_pending</c>: <c>after_run</c>, <c>head_moved</c>, <c>checks_rerun</c> or <c>catch_up</c>.
+/// <c>checks_pending</c>: <c>after_run</c>, <c>head_moved</c>, <c>checks_rerun</c>, <c>catch_up</c> or <c>before_ready</c>.
 /// <paramref name="MergeOutcome"/> and <paramref name="MergeSkippedReason"/> are set only for a <c>review</c> issue that
 /// left merge-pending without a merge (ADR 0105). <paramref name="ReviewOutcome"/> and
 /// <paramref name="ReviewSkippedReason"/> are set only for a <c>review</c> issue whose review run failed open (ADR 0113).
 /// <paramref name="ReviewRunId"/> is the run of the issue's latest review verdict, in any state, once one was handled.
 /// <paramref name="RebasePendingReason"/> is set only for
-/// <c>rebase_pending</c>: <c>after_run</c> or <c>catch_up</c>. <paramref name="CatchUpRound"/> and
+/// <c>rebase_pending</c>: <c>after_run</c>, <c>catch_up</c> or <c>before_ready</c>. <paramref name="CatchUpRound"/> and
 /// <paramref name="CatchUpRoundLimit"/> are set while a catch-up (ADR 0111) has started: in <c>rebase_pending</c> or
 /// <c>checks_pending</c> with reason <c>catch_up</c>, or in <c>merge_pending</c>. <paramref name="MergeWait"/> is set
-/// only for a <c>merge_pending</c> issue waiting in the catch-up queue.
+/// only for a <c>merge_pending</c> issue waiting in the catch-up queue. <paramref name="BeforeReadyRounds"/> (the Before Ready
+/// rebases the current code has spent) and <paramref name="BeforeReadyRoundLimit"/> are set only in <c>rebase_pending</c>
+/// or <c>checks_pending</c> with reason <c>before_ready</c> (ADR 0128).
 /// </summary>
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
@@ -185,7 +187,9 @@ public sealed record IssueStateDetails(
     MergeWaitDetails? MergeWait = null,
     string? ReviewOutcome = null,
     string? ReviewSkippedReason = null,
-    Guid? ReviewRunId = null);
+    Guid? ReviewRunId = null,
+    int? BeforeReadyRounds = null,
+    int? BeforeReadyRoundLimit = null);
 
 /// <summary>
 /// A merge-pending issue's place in its repository's catch-up queue (ADR 0111): <paramref name="Position"/> is 1-based,

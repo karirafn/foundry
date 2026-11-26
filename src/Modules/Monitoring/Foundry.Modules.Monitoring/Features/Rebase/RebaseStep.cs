@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -214,6 +216,11 @@ internal sealed class RebaseStep(
             return closed;
         }
 
+        if (pending.CheckOnly)
+        {
+            return await CheckFellBehindAsync(repository, provider, pending, cancellationToken);
+        }
+
         return rebase.IsAwaitingLanding
             ? await AwaitLandingAsync(repository, provider, pending, rebase, now, cancellationToken)
             : await RequestRebaseAsync(repository, provider, pending, rebase, now, cancellationToken);
@@ -266,6 +273,36 @@ internal sealed class RebaseStep(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A Before Ready rebase that spent its rounds (ADR 0128) only reads the branch: it never asks the provider to
+    /// rebase, and a branch behind the default branch enters review as <c>skipped(fell-behind)</c>.
+    /// </summary>
+    private static async Task<StepResult> CheckFellBehindAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        RebasePendingIssueInfo pending,
+        CancellationToken cancellationToken)
+    {
+        Result<PullRequestRebaseState> stateResult = await provider.GetRebaseStateAsync(
+            repository.Slug,
+            pending.PullRequestUrl,
+            cancellationToken);
+
+        if (stateResult is Result<PullRequestRebaseState>.Failure stateFailure)
+        {
+            return new StepResult.Transient(stateFailure.Error.Message);
+        }
+
+        return ((Result<PullRequestRebaseState>.Success)stateResult).Value switch
+        {
+            PullRequestRebaseState.Unsupported => Skipped(RebaseSkipReasons.Unsupported),
+            PullRequestRebaseState.Refused refused => Skipped(refused.Reason),
+            PullRequestRebaseState.UpToDate => new StepResult.Resolved(RebaseOutcomes.UpToDate),
+            PullRequestRebaseState.Behind => Skipped(RebaseSkipReasons.FellBehind),
+            PullRequestRebaseState unknown => throw new UnreachableException($"Unhandled rebase state: {unknown}"),
+        };
     }
 
     private static async Task<StepResult> RequestRebaseAsync(

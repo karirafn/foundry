@@ -77,7 +77,7 @@ public sealed class RunAsync : IAsyncDisposable
 
     private RebaseStep BuildSut(params RebasePendingIssueInfo[] pending) =>
         new(
-            new StubIssueQueries(pending.Length == 0 ? [new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt)] : pending),
+            new StubIssueQueries(pending.Length == 0 ? [new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: false)] : pending),
             _dbContext,
             _dispatcher,
             _nudgeQueue,
@@ -589,7 +589,7 @@ public sealed class RunAsync : IAsyncDisposable
         _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.UpToDate(NewHead)));
 
         // Act
-        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt.AddHours(1)))
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt.AddHours(1), CheckOnly: false))
             .RunAsync(repository, _provider, null, Now.AddHours(1), TestContext.Current.CancellationToken);
 
         // Assert
@@ -671,6 +671,110 @@ public sealed class RunAsync : IAsyncDisposable
         // Assert
         _dbContext.ChangeTracker.Clear();
         _dbContext.Set<PendingRebase>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCheckOnlyAndTheBranchIsUpToDate_ResolvesUpToDateWithoutRebaseCall()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.UpToDate(OldHead)));
+
+        // Act
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        RebaseResolved resolved = SingleResolved();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe("up_to_date"),
+            () => resolved.Reason.ShouldBeNull());
+        _provider.StateCalls.ShouldBe(1);
+        _provider.RebaseCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCheckOnlyAndTheBranchIsBehind_ResolvesSkippedFellBehindWithoutRebaseCall()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Behind(PrId, OldHead, 3)));
+
+        // Act
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        RebaseResolved resolved = SingleResolved();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe("skipped"),
+            () => resolved.Reason.ShouldBe(RebaseSkipReasons.FellBehind));
+        _provider.StateCalls.ShouldBe(1);
+        _provider.RebaseCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCheckOnlyAndTheBranchIsBehindWithARebaseRunning_ResolvesSkippedFellBehindWithoutWaiting()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.InProgress() }));
+
+        // Act
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Reason.ShouldBe(RebaseSkipReasons.FellBehind);
+        _provider.RebaseCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCheckOnlyAndTheProviderIsUnsupported_ResolvesSkippedUnsupported()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Unsupported()));
+
+        // Act
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Reason.ShouldBe(RebaseSkipReasons.Unsupported);
+    }
+
+    [Fact]
+    public async Task WhenCheckOnlyAndTheReadFails_BacksOffAndNudgesLater()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Fail(new Error("GitHub.UnexpectedStatusCode", "502")));
+
+        // Act
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<RebaseResolved>().ShouldBeEmpty();
+        LoadProgress().TransientFailures.ShouldBe(1);
+        _provider.RebaseCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCheckOnlyAndRebaseAfterRunIsOff_ResolvesDisabledWithoutProviderCalls()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository(rebaseAfterRun: false);
+
+        // Act
+        await BuildSut(new RebasePendingIssueInfo(IssueNumber, PrUrl, EnteredAt, CheckOnly: true))
+            .RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("disabled");
+        _provider.StateCalls.ShouldBe(0);
     }
 
     private sealed class StubIssueQueries(

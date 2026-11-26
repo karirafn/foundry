@@ -97,7 +97,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenApprovedForPerson_TheIssueGoesToReviewWithNoSkippedOutcome()
+    public async Task WhenApprovedForPerson_TheIssueRebasesBeforeReadyWithNoSkippedOutcome()
     {
         // Arrange
         WorkerRunId workerRunId = WorkerRunId.New();
@@ -109,10 +109,11 @@ public sealed class HandleAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        ReviewIssue review = (await ReloadAsync(reviewing)).ShouldBeOfType<ReviewIssue>();
-        review.ShouldSatisfyAllConditions(
-            () => review.ReviewOutcome.ShouldBeNull(),
-            () => review.VerifiedHeadSha.ShouldBe(ReviewedCommit));
+        RebasePendingIssue rebasePending = (await ReloadAsync(reviewing)).ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ReviewOutcome.ShouldBeNull(),
+            () => rebasePending.VerifiedHeadSha.ShouldBe(ReviewedCommit));
     }
 
     [Fact]
@@ -143,7 +144,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
 
         // Assert
-        (await ReloadAsync(reviewing)).ShouldBeOfType<ReviewIssue>();
+        (await ReloadAsync(reviewing)).ShouldBeOfType<RebasePendingIssue>();
     }
 
     [Fact]

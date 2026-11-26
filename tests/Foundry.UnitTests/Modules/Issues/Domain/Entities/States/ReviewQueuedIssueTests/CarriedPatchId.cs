@@ -105,8 +105,8 @@ public sealed class CarriedPatchId
         context.ShouldBeOfType<DispatchContext.Review>().CarriedPatchId.ShouldBeNull();
     }
 
-    // An approval routes to a person and a push in review sends it back through the checks gate; a request for changes
-    // sends it back through a findings fix.
+    // An approval routes to a person through the Before Ready rebase and a push in review sends it back through the
+    // checks gate; a request for changes sends it back through a findings fix.
     private static ReviewQueuedIssue QueuedAgainAfter(ReviewVerdictOutcome outcome, string? patchId)
     {
         ReviewInProgressIssue reviewing = new IssueBuilder()
@@ -117,6 +117,9 @@ public sealed class CarriedPatchId
 
         ChecksPendingIssue checksPending = reviewed switch
         {
+            RebasePendingIssue beforeReady => ((ReviewIssue)beforeReady
+                    .ResolveRebase(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow))
+                .RecheckAfterHeadMoved(DateTimeOffset.UtcNow),
             ReviewIssue review => review.RecheckAfterHeadMoved(DateTimeOffset.UtcNow),
             RevisionQueuedIssue findingsFix => findingsFix
                 .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
