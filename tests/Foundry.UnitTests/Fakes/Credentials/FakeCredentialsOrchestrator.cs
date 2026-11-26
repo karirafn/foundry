@@ -213,8 +213,8 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
 
     /// <summary>
     /// Configures <see cref="StreamLogsAsync"/> to yield <paramref name="logLines"/> and then
-    /// block indefinitely until the cancellation token fires (simulating a CLI that re-prompts
-    /// after an invalid code without exiting).
+    /// block indefinitely until the cancellation token fires (simulating a CLI that
+    /// keeps waiting without exiting).
     /// </summary>
     public FakeCredentialsOrchestrator WithBlockingStreamAfterLines()
     {
