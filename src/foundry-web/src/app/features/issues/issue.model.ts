@@ -271,6 +271,10 @@ export interface IssueStateDetails {
   catchUpRound?: number | null;
   /** Set with catchUpRound: how many catch-up rounds a PR/MR may start. */
   catchUpRoundLimit?: number | null;
+  /** Set when the state is rebase_pending or checks_pending with reason before_ready: the Before Ready rounds already spent. */
+  beforeReadyRounds?: number | null;
+  /** Set with beforeReadyRounds: how many Before Ready rounds a PR/MR may spend before the rebase only checks. */
+  beforeReadyRoundLimit?: number | null;
   /** Set when the state is merge_pending and the PR/MR waits in the catch-up queue: its place and what it waits for. */
   mergeWait?: MergeWaitDetails | null;
 }
@@ -278,11 +282,11 @@ export interface IssueStateDetails {
 /** Why the Publisher pushed a run's work to a side branch: the branch moved during the run, or it is protected from force pushes. */
 export type DivergenceReason = 'branch-moved' | 'force-push-protected';
 
-/** Why an issue is in checks_pending: a run left an open PR/MR, new commits reached it after its checks resolved, its checks passed on a rerun of the same commits, or it was rebased for a catch-up. */
-export type ChecksPendingReason = 'after_run' | 'head_moved' | 'checks_rerun' | 'catch_up';
+/** Why an issue is in checks_pending: a run left an open PR/MR, new commits reached it after its checks resolved, its checks passed on a rerun of the same commits, or it was rebased for a catch-up or before it is marked ready. */
+export type ChecksPendingReason = 'after_run' | 'head_moved' | 'checks_rerun' | 'catch_up' | 'before_ready';
 
-/** Why an issue is in rebase_pending: a run left an open PR/MR, or its merge was refused because it fell behind the default branch (ADR 0111). */
-export type RebasePendingReason = 'after_run' | 'catch_up';
+/** Why an issue is in rebase_pending: a run left an open PR/MR, its merge was refused because it fell behind the default branch (ADR 0111), or it is about to be marked ready (ADR 0128). */
+export type RebasePendingReason = 'after_run' | 'catch_up' | 'before_ready';
 
 /** A merge-pending PR/MR's place in the catch-up queue: position 1 is next to catch up; waitingForIssueNumber is the issue whose up-to-date PR/MR merges first. */
 export interface MergeWaitDetails {

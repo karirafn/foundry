@@ -259,6 +259,19 @@ describe('PaneStatusComponent', () => {
     expect(text(line?.querySelector('fd-state-badge span'))).toBe('CATCH-UP QUEUED');
   });
 
+  it('shows a Rebasing chip and no catch-up copy while rebasing before review', () => {
+    // Act
+    const { el } = setup(issue('rebase_pending', { rebasePendingReason: 'before_ready', beforeReadyRounds: 0, beforeReadyRoundLimit: 3 }), {
+      summary: summary({ state: 'rebase_pending', lifecycle: currentAt('rebase', 'running') }),
+    });
+
+    // Assert
+    const line = el.querySelector('.pane-status__line');
+    expect(text(line?.querySelector('fd-step-chip'))).toBe('Rebasing…');
+    expect(text(el)).not.toContain('Waiting to catch up');
+    expect(text(el)).not.toContain('CATCH-UP QUEUED');
+  });
+
   it('shows a Preparing chip and keeps the state badge while a run starts', () => {
     // Act
     const { el } = setup(issue('in_progress'), {

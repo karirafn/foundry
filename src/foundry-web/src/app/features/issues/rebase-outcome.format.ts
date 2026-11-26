@@ -11,6 +11,7 @@ const REBASE_SKIPPED_REASON_LABELS: Record<string, string> = {
   'not-found': 'not found',
   'stale-head': 'stale head',
   'unrecognised-error': 'unrecognised error',
+  'fell-behind': 'fell behind again',
 };
 
 const REBASE_OUTCOME_LABELS: Record<string, string> = {
