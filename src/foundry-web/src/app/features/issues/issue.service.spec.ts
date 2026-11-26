@@ -224,6 +224,9 @@ describe('IssueService', () => {
       labels: ['bug'],
       kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
       triage: null,
+      implementDemand: null,
+      demandReason: null,
+      demandEscalated: false,
       clarifications: [],
       stateDetails: {
         workerRunId: null,
@@ -258,6 +261,9 @@ describe('IssueService', () => {
       labels: [],
       kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
       triage: null,
+      implementDemand: null,
+      demandReason: null,
+      demandEscalated: false,
       clarifications: [],
       stateDetails: {
         workerRunId: null,
@@ -387,6 +393,9 @@ describe('IssueService', () => {
       labels: [],
       kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
       triage: null,
+      implementDemand: null,
+      demandReason: null,
+      demandEscalated: false,
       clarifications: [],
       stateDetails: {
         workerRunId: null,

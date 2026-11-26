@@ -138,6 +138,20 @@ builder.Services.AddOpenApi(options =>
             schema.Properties?.Clear();
         }
 
+        // A nullable enum property is written as oneOf [null, $ref] to the enum's shared schema, so a null in that
+        // shared enum list would make every non-nullable use of the enum nullable as well.
+        Type enumType = Nullable.GetUnderlyingType(context.JsonTypeInfo.Type) ?? context.JsonTypeInfo.Type;
+        if (enumType.IsEnum && schema.Enum is { } values)
+        {
+            for (int i = values.Count - 1; i >= 0; i--)
+            {
+                if (values[i] is null || values[i]!.GetValueKind() == System.Text.Json.JsonValueKind.Null)
+                {
+                    values.RemoveAt(i);
+                }
+            }
+        }
+
         return Task.CompletedTask;
     });
 });

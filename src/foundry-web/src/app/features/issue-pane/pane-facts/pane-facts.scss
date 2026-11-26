@@ -63,6 +63,11 @@
   margin-top: var(--fd-spacing-xs);
 }
 
+.pane-facts__reason {
+  line-height: 1.5;
+  margin: var(--fd-spacing-xs) 0 0;
+}
+
 .pane-facts__note,
 .pane-facts__muted {
   color: var(--fd-text-secondary);

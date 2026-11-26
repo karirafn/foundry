@@ -38,6 +38,9 @@ const baseDetail: IssueDetail = {
   stateDetails,
   kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
   triage: null,
+  implementDemand: null,
+  demandReason: null,
+  demandEscalated: false,
   clarifications: [],
 };
 
@@ -167,6 +170,50 @@ describe('PaneFactsComponent', () => {
 
     // Assert
     expect(text(value(el, 'Triage'))).toBe('Not triaged. This issue was queued without a readiness check.');
+  });
+
+  describe('Demand', () => {
+    it('shows a routine issue as a neutral chip and the triage reason, with no Escalated chip', () => {
+      // Act
+      const { el } = setup(issue('queued', { implementDemand: 'routine', demandReason: 'Copies the sibling slice.' }));
+
+      // Assert
+      const demand = value(el, 'Demand');
+      expect(text(demand?.querySelector('.pane-facts__chip--neutral'))).toBe('Routine');
+      expect(text(demand?.querySelector('.pane-facts__reason'))).toBe('Triage: Copies the sibling slice.');
+      expect(demand?.querySelectorAll('.pane-facts__chip')).toHaveLength(1);
+    });
+
+    it('shows an escalated issue as Demanding with the Escalated chip, its note and the original reason', () => {
+      // Act
+      const { el } = setup(
+        issue('revision_queued', { implementDemand: 'demanding', demandReason: 'none', demandEscalated: true }),
+      );
+
+      // Assert
+      const demand = value(el, 'Demand');
+      const chips = Array.from(demand?.querySelectorAll('.pane-facts__chip') ?? []).map(text);
+      expect(chips).toEqual(['Demanding', 'Escalated']);
+      expect(demand?.querySelector('.pane-facts__chip')?.classList).toContain('pane-facts__chip--warning');
+      expect(text(demand)).toMatch(/Raised by a review or CI finding/);
+      expect(text(demand?.querySelector('.pane-facts__reason'))).toBe('Triage: No trigger made it demanding');
+    });
+
+    it('shows the chip alone when triage gave no reason', () => {
+      // Act
+      const { el } = setup(issue('queued', { implementDemand: 'demanding', demandReason: null }));
+
+      // Assert
+      expect(value(el, 'Demand')?.querySelector('.pane-facts__reason')).toBeNull();
+    });
+
+    it('renders no Demand key without a demand', () => {
+      // Act
+      const { el } = setup(issue('queued', { implementDemand: null, demandEscalated: true }));
+
+      // Assert
+      expect(value(el, 'Demand')).toBeNull();
+    });
   });
 
   it('links the short head SHA to the commit, with the full SHA as title and name, beside the commit count', () => {

@@ -62,6 +62,9 @@ function detail(
     },
     kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
     triage: null,
+    implementDemand: null,
+    demandReason: null,
+    demandEscalated: false,
     clarifications,
   };
 }

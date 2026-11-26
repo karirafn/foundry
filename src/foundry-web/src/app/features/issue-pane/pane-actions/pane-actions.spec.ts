@@ -42,6 +42,9 @@ function issue(state: IssueDetail['state']): IssueDetail {
     stateDetails,
     kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
     triage: null,
+    implementDemand: null,
+    demandReason: null,
+    demandEscalated: false,
     clarifications: [],
   };
 }

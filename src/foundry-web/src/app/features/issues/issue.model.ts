@@ -301,6 +301,12 @@ export interface IssueDetail extends IssueSummary {
   kind: IssueKindClassification;
   /** The latest triage verdict; null if the issue was never triaged. */
   triage: TriageVerdictDetails | null;
+  /** The Implement Demand the issue's implement runs use; null unless the issue holds a ready triage verdict. */
+  implementDemand: 'routine' | 'demanding' | null;
+  /** The ready verdict's one-line reason; null without one, and for a verdict that predates it. */
+  demandReason: string | null;
+  /** True once a review-findings or failed-checks revision raised the issue to demanding. */
+  demandEscalated: boolean;
   /** The clarification log, oldest round first; empty when no run asked. */
   clarifications: Clarification[];
 }

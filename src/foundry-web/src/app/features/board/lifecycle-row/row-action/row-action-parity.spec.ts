@@ -99,6 +99,9 @@ function detail(c: ParityCase): IssueDetail {
     },
     kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
     triage: null,
+    implementDemand: null,
+    demandReason: null,
+    demandEscalated: false,
     clarifications: [],
   };
 }

@@ -35,6 +35,9 @@ const baseDetail: IssueDetail = {
   stateDetails: null,
   kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
   triage: null,
+  implementDemand: null,
+  demandReason: null,
+  demandEscalated: false,
   clarifications: [],
 };
 
@@ -105,6 +108,8 @@ describe('buildFacts', () => {
     const detail = issue('failed', {
       labels: ['ui'],
       triage: verdict(),
+      implementDemand: 'demanding',
+      demandReason: 'Adds a migration.',
       stateDetails: details({
         workerRunId: 'run-0123456789abcdef',
         branchName: 'feat/42-dark-mode',
@@ -142,6 +147,7 @@ describe('buildFacts', () => {
     expect(keys).toEqual([
       'Kind',
       'Triage',
+      'Demand',
       'Branch',
       'Published',
       'Reverted files',
@@ -399,6 +405,95 @@ describe('buildFacts', () => {
 
       // Assert
       expect(fact(facts, 'triage')).toBeUndefined();
+    });
+  });
+
+  describe('Demand', () => {
+    it('shows no Demand row when the issue holds no ready verdict', () => {
+      // Act
+      const facts = buildFacts(issue('queued', { implementDemand: null, demandEscalated: true }), null, null);
+
+      // Assert
+      expect(fact(facts, 'demand')).toBeUndefined();
+    });
+
+    it('shows a routine issue as a neutral Routine chip with triage reason', () => {
+      // Act
+      const d = fact(
+        buildFacts(issue('queued', { implementDemand: 'routine', demandReason: 'Copies the sibling slice.' }), null, null),
+        'demand',
+      );
+
+      // Assert
+      expect(d).toEqual({
+        type: 'demand',
+        key: 'Demand',
+        tier: 'Routine',
+        tone: 'neutral',
+        escalated: false,
+        reason: 'Copies the sibling slice.',
+      });
+    });
+
+    it('shows a demanding issue as a warning Demanding chip', () => {
+      // Act
+      const d = fact(
+        buildFacts(issue('in_progress', { implementDemand: 'demanding', demandReason: 'Adds a migration.' }), null, null),
+        'demand',
+      );
+
+      // Assert
+      expect(d).toMatchObject({ tier: 'Demanding', tone: 'warning', escalated: false, reason: 'Adds a migration.' });
+    });
+
+    it('shows an escalated issue as Demanding and keeps the original triage reason', () => {
+      // Act
+      const d = fact(
+        buildFacts(
+          issue('revision_queued', { implementDemand: 'demanding', demandReason: 'Copies the sibling slice.', demandEscalated: true }),
+          null,
+          null,
+        ),
+        'demand',
+      );
+
+      // Assert
+      expect(d).toMatchObject({ tier: 'Demanding', tone: 'warning', escalated: true, reason: 'Copies the sibling slice.' });
+    });
+
+    it.each(['none', 'NONE', ' None '])('reads the reason %j as no trigger', (reason) => {
+      // Act
+      const d = fact(buildFacts(issue('queued', { implementDemand: 'demanding', demandReason: reason }), null, null), 'demand');
+
+      // Assert
+      expect(d?.reason).toBe('No trigger made it demanding');
+    });
+
+    it.each([null, '', '   '])('shows no reason for %j', (reason) => {
+      // Act
+      const d = fact(buildFacts(issue('queued', { implementDemand: 'demanding', demandReason: reason }), null, null), 'demand');
+
+      // Assert
+      expect(d?.reason).toBeNull();
+    });
+
+    it('trims the reason and keeps the rest verbatim', () => {
+      // Act
+      const d = fact(
+        buildFacts(issue('queued', { implementDemand: 'routine', demandReason: '  none of the triggers apply  ' }), null, null),
+        'demand',
+      );
+
+      // Assert
+      expect(d?.reason).toBe('none of the triggers apply');
+    });
+
+    it.each(['triage_queued', 'triage_in_progress'])('keeps the row while a %s issue still holds a ready verdict', (state) => {
+      // Act
+      const d = fact(buildFacts(issue(state, { implementDemand: 'routine', demandReason: 'none' }), null, null), 'demand');
+
+      // Assert
+      expect(d).toBeDefined();
     });
   });
 
