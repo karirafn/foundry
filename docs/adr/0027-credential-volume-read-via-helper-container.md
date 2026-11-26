@@ -20,7 +20,7 @@ Depending on the login container's post-success state is fragile precisely becau
 
 Read credential state from the credential **volume** via a fresh, short-lived helper container, decoupled from the login container's lifecycle.
 
-Success is detected from the `Login successful.` log signal, not from the container exit code (which races the signal, as the Context explains); an `Invalid code` line or a stream that closes without the success signal is failure.
+Success is detected from the `Login successful.` log signal, not from the container exit code (which races the signal, as the Context explains); a stream that closes without the success signal is failure; malformed codes never reach the CLI ([ADR 0024](0024-delegate-claude-credential-lifecycle-to-claude-code.md)).
 The Claude Code CLI writes `.credentials.json` to `$CLAUDE_CONFIG_DIR` (on the mounted credential volume) before it emits that signal, so the credential persists on the volume independently of the login container.
 `DockerWorkerOrchestrator.GetCredentialVolumeAuthStatusAsync` starts a helper container (`foundry-claude-login` image, `sleep`, credential volume mounted), execs `claude auth status --json` inside it, then stops and removes the helper in a `finally`.
 The helper mounts the volume **read-write**: the CLI refreshes an expired access token during `auth status` and writes `.credentials.json` back, and a read-only mount cannot persist a rotated refresh token, leaving a dead token on the volume.
@@ -52,3 +52,4 @@ Rejected: the daemon mountpoint (`/var/lib/docker/volumes/…`) is unreachable f
 
 ## Revisions
 - 2026-11-02 — The helper mounts the credential volume read-write instead of read-only, because `auth status` can refresh and write back `.credentials.json` (#613).
+- 2026-11-26 — Failure is the stream closing without the success signal; the Invalid code line is no longer matched (#1295)

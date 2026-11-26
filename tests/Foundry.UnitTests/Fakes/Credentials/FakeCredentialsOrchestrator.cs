@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.SessionCheck;
@@ -265,10 +266,10 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         return spec.Command == UsageReportCommand.ProbeTurn ? _probeTurnResult : _usageReportResult;
     }
 
-    public async Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+    public async Task DeliverLoginCodeAsync(string containerId, LoginCode code, CancellationToken cancellationToken)
     {
         DeliverLoginCodeCallCount++;
-        LastDeliveredCode = code;
+        LastDeliveredCode = code.Value;
 
         if (_deliverGate is not null)
         {
@@ -296,7 +297,7 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         if (_blockAfterLines)
         {
             // Block until the cancellation token fires — simulates a CLI that stays alive
-            // (e.g., after emitting "Invalid code", it re-prompts and never exits).
+            // (e.g., one that refuses a code locally and keeps waiting for another).
             await Task.Delay(Timeout.Infinite, cancellationToken);
         }
     }

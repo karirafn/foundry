@@ -1,5 +1,7 @@
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 
 using Shouldly;
@@ -13,6 +15,8 @@ public sealed class DeliverLoginCodeAsync
     private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
         new(runtime);
 
+    private static LoginCode Code(string value) => LoginCode.Create(value).ValueOrThrow();
+
     [Fact]
     public async Task WhenCodeDelivered_ExecCreatedInCorrectContainer()
     {
@@ -21,7 +25,7 @@ public sealed class DeliverLoginCodeAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.DeliverLoginCodeAsync("test-container-id", "my-code", CancellationToken.None);
+        await sut.DeliverLoginCodeAsync("test-container-id", Code("my#code"), CancellationToken.None);
 
         // Assert
         runtime.LastExecAsyncContainerId.ShouldBe("test-container-id");
@@ -35,7 +39,7 @@ public sealed class DeliverLoginCodeAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.DeliverLoginCodeAsync("container-id", "auth-code-abc", CancellationToken.None);
+        await sut.DeliverLoginCodeAsync("container-id", Code("auth-code#abc"), CancellationToken.None);
 
         // Assert — argv uses env-var delivery (ForCode), not stdin (ForStdin)
         LoginExecCommand expectedCmd = LoginExecCommand.ForCode();
@@ -51,15 +55,15 @@ public sealed class DeliverLoginCodeAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
+        await sut.DeliverLoginCodeAsync("container-id", Code("secret#code"), CancellationToken.None);
 
         // Assert — code carried as env var C=<code>, never interpolated into argv
         IReadOnlyList<string> captured = runtime.LastExecAsyncCommand.ShouldNotBeNull();
         string allArgs = string.Join(" ", captured);
-        allArgs.ShouldNotContain("secret-code");
+        allArgs.ShouldNotContain("secret#code");
 
         IReadOnlyList<string> env = runtime.LastExecAsyncEnvironment.ShouldNotBeNull();
-        env.ShouldContain("C=secret-code");
+        env.ShouldContain("C=secret#code");
     }
 
     [Fact]
@@ -68,10 +72,10 @@ public sealed class DeliverLoginCodeAsync
         // Arrange
         FakeDockerContainerRuntime runtime = new();
         CredentialsOrchestrator sut = BuildSut(runtime);
-        const string codeWithMeta = @"abc$'"";&|";
+        const string codeWithMeta = @"abc$'"";&|#x";
 
         // Act
-        await sut.DeliverLoginCodeAsync("container-id", codeWithMeta, CancellationToken.None);
+        await sut.DeliverLoginCodeAsync("container-id", Code(codeWithMeta), CancellationToken.None);
 
         // Assert — the literal code value is in the env var, not shell-expanded
         IReadOnlyList<string> env = runtime.LastExecAsyncEnvironment.ShouldNotBeNull();
@@ -91,7 +95,7 @@ public sealed class DeliverLoginCodeAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.DeliverLoginCodeAsync("container-id", "secret-code", CancellationToken.None);
+        await sut.DeliverLoginCodeAsync("container-id", Code("secret#code"), CancellationToken.None);
 
         // Assert — ExecAsync was called (not ExecCaptureStdoutAsync which would read stdout)
         runtime.LastExecAsyncContainerId.ShouldNotBeNull();

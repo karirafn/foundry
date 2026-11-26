@@ -64,7 +64,7 @@ public sealed class ConcurrencyRace
         await sut.WaitForStartCompletedAsync();
 
         // Start SubmitCodeAsync — it will block inside DeliverLoginCodeAsync
-        Task<Result> submitTask = sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        Task<Result> submitTask = sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Wait for the background task's 100ms poll to detect SigningIn and exit
         // WaitForCodeOrTimeoutAsync, then run through its finally block (disposes _sessionTimeoutCts).
@@ -112,7 +112,7 @@ public sealed class ConcurrencyRace
         await sut.WaitForStartCompletedAsync();
 
         // Start SubmitCodeAsync with the long-lived host token — the scan will block
-        Task<Result> submitTask = sut.SubmitCodeAsync("any-code", hostCts.Token);
+        Task<Result> submitTask = sut.SubmitCodeAsync(TestLoginCode.Of("any-code"), hostCts.Token);
 
         // Give SubmitCodeAsync time to enter WaitForLoginSuccessAsync (after DeliverLoginCodeAsync)
         await Task.Delay(50, CancellationToken.None);
@@ -150,7 +150,7 @@ public sealed class ConcurrencyRace
         await sut.WaitForStartCompletedAsync();
 
         // Start code submission with the host token — it will block in the log scan
-        Task<Result> submitTask = sut.SubmitCodeAsync("any-code", hostCts.Token);
+        Task<Result> submitTask = sut.SubmitCodeAsync(TestLoginCode.Of("any-code"), hostCts.Token);
 
         // Give the task time to enter the blocking scan
         await Task.Delay(50, CancellationToken.None);
@@ -185,7 +185,7 @@ public sealed class ConcurrencyRace
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await sut.WaitForStartCompletedAsync();
-        await sut.SubmitCodeAsync("code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("code"), TestContext.Current.CancellationToken);
 
         // Assert — session cleared
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();

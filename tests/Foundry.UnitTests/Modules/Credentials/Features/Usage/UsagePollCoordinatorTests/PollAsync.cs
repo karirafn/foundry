@@ -1,4 +1,5 @@
 using Foundry.Modules.Credentials.Domain.Entities;
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.SessionCheck;
@@ -238,7 +239,7 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task DeliverLoginCodeAsync(
             string containerId,
-            string code,
+            LoginCode code,
             CancellationToken cancellationToken)
             => Task.CompletedTask;
 
@@ -676,7 +677,7 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task DeliverLoginCodeAsync(
             string containerId,
-            string code,
+            LoginCode code,
             CancellationToken cancellationToken)
             => Task.CompletedTask;
 

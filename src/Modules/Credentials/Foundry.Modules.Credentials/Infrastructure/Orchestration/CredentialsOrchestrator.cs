@@ -88,7 +88,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
 
     public async Task DeliverLoginCodeAsync(
         string containerId,
-        string code,
+        LoginCode code,
         CancellationToken cancellationToken)
     {
         LoginExecCommand cmd = LoginExecCommand.ForCode();
@@ -96,7 +96,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         await runtime.ExecAsync(
             containerId,
             cmd.Argv,
-            [$"C={code}"],
+            [$"C={code.Value}"],
             cancellationToken);
     }
 

@@ -10,8 +10,7 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Credentials.Features.Login.LoginSessionServiceTests;
 
 /// <summary>
-/// Tests for finding #1: WaitForLoginSuccessAsync must not hang when the CLI emits
-/// "Invalid code" and stays alive (re-prompting), and must produce Failed(InvalidCode).
+/// Tests for finding #1: a log stream that ends without the success line must produce Failed(InvalidCode).
 /// Tests for finding #2: concurrent StartAsync calls must not create two sessions.
 /// Tests for finding #3: host cancellation must clear _activeSession.
 /// </summary>
@@ -32,45 +31,14 @@ public sealed class InvalidCodeHandling
     }
 
     /// <summary>
-    /// Finding #1a: When the log stream emits "Invalid code" and then blocks indefinitely
-    /// (CLI re-prompts without exiting), SubmitCodeAsync must NOT hang — it must detect
-    /// the "Invalid code" line, terminate the stream scan, and transition to Failed(InvalidCode).
+    /// A code the server rejects makes the CLI exit, so the log stream ends. A stream that
+    /// ends after the URL line without a success line is a rejected code, whatever the CLI printed.
     /// </summary>
     [Fact]
-    public async Task WhenCliEmitsInvalidCode_WithBlockingStream_SessionFailsWithInvalidCode()
+    public async Task WhenStreamEndsWithoutSuccessLine_SessionFailsWithInvalidCode()
     {
-        // Arrange — stream yields URL + "Invalid code" then blocks indefinitely (no EOF)
-        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "Invalid code. Please try again."]);
-        orchestrator.WithBlockingStreamAfterLines();
-
-        CapturingLoginSessionBroadcaster broadcaster = new();
-        LoginSessionService sut = CreateService(orchestrator, broadcaster);
-
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await sut.WaitForStartCompletedAsync();
-
-        // Act — submit code; stream blocks after "Invalid code"; must not hang
-        using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(10));
-        await sut.SubmitCodeAsync("bogus-code", timeoutCts.Token);
-
-        // Assert — session ended in Failed(InvalidCode), not a hang
-        ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
-        LoginSessionUpdate? failedUpdate = broadcaster.Captured
-            .FirstOrDefault(u => u.Phase == LoginPhaseDiscriminator.Failed);
-        failedUpdate.ShouldNotBeNull("session must reach Failed phase");
-        failedUpdate!.FailureReason.ShouldBe(LoginFailureDiscriminator.InvalidCode);
-    }
-
-    /// <summary>
-    /// Finding #1b: When the log stream emits "Invalid code" (case-insensitive), the session
-    /// fails — the check must be case-insensitive to handle variations like "invalid code".
-    /// </summary>
-    [Fact]
-    public async Task WhenCliEmitsInvalidCodeLowercase_SessionFailsWithInvalidCode()
-    {
-        // Arrange — lowercase variant of the rejection message
-        FakeCredentialsOrchestrator orchestrator = new([UrlLine, "invalid code, please try again"]);
-        orchestrator.WithBlockingStreamAfterLines();
+        // Arrange — stream yields only the URL line, then ends
+        FakeCredentialsOrchestrator orchestrator = new([UrlLine]);
 
         CapturingLoginSessionBroadcaster broadcaster = new();
         LoginSessionService sut = CreateService(orchestrator, broadcaster);
@@ -80,12 +48,13 @@ public sealed class InvalidCodeHandling
 
         // Act
         using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(10));
-        await sut.SubmitCodeAsync("bogus-code", timeoutCts.Token);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("bogus-code"), timeoutCts.Token);
 
-        // Assert
+        // Assert — session ended in Failed(InvalidCode)
+        ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
         LoginSessionUpdate? failedUpdate = broadcaster.Captured
             .FirstOrDefault(u => u.Phase == LoginPhaseDiscriminator.Failed);
-        failedUpdate.ShouldNotBeNull();
+        failedUpdate.ShouldNotBeNull("session must reach Failed phase");
         failedUpdate!.FailureReason.ShouldBe(LoginFailureDiscriminator.InvalidCode);
     }
 

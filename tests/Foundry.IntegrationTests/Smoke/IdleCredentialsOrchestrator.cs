@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.SessionCheck;
@@ -21,7 +22,7 @@ internal sealed class IdleCredentialsOrchestrator : ICredentialsOrchestrator
     public Task<Result<string>> StartLoginContainerAsync(LoginContainerSpec spec, CancellationToken cancellationToken)
         => Task.FromResult(Result<string>.Fail(NoDocker));
 
-    public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+    public Task DeliverLoginCodeAsync(string containerId, LoginCode code, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
     public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)

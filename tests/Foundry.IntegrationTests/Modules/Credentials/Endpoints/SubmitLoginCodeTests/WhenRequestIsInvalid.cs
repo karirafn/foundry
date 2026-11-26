@@ -11,7 +11,7 @@ namespace Foundry.IntegrationTests.Modules.Credentials.Endpoints.SubmitLoginCode
 
 /// <summary>
 /// Integration tests for POST /api/credentials/login/code — validation error paths.
-/// The inline guards (empty code, too-long code) do not touch the database, so these
+/// The code-shape guards (LoginCode) do not touch the database, so these
 /// tests use a shared factory fixture. The 422 path (no active session) also requires no
 /// database state beyond the default factory setup.
 /// </summary>
@@ -98,7 +98,7 @@ public sealed class WhenRequestIsInvalid(FoundryWebAppFactory factory) : IClassF
     public async Task WhenNoActiveLoginSession_ReturnsUnprocessableEntityAsProblemDetails()
     {
         // Arrange — no login session started; code is valid-shaped
-        object body = new { code = "valid-looking-code" };
+        object body = new { code = "valid-looking-code#state" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(

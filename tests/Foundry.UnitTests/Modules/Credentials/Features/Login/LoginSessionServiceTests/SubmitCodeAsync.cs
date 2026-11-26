@@ -41,7 +41,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Assert
         // After Succeeded, session is cleared — IsLoginActive is false and no active phase
@@ -69,7 +69,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("xyz789", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("xyz789"), TestContext.Current.CancellationToken);
 
         // Assert
         committer.CommitCallCount.ShouldBe(1);
@@ -104,7 +104,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("valid-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("valid-code"), TestContext.Current.CancellationToken);
 
         // Assert — volume method was called (not exec on the stopped login container)
         orchestrator.GetCredentialVolumeAuthStatusCallCount.ShouldBe(1);
@@ -127,11 +127,11 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("the-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("the-code"), TestContext.Current.CancellationToken);
 
         // Assert
         orchestrator.DeliverLoginCodeCallCount.ShouldBe(1);
-        orchestrator.LastDeliveredCode.ShouldBe("the-code");
+        orchestrator.LastDeliveredCode.ShouldBe("the-code#state");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Assert
         orchestrator.StopContainerCallCount.ShouldBeGreaterThan(0);
@@ -171,7 +171,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
@@ -192,7 +192,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("bad-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("bad-code"), TestContext.Current.CancellationToken);
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();
@@ -213,7 +213,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("bad-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("bad-code"), TestContext.Current.CancellationToken);
 
         // Assert
         orchestrator.StopContainerCallCount.ShouldBeGreaterThan(0);
@@ -236,7 +236,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("bad-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("bad-code"), TestContext.Current.CancellationToken);
 
         // Assert
         committer.CommitCallCount.ShouldBe(0);
@@ -268,7 +268,7 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Assert — success signal is authoritative; running container must not block success
         committer.CommitCallCount.ShouldBe(1);
@@ -284,7 +284,7 @@ public sealed class SubmitCodeAsync
         LoginSessionService sut = CreateService(orchestrator);
 
         // Act — no session started
-        Result submitResult = await sut.SubmitCodeAsync("any-code", TestContext.Current.CancellationToken);
+        Result submitResult = await sut.SubmitCodeAsync(TestLoginCode.Of("any-code"), TestContext.Current.CancellationToken);
 
         // Assert
         submitResult.IsFailure.ShouldBeTrue();
@@ -310,15 +310,15 @@ public sealed class SubmitCodeAsync
         await sut.WaitForStartCompletedAsync();
 
         // Deliver first code — transitions to SigningIn; the WaitForLoginSuccessAsync
-        // log scan will block indefinitely (no "Login successful." or "Invalid code").
+        // log scan will block indefinitely (no "Login successful." and no end of stream).
         // We do NOT await SubmitCodeAsync to keep the session in SigningIn.
-        Task<Result> firstSubmit = sut.SubmitCodeAsync("first-code", TestContext.Current.CancellationToken);
+        Task<Result> firstSubmit = sut.SubmitCodeAsync(TestLoginCode.Of("first-code"), TestContext.Current.CancellationToken);
 
         // Wait a brief moment for the state machine to advance past WaitingForAuthorization
         await Task.Delay(50, TestContext.Current.CancellationToken);
 
         // Act — second submit while in SigningIn
-        Result submitResult = await sut.SubmitCodeAsync("second-code", TestContext.Current.CancellationToken);
+        Result submitResult = await sut.SubmitCodeAsync(TestLoginCode.Of("second-code"), TestContext.Current.CancellationToken);
 
         // Assert — second submit is rejected with NotAcceptingCode
         submitResult.IsFailure.ShouldBeTrue();
@@ -353,7 +353,7 @@ public sealed class SubmitCodeAsync
             TestContext.Current.CancellationToken);
 
         // Start submit — it will block in the log scan (blocking stream)
-        Task<Result> submitTask = sut.SubmitCodeAsync("some-code", hostCts.Token);
+        Task<Result> submitTask = sut.SubmitCodeAsync(TestLoginCode.Of("some-code"), hostCts.Token);
         await Task.Delay(50, TestContext.Current.CancellationToken);
 
         // Act — simulate host shutdown

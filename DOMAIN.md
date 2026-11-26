@@ -45,11 +45,11 @@ The `timeout` wrapper bounds the CLI's lifetime independently of the sleep-holde
 Foundry streams the container's stdout/stderr log lines and extracts the `https://…/oauth/…` authorization URL (the `visit:` line emitted by the CLI) — the URL is broadcast to the dashboard via SignalR as a `LoginSessionUpdate`.
 The operator opens the URL, authorizes, and pastes the code into the dashboard.
 Foundry delivers the code into the FIFO via `docker exec` (`printf '%s\n' "$C" > /tmp/ci`), then kills the sleep-holder process (read from `/tmp/ci.pid`) so the FIFO writer closes and the CLI receives EOF on stdin and proceeds to token exchange.
-The service scans the log stream for the `Login successful.` signal, which is authoritative — an `Invalid code` line, or the stream closing without the success signal, is treated as failure.
+The service scans the log stream for the `Login successful.` signal, which is authoritative — the stream closing without the success signal is treated as failure.
 It deliberately does not gate on the container exit code: the CLI may still be running when the success signal appears (observed in practice living seconds longer), so an exit-code check races the signal and misreports success as failure.
 Because the login container's lifecycle at that moment is therefore unreliable (it may or may not have exited), Foundry captures the authenticated account's email, org name, and subscription type without depending on it — by running `claude auth status --json` in a fresh short-lived helper container that mounts the same credential volume read-write (`auth status` refreshes an expired access token and must be able to persist the rotated refresh token), then tears the helper down.
 This volume read is also the real confirmation that login persisted a valid credential.
-On an invalid code the session transitions to `Failed(InvalidCode)` and is broadcast to the dashboard for re-prompt — the operator may start a new session.
+A malformed code (empty, too long, with line breaks or control characters, a web address, or without text on both sides of `#`) is refused with 400 before delivery and the session keeps waiting for a code; on an invalid code the session transitions to `Failed(InvalidCode)` and is broadcast to the dashboard for re-prompt — the operator may start a new session.
 
 **Onboarding seed.**
 `ICredentialsOrchestrator.SeedOnboardingAsync` idempotently merges onboarding-gate flags into the volume's `.claude.json` (`hasCompletedOnboarding`, `hasTrustDialogAccepted`, `theme`), setting each key only when absent, so existing credentials and account data are never overwritten.

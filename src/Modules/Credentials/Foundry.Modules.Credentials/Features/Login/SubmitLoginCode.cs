@@ -1,4 +1,4 @@
-using Foundry.Modules.Credentials.Domain.Entities;
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -12,9 +12,9 @@ namespace Foundry.Modules.Credentials.Features.Login;
 /// <summary>
 /// POST /api/credentials/login/code
 /// Submits the operator's authorization code to the active login session.
-/// Returns 400 when the code is empty/whitespace or exceeds the maximum length,
-/// 422 when there is no active session or the session is not in a state that
-/// accepts a code, 200 on acceptance.
+/// Returns 400 when the code is not a well-formed <see cref="LoginCode"/> (checked before the
+/// session is looked at, so the operator sees the shape problem first), 422 when there is no
+/// active session or the session is not in a state that accepts a code, 200 on acceptance.
 /// </summary>
 internal static class SubmitLoginCode
 {
@@ -22,8 +22,6 @@ internal static class SubmitLoginCode
 
     internal static class Endpoint
     {
-        private const int MaxLoginCodeLength = 512;
-
         internal static void Map(RouteGroupBuilder group)
         {
             group.MapPost("/code", static async (
@@ -43,18 +41,14 @@ internal static class SubmitLoginCode
             LoginSessionService service,
             CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.Code))
+            Result<LoginCode> codeResult = LoginCode.Create(request.Code ?? string.Empty);
+            if (codeResult is Result<LoginCode>.Failure codeFailure)
             {
-                return CredentialsErrors.LoginCodeEmpty.ToProblem(StatusCodes.Status400BadRequest);
+                return codeFailure.Error.ToProblem(StatusCodes.Status400BadRequest);
             }
 
-            if (request.Code.Length > MaxLoginCodeLength)
-            {
-                return CredentialsErrors.LoginCodeTooLong(MaxLoginCodeLength)
-                    .ToProblem(StatusCodes.Status400BadRequest);
-            }
-
-            Result submitResult = await service.SubmitCodeAsync(request.Code, cancellationToken);
+            LoginCode code = ((Result<LoginCode>.Success)codeResult).Value;
+            Result submitResult = await service.SubmitCodeAsync(code, cancellationToken);
 
             return submitResult.Match<Results<Ok, ProblemHttpResult>>(
                 () => TypedResults.Ok(),

@@ -3,10 +3,10 @@ using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
 
 using Shouldly;
@@ -17,7 +17,9 @@ namespace Foundry.IntegrationTests.Modules.Credentials.Login;
 
 /// <summary>
 /// Integration tests for the login flow against the real login image
-/// (<c>foundry-claude-login:local</c>, pinned to Claude CLI @2.1.187).
+/// (<c>foundry-claude-login:local</c>, with the Claude CLI version pinned in
+/// <c>workers/package.json</c>). They pin the CLI behaviours the login flow depends on
+/// (ADR 0024 § CLI output coupling), through the production container command.
 ///
 /// These tests require:
 ///   - A live Docker daemon (Linux/CI).
@@ -35,9 +37,14 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
 {
     private const string LoginImage = WorkerImageNames.LoginImageName;
 
+    // Long enough that the CLI's own timeout never ends a test early: URL wait plus the
+    // longest post-delivery observation window.
+    private const int LoginContainerTimeoutSeconds = 180;
+
+    private static readonly TimeSpan UrlWait = TimeSpan.FromSeconds(90);
+
     private DockerClientConfiguration? _config;
     private DockerClient? _dockerClient;
-    private DockerWorkerOrchestrator? _workerSut;
     private CredentialsOrchestrator? _credentialsSut;
     private bool _daemonReachable;
     private bool _imagePresent;
@@ -75,7 +82,6 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             _dockerClient.Volumes,
             _dockerClient.Exec);
 
-        _workerSut = new DockerWorkerOrchestrator(runtime);
         _credentialsSut = new CredentialsOrchestrator(runtime);
     }
 
@@ -108,13 +114,11 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Starts a real login container with the FIFO bootstrap and captures the OAuth URL
-    /// from the CLI's stdout. Confirms that:
-    /// (a) the container starts without blocking on interactive prompts (seed is applied),
+    /// Starts the production login container and captures the OAuth URL from the CLI's stdout
+    /// through the production log stream. Confirms that:
+    /// (a) the container starts without blocking on interactive prompts,
     /// (b) the OAuth URL appears in the log stream within the timeout,
     /// (c) the URL matches the regex used by <see cref="AuthorizationUrlExtractor"/>.
-    ///
-    /// Note: the seed is applied to the isolated test volume before the login container starts.
     /// </summary>
     [Fact]
     public async Task StartLoginContainer_OAuthUrlCapturedFromRealCliStdout()
@@ -122,53 +126,23 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator workerSut = _workerSut.ShouldNotBeNull();
-        string volumeName = _testVolumeName.ShouldNotBeNull();
+        CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
+        await SeedVolumeAsync(_testVolumeName.ShouldNotBeNull());
 
-        // Seed the credential volume so onboarding doesn't block the login prompt.
-        await SeedVolumeAsync(volumeName);
-
-        int timeoutSeconds = 60;
-        string fifoPath = LoginExecCommand.FifoPath;
-        string sleepPidPath = LoginExecCommand.SleepPidPath;
-        string bootstrapCmd =
-            $"mkfifo {fifoPath}; sleep {timeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; exec claude auth login --claudeai < {fifoPath}";
-
-        CreateContainerParameters createParams = BuildLoginContainerParams(volumeName, bootstrapCmd);
-
-        CreateContainerResponse response = await _dockerClient!.Containers.CreateContainerAsync(
-            createParams,
-            TestContext.Current.CancellationToken);
-
-        string containerId = response.ID;
+        // Act
+        string containerId = await StartProductionLoginContainerAsync(credentialsSut);
 
         try
         {
-            await _dockerClient.Containers.StartContainerAsync(
-                containerId,
-                new ContainerStartParameters(),
-                TestContext.Current.CancellationToken);
+            using CancellationTokenSource urlCts = new(UrlWait);
+            await using IAsyncEnumerator<string> lines =
+                credentialsSut.StreamLogsAsync(containerId, urlCts.Token).GetAsyncEnumerator(urlCts.Token);
 
-            // Act — scan log stream for the OAuth URL within a bounded window.
-            // Use an independent CTS — test-framework cancellation is too tight for CLI startup time.
-            using CancellationTokenSource urlCts = new(TimeSpan.FromSeconds(90));
-
-            string? capturedUrl = null;
-
-            await foreach (string line in workerSut.StreamLogsAsync(containerId, urlCts.Token))
-            {
-                string? url = AuthorizationUrlExtractor.Extract(line);
-                if (url is not null)
-                {
-                    capturedUrl = url;
-                    break;
-                }
-            }
+            string? capturedUrl = await ReadUntilAuthorizationUrlAsync(lines);
 
             // Assert — URL captured and is a valid OAuth URL
             capturedUrl.ShouldNotBeNull(
-                "OAuth URL was not emitted by the login container within 45 seconds. " +
-                "Check that the onboarding seed was applied and the CLI is version 2.1.187.");
+                $"OAuth URL was not emitted by the login container within {UrlWait.TotalSeconds} seconds.");
             capturedUrl.ShouldStartWith("https://");
             capturedUrl.ShouldContain("oauth");
         }
@@ -179,92 +153,58 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Delivers a bogus authorization code via <c>docker exec</c> to the FIFO and confirms
-    /// the CLI emits an "Invalid code" rejection message — verifying the exec→FIFO→CLI framing
-    /// works end-to-end with real Docker.
-    ///
-    /// The CLI does NOT exit after a single invalid code attempt — it prompts the user to retry.
-    /// Foundry's session timeout (session-level CTS) is what eventually causes the session to
-    /// fail with <see cref="LoginFailureReason.CodeTimeout"/> in production, not a non-zero exit.
-    /// We assert the rejection message, not the exit code.
+    /// Delivers a well-formed but bogus code through the production delivery path. The server
+    /// rejects it, the CLI exits, and the log stream ends without the success line: this is the
+    /// behaviour Foundry relies on to report <see cref="LoginFailureReason.InvalidCode"/>,
+    /// without matching any CLI wording.
     ///
     /// NOT AUTOMATABLE: A successful token exchange (valid human-authorized code completing
     /// the OAuth round-trip) cannot be automated without a real browser session.
     /// That path is spike-verified and documented manually.
     /// </summary>
     [Fact]
-    public async Task DeliverBogusCode_CliEmitsInvalidCodeMessage()
+    public async Task DeliverWellFormedBogusCode_StreamEndsWithoutSuccessSignal()
     {
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
-        DockerWorkerOrchestrator workerSut = _workerSut.ShouldNotBeNull();
         CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
-        string volumeName = _testVolumeName.ShouldNotBeNull();
+        await SeedVolumeAsync(_testVolumeName.ShouldNotBeNull());
+        LoginCode bogusCode = LoginCode.Create("abcdefghijklmnop#qrstuvwxyz").ValueOrThrow();
 
-        await SeedVolumeAsync(volumeName);
-
-        int timeoutSeconds = 60;
-        string fifoPath = LoginExecCommand.FifoPath;
-        string sleepPidPath = LoginExecCommand.SleepPidPath;
-        string bootstrapCmd =
-            $"mkfifo {fifoPath}; sleep {timeoutSeconds} > {fifoPath} & echo $! > {sleepPidPath}; exec claude auth login --claudeai < {fifoPath}";
-
-        CreateContainerParameters createParams = BuildLoginContainerParams(volumeName, bootstrapCmd);
-
-        CreateContainerResponse response = await _dockerClient!.Containers.CreateContainerAsync(
-            createParams,
-            TestContext.Current.CancellationToken);
-
-        string containerId = response.ID;
+        string containerId = await StartProductionLoginContainerAsync(credentialsSut);
 
         try
         {
-            await _dockerClient.Containers.StartContainerAsync(
-                containerId,
-                new ContainerStartParameters(),
-                TestContext.Current.CancellationToken);
+            // One enumeration for the whole test, so the stream cannot miss the container's exit
+            // (AutoRemove removes it as soon as it stops).
+            using CancellationTokenSource streamCts = new(UrlWait);
+            await using IAsyncEnumerator<string> lines =
+                credentialsSut.StreamLogsAsync(containerId, streamCts.Token).GetAsyncEnumerator(streamCts.Token);
 
-            // Wait for the OAuth URL so the FIFO is open for reading before we write.
-            // Use an independent CTS — test-framework cancellation is too tight for the CLI startup time.
-            using CancellationTokenSource urlCts = new(TimeSpan.FromSeconds(90));
+            (await ReadUntilAuthorizationUrlAsync(lines))
+                .ShouldNotBeNull("OAuth URL must appear before delivering the code.");
 
-            bool urlSeen = false;
-            await foreach (string line in workerSut.StreamLogsAsync(containerId, urlCts.Token))
+            // Act
+            await credentialsSut.DeliverLoginCodeAsync(containerId, bogusCode, TestContext.Current.CancellationToken);
+
+            // The token exchange is a network round-trip to Anthropic's token endpoint.
+            streamCts.CancelAfter(TimeSpan.FromSeconds(60));
+
+            bool successSeen = false;
+            while (await lines.MoveNextAsync())
             {
-                if (AuthorizationUrlExtractor.Extract(line) is not null)
+                if (lines.Current.Contains(LoginSessionService.LoginSuccessSignal, StringComparison.Ordinal))
                 {
-                    urlSeen = true;
-                    break;
+                    successSeen = true;
                 }
             }
 
-            urlSeen.ShouldBeTrue("OAuth URL must appear before delivering the code.");
-
-            // Act — deliver a bogus code via exec (code is not a real secret; kept out of logs)
-            // The env var C holds the code — no shell injection possible.
-            const string BogusCode = "INVALID-CODE-FOR-TEST";
-            await credentialsSut.DeliverLoginCodeAsync(containerId, BogusCode, TestContext.Current.CancellationToken);
-
-            // Assert — CLI rejected the bogus code and emitted an "Invalid code" message.
-            // The CLI does NOT exit after one failed attempt; it stays alive and re-prompts.
-            // Allow up to 60 s for the network round-trip to Anthropic's token endpoint.
-            // We scan the log stream rather than wait for container exit.
-            using CancellationTokenSource rejectionCts = new(TimeSpan.FromSeconds(60));
-
-            bool rejectionSeen = false;
-            await foreach (string line in workerSut.StreamLogsAsync(containerId, rejectionCts.Token))
-            {
-                if (line.Contains("Invalid code", StringComparison.OrdinalIgnoreCase))
-                {
-                    rejectionSeen = true;
-                    break;
-                }
-            }
-
-            rejectionSeen.ShouldBeTrue(
-                "The CLI must emit an 'Invalid code' rejection message within 60 s of receiving a bogus code. " +
-                "This confirms the exec→FIFO→CLI stdin framing works end-to-end.");
+            // Assert — the runtime also ends the stream cleanly on cancellation, so the stream
+            // ended on its own only if the 60-second token was not cancelled.
+            streamCts.IsCancellationRequested.ShouldBeFalse(
+                "The log stream must end on its own within 60 s of delivering a code the server rejects.");
+            successSeen.ShouldBeFalse("A bogus code must never produce the success line.");
         }
         finally
         {
@@ -272,6 +212,46 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Delivers a code without <c>#</c> — a shape <see cref="LoginCode"/> refuses — straight
+    /// to the CLI. The CLI refuses it locally and keeps waiting. This guards
+    /// <see cref="LoginCode"/> against being stricter than the CLI: a CLI release that accepts
+    /// such a code sends it to the server, which rejects it, the CLI exits, and this test fails.
+    /// </summary>
+    [Fact]
+    public async Task DeliverCodeWithoutHash_CliKeepsWaiting()
+    {
+        // Arrange
+        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
+        Assert.SkipUnless(_imagePresent, $"Login image '{LoginImage}' is not present. Build it first.");
+        CredentialsOrchestrator credentialsSut = _credentialsSut.ShouldNotBeNull();
+
+        string containerId = await StartProductionLoginContainerAsync(credentialsSut);
+
+        try
+        {
+            using (CancellationTokenSource urlCts = new(UrlWait))
+            {
+                await using IAsyncEnumerator<string> lines =
+                    credentialsSut.StreamLogsAsync(containerId, urlCts.Token).GetAsyncEnumerator(urlCts.Token);
+
+                (await ReadUntilAuthorizationUrlAsync(lines))
+                    .ShouldNotBeNull("OAuth URL must appear before delivering the code.");
+            }
+
+            // Act — a raw string, because DeliverLoginCodeAsync accepts only a LoginCode.
+            await ExecLoginCodeAsync(containerId, "INVALID-CODE-FOR-TEST");
+            await Task.Delay(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+
+            // Assert
+            (await IsContainerRunningAsync(containerId)).ShouldBeTrue(
+                "The CLI must refuse a code without '#' locally and keep waiting for another code.");
+        }
+        finally
+        {
+            await ForceRemoveContainerAsync(containerId);
+        }
+    }
     /// <summary>
     /// Verifies that <see cref="CredentialsOrchestrator.GetCredentialVolumeAuthStatusAsync"/> correctly
     /// parses the real <c>claude auth status --json</c> output framing (Docker exec stdout
@@ -485,35 +465,65 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         }
     }
 
-    private static CreateContainerParameters BuildLoginContainerParams(string volumeName, string bootstrapCmd) =>
-        new()
+    private static async Task<string> StartProductionLoginContainerAsync(CredentialsOrchestrator credentialsSut)
+    {
+        Foundry.Shared.Result<string> started = await credentialsSut.StartLoginContainerAsync(
+            new LoginContainerSpec(LoginContainerTimeoutSeconds),
+            TestContext.Current.CancellationToken);
+
+        return started.ValueOrThrow();
+    }
+
+    private static async Task<string?> ReadUntilAuthorizationUrlAsync(IAsyncEnumerator<string> lines)
+    {
+        while (await lines.MoveNextAsync())
         {
-            Image = LoginImage,
-            Cmd = ["sh", "-c", bootstrapCmd],
-            Env = [$"{WorkerVolumeNames.ClaudeConfigDirEnvVar}={WorkerVolumeNames.ClaudeConfigContainerPath}"],
-            Tty = false,
-            AttachStdout = true,
-            AttachStderr = true,
-            WorkingDir = OnboardingSeed.DefaultWorkDir,
-            Labels = new Dictionary<string, string>
+            string? url = AuthorizationUrlExtractor.Extract(lines.Current);
+            if (url is not null)
             {
-                ["foundry.login"] = "true",
-                ["foundry.managed"] = "true",
-            },
-            HostConfig = new HostConfig
+                return url;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task ExecLoginCodeAsync(string containerId, string rawCode)
+    {
+        ContainerExecCreateResponse execResponse = await _dockerClient!.Exec.ExecCreateContainerAsync(
+            containerId,
+            new ContainerExecCreateParameters
             {
-                Mounts =
-                [
-                    new Mount
-                    {
-                        Type = "volume",
-                        Source = volumeName,
-                        Target = WorkerVolumeNames.ClaudeConfigContainerPath,
-                        ReadOnly = false,
-                    },
-                ],
+                Cmd = [.. LoginExecCommand.ForCode().Argv],
+                Env = [$"C={rawCode}"],
+                AttachStdout = true,
+                AttachStderr = true,
             },
-        };
+            TestContext.Current.CancellationToken);
+
+        using MultiplexedStream stream = await _dockerClient.Exec.StartAndAttachContainerExecAsync(
+            execResponse.ID,
+            tty: false,
+            TestContext.Current.CancellationToken);
+
+        await stream.CopyOutputToAsync(Stream.Null, Stream.Null, Stream.Null, TestContext.Current.CancellationToken);
+    }
+
+    private async Task<bool> IsContainerRunningAsync(string containerId)
+    {
+        try
+        {
+            ContainerInspectResponse inspect = await _dockerClient!.Containers.InspectContainerAsync(
+                containerId,
+                TestContext.Current.CancellationToken);
+            return inspect.State.Running;
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            // AutoRemove deletes the login container as soon as it exits.
+            return false;
+        }
+    }
 
     /// <summary>
     /// Seeds the credential volume with onboarding suppression by running a helper container.

@@ -47,23 +47,24 @@ The container entrypoint bootstraps a named FIFO at `/tmp/ci`, records the FIFO 
 Foundry streams the container stdout/stderr and extracts the authorization URL from the `visit:` line; the URL is pushed to the dashboard over SignalR.
 The operator opens the URL, authorizes in the browser, and pastes the code into the dashboard.
 Foundry delivers the code via `docker exec` (`printf '%s\n' "$C" > /tmp/ci; kill $(cat /tmp/ci.pid)`) — the code is passed as environment variable `C`, never interpolated, so shell metacharacters cannot cause injection; the sleep-holder kill forces EOF on stdin so the CLI proceeds to token exchange without waiting.
-Foundry polls the log stream for `Login successful.` and reads the container exit code (0 = success, non-zero = bad or expired code).
-On success the login container has already exited (its entrypoint `exec`s the CLI as PID 1, so the container stops when login completes), so Foundry captures the authenticated account identity (email, org name, subscription type) by running `claude auth status --json` in a fresh short-lived helper container that mounts the credential volume, rather than exec-ing into the stopped login container. See [ADR 0027](0027-credential-volume-read-via-helper-container.md).
+Foundry scans the log stream for `Login successful.`; a stream that ends without it is a rejected code. Foundry does not read the exit code, because the CLI can keep running for seconds after printing the success line ([ADR 0027](0027-credential-volume-read-via-helper-container.md)).
+On success Foundry captures the authenticated account identity (email, org name, subscription type) by running `claude auth status --json` in a fresh short-lived helper container that mounts the credential volume, rather than exec-ing into the login container. See [ADR 0027](0027-credential-volume-read-via-helper-container.md).
 
 ### CLI output coupling
 
-The flow depends on specific output strings emitted by `claude` CLI 2.1.187:
+The flow depends on these behaviours of the `claude` CLI version pinned in `workers/package.json`:
 
-| Signal | Source | Used for |
-|---|---|---|
-| URL containing `/oauth/` | stdout `visit:` line | Authorization URL extraction (regex match) |
-| `Login successful.` | stdout | Success detection (log stream scan) |
-| Non-zero exit code | container exit | Bad/expired code detection (fallback to exit code) |
+| Behaviour | Used for |
+|---|---|
+| An `https://…oauth…` URL on stdout | Authorization URL extraction (regex match) |
+| `Login successful.` on stdout | Success detection |
+| A code the server rejects makes the CLI exit, so the log stream ends | Rejection detection: a stream that ends without the success line is `InvalidCode` |
+| A code without text on both sides of `#` is refused locally and the CLI keeps waiting | Foundry refuses such codes at `POST /api/credentials/login/code` (`LoginCode`) before delivery, so Foundry's rule is never stricter than the CLI's |
 
-The onboarding seed (`hasCompletedOnboarding`, `hasTrustDialogAccepted`, `theme`) also depends on `.claude.json` key names stable across CLI versions.
-The CI integration test (`LoginIntegrationTests`) is the safety net for CLI version drift — it runs in the dedicated `login-integration` CI job and will fail if any of these strings or behaviors change.
-The `login-integration` job triggers on changes to `workers/Dockerfile.base`, `workers/Dockerfile.login`, or the login source/test paths, and on manual `workflow_dispatch`.
-The per-PR `api` job does not build the login image, so these tests self-skip there (image absent) and only execute in the dedicated job.
+Foundry matches no CLI rejection wording: that wording changed between CLI 2.1.325 and 2.1.330.
+`LoginFlowIntegrationTests` is the safety net for CLI version drift. It runs in the `login-integration` CI job, through the production container command, and asserts all four behaviours.
+The job runs on pushes to `main`, on `workflow_dispatch`, and on pull requests that match the `login` path filter in `.github/workflows/ci.yml`.
+The per-PR `api` job does not build the login image, so these tests self-skip there.
 
 ### Onboarding seed
 
@@ -74,3 +75,6 @@ Before invoking `claude auth login --claudeai`, the entrypoint merges onboarding
 Dispatch is transiently suppressed via `ILoginSessionState.IsLoginActive` while a session is active.
 This is not persisted — a Foundry restart mid-login drops the in-memory session, and the periodic `TransientContainerReaper` reaps orphaned login containers ([ADR 0031](0031-crash-safe-self-cleaning-transient-containers.md)).
 A successful login marks the credentials valid and publishes `CredentialsValidated`, which lifts the auth-invalid pause and re-queues auth-invalid-failed work ([ADR 0030](0030-extract-claude-credentials-module.md)).
+
+## Revisions
+- 2026-11-26 — Rejection is detected by the log stream ending, never by CLI wording; malformed codes are refused at the API (#1295)

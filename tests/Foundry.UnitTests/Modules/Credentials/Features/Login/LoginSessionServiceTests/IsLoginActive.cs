@@ -75,7 +75,7 @@ public sealed class IsLoginActive
         await sut.WaitForStartCompletedAsync();
 
         // Act — submit code to complete and reach Succeeded
-        await sut.SubmitCodeAsync("any-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("any-code"), TestContext.Current.CancellationToken);
 
         // Assert
         ((ILoginSessionState)sut).IsLoginActive.ShouldBeFalse();

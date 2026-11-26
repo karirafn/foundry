@@ -864,7 +864,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(""));
 
-        public Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
+        public Task DeliverLoginCodeAsync(string containerId, LoginCode code, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
         public Task<Result<Foundry.Modules.Credentials.Infrastructure.Orchestration.AccountIdentity>> GetCredentialVolumeAuthStatusAsync(
