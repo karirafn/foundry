@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 
 using Docker.DotNet;
@@ -644,6 +645,12 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
         catch (DockerContainerNotFoundException)
         {
             // Already removed.
+        }
+        catch (DockerApiException ex)
+            when (ex.StatusCode == HttpStatusCode.Conflict
+                  && ex.ResponseBody.Contains("already in progress", StringComparison.OrdinalIgnoreCase))
+        {
+            // The production login container is AutoRemove: once the CLI exits, Docker is already removing it.
         }
     }
 }
