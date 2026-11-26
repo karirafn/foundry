@@ -1,4 +1,4 @@
-import { beforeEach, vi } from 'vitest';
+import { beforeEach } from 'vitest';
 import {
   ConsoleMethodUsage,
   GUARDED_CONSOLE_METHODS,
@@ -6,10 +6,11 @@ import {
   undeclaredConsoleOutput,
 } from './testing/console-guard';
 
-// Each test starts on the recorders, below any spy it creates, so a test that replaces the
-// method's implementation never reaches them, one that only spies still does, and a spy an
-// earlier test left behind does not silence a later one.
-const recorded: Record<GuardedConsoleMethod, unknown[][]> = { error: [], warn: [] };
+// Each test starts on the recorders, below any spy it creates, so a stub that replaces the
+// method's implementation takes its calls before they reach them, a call made before the stub or
+// past a mockImplementationOnce still does, and a spy an earlier test left behind does not
+// silence a later one.
+const recorded: Record<GuardedConsoleMethod, unknown[][]> = { error: [], warn: [], log: [], info: [], debug: [] };
 const recorders = {} as Record<GuardedConsoleMethod, (...args: unknown[]) => void>;
 
 for (const method of GUARDED_CONSOLE_METHODS) {
@@ -20,11 +21,6 @@ for (const method of GUARDED_CONSOLE_METHODS) {
   };
   recorders[method] = recorder;
   console[method] = recorder;
-}
-
-function isReplaced(method: GuardedConsoleMethod): boolean {
-  const current = console[method];
-  return current !== recorders[method] && vi.isMockFunction(current) && current.getMockImplementation() !== undefined;
 }
 
 // Checked once every hook has run: a failing afterEach would skip the hooks after it, such as
@@ -38,7 +34,6 @@ beforeEach(({ onTestFinished }) => {
     const usages: ConsoleMethodUsage[] = GUARDED_CONSOLE_METHODS.map((method) => ({
       method,
       calls: recorded[method],
-      replaced: isReplaced(method),
     }));
     const failure = undeclaredConsoleOutput(usages);
     if (failure !== null) {
