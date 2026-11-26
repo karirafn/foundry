@@ -20,7 +20,8 @@ dotnet run --project src/Foundry.AppHost
 dotnet test --project tests/Foundry.UnitTests --filter-class "*ExampleTests"
 
 # Frontend — npm ci installs from the lockfile without rewriting it; reach for
-# npm install <pkg> only to add or change a dependency.
+# npm install <pkg> only to add or change a dependency. Use the npm version
+# pinned in package.json `packageManager` (CI installs it), so lockfile writes match.
 cd src/foundry-web
 npm ci
 npx ng serve
