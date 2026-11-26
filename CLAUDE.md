@@ -19,9 +19,10 @@ dotnet run --project src/Foundry.AppHost
 # Run single test
 dotnet test --project tests/Foundry.UnitTests --filter-class "*ExampleTests"
 
-# Frontend
+# Frontend — npm ci installs from the lockfile without rewriting it; reach for
+# npm install <pkg> only to add or change a dependency.
 cd src/foundry-web
-npm install
+npm ci
 npx ng serve
 
 # Frontend layout specs (*.layout.spec.ts) run in headless Chromium, not jsdom.
