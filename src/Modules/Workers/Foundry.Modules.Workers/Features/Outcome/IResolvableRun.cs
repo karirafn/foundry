@@ -15,6 +15,9 @@ internal interface IResolvableRun
 
     WorkerRole Role { get; }
 
+    /// <summary>The Implement Demand an implement run was dispatched with; <see langword="null"/> for any other run, or one recorded before runs kept it.</summary>
+    ImplementDemand? Demand { get; }
+
     BranchName? BranchName { get; }
 
     MonitoredRepositoryId MonitoredRepositoryId { get; }

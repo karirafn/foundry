@@ -86,13 +86,15 @@ internal sealed class IssueClaimedHandler(
         WorkerRole role = DispatchRoleMapping.ToWorkerRole(claimed.Context.Role);
         WorkerRoleCatalog? catalog = roleCatalog.Current;
         string image = catalog?.Image.Reference ?? await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+        RunModel runModel = await GetRunModelAsync(role, claimed.Demand, cancellationToken);
 
         StartingRun startingRun = StartingRun.Begin(
             claimed.IssueId,
             claimed.WorkerRunId,
             role,
             image,
-            refusesNeedsInput: claimed.Context.ContinuedWithoutAnswer);
+            refusesNeedsInput: claimed.Context.ContinuedWithoutAnswer,
+            runModel: runModel);
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -256,6 +258,7 @@ internal sealed class IssueClaimedHandler(
             issueContent,
             trackerContext,
             reviewPrompt,
+            runModel,
             cancellationToken);
 
         if (specResult is not Result<WorkerContainerSpec>.Success { Value: { } spec })
@@ -386,11 +389,11 @@ internal sealed class IssueClaimedHandler(
     }
 
     /// <summary>
-    /// The run's model and effort (ADR 0095): an implement run's from the Tier Model of the claim's demand, a claim with
-    /// no demand reading as demanding; any other role's model from its role setting, with no effort. Empty when never set,
-    /// so the CLI's account default applies.
+    /// The run's demand, model and effort (ADR 0095): an implement run's effective demand, a claim with no demand
+    /// reading as demanding, with the Tier Model of that demand; any other role's model from its role setting, with no
+    /// demand or effort. Model and effort are empty when never set, so the CLI's account default applies.
     /// </summary>
-    private async Task<(string Model, string Effort)> GetRunModelAsync(
+    private async Task<RunModel> GetRunModelAsync(
         WorkerRole role,
         ImplementDemand? demand,
         CancellationToken cancellationToken)
@@ -402,14 +405,14 @@ internal sealed class IssueClaimedHandler(
                 .AsNoTracking()
                 .FirstOrDefaultAsync(candidate => candidate.Demand == effectiveDemand, cancellationToken);
 
-            return (tier?.Model ?? string.Empty, tier?.Effort ?? string.Empty);
+            return new RunModel(effectiveDemand, tier?.Model ?? string.Empty, tier?.Effort ?? string.Empty);
         }
 
         WorkerRoleSettings? settings = await dbContext.Set<WorkerRoleSettings>()
             .AsNoTracking()
             .FirstOrDefaultAsync(candidate => candidate.Role == role, cancellationToken);
 
-        return (settings?.Model ?? string.Empty, string.Empty);
+        return new RunModel(demand: null, settings?.Model ?? string.Empty, string.Empty);
     }
 
     // Logs are read at dispatch rather than stored with the trigger, so log text never reaches the database. A log
@@ -529,6 +532,7 @@ internal sealed class IssueClaimedHandler(
         IssueContent issueContent,
         TrackerContext trackerContext,
         ReviewPromptInput? reviewPrompt,
+        RunModel runModel,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -542,7 +546,6 @@ internal sealed class IssueClaimedHandler(
         Toolchain toolchain = await dbContext.GetRecordedToolchainAsync(catalog.Image.ImageId, cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
-        (string model, string effort) = await GetRunModelAsync(role.Role, claimed.Demand, cancellationToken);
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
         IReadOnlyList<FailingJobLog> failingJobLogs = await ReadFailingJobLogsAsync(claimed, cancellationToken);
 
@@ -614,7 +617,7 @@ internal sealed class IssueClaimedHandler(
             ["WORKER_PROMPT"] = workerPrompt,
             ["WORKER_ROLE"] = role.Role.Name,
             ["WORKER_CAPABILITY"] = role.Capability.ToName(),
-            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model, effort),
+            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, runModel.Model, runModel.Effort),
         };
 
         if (nestedDocker)

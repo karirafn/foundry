@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -280,7 +281,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<IGlobalSettingsQueries>(_ => settingsQueries);
         services.AddScoped<IDispatchPauseQueries>(_ => settingsQueries);
         services.AddScoped<IPostExitProviderQueries, NullPostExitProviderQueries>();
-        services.AddSingleton<IContainerOutputParser>(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
+        services.AddSingleton<IContainerOutputParser>(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()));
         services.AddScoped<WorkerOutcomeResolver>(sp => new WorkerOutcomeResolver(
             sp.GetRequiredService<IPostExitProviderQueries>(),
             sp.GetRequiredService<IContainerOutputParser>(),
@@ -415,6 +416,8 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 
     private sealed class AlwaysCanDispatchCredentialGate : ICredentialGate

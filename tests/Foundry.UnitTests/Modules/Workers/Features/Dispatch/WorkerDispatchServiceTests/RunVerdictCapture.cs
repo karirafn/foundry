@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
@@ -147,7 +148,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
 
         return BuildService(
             new ExitedWorkerOrchestrator(exitedStatus, log),
-            containerOutputParser: new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
+            containerOutputParser: new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()),
             postExitProviderQueries: queries);
     }
 

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
+using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared.Infrastructure.Docker;
@@ -12,7 +13,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Workers.Features.Outcome;
 
-internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParser> logger) : IContainerOutputParser
+internal sealed partial class ContainerOutputParser(
+    ILogger<ContainerOutputParser> logger,
+    IPlanUsageWindowReader planUsageWindowReader) : IContainerOutputParser
 {
     private const int MaxLogLength = 65_536;    // 64 KB
     // stream-json's result event carries today's json keys plus model_usage_since_last_result,
@@ -157,6 +160,27 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     }
 
     public Toolchain? ParseToolchain(string? fullLog) => ToolchainLineParser.Parse(fullLog);
+
+    public RunPlanUsage? ParsePlanUsage(string? fullLog)
+    {
+        if (string.IsNullOrWhiteSpace(fullLog))
+        {
+            return null;
+        }
+
+        IEnumerable<string> jsonLines = fullLog
+            .Split('\n')
+            .Select(line => StripDockerTimestampAndExtractJson(line.AsSpan().Trim()))
+            .OfType<string>();
+
+        PlanUsageWindows windows = planUsageWindowReader.Read(jsonLines);
+
+        return windows is { First: { } first, Last: { } last }
+            ? new RunPlanUsage(ToPlanUsage(first), ToPlanUsage(last))
+            : null;
+    }
+
+    private static PlanUsage ToPlanUsage(PlanUsageMeters meters) => new(meters.FiveHour, meters.SevenDay);
 
     private const int MaxLoggedResultTextLength = 200;
 

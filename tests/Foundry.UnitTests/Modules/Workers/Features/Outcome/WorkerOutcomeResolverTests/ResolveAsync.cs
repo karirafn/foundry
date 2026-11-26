@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -897,7 +898,7 @@ public sealed partial class ResolveAsync
     // -------------------------------------------------------------------------
 
     private static WorkerOutcomeResolver BuildResolverWithRealParser(IPostExitProviderQueries providerQueries)
-        => BuildResolver(providerQueries, new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
+        => BuildResolver(providerQueries, new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()));
 
     private static IPostExitProviderQueries NoMrQueries(bool hasCommits)
         => new ScriptedProviderQueries(
@@ -1596,6 +1597,8 @@ public sealed partial class ResolveAsync
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 
     private sealed class UsageLimitedParser(DateTimeOffset resetsAt) : IContainerOutputParser
@@ -1608,6 +1611,8 @@ public sealed partial class ResolveAsync
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 
     private sealed class NoResultLineParser : IContainerOutputParser
@@ -1620,6 +1625,8 @@ public sealed partial class ResolveAsync
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 
     private sealed class TransientApiErrorParser : IContainerOutputParser
@@ -1632,6 +1639,8 @@ public sealed partial class ResolveAsync
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 
     private sealed class CreditsExhaustedParser : IContainerOutputParser
@@ -1644,5 +1653,7 @@ public sealed partial class ResolveAsync
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 }

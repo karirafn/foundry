@@ -37,7 +37,8 @@ public sealed class StartingRun : WorkerRun
         WorkerRunId workerRunId,
         WorkerRole? role = null,
         string? image = null,
-        bool refusesNeedsInput = false)
+        bool refusesNeedsInput = false,
+        RunModel? runModel = null)
     {
         RunSourceToken sourceToken = RunSourceToken.Mint();
         StartingRun starting = new(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image)
@@ -45,6 +46,10 @@ public sealed class StartingRun : WorkerRun
             SourceToken = sourceToken,
         };
         starting.StoreSourceTokenHash(sourceToken.Hash);
+        if (runModel is not null)
+        {
+            starting.StoreRunModel(runModel);
+        }
         if (refusesNeedsInput)
         {
             starting.RefuseNeedsInput();

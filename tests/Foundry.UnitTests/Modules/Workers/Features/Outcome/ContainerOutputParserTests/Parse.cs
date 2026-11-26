@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Testing;
 
@@ -14,12 +15,11 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.ContainerOutputPars
 
 public sealed class Parse
 {
-    private readonly IContainerOutputParser _sut = new ContainerOutputParser(
-        NullLogger<ContainerOutputParser>.Instance);
+    private readonly IContainerOutputParser _sut = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
 
     private static ContainerOutputParser BuildParserWithCapture(CapturingLogger logger)
     {
-        return new ContainerOutputParser(new CapturingLoggerAdapter(logger));
+        return new ContainerOutputParser(new CapturingLoggerAdapter(logger), new PlanUsageWindowReader());
     }
 
     private sealed class CapturingLoggerAdapter(CapturingLogger inner) : ILogger<ContainerOutputParser>

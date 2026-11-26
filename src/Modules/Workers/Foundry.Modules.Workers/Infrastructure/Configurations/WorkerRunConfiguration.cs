@@ -202,6 +202,32 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasColumnType("TEXT")
             .HasColumnName("toolchain");
 
+        builder.Property(r => r.Demand)
+            .HasConversion(ImplementTierSettingsConfiguration.DemandConverter)
+            .HasMaxLength(ImplementTierSettingsConfiguration.DemandMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("demand");
+
+        builder.Property(r => r.Model)
+            .HasMaxLength(WorkerRoleSettings.MaxModelLength)
+            .IsUnicode(false)
+            .HasColumnName("model");
+
+        builder.Property(r => r.Effort)
+            .HasMaxLength(ImplementTierSettingsConfiguration.EffortMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("effort");
+
+        builder.Property(r => r.PlanUsageAtStart)
+            .HasConversion(PlanUsageValueConverters.OptionalConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("plan_usage_at_start");
+
+        builder.Property(r => r.PlanUsageAtEnd)
+            .HasConversion(PlanUsageValueConverters.OptionalConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("plan_usage_at_end");
+
         builder.Ignore(r => r.Verdict);
 
         builder.Property(r => r.RefusesNeedsInput)

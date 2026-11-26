@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 
@@ -14,8 +15,7 @@ public sealed class ParseToolchain
     private const string ToolchainLine =
         """2026-11-16T10:00:01.000000000Z FOUNDRY_TOOLCHAIN [{"name":"node","version":"22.22.3"},{"name":"git","version":"2.47.3"}]""";
 
-    private readonly IContainerOutputParser _sut = new ContainerOutputParser(
-        NullLogger<ContainerOutputParser>.Instance);
+    private readonly IContainerOutputParser _sut = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
 
     [Fact]
     public void WhenTheLogHoldsOneToolchainLine_ReturnsItsEntriesInOrder()

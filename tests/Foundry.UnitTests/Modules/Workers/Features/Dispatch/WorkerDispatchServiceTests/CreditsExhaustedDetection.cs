@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -32,7 +33,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
     {
-        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance);
+        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, containerLogs);
 
         return base.BuildService(
@@ -123,7 +124,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
 
-        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance);
+        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, Credits429OnlyOutput);
 
         DispatchAndPublishTicker sut = base.BuildService(

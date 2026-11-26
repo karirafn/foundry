@@ -501,8 +501,8 @@ internal sealed class WorkerRunMonitor(
 
     /// <summary>
     /// Reads the container's full log before the applier removes the container: records on the run the toolchain the
-    /// container reported at startup (ADR 0109), and renders the log as the run's Run Transcript. Best-effort: a failed
-    /// fetch or render yields no transcript and leaves the outcome as is.
+    /// container reported at startup (ADR 0109) and the plan usage its output reported, and renders the log as the run's
+    /// Run Transcript. Best-effort: a failed fetch or render yields no transcript and leaves the outcome as is.
     /// </summary>
     private async Task<WorkerRunTranscript?> TryCaptureFullLogAsync(
         ActiveRun activeRun,
@@ -518,6 +518,7 @@ internal sealed class WorkerRunMonitor(
             }
 
             activeRun.RecordToolchain(containerOutputParser.ParseToolchain(fullLog));
+            activeRun.RecordPlanUsage(containerOutputParser.ParsePlanUsage(fullLog));
 
             string rendered = AgentTranscriptFormatter.FormatLog(fullLog);
 

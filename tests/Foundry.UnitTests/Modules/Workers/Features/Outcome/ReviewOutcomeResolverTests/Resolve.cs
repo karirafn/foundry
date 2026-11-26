@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -34,7 +35,7 @@ public sealed class Resolve
 
     private static ReviewOutcomeResolver CreateSut(IWorkerRoleCatalogStore? store = null) =>
         new(
-            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
+            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()),
             store ?? StubWorkerRoleCatalogStore.With(principles: Principles));
 
     private static ActiveRun CreateReviewRun(bool withFacts = true)

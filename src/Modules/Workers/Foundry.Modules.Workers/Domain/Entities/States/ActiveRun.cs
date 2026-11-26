@@ -84,6 +84,12 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
         StoreToolchain(toolchain);
     }
 
+    /// <summary>Keeps the plan usage the run's output reported at its start and end; every later state carries it.</summary>
+    public void RecordPlanUsage(RunPlanUsage? planUsage)
+    {
+        StorePlanUsage(planUsage);
+    }
+
     internal static ActiveRun FromStarting(
         StartingRun starting,
         ContainerId containerId,

@@ -1078,6 +1078,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Demand")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("demand");
+
                     b.Property<string>("DivergedSideBranch")
                         .HasMaxLength(500)
                         .IsUnicode(false)
@@ -1089,6 +1095,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("divergence_reason");
+
+                    b.Property<string>("Effort")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effort");
 
                     b.Property<DateTimeOffset?>("FalsePositivesConfirmedAt")
                         .HasColumnType("TEXT")
@@ -1111,6 +1123,20 @@ namespace Foundry.WebApi.Migrations
                     b.Property<Guid>("IssueId")
                         .HasColumnType("TEXT")
                         .HasColumnName("issue_id");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model");
+
+                    b.Property<string>("PlanUsageAtEnd")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("plan_usage_at_end");
+
+                    b.Property<string>("PlanUsageAtStart")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("plan_usage_at_start");
 
                     b.Property<Guid?>("PreparedRepositoryId")
                         .HasColumnType("TEXT")

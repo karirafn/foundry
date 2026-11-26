@@ -2,6 +2,7 @@ using Docker.DotNet;
 
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
@@ -212,6 +213,9 @@ public sealed class AddWorkersModule
         // Arrange
         ServiceCollection services = new();
         services.AddLogging();
+
+        // The Credentials module provides the plan usage reader the parser reads windows with.
+        services.AddSingleton<IPlanUsageWindowReader, PlanUsageWindowReader>();
 
         // Act
         services.AddWorkersModule();
