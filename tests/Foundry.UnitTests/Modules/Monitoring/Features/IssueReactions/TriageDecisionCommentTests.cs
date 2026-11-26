@@ -25,7 +25,7 @@ public sealed class TriageDecisionCommentTests
         ];
 
         // Act
-        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued);
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued, ImplementDemand.Demanding, null);
 
         // Assert
         comment.ShouldBe(string.Join(
@@ -33,6 +33,7 @@ public sealed class TriageDecisionCommentTests
             "Triage decided these details and queued the issue:",
             "- `Which retry cap?`: `Three attempts.` (Settled by existing behaviour)",
             "- `Which log level?`: `Warning.` (Implementation detail)",
+            "Implementation tier: **demanding**",
             "Use **Re-triage** to revisit them before work starts."));
     }
 
@@ -43,7 +44,7 @@ public sealed class TriageDecisionCommentTests
         List<TriageDecision> decisions = [TriageDecisionBuilder.Build()];
 
         // Act
-        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.WaitingOnBlockers);
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.WaitingOnBlockers, ImplementDemand.Demanding, null);
 
         // Assert
         comment.Split('\n')[0].ShouldBe("Triage decided these details; the issue waits on its open blockers before it is queued:");
@@ -59,7 +60,7 @@ public sealed class TriageDecisionCommentTests
         ];
 
         // Act
-        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued);
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued, ImplementDemand.Demanding, null);
 
         // Assert
         comment.Split('\n')[1].ShouldBe("- ``Who owns `x`?``: `@team owns it. # Heading | a | b |` (Settled by existing behaviour)");
@@ -73,7 +74,7 @@ public sealed class TriageDecisionCommentTests
         List<TriageDecision> decisions = [.. Enumerable.Range(1, 20).Select(_ => TriageDecisionBuilder.Build(decision: longDecision))];
 
         // Act
-        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued);
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued, ImplementDemand.Demanding, null);
 
         // Assert
         comment.ShouldSatisfyAllConditions(
@@ -93,7 +94,7 @@ public sealed class TriageDecisionCommentTests
         ];
 
         // Act
-        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued);
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued, ImplementDemand.Demanding, "Touches the outbox.");
 
         // Assert
         comment.ShouldSatisfyAllConditions(
@@ -101,6 +102,66 @@ public sealed class TriageDecisionCommentTests
             () => comment.ShouldContain(ShortenedNote),
             () => comment.ShouldContain("…"),
             () => decisions.ShouldAllBe(decision => comment.Contains($"`{decision.Question}`")),
+            () => comment.Split('\n')[^2].ShouldBe("Implementation tier: **demanding** — `Touches the outbox.`"),
             () => comment.Split('\n')[^1].ShouldBe("Use **Re-triage** to revisit them before work starts."));
+    }
+
+    [Fact]
+    public void Compose_WhenRoutineWithAReason_StatesTheTierAndTheReasonBeforeTheClosingLine()
+    {
+        // Arrange
+        List<TriageDecision> decisions = [TriageDecisionBuilder.Build()];
+
+        // Act
+        string comment = TriageDecisionComment.Compose(
+            decisions, TriageRelease.WaitingOnBlockers, ImplementDemand.Routine, "Copies the existing slice.");
+
+        // Assert
+        comment.Split('\n')[^2].ShouldBe("Implementation tier: **routine** — `Copies the existing slice.`");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Compose_WhenTheReasonIsMissing_StatesTheTierWithoutADash(string? reason)
+    {
+        // Arrange
+        List<TriageDecision> decisions = [TriageDecisionBuilder.Build()];
+
+        // Act
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued, ImplementDemand.Routine, reason);
+
+        // Assert
+        comment.Split('\n')[^2].ShouldBe("Implementation tier: **routine**");
+    }
+
+    [Theory]
+    [InlineData("none")]
+    [InlineData(" None ")]
+    public void Compose_WhenTheReasonIsNone_SaysNoDemandingTrigger(string reason)
+    {
+        // Arrange
+        List<TriageDecision> decisions = [TriageDecisionBuilder.Build()];
+
+        // Act
+        string comment = TriageDecisionComment.Compose(decisions, TriageRelease.Queued, ImplementDemand.Demanding, reason);
+
+        // Assert
+        comment.Split('\n')[^2].ShouldBe("Implementation tier: **demanding** — no demanding trigger");
+    }
+
+    [Fact]
+    public void Compose_RendersTheReasonAsLiteralTextOnOneLine()
+    {
+        // Arrange
+        List<TriageDecision> decisions = [TriageDecisionBuilder.Build()];
+
+        // Act
+        string comment = TriageDecisionComment.Compose(
+            decisions, TriageRelease.Queued, ImplementDemand.Demanding, "Edits `auth`\n# Heading");
+
+        // Assert
+        comment.Split('\n')[^2].ShouldBe("Implementation tier: **demanding** — ``Edits `auth` # Heading``");
     }
 }

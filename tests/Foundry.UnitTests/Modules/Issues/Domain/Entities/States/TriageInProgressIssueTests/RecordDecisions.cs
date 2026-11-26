@@ -106,6 +106,25 @@ public sealed class RecordDecisions
     }
 
     [Fact]
+    public void WhenAReadyVerdictWithDecisionsCarriesADemand_RaisesTheDecisionsWithTheDemandAndItsReason()
+    {
+        // Arrange
+        TriageInProgressIssue triaging = new IssueBuilder().TriageInProgress();
+
+        // Act
+        triaging.MarkReady(
+            new TriageVerdict.Ready(IssueKind.Feature, DecidedAt, ImplementDemand.Routine, "Copies a sibling slice."),
+            [TriageDecisionBuilder.Build()],
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        TriageDetailsDecided decided = triaging.DomainEvents.OfType<TriageDetailsDecided>().ShouldHaveSingleItem();
+        decided.ShouldSatisfyAllConditions(
+            () => decided.Demand.ShouldBe(ImplementDemand.Routine),
+            () => decided.DemandReason.ShouldBe("Copies a sibling slice."));
+    }
+
+    [Fact]
     public void WhenAReadyVerdictWithDecisionsMeetsOpenBlockers_RaisesTheDecisionsAsWaitingOnBlockers()
     {
         // Arrange

@@ -11,4 +11,6 @@ public sealed record TriageDetailsDecided(
     MonitoredRepositoryId MonitoredRepositoryId,
     int IssueNumber,
     IReadOnlyList<TriageDecision> Decisions,
-    TriageRelease Release) : IDomainEvent;
+    TriageRelease Release,
+    ImplementDemand Demand,
+    string? DemandReason) : IDomainEvent;

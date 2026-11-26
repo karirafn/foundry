@@ -23,7 +23,7 @@ internal sealed class TriageDecisionsRecordedHandler(
         Result commented = await writer.PostIssueCommentAsync(
             @event.MonitoredRepositoryId,
             @event.IssueNumber,
-            TriageDecisionComment.Compose(@event.Decisions, @event.Release),
+            TriageDecisionComment.Compose(@event.Decisions, @event.Release, @event.Demand, @event.DemandReason),
             cancellationToken);
 
         if (commented is not Result.Failure failure)
