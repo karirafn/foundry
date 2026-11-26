@@ -169,6 +169,11 @@ class CalloutSource {
     return this.summary?.rebaseSkippedReason ?? this.details?.rebaseSkippedReason ?? null;
   }
 
+  get rebaseFellBehind(): boolean {
+    return (this.summary?.rebaseOutcome ?? this.details?.rebaseOutcome) === 'skipped'
+      && this.rebaseSkippedReason === 'fell-behind';
+  }
+
   prLink(): CalloutLink | null {
     if (this.pullRequestUrl === null) {
       return null;
@@ -477,6 +482,42 @@ function catchUpRoundText(src: CalloutSource): string | null {
   return limit === null ? `round ${round}` : `round ${round} of ${limit}`;
 }
 
+// A rebase_pending pass with every round spent only reads whether the branch fell behind (ADR 0128).
+function beforeReadyCheckOnly(src: CalloutSource): boolean {
+  const spent = src.details?.beforeReadyRounds ?? null;
+  const limit = src.details?.beforeReadyRoundLimit ?? null;
+  return src.state === 'rebase_pending' && spent !== null && limit !== null && spent >= limit;
+}
+
+// BeforeReadyRounds counts rounds already spent: a rebase_pending pass is on the next round, and a checks_pending
+// pass follows a Rebased that already counted. Null for the check-only pass or when unset.
+function beforeReadyRoundText(src: CalloutSource): string | null {
+  const spent = src.details?.beforeReadyRounds ?? null;
+  if (spent === null || beforeReadyCheckOnly(src)) {
+    return null;
+  }
+  const limit = src.details?.beforeReadyRoundLimit ?? null;
+  const round = src.state === 'rebase_pending' ? spent + 1 : spent;
+  return limit === null ? `round ${round}` : `round ${round} of ${limit}`;
+}
+
+function withRoundText(title: string, roundText: string | null): string {
+  return roundText === null ? title : `${title} (${roundText})`;
+}
+
+function beforeReadyRebaseCallout(src: CalloutSource): Draft {
+  const pr = src.pullRequest;
+  if (beforeReadyCheckOnly(src)) {
+    return withPrLink(src, draft('working', 'Checking the branch is up to date', [
+      `Foundry used all its rebase rounds, so it only checks whether the ${pr} fell behind before marking it ready.`,
+    ]));
+  }
+  return withPrLink(src, draft('working', withRoundText('Rebasing before review', beforeReadyRoundText(src)), [
+    `Checks and review passed. Foundry is bringing the ${pr} up to date with the default branch before marking it ready.`,
+    'If it rebases, checks run again before it reaches you.',
+  ]));
+}
+
 function catchUpTitle(src: CalloutSource): string {
   const text = catchUpRoundText(src);
   return text === null ? 'Catching up' : `Catching up (${text})`;
@@ -491,8 +532,11 @@ function withPrLink(src: CalloutSource, d: Draft): Draft {
 }
 
 function rebasePendingCallout(src: CalloutSource): Draft {
-  // Only catch_up carries its own copy; after_run, a missing field and a reason a newer backend adds keep the
-  // default, which has no link.
+  // catch_up and before_ready carry their own copy; after_run, a missing field and a reason a newer backend adds
+  // keep the default, which has no link.
+  if (src.details?.rebasePendingReason === 'before_ready') {
+    return beforeReadyRebaseCallout(src);
+  }
   if (src.details?.rebasePendingReason !== 'catch_up') {
     return draft('working', 'Rebasing', ['Foundry is rebasing the branch onto the default branch.']);
   }
@@ -532,8 +576,8 @@ function mergePendingCallout(src: CalloutSource): Draft {
 }
 
 function checksPendingCallout(src: CalloutSource): Draft {
-  // head_moved, checks_rerun and catch_up carry their own copy; after_run, a missing field and a reason a newer
-  // backend adds keep the default.
+  // head_moved, checks_rerun, catch_up and before_ready carry their own copy; after_run, a missing field and a reason
+  // a newer backend adds keep the default.
   let d: Draft;
   switch (src.details?.checksPendingReason) {
     case 'head_moved':
@@ -551,6 +595,12 @@ function checksPendingCallout(src: CalloutSource): Draft {
       d = draft('working', catchUpTitle(src), [
         `Foundry rebased the ${src.pullRequest} onto the default branch after it fell behind.`,
         'Waiting for CI checks on the rebased commits before merging.',
+      ]);
+      break;
+    case 'before_ready':
+      d = draft('working', withRoundText('Checks re-running before review', beforeReadyRoundText(src)), [
+        `Foundry rebased the ${src.pullRequest} onto the default branch before marking it ready.`,
+        'Waiting for CI checks on the rebased commits.',
       ]);
       break;
     default:
@@ -645,6 +695,11 @@ function reviewCallout(src: CalloutSource): Draft {
     d = draft('warning', 'Merge skipped', [
       mergeSkippedLine(src),
       'Foundry addresses review comments in a revision run.',
+    ]);
+  } else if (src.rebaseFellBehind) {
+    d = draft('warning', `${src.prAbbrev} ready, but behind`, [
+      `Foundry used all its rebase rounds and the ${src.pullRequest} fell behind the default branch again.`,
+      `Rebase it on ${src.providerName} before merging. Foundry addresses review comments in a revision run.`,
     ]);
   } else {
     d = draft('success', `${src.prAbbrev} ready for review`, [

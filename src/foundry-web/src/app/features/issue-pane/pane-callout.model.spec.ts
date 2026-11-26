@@ -1226,6 +1226,244 @@ describe('buildCallout', () => {
     });
   });
 
+  describe('before-ready rebase', () => {
+    const PR_URL = 'https://github.com/acme/api/pull/7';
+    const PR_LINK = { label: 'View PR', href: PR_URL, ariaLabel: 'View pull request for issue #42' };
+
+    function beforeReady(
+      state: IssueDetail['state'],
+      details: Partial<IssueStateDetails>,
+      providerType = 'github',
+      pullRequestUrl: string | null = PR_URL,
+    ) {
+      return buildCallout(detail(state, details), null, summary({ state, providerType, pullRequestUrl }), null);
+    }
+
+    describe('rebase_pending', () => {
+      it.each([
+        [0, 'Rebasing before review (round 1 of 3)'],
+        [2, 'Rebasing before review (round 3 of 3)'],
+      ])('titles a before-ready rebase with %s rounds spent as "%s"', (spent, title) => {
+        // Act
+        const callout = beforeReady('rebase_pending', {
+          rebasePendingReason: 'before_ready',
+          beforeReadyRounds: spent,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.title).toBe(title);
+      });
+
+      it('explains a before-ready rebase, linking the pull request', () => {
+        // Act
+        const callout = beforeReady('rebase_pending', {
+          rebasePendingReason: 'before_ready',
+          beforeReadyRounds: 0,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.lines).toEqual([
+          'Checks and review passed. Foundry is bringing the pull request up to date with the default branch before '
+            + 'marking it ready.',
+          'If it rebases, checks run again before it reaches you.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+        expect(callout.chip).toBeNull();
+        expect(callout.rows).toEqual([]);
+      });
+
+      it('shows the round without a limit when the limit is missing', () => {
+        // Act
+        const callout = beforeReady('rebase_pending', {
+          rebasePendingReason: 'before_ready',
+          beforeReadyRounds: 1,
+          beforeReadyRoundLimit: null,
+        });
+
+        // Assert
+        expect(callout.title).toBe('Rebasing before review (round 2)');
+      });
+
+      it('drops the round when the spent rounds are missing', () => {
+        // Act
+        const callout = beforeReady('rebase_pending', {
+          rebasePendingReason: 'before_ready',
+          beforeReadyRounds: null,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.title).toBe('Rebasing before review');
+      });
+
+      it('explains the check-only pass once every round is spent', () => {
+        // Act
+        const callout = beforeReady('rebase_pending', {
+          rebasePendingReason: 'before_ready',
+          beforeReadyRounds: 3,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.title).toBe('Checking the branch is up to date');
+        expect(callout.lines).toEqual([
+          'Foundry used all its rebase rounds, so it only checks whether the pull request fell behind before marking '
+            + 'it ready.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+      });
+
+      it('carries no catch-up copy', () => {
+        // Act
+        const callout = beforeReady('rebase_pending', {
+          rebasePendingReason: 'before_ready',
+          beforeReadyRounds: 0,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.title).not.toContain('Catching up');
+        expect(callout.lines.join(' ')).not.toContain('catch');
+      });
+    });
+
+    describe('checks_pending', () => {
+      it.each([
+        [1, 'Checks re-running before review (round 1 of 3)'],
+        [3, 'Checks re-running before review (round 3 of 3)'],
+      ])('titles checks after a before-ready rebase with %s rounds spent as "%s"', (spent, title) => {
+        // Act
+        const callout = beforeReady('checks_pending', {
+          checksPendingReason: 'before_ready',
+          beforeReadyRounds: spent,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.title).toBe(title);
+      });
+
+      it('explains checks on the rebased commits, linking the pull request', () => {
+        // Act
+        const callout = beforeReady('checks_pending', {
+          checksPendingReason: 'before_ready',
+          beforeReadyRounds: 1,
+          beforeReadyRoundLimit: 3,
+        });
+
+        // Assert
+        expect(callout.tone).toBe('working');
+        expect(callout.lines).toEqual([
+          'Foundry rebased the pull request onto the default branch before marking it ready.',
+          'Waiting for CI checks on the rebased commits.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+      });
+
+      it('shows the round without a limit on GitLab in merge-request terms', () => {
+        // Act
+        const callout = beforeReady(
+          'checks_pending',
+          { checksPendingReason: 'before_ready', beforeReadyRounds: 2, beforeReadyRoundLimit: null },
+          'gitlab',
+          null,
+        );
+
+        // Assert
+        expect(callout.title).toBe('Checks re-running before review (round 2)');
+        expect(callout.lines[0]).toBe('Foundry rebased the merge request onto the default branch before marking it ready.');
+        expect(callout.links).toEqual([]);
+      });
+
+      it('drops the round when the spent rounds are missing', () => {
+        // Act
+        const callout = beforeReady('checks_pending', { checksPendingReason: 'before_ready', beforeReadyRounds: null });
+
+        // Assert
+        expect(callout.title).toBe('Checks re-running before review');
+      });
+    });
+
+    describe('review, fell behind', () => {
+      function fellBehind(overrides: Partial<IssueSummary> = {}, providerType = 'github') {
+        return buildCallout(
+          detail('review', { rebaseOutcome: 'skipped', rebaseSkippedReason: 'fell-behind' }),
+          null,
+          summary({
+            state: 'review',
+            providerType,
+            pullRequestUrl: PR_URL,
+            rebaseOutcome: 'skipped',
+            rebaseSkippedReason: 'fell-behind',
+            ...overrides,
+          }),
+          null,
+        );
+      }
+
+      it('warns that the pull request is ready but behind', () => {
+        // Act
+        const callout = fellBehind();
+
+        // Assert
+        expect(callout.tone).toBe('warning');
+        expect(callout.title).toBe('PR ready, but behind');
+        expect(callout.lines).toEqual([
+          'Foundry used all its rebase rounds and the pull request fell behind the default branch again.',
+          'Rebase it on GitHub before merging. Foundry addresses review comments in a revision run.',
+        ]);
+        expect(callout.links).toEqual([PR_LINK]);
+      });
+
+      it('names a merge request on GitLab', () => {
+        // Act
+        const callout = fellBehind({}, 'gitlab');
+
+        // Assert
+        expect(callout.title).toBe('MR ready, but behind');
+        expect(callout.lines[1]).toBe(
+          'Rebase it on GitLab before merging. Foundry addresses review comments in a revision run.',
+        );
+      });
+
+      it('keeps the review skipped callout ahead of falling behind', () => {
+        // Act
+        const callout = fellBehind({ reviewOutcome: 'skipped' });
+
+        // Assert
+        expect(callout.title).toBe('Review skipped');
+      });
+
+      it('keeps the merge skipped callout ahead of falling behind', () => {
+        // Act
+        const callout = fellBehind({ mergeOutcome: 'skipped' });
+
+        // Assert
+        expect(callout.title).toBe('Merge skipped');
+      });
+
+      it('keeps the checks failing callout ahead of falling behind', () => {
+        // Act
+        const callout = fellBehind({ checksOutcome: 'still_failing' });
+
+        // Assert
+        expect(callout.tone).toBe('error');
+      });
+
+      it('shows a review whose rebase was skipped for another reason as ready for review', () => {
+        // Act
+        const callout = fellBehind({ rebaseSkippedReason: 'timeout' });
+
+        // Assert
+        expect(callout.title).toBe('PR ready for review');
+      });
+    });
+  });
+
   describe('catch-up queue (ADR 0111)', () => {
     const PR_URL = 'https://github.com/acme/api/pull/7';
     const PR_LINK = { label: 'View PR', href: PR_URL, ariaLabel: 'View pull request for issue #42' };

@@ -1972,6 +1972,25 @@ describe('IssueCardComponent', () => {
     expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
   });
 
+  it('should render a fell-behind rebase skip as "Rebase skipped: fell behind again"', () => {
+    // Arrange
+    const issue: IssueSummary = {
+      ...mockIssue,
+      state: 'review',
+      rebaseOutcome: 'skipped',
+      rebaseSkippedReason: 'fell-behind',
+    };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__rebase-badge');
+    expect(badge?.textContent?.trim()).toBe('Rebase skipped: fell behind again');
+    expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
+  });
+
   it('should show the raw skipped reason when it is unknown', () => {
     // Arrange
     const issue: IssueSummary = {

@@ -556,6 +556,7 @@ describe('buildFacts', () => {
   it.each([
     ['up_to_date', null, 'Up to date'],
     ['skipped', 'timeout', 'Skipped (timeout)'],
+    ['skipped', 'fell-behind', 'Skipped (fell behind again)'],
     ['conflict', null, 'Conflict'],
   ])('shows a Rebase row for %s (reason %s) as "%s"', (outcome, reason, expected) => {
     // Act
