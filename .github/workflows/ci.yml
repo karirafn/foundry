@@ -88,6 +88,14 @@ jobs:
           cache: npm
           cache-dependency-path: src/foundry-web/package-lock.json
 
+      - name: Install pinned npm
+        if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
+        # package.json packageManager is the single source of the npm version
+        run: |
+          npm install -g "$(node -p "require('./package.json').packageManager")"
+          npm --version
+        working-directory: src/foundry-web
+
       - name: Install dependencies
         if: github.event_name == 'push' || steps.changes.outputs.web == 'true'
         run: npm ci

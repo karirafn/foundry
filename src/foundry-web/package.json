@@ -10,7 +10,7 @@
     "generate:api": "openapi-typescript ../Foundry.WebApi/openapi/v1.json -o ./src/app/api/schema.ts"
   },
   "private": true,
-  "packageManager": "npm@10.4.0",
+  "packageManager": "npm@12.2.3",
   "dependencies": {
     "@angular/cdk": "^22.3.0",
     "@angular/common": "^22.3.0",
