@@ -397,7 +397,10 @@ public sealed class HandleAsync : IAsyncDisposable
                 Kind: new IssueKindDetails(IssueKindDetails.UnclassifiedSource, null, null),
                 Triage: null,
                 Clarifications: [],
-                RunKind: null);
+                RunKind: null,
+                ImplementDemand: null,
+                DemandReason: null,
+                DemandEscalated: false);
             return Task.FromResult(Result<IssueDetail>.Ok(detail));
         }
 

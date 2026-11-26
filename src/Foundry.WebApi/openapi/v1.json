@@ -4528,7 +4528,10 @@
           "kind",
           "triage",
           "clarifications",
-          "runKind"
+          "runKind",
+          "implementDemand",
+          "demandReason",
+          "demandEscalated"
         ],
         "type": "object",
         "properties": {
@@ -4603,6 +4606,25 @@
               "null",
               "string"
             ]
+          },
+          "implementDemand": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImplementDemand"
+              }
+            ]
+          },
+          "demandReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "demandEscalated": {
+            "type": "boolean"
           }
         }
       },

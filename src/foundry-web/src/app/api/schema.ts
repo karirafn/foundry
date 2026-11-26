@@ -1407,6 +1407,9 @@ export interface components {
             triage: null | components["schemas"]["TriageVerdictDetails"];
             clarifications: components["schemas"]["ClarificationDetails"][];
             runKind: null | string;
+            implementDemand: null | components["schemas"]["ImplementDemand"];
+            demandReason: null | string;
+            demandEscalated: boolean;
         };
         IssueKindDetails: {
             source: string;

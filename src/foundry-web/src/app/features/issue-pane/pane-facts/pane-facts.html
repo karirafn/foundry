@@ -48,6 +48,21 @@
               }
             </dd>
           }
+          @case ('demand') {
+            <dt>{{ f.key }}</dt>
+            <dd>
+              <span class="pane-facts__line">
+                <span class="badge pane-facts__chip" [class]="'pane-facts__chip--' + f.tone">{{ f.tier }}</span>
+                @if (f.escalated) {
+                  <span class="badge pane-facts__chip pane-facts__chip--neutral">Escalated</span>
+                  <span class="pane-facts__note">Raised by a review or CI finding</span>
+                }
+              </span>
+              @if (f.reason) {
+                <p class="pane-facts__reason pane-facts__note">Triage: {{ f.reason }}</p>
+              }
+            </dd>
+          }
           @case ('published') {
             <dt>{{ f.key }}</dt>
             <dd>

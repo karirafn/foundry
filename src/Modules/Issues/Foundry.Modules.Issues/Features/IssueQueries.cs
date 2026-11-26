@@ -732,7 +732,10 @@ internal sealed class IssueQueries(
             Kind: BuildKindDetails(issue),
             Triage: BuildTriageDetails(issue),
             Clarifications: BuildClarificationDetails(issue),
-            RunKind: RunKindName(issue.RunKind));
+            RunKind: RunKindName(issue.RunKind),
+            ImplementDemand: issue.TriageVerdict is TriageVerdict.Ready ? issue.ImplementDemand : null,
+            DemandReason: (issue.TriageVerdict as TriageVerdict.Ready)?.DemandReason,
+            DemandEscalated: issue.DemandEscalated);
     }
 
     /// <summary>

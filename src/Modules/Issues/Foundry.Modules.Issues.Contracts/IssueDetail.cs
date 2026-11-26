@@ -8,6 +8,9 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <summary>
 /// One issue in full. <paramref name="RunKind"/> is the kind of run the issue is queued for or running (an
 /// <see cref="IssueSummary"/> run kind), and <see langword="null"/> when none is; while a run publishes, it is that run's kind.
+/// <paramref name="ImplementDemand"/> and <paramref name="DemandReason"/> are <see langword="null"/> unless the issue holds a
+/// ready triage verdict, so no demand is shown that triage never judged; <paramref name="DemandReason"/> is also
+/// <see langword="null"/> for a ready verdict that predates the reason.
 /// </summary>
 public sealed record IssueDetail(
     Guid Id,
@@ -23,7 +26,10 @@ public sealed record IssueDetail(
     IssueKindDetails Kind,
     TriageVerdictDetails? Triage,
     IReadOnlyList<ClarificationDetails> Clarifications,
-    string? RunKind);
+    string? RunKind,
+    ImplementDemand? ImplementDemand,
+    string? DemandReason,
+    bool DemandEscalated);
 
 /// <summary>
 /// One round of the issue's clarification log (ADR 0096), oldest first in <see cref="IssueDetail.Clarifications"/>:

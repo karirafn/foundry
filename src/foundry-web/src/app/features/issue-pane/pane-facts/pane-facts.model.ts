@@ -80,6 +80,14 @@ export type PaneFact =
   /** `verdict` is null when the issue was queued without a readiness check. */
   | { readonly type: 'triage'; readonly key: 'Triage'; readonly verdict: TriageVerdictFact | null }
   | {
+      readonly type: 'demand';
+      readonly key: 'Demand';
+      readonly tier: 'Routine' | 'Demanding';
+      readonly tone: 'neutral' | 'warning';
+      readonly escalated: boolean;
+      readonly reason: string | null;
+    }
+  | {
       readonly type: 'published';
       readonly key: 'Published';
       readonly shortSha: string;
@@ -162,6 +170,36 @@ function triageFact(d: IssueDetail): PaneFact | null {
   return null;
 }
 
+// Triage writes `none` when no demanding trigger applies.
+const NO_TRIGGER_REASON = 'none';
+
+function demandReason(reason: string | null): string | null {
+  const trimmed = reason?.trim() ?? '';
+  if (trimmed === '') {
+    return null;
+  }
+  return trimmed.toLowerCase() === NO_TRIGGER_REASON ? 'No trigger made it demanding' : trimmed;
+}
+
+/**
+ * The Demand row: the tier the issue's implement runs use. Not hidden with the Triage row: the
+ * detail carries no demand until a ready verdict exists, and an escalated issue keeps its row.
+ */
+function demandFact(d: IssueDetail): PaneFact | null {
+  if (d.implementDemand === null) {
+    return null;
+  }
+  const demanding = d.implementDemand === 'demanding';
+  return {
+    type: 'demand',
+    key: 'Demand',
+    tier: demanding ? 'Demanding' : 'Routine',
+    tone: demanding ? 'warning' : 'neutral',
+    escalated: d.demandEscalated,
+    reason: demandReason(d.demandReason),
+  };
+}
+
 function commitsText(count: number): string {
   if (count === 0) {
     return 'No commits';
@@ -237,6 +275,7 @@ export function buildFacts(
   const rows: (PaneFact | null)[] = [
     detail.kind ? kindFact(detail.kind) : null,
     triageFact(detail),
+    demandFact(detail),
     text('Branch', s?.branchName, true),
     publish === null
       ? null

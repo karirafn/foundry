@@ -47,6 +47,9 @@ function issue(state: IssueDetail['state'], details: Partial<IssueStateDetails> 
     stateDetails: stateDetails(details),
     kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
     triage: null,
+    implementDemand: null,
+    demandReason: null,
+    demandEscalated: false,
     clarifications: [],
   };
 }
