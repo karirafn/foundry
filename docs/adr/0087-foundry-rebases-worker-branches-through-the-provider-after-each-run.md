@@ -34,3 +34,4 @@ Foundry, not the agent, rebases the worker branch onto the default branch after 
 ## Revisions
 - 2026-11-10 — A rebase conflict is resolved by rebasing, not by a merge commit, which left the pull request unmergeable on linear-history repositories; Foundry pushes the rewritten branch with a lease ([ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md))
 - 2026-11-14 — A pull request whose merge the provider refuses for being behind is rebased through a serialized catch-up queue ([ADR 0111](0111-foundry-serializes-catch-up-rebases-for-pull-requests-it-merges.md))
+- 2026-11-26 — A pull request a person could merge is rebased before it is marked ready, with three rounds before a check-only pass ([ADR 0128](0128-foundry-rebases-a-mergeable-pull-request-before-marking-it-ready.md))
