@@ -57,7 +57,7 @@ public sealed class WhenChecksPassed : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenChecksVerdictResolvedWithPassed_TransitionsIssueToReviewWithPassedOutcome()
+    public async Task WhenChecksVerdictResolvedWithPassed_PersistsABeforeReadyRebaseCarryingThePassedOutcome()
     {
         // Arrange
         ChecksPendingIssue checksPending = await SeedChecksPendingIssueAsync();
@@ -80,12 +80,15 @@ public sealed class WhenChecksPassed : IAsyncDisposable
         Issue? persisted = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == checksPending.Id, TestContext.Current.CancellationToken);
 
-        ReviewIssue review = persisted.ShouldBeOfType<ReviewIssue>();
-        review.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
+        RebasePendingIssue rebasePending = persisted.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBe(new RebasePendingReason.BeforeReady(CheckOnly: false)),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>(),
+            () => rebasePending.VerifiedHeadSha.ShouldBe("9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807"));
     }
 
     [Fact]
-    public async Task WhenChecksVerdictResolvedWithPassed_ChecksOutcomeDiscriminatorIsPassedOnDetail()
+    public async Task WhenChecksVerdictResolvedWithPassed_DetailShowsTheBeforeReadyRebaseAndItsRounds()
     {
         // Arrange
         ChecksPendingIssue checksPending = await SeedChecksPendingIssueAsync(issueNumber: 2);
@@ -112,10 +115,11 @@ public sealed class WhenChecksPassed : IAsyncDisposable
 
         // Assert
         IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
-        detail.State.ShouldBe("review");
+        detail.State.ShouldBe("rebase_pending");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.ChecksOutcome.ShouldBe("passed"),
-            () => stateDetails.FailingChecks.ShouldBeNull());
+            () => stateDetails.RebasePendingReason.ShouldBe("before_ready"),
+            () => stateDetails.BeforeReadyRounds.ShouldBe(0),
+            () => stateDetails.BeforeReadyRoundLimit.ShouldBe(Issue.MaxBeforeReadyRounds));
     }
 }
