@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
@@ -137,10 +139,28 @@ internal sealed class LoginSessionService(
         try
         {
             await orchestrator.DeliverLoginCodeAsync(session.ContainerId, code, cancellationToken);
+            long deliveredAt = Stopwatch.GetTimestamp();
 
-            bool loginSuccessful = await WaitForLoginSuccessAsync(session.ContainerId, linkedSignIn.Token);
+            SignInScanOutcome outcome = await WaitForLoginSuccessAsync(session.ContainerId, linkedSignIn.Token);
 
-            if (!loginSuccessful)
+            // The log stream ends cleanly on cancellation, so the tokens tell host shutdown
+            // apart from the sign-in timer. Host shutdown is checked first so it wins a tie.
+            if (outcome is SignInScanOutcome.Cancelled && cancellationToken.IsCancellationRequested)
+            {
+                return Result.Ok();
+            }
+
+            if (outcome is SignInScanOutcome.Cancelled cancelled)
+            {
+                LogSignInTimeout(session, code, cancelled, Stopwatch.GetElapsedTime(deliveredAt));
+                await FailSessionAsync(
+                    session,
+                    new LoginFailureReason.CodeTimeout("Sign-in timed out waiting for login confirmation."),
+                    CancellationToken.None);
+                return Result.Ok();
+            }
+
+            if (outcome is SignInScanOutcome.StreamEnded)
             {
                 await FailSessionAsync(session, new LoginFailureReason.InvalidCode(), cancellationToken);
                 return Result.Ok();
@@ -179,17 +199,6 @@ internal sealed class LoginSessionService(
                 new LoginPhase.Succeeded(identitySuccess.Value),
                 cancellationToken);
 
-            return Result.Ok();
-        }
-        catch (OperationCanceledException) when (signInCts.IsCancellationRequested
-                                                  && !cancellationToken.IsCancellationRequested)
-        {
-            // Sign-in-scan timeout fired (not host shutdown) — treat as CodeTimeout.
-            _signInTimeoutCts = null;
-            await FailSessionAsync(
-                session,
-                new LoginFailureReason.CodeTimeout("Sign-in timed out waiting for login confirmation."),
-                CancellationToken.None);
             return Result.Ok();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -250,6 +259,9 @@ internal sealed class LoginSessionService(
     // Maximum length of a single log line accepted for URL extraction and broadcast.
     // Lines longer than this are skipped — a legitimate OAuth URL is never this long.
     private const int MaxUrlLineLengthChars = 8_192;
+
+    // Maximum length of the last CLI line written to the sign-in timeout warning.
+    private const int MaxLoggedLineLengthChars = 500;
 
     /// <summary>
     /// The current session phase, or <c>null</c> when no session exists.
@@ -462,18 +474,21 @@ internal sealed class LoginSessionService(
 
     /// <summary>
     /// Waits for the login success signal in the log stream.
-    /// Returns <c>true</c> immediately when the success signal ("Login successful.") is seen —
-    /// the container may still be running at this point, so exit code is not consulted.
-    /// The authoritative credential validation happens downstream in
+    /// Returns <see cref="SignInScanOutcome.Succeeded"/> as soon as the success signal
+    /// ("Login successful.") is seen — the container may still be running at this point, so exit
+    /// code is not consulted. The authoritative credential validation happens downstream in
     /// <see cref="ICredentialsOrchestrator.GetCredentialVolumeAuthStatusAsync"/>.
-    /// Returns <c>false</c> when the stream ends without the success signal: a code the server
-    /// rejects makes the CLI exit, which ends the stream. No CLI rejection wording is matched,
-    /// because that wording changes between CLI releases (ADR 0024). The scan is bounded by
-    /// <paramref name="cancellationToken"/>, the self-owned sign-in CTS
-    /// (<see cref="LoginSessionOptions.SignInTimeout"/>).
+    /// Returns <see cref="SignInScanOutcome.StreamEnded"/> when the stream ends on its own without
+    /// the success signal: a code the server rejects makes the CLI exit, which ends the stream.
+    /// No CLI rejection wording is matched, because that wording changes between CLI releases
+    /// (ADR 0024). The log stream also ends cleanly when <paramref name="cancellationToken"/> is
+    /// cancelled, so an end after cancellation is <see cref="SignInScanOutcome.Cancelled"/>.
     /// </summary>
-    private async Task<bool> WaitForLoginSuccessAsync(string containerId, CancellationToken cancellationToken)
+    private async Task<SignInScanOutcome> WaitForLoginSuccessAsync(string containerId, CancellationToken cancellationToken)
     {
+        string? lastLine = null;
+        int linesReceived = 0;
+
         await foreach (string line in orchestrator
             .StreamLogsAsync(containerId, cancellationToken)
             .ConfigureAwait(false))
@@ -484,11 +499,59 @@ internal sealed class LoginSessionService(
                 // point (observed in production: container lived 14+ seconds after signal).
                 // Do not gate on exit code; GetCredentialVolumeAuthStatusAsync validates the
                 // persisted credential after this returns.
-                return true;
+                return new SignInScanOutcome.Succeeded();
             }
+
+            lastLine = line;
+            linesReceived++;
         }
 
-        return false;
+        return cancellationToken.IsCancellationRequested
+            ? new SignInScanOutcome.Cancelled(lastLine, linesReceived)
+            : new SignInScanOutcome.StreamEnded();
+    }
+
+    private void LogSignInTimeout(
+        LoginSession session,
+        LoginCode code,
+        SignInScanOutcome.Cancelled outcome,
+        TimeSpan elapsed)
+    {
+        if (outcome.LastLine is null)
+        {
+            logger?.LogWarning(
+                "Login session {SessionId} timed out after {Elapsed} waiting for login confirmation. No CLI line was received.",
+                session.SessionId,
+                elapsed);
+            return;
+        }
+
+        logger?.LogWarning(
+            "Login session {SessionId} timed out after {Elapsed} waiting for login confirmation. Last CLI line: {LastLine}",
+            session.SessionId,
+            elapsed,
+            MaskForLog(outcome.LastLine, code));
+    }
+
+    // SecretRedactor does not recognise an authorization code, so the submitted code and its
+    // part before '#' are masked here in case the CLI echoes them back.
+    private static string MaskForLog(string line, LoginCode code)
+    {
+        string codePartBeforeHash = code.Value[..code.Value.IndexOf('#', StringComparison.Ordinal)];
+        string masked = line
+            .Replace(code.Value, "***", StringComparison.Ordinal)
+            .Replace(codePartBeforeHash, "***", StringComparison.Ordinal);
+
+        return masked.Length <= MaxLoggedLineLengthChars ? masked : masked[..MaxLoggedLineLengthChars];
+    }
+
+    private abstract record SignInScanOutcome
+    {
+        internal sealed record Succeeded : SignInScanOutcome;
+
+        internal sealed record StreamEnded : SignInScanOutcome;
+
+        internal sealed record Cancelled(string? LastLine, int LinesReceived) : SignInScanOutcome;
     }
 
     private async Task FailSessionAsync(
