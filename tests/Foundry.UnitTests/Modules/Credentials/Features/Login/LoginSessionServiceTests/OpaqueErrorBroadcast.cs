@@ -50,7 +50,7 @@ public sealed class OpaqueErrorBroadcast
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("the-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("the-code"), TestContext.Current.CancellationToken);
 
         // Assert — the broadcast must NOT contain the raw error string
         LoginSessionUpdate? failedUpdate = broadcaster.Captured

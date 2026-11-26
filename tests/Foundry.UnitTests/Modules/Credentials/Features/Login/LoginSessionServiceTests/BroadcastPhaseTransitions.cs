@@ -91,7 +91,7 @@ public sealed class BroadcastPhaseTransitions
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.SigningIn);
@@ -111,7 +111,7 @@ public sealed class BroadcastPhaseTransitions
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("abc123", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("abc123"), TestContext.Current.CancellationToken);
 
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.Succeeded);
@@ -131,7 +131,7 @@ public sealed class BroadcastPhaseTransitions
         await sut.WaitForStartCompletedAsync();
 
         // Act
-        await sut.SubmitCodeAsync("bad-code", TestContext.Current.CancellationToken);
+        await sut.SubmitCodeAsync(TestLoginCode.Of("bad-code"), TestContext.Current.CancellationToken);
 
         // Assert
         broadcaster.Captured.ShouldContain(u => u.Phase == LoginPhaseDiscriminator.Failed);

@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Features.SessionCheck;
@@ -17,7 +18,7 @@ internal interface ICredentialsOrchestrator
         LoginContainerSpec spec,
         CancellationToken cancellationToken);
 
-    Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken);
+    Task DeliverLoginCodeAsync(string containerId, LoginCode code, CancellationToken cancellationToken);
 
     Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken);
 

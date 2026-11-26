@@ -1,4 +1,5 @@
 using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 
@@ -18,7 +19,6 @@ internal sealed class LoginSessionService(
     ILogger<LoginSessionService>? logger = null) : ILoginSessionState
 {
     internal const string LoginSuccessSignal = "Login successful.";
-    internal const string InvalidCodeSignal = "Invalid code";
 
     /// <summary>
     /// Fixed opaque failure message broadcast to clients for Unknown failures.
@@ -100,7 +100,7 @@ internal sealed class LoginSessionService(
     /// Returns a failure result if there is no session or the session is not in a state
     /// that accepts a code (i.e. not <see cref="LoginPhase.WaitingForAuthorization"/>).
     /// </summary>
-    internal async Task<Result> SubmitCodeAsync(string code, CancellationToken cancellationToken)
+    internal async Task<Result> SubmitCodeAsync(LoginCode code, CancellationToken cancellationToken)
     {
         LoginSession? session;
         lock (_sessionLock)
@@ -461,15 +461,16 @@ internal sealed class LoginSessionService(
         };
 
     /// <summary>
-    /// Waits for the login success signal or "Invalid code" rejection in the log stream.
+    /// Waits for the login success signal in the log stream.
     /// Returns <c>true</c> immediately when the success signal ("Login successful.") is seen —
     /// the container may still be running at this point, so exit code is not consulted.
     /// The authoritative credential validation happens downstream in
     /// <see cref="ICredentialsOrchestrator.GetCredentialVolumeAuthStatusAsync"/>.
-    /// Returns <c>false</c> when an "Invalid code" rejection is detected (CLI re-prompts;
-    /// the stream is cancelled via <paramref name="cancellationToken"/> which is the self-owned
-    /// sign-in CTS so the scan is bounded by <see cref="LoginSessionOptions.SignInTimeout"/>.
-    /// Returns <c>false</c> when the stream ends without either signal.
+    /// Returns <c>false</c> when the stream ends without the success signal: a code the server
+    /// rejects makes the CLI exit, which ends the stream. No CLI rejection wording is matched,
+    /// because that wording changes between CLI releases (ADR 0024). The scan is bounded by
+    /// <paramref name="cancellationToken"/>, the self-owned sign-in CTS
+    /// (<see cref="LoginSessionOptions.SignInTimeout"/>).
     /// </summary>
     private async Task<bool> WaitForLoginSuccessAsync(string containerId, CancellationToken cancellationToken)
     {
@@ -477,13 +478,6 @@ internal sealed class LoginSessionService(
             .StreamLogsAsync(containerId, cancellationToken)
             .ConfigureAwait(false))
         {
-            if (line.Contains(InvalidCodeSignal, StringComparison.OrdinalIgnoreCase))
-            {
-                // CLI rejected the code and will re-prompt — stream stays open indefinitely.
-                // Treat this as definitive failure immediately rather than waiting for EOF.
-                return false;
-            }
-
             if (line.Contains(LoginSuccessSignal, StringComparison.Ordinal))
             {
                 // Success signal is authoritative — the container may still be running at this

@@ -14,6 +14,8 @@ namespace Foundry.UnitTests.Modules.Credentials.Features.Login.SubmitLoginCodeTe
 
 public sealed class SubmitEndpoint
 {
+    private const string LoginUrlLine = "If the browser didn't open, visit: https://claude.ai/oauth/authorize?code=true";
+
     [Fact]
     public async Task WhenCodeIsEmpty_Returns400WithLoginCodeEmptyCode()
     {
@@ -81,13 +83,46 @@ public sealed class SubmitEndpoint
             () => problem.ProblemDetails.Detail.ShouldNotBeNullOrEmpty());
     }
 
+    [Theory]
+    [InlineData("INVALID-CODE-FOR-TEST", CredentialsErrors.LoginCodeIncompleteCode, "That doesn't look like the full code. Copy all of it, including the # in the middle.")]
+    [InlineData("https://claude.ai/magic-link#abc", CredentialsErrors.LoginCodeIsWebAddressCode, "That's a web address, not the code. Paste the code the last sign-in page shows.")]
+    [InlineData("abc#def\nxyz", CredentialsErrors.LoginCodeHasControlCharactersCode, "The code contains line breaks or control characters. Copy just the code and paste it again.")]
+    public async Task WhenCodeIsMalformedWhileWaitingForAuthorization_Returns400AndDeliversNothing(
+        string code,
+        string expectedErrorCode,
+        string expectedDetail)
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new([LoginUrlLine]);
+        orchestrator.WithBlockingStreamAfterLines();
+        LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await service.WaitForStartCompletedAsync();
+
+        // Act
+        Results<Ok, ProblemHttpResult> result =
+            await SubmitLoginCode.Endpoint.HandleAsync(
+                new SubmitLoginCode.Request(Code: code),
+                service,
+                TestContext.Current.CancellationToken);
+
+        // Assert
+        ProblemHttpResult problem = result.Result.ShouldBeOfType<ProblemHttpResult>();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.StatusCode.ShouldBe(StatusCodes.Status400BadRequest),
+            () => problem.ProblemDetails.Type.ShouldEndWith(expectedErrorCode),
+            () => problem.ProblemDetails.Detail.ShouldBe(expectedDetail),
+            () => service.ActiveSessionPhaseForTest.ShouldBeOfType<LoginPhase.WaitingForAuthorization>(),
+            () => orchestrator.DeliverLoginCodeCallCount.ShouldBe(0));
+    }
+
     [Fact]
     public async Task WhenCodeIsRealisticOAuthLength_DoesNotReturn400()
     {
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
-        string realisticCode = new string('x', 130);
+        string realisticCode = new string('x', 64) + "#" + new string('y', 64);
 
         // Act
         Results<Ok, ProblemHttpResult> result =
@@ -111,7 +146,7 @@ public sealed class SubmitEndpoint
         // Act — no session started; code is non-empty
         Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
-                new SubmitLoginCode.Request(Code: "valid-code"),
+                new SubmitLoginCode.Request(Code: "valid-code#state"),
                 service,
                 TestContext.Current.CancellationToken);
 
@@ -137,7 +172,7 @@ public sealed class SubmitEndpoint
         // Act
         Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
-                new SubmitLoginCode.Request(Code: "abc123"),
+                new SubmitLoginCode.Request(Code: "abc#123"),
                 service,
                 TestContext.Current.CancellationToken);
 
