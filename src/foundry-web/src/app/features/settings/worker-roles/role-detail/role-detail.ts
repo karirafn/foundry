@@ -11,6 +11,7 @@ import {
   inject,
   untracked,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -22,7 +23,7 @@ import { PromptTextComponent } from '../prompt-text';
 import { RoleCapabilityComponent, capabilityHint } from '../role-shared/role-capability';
 import { RoleImageComponent } from '../role-shared/role-image';
 import { WorkerRoleModelComponent } from '../worker-role-model';
-import { WorkerRoleCard, WorkerRoleCatalog, WorkerRoleService } from '../worker-role.service';
+import { ImplementDemand, WorkerRoleCard, WorkerRoleCatalog, WorkerRoleService } from '../worker-role.service';
 import { RolePluginsComponent } from './role-plugins';
 
 type ViewState = 'loading' | 'not-ready' | 'error' | 'not-found' | 'loaded';
@@ -34,6 +35,8 @@ const STATUS_ANNOUNCEMENTS: Readonly<Record<ViewState, string>> = {
   'not-found': 'Worker role not found',
   loaded: '',
 };
+
+const DEMAND_ORDER: readonly ImplementDemand[] = ['routine', 'demanding'];
 
 const LOAD_ERROR_FALLBACK = 'Failed to load worker roles';
 
@@ -124,8 +127,20 @@ const LOAD_ERROR_FALLBACK = 'Failed to load worker roles';
             </header>
 
             <div class="role-detail__body">
-              <aside class="role-detail__rail" aria-label="Role summary">
-                <fd-worker-role-model class="role-detail__rail-block" [role]="view.role" />
+              <aside
+                class="role-detail__rail"
+                [class.role-detail__rail--demands]="demands().length > 0"
+                aria-label="Role summary"
+              >
+                @for (demand of demands(); track demand) {
+                  <fd-worker-role-model
+                    class="role-detail__rail-block"
+                    [role]="view.role"
+                    [demand]="demand"
+                  />
+                } @empty {
+                  <fd-worker-role-model class="role-detail__rail-block" [role]="view.role" />
+                }
                 <dl class="role-detail__facts role-detail__rail-block">
                   <div>
                     <dt>Verdict</dt>
@@ -208,7 +223,7 @@ export class RoleDetailComponent implements OnInit, UnsavedChanges {
   private readonly _route = inject(ActivatedRoute);
   private readonly _injector = inject(Injector);
 
-  private readonly _model = viewChild(WorkerRoleModelComponent);
+  private readonly _models = viewChildren(WorkerRoleModelComponent);
   private readonly _focusTarget = viewChild<ElementRef<HTMLElement>>('focusTarget');
 
   protected readonly roleName: Signal<string | null> = toSignal(
@@ -265,6 +280,12 @@ export class RoleDetailComponent implements OnInit, UnsavedChanges {
     return view ? pluginFact(view.role.agents.length, view.catalog.shared.agents.length) : '';
   });
 
+  /** The demands the role sets its model for, routine first; empty for a role with one model. */
+  protected readonly demands: Signal<readonly ImplementDemand[]> = computed(() => {
+    const settings = this.loaded()?.role.demandModels ?? [];
+    return DEMAND_ORDER.filter((demand) => settings.some((s) => s.demand === demand));
+  });
+
   protected readonly verdictSchema: Signal<string | null> = computed(() =>
     formatVerdictSchema(this.loaded()?.role.verdictSchema ?? null),
   );
@@ -300,7 +321,7 @@ export class RoleDetailComponent implements OnInit, UnsavedChanges {
   }
 
   hasUnsavedChanges(): boolean {
-    return this._model()?.hasUnsavedChanges() ?? false;
+    return this._models().some((model) => model.hasUnsavedChanges());
   }
 
   protected retry(): void {

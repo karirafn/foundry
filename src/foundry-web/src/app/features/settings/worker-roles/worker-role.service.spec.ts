@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { WorkerRoleService } from './worker-role.service';
-import { buildModelOptions, buildWorkerRole, buildWorkerRoleCatalog } from '../testing/worker-role-catalog.fixture';
+import {
+  buildImplementRole,
+  buildModelOptions,
+  buildWorkerRole,
+  buildWorkerRoleCatalog,
+} from '../testing/worker-role-catalog.fixture';
 
 function setup() {
   TestBed.configureTestingModule({
@@ -192,6 +197,126 @@ describe('WorkerRoleService', () => {
         message: 'Not listed.',
       });
       expect(svc.savingModel()).toBeNull();
+    });
+  });
+
+  describe('saveDemandModel', () => {
+    function loaded() {
+      const ctx = setup();
+      ctx.svc.load();
+      ctx.httpMock
+        .expectOne('/api/worker-roles')
+        .flush(buildWorkerRoleCatalog({ roles: [buildImplementRole(), buildWorkerRole({ name: 'triage' })] }));
+      return ctx;
+    }
+
+    it('should PUT the model and effort for the demand and patch only that demand in the catalog', () => {
+      // Arrange
+      const { svc, httpMock } = loaded();
+
+      // Act
+      svc.saveDemandModel('implement', 'demanding', ' opus ', 'high');
+      expect(svc.savingDemand()).toEqual([{ role: 'implement', demand: 'demanding' }]);
+      const req = httpMock.expectOne('/api/worker-roles/implement/demand-models/demanding');
+      req.flush({ demand: 'demanding', model: 'opus', effort: 'high' });
+
+      // Assert
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ model: ' opus ', effort: 'high' });
+      expect(svc.catalog()!.roles[0]).toEqual(buildImplementRole({}, { model: 'opus', effort: 'high' }));
+      expect(svc.catalog()!.roles[1]).toEqual(buildWorkerRole({ name: 'triage' }));
+      expect(svc.savingDemand()).toEqual([]);
+      expect(svc.savedDemand()).toEqual([{ role: 'implement', demand: 'demanding' }]);
+    });
+
+    it('should track each demand on its own, so saving one leaves the other saved', () => {
+      // Arrange
+      const { svc, httpMock } = loaded();
+      svc.saveDemandModel('implement', 'routine', 'sonnet', '');
+      httpMock
+        .expectOne('/api/worker-roles/implement/demand-models/routine')
+        .flush({ demand: 'routine', model: 'sonnet', effort: '' });
+
+      // Act
+      svc.saveDemandModel('implement', 'demanding', 'opus', 'xhigh');
+
+      // Assert
+      expect(svc.savingDemand()).toEqual([{ role: 'implement', demand: 'demanding' }]);
+      expect(svc.savedDemand()).toEqual([{ role: 'implement', demand: 'routine' }]);
+      httpMock
+        .expectOne('/api/worker-roles/implement/demand-models/demanding')
+        .flush({ demand: 'demanding', model: 'opus', effort: 'xhigh' });
+      expect(svc.savedDemand()).toEqual([
+        { role: 'implement', demand: 'routine' },
+        { role: 'implement', demand: 'demanding' },
+      ]);
+    });
+
+    it('should expose a rejected save keyed by role and demand with its code', () => {
+      // Arrange
+      const { svc, httpMock } = loaded();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Act
+      svc.saveDemandModel('implement', 'routine', 'sonnet', 'max');
+      httpMock.expectOne('/api/worker-roles/implement/demand-models/routine').flush(
+        { detail: "'max' is not an effort level.", type: 'tag:foundry,2026:problems/Worker.TierEffortInvalid' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+
+      // Assert
+      expect(svc.saveDemandError()).toEqual([
+        {
+          role: 'implement',
+          demand: 'routine',
+          code: 'Worker.TierEffortInvalid',
+          message: "'max' is not an effort level.",
+        },
+      ]);
+      expect(svc.savingDemand()).toEqual([]);
+      expect(svc.savedDemand()).toEqual([]);
+      expect(svc.catalog()!.roles[0]).toEqual(buildImplementRole());
+    });
+
+    it('should fall back to a generic message when the failure has no detail', () => {
+      // Arrange
+      const { svc, httpMock } = loaded();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Act
+      svc.saveDemandModel('implement', 'demanding', 'opus', '');
+      httpMock
+        .expectOne('/api/worker-roles/implement/demand-models/demanding')
+        .flush(null, { status: 500, statusText: 'Server Error' });
+
+      // Assert
+      expect(svc.saveDemandError()).toEqual([
+        { role: 'implement', demand: 'demanding', code: null, message: 'Failed to save the model' },
+      ]);
+    });
+
+    it('should clear the demand error on its next save but keep the other demand error', () => {
+      // Arrange
+      const { svc, httpMock } = loaded();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      for (const demand of ['routine', 'demanding'] as const) {
+        svc.saveDemandModel('implement', demand, 'claude-typo', '');
+        httpMock
+          .expectOne(`/api/worker-roles/implement/demand-models/${demand}`)
+          .flush(
+            { detail: 'Not listed.', type: 'tag:foundry,2026:problems/Worker.RoleModelNotListed' },
+            { status: 400, statusText: 'Bad Request' },
+          );
+      }
+
+      // Act
+      svc.saveDemandModel('implement', 'routine', 'sonnet', '');
+
+      // Assert
+      expect(svc.saveDemandError().map((e) => e.demand)).toEqual(['demanding']);
+      httpMock
+        .expectOne('/api/worker-roles/implement/demand-models/routine')
+        .flush({ demand: 'routine', model: 'sonnet', effort: '' });
     });
   });
 });

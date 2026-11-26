@@ -1,4 +1,9 @@
-import { WorkerRoleCard, WorkerRoleCatalog, WorkerRoleModelOptions } from '../worker-roles/worker-role.service';
+import {
+  DemandModel,
+  WorkerRoleCard,
+  WorkerRoleCatalog,
+  WorkerRoleModelOptions,
+} from '../worker-roles/worker-role.service';
 
 export const ROLE_PROMPT_SLOT = '{rolePrompt}';
 export const PRINCIPLES_SLOT = '{principles}';
@@ -39,11 +44,36 @@ export function buildWorkerRole(overrides: Partial<WorkerRoleCard> = {}): Worker
     ],
     verdictSchema: null,
     model: '',
+    demandModels: [],
     principleSections: [...PRINCIPLE_SECTIONS],
     principles: IMPLEMENT_PRINCIPLES,
     decisionRule: DECISION_RULE,
     ...overrides,
   };
+}
+
+/** The implement role's per-demand settings as the API returns them: routine first. */
+export function buildDemandModels(
+  routine: Partial<DemandModel> = {},
+  demanding: Partial<DemandModel> = {},
+): DemandModel[] {
+  return [
+    { demand: 'routine', model: '', effort: '', ...routine },
+    { demand: 'demanding', model: '', effort: '', ...demanding },
+  ];
+}
+
+/** The implement role as the API returns it: its model is set per demand, so the role-wide model is empty. */
+export function buildImplementRole(
+  routine: Partial<DemandModel> = {},
+  demanding: Partial<DemandModel> = {},
+  overrides: Partial<WorkerRoleCard> = {},
+): WorkerRoleCard {
+  return buildWorkerRole({
+    model: '',
+    demandModels: buildDemandModels(routine, demanding),
+    ...overrides,
+  });
 }
 
 export function buildWorkerRoleCatalog(

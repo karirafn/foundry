@@ -1,3 +1,4 @@
+@use '../../../../styles/breakpoints' as *;
 @use '../../../../styles/controls' as *;
 
 :host {
@@ -23,7 +24,7 @@
   }
 
   &__row {
-    align-items: center;
+    align-items: flex-end;
     display: flex;
     flex-wrap: wrap;
     gap: var(--fd-spacing-sm);
@@ -47,6 +48,33 @@
     &[aria-invalid='true'] {
       border-color: var(--fd-state-failed);
     }
+  }
+
+  // The effort control: its visible label stacks above the select, and the pair sits beside the Save.
+  &__field {
+    display: flex;
+    flex: 0 1 10rem;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    max-inline-size: 12rem;
+    min-inline-size: 0;
+
+    // At phone width the field fills its row, so the effort select and the Save each take their own.
+    @media (max-width: #{$compact-breakpoint - 1px}) {
+      flex-basis: 100%;
+      max-inline-size: none;
+    }
+  }
+
+  &__label {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  // The field carries the 10rem basis: inside its column a flex basis would set the select's height.
+  &__select--effort {
+    flex: 0 0 auto;
+    max-inline-size: 12rem;
   }
 
   &__save,
