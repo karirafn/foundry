@@ -348,7 +348,11 @@ internal sealed class WorkerOutcomeApplier(
 
     private static TriageResult ToTriageResult(TriageVerdict verdict) => verdict switch
     {
-        TriageVerdict.Ready ready => new TriageResult.Ready(ToTriageKind(ready.Kind), ready.Decisions),
+        TriageVerdict.Ready ready => new TriageResult.Ready(
+            ToTriageKind(ready.Kind),
+            ready.Decisions,
+            ready.Demand,
+            ready.DemandReason),
         TriageVerdict.NeedsInput needsInput => new TriageResult.NeedsInput(
             ToTriageKind(needsInput.Kind),
             [.. needsInput.Questions],

@@ -41,7 +41,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
 
     // A triage run's final result event with a schema-valid ready verdict.
     private const string TriageReadyTranscript =
-        """{"type":"result","subtype":"success","is_error":false,"result":"Ready","structured_output":{"outcome":"ready","kind":"feature"}}""";
+        """{"type":"result","subtype":"success","is_error":false,"result":"Ready","structured_output":{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none"}}""";
 
     private readonly ComposedHostBoundaries _boundaries = new();
     private readonly FoundryWebAppFactory _factory;

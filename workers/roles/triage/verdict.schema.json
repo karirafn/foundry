@@ -13,6 +13,18 @@
       "type": "string",
       "enum": ["feature", "bug", "refactor", "documentation"]
     },
+    "demand": {
+      "description": "Your judgment of the implement work: demanding when a trigger of the rubric applies, routine otherwise. Required with outcome ready. Only with outcome ready.",
+      "type": "string",
+      "enum": ["routine", "demanding"]
+    },
+    "demandReason": {
+      "description": "One line naming the rubric trigger that applies, or none. Required with outcome ready. Only with outcome ready.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\r\\n]+$"
+    },
     "questions": {
       "$ref": "#/$defs/questions"
     },

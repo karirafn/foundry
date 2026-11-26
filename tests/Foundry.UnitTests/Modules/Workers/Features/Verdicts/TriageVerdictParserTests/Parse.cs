@@ -28,7 +28,7 @@ public sealed class Parse
     public void WhenTheIssueIsReady_RecordsADoneVerdict()
     {
         // Act
-        RunVerdict verdict = _sut.Parse(Json("""{"outcome":"ready","kind":"feature"}"""));
+        RunVerdict verdict = _sut.Parse(Json("""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none"}"""));
 
         // Assert
         verdict.ShouldBe(RunVerdict.Done());

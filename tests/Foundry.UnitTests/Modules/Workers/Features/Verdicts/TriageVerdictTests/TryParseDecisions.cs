@@ -28,7 +28,7 @@ public sealed class TryParseDecisions
     {
         // Act
         TriageVerdict? verdict = TriageVerdict.TryParse(Json(
-            $$"""{"outcome":"ready","kind":"feature","decisions":[{{Decision}},{"question":"Where does the setting live?","decision":"In appsettings.json under Retry.","ground":"implementation_detail","evidence":["src/Options.cs:3 binds Retry","appsettings.json:9 holds it"]}]}"""));
+            $$"""{"outcome":"ready","kind":"feature","demand":"routine","demandReason":"none","decisions":[{{Decision}},{"question":"Where does the setting live?","decision":"In appsettings.json under Retry.","ground":"implementation_detail","evidence":["src/Options.cs:3 binds Retry","appsettings.json:9 holds it"]}]}"""));
 
         // Assert
         verdict.ShouldBeOfType<TriageVerdict.Ready>().Decisions.ShouldBe(
@@ -62,7 +62,7 @@ public sealed class TryParseDecisions
     public void WhenAVerdictCarriesNoDecisions_ItsDecisionsAreEmpty()
     {
         // Act
-        TriageVerdict? verdict = TriageVerdict.TryParse(Json("""{"outcome":"ready","kind":"bug"}"""));
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json("""{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none"}"""));
 
         // Assert
         verdict.ShouldBeOfType<TriageVerdict.Ready>().Decisions.ShouldBeEmpty();
@@ -94,7 +94,7 @@ public sealed class TryParseDecisions
     public void WhenADecisionBreaksTheSchema_ReturnsNull(string decision)
     {
         // Act
-        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"bug","decisions":[{{decision}}]}"""));
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none","decisions":[{{decision}}]}"""));
 
         // Assert
         verdict.ShouldBeNull();
@@ -108,7 +108,7 @@ public sealed class TryParseDecisions
 
         // Act
         TriageVerdict? verdict = TriageVerdict.TryParse(Json(
-            $$"""{"outcome":"ready","kind":"bug","decisions":[{"question":"Which?","decision":"{{decision}}","ground":"settled_business","evidence":["src/Retry.cs:8"]}]}"""));
+            $$"""{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none","decisions":[{"question":"Which?","decision":"{{decision}}","ground":"settled_business","evidence":["src/Retry.cs:8"]}]}"""));
 
         // Assert
         verdict.ShouldBeNull();
@@ -121,7 +121,7 @@ public sealed class TryParseDecisions
         string decisions = string.Join(",", Enumerable.Repeat(Decision, TriageResult.MaxDecisions + 1));
 
         // Act
-        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"bug","decisions":[{{decisions}}]}"""));
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none","decisions":[{{decisions}}]}"""));
 
         // Assert
         verdict.ShouldBeNull();
@@ -131,7 +131,7 @@ public sealed class TryParseDecisions
     public void WhenDecisionsIsNotAnArray_ReturnsNull()
     {
         // Act
-        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"bug","decisions":{{Decision}}}"""));
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json($$"""{"outcome":"ready","kind":"bug","demand":"routine","demandReason":"none","decisions":{{Decision}}}"""));
 
         // Assert
         verdict.ShouldBeNull();
