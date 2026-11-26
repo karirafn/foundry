@@ -57,7 +57,7 @@ internal sealed class TriageRunCompletedHandler(
         Issue next = @event.Result switch
         {
             TriageResult.Ready ready => triaging.MarkReady(
-                new TriageVerdict.Ready(ToIssueKind(ready.Kind), @event.DecidedAt),
+                new TriageVerdict.Ready(ToIssueKind(ready.Kind), @event.DecidedAt, ready.Demand, ready.DemandReason),
                 ready.Decisions,
                 now),
             TriageResult.NeedsInput needsInput => triaging.MarkNeedsInput(

@@ -134,6 +134,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = findings;
         revisionQueued.RecordReviewFix();
+        revisionQueued.EscalateDemand();
         revisionQueued.StartRound();
         revisionQueued.ResetChecksFixAttempts();
         revisionQueued.ResetBeforeReadyRounds();
@@ -155,6 +156,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks, headSha);
         revisionQueued.RecordChecksFix();
         revisionQueued.ResetBeforeReadyRounds();
+        revisionQueued.EscalateDemand();
         revisionQueued.StartRound();
         revisionQueued.PriorFeedbackCutoffAt = source.FeedbackCutoffAt;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;

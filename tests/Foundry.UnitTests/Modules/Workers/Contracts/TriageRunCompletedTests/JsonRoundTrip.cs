@@ -44,4 +44,36 @@ public sealed class JsonRoundTrip
             () => blocked.BlockedBy.Select(blocker => blocker.Reason).ShouldBe(
                 ["second by number, first named", "needs the retry policy"]));
     }
+
+    [Fact]
+    public void WhenAReadyResultWrittenBeforeDemandExistedIsRead_ItReadsDemandingWithNoReason()
+    {
+        // Arrange
+        const string Stored = """{"$type":"ready","Kind":0,"Decisions":[]}""";
+
+        // Act
+        TriageResult? deserialized = JsonSerializer.Deserialize<TriageResult>(Stored);
+
+        // Assert
+        TriageResult.Ready ready = deserialized.ShouldBeOfType<TriageResult.Ready>();
+        ready.ShouldSatisfyAllConditions(
+            () => ready.Demand.ShouldBe(ImplementDemand.Demanding),
+            () => ready.DemandReason.ShouldBeNull());
+    }
+
+    [Fact]
+    public void WhenAReadyResultWithARoutineDemandIsRoundTripped_KeepsTheDemandAndItsReason()
+    {
+        // Arrange
+        TriageResult original = new TriageResult.Ready(TriageKind.Documentation, [], ImplementDemand.Routine, "none");
+
+        // Act
+        TriageResult? deserialized = JsonSerializer.Deserialize<TriageResult>(JsonSerializer.Serialize(original));
+
+        // Assert
+        TriageResult.Ready ready = deserialized.ShouldBeOfType<TriageResult.Ready>();
+        ready.ShouldSatisfyAllConditions(
+            () => ready.Demand.ShouldBe(ImplementDemand.Routine),
+            () => ready.DemandReason.ShouldBe("none"));
+    }
 }

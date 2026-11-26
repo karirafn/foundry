@@ -108,6 +108,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("clarifications")
                         .HasDefaultValueSql("'[]'");
 
+                    b.Property<bool>("DemandEscalated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("demand_escalated");
+
                     b.Property<string>("DetectedAt")
                         .IsRequired()
                         .HasColumnType("TEXT")

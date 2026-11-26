@@ -114,6 +114,85 @@ public sealed class Convert
     }
 
     [Theory]
+    [InlineData(ImplementDemand.Routine)]
+    [InlineData(ImplementDemand.Demanding)]
+    public void AReadyVerdict_RoundTripsItsDemandAndReason(ImplementDemand demand)
+    {
+        // Arrange
+        TriageVerdict verdict = new TriageVerdict.Ready(IssueKind.Feature, DecidedAt, demand, "A schema migration.");
+
+        // Act
+        TriageVerdict read = Deserialize(Serialize(verdict));
+
+        // Assert
+        TriageVerdict.Ready ready = read.ShouldBeOfType<TriageVerdict.Ready>();
+        ready.ShouldSatisfyAllConditions(
+            () => ready.Demand.ShouldBe(demand),
+            () => ready.DemandReason.ShouldBe("A schema migration."));
+    }
+
+    [Fact]
+    public void ARoutineReadyVerdict_StoresTheDocumentedShape()
+    {
+        // Arrange
+        TriageVerdict verdict = new TriageVerdict.Ready(IssueKind.Bug, DecidedAt, ImplementDemand.Routine, "none");
+
+        // Act
+        string stored = Serialize(verdict);
+
+        // Assert
+        stored.ShouldBe(
+            """{"outcome":"ready","kind":"bug","decidedAt":"2026-11-11T10:00:00+00:00","demand":"routine","demandReason":"none"}""");
+    }
+
+    [Fact]
+    public void AReadyVerdictWithNoReason_StoresNoReason()
+    {
+        // Arrange
+        TriageVerdict verdict = new TriageVerdict.Ready(IssueKind.Bug, DecidedAt);
+
+        // Act
+        string stored = Serialize(verdict);
+
+        // Assert
+        stored.ShouldBe("""{"outcome":"ready","kind":"bug","decidedAt":"2026-11-11T10:00:00+00:00","demand":"demanding"}""");
+    }
+
+    [Fact]
+    public void AReadyVerdictStoredBeforeDemandExisted_ReadsDemandingWithNoReason()
+    {
+        // Arrange
+        const string Stored = """{"outcome":"ready","kind":"bug","decidedAt":"2026-11-11T10:00:00+00:00"}""";
+
+        // Act
+        TriageVerdict read = Deserialize(Stored);
+
+        // Assert
+        TriageVerdict.Ready ready = read.ShouldBeOfType<TriageVerdict.Ready>();
+        ready.ShouldSatisfyAllConditions(
+            () => ready.Demand.ShouldBe(ImplementDemand.Demanding),
+            () => ready.DemandReason.ShouldBeNull());
+    }
+
+    [Theory]
+    [InlineData("\"trivial\"")]
+    [InlineData("\"Routine\"")]
+    [InlineData("1")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    public void AReadyVerdictWithADemandItDoesNotRecognise_ReadsDemanding(string demand)
+    {
+        // Arrange
+        string stored = $$"""{"outcome":"ready","kind":"bug","decidedAt":"2026-11-11T10:00:00+00:00","demand":{{demand}}}""";
+
+        // Act
+        TriageVerdict read = Deserialize(stored);
+
+        // Assert
+        read.ShouldBeOfType<TriageVerdict.Ready>().Demand.ShouldBe(ImplementDemand.Demanding);
+    }
+
+    [Theory]
     [InlineData("""{"outcome":"deferred","kind":"bug","decidedAt":"2026-11-11T10:00:00+00:00"}""")]
     [InlineData("""{"outcome":"ready","kind":"chore","decidedAt":"2026-11-11T10:00:00+00:00"}""")]
     [InlineData("""{"outcome":"blocked","kind":"bug","decidedAt":"2026-11-11T10:00:00+00:00"}""")]

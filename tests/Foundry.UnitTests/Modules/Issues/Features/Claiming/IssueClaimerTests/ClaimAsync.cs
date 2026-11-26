@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -427,6 +428,147 @@ public sealed class ClaimAsync : IAsyncDisposable
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
         claimed.Dispatch.IssueApiUrl.ShouldBe(DefaultDispatchInfo.IssueApiUrlBase + "/42");
+    }
+
+    private const string Head = "4f2c9e1a7b3d5f6e8a0c2b4d6f8e0a1c3b5d7f9e";
+
+    private static readonly DateTimeOffset Now = new(2026, 11, 26, 10, 0, 0, TimeSpan.Zero);
+
+    private static FreshQueuedIssue TriagedRoutine(MonitoredRepositoryId repositoryId) =>
+        (FreshQueuedIssue)new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .TriageInProgress()
+            .MarkReady(new TriageVerdict.Ready(IssueKind.Feature, Now, ImplementDemand.Routine, "none"), [], Now);
+
+    private static RevisionQueuedIssue EscalatedFromRoutine(MonitoredRepositoryId repositoryId) =>
+        (RevisionQueuedIssue)TriagedRoutine(repositoryId)
+            .Claim(WorkerRunId.New(), Now)
+            .MarkRebasePending("feat/1-test", "https://github.com/owner/repo/pull/1", Now, Now)
+            .MarkChecksPending(new RebaseOutcome.UpToDate(), Now)
+            .ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: true, Head, Now)
+            .ShouldBeOfType<ReviewQueuedIssue>()
+            .Claim(WorkerRunId.New(), Now)
+            .ResolveVerdict(
+                ReviewVerdictOutcome.ChangesRequested,
+                patchId: null,
+                new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Missing, "No test covers the change."),
+                Now);
+
+    private async Task<QueuedIssue> SeedAndReloadAsync(QueuedIssue issue)
+    {
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        return (QueuedIssue)await _dbContext.Set<Issue>()
+            .AsNoTracking()
+            .SingleAsync(i => i.Id == issue.Id, TestContext.Current.CancellationToken);
+    }
+
+    private async Task<ClaimedIssueDispatch> ClaimDispatchAsync(QueuedIssue issue)
+    {
+        await BuildClaimer().ClaimAsync(new DispatchCandidate(issue, DefaultDispatchInfo), WorkerRunId.New(), CancellationToken.None);
+        return _integrationEventDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldHaveSingleItem().Dispatch;
+    }
+
+    [Fact]
+    public async Task WhenAFreshRunIsClaimedForARoutineIssue_TheClaimCarriesRoutine()
+    {
+        // Arrange
+        QueuedIssue queued = await SeedAndReloadAsync(TriagedRoutine(MonitoredRepositoryId.New()));
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        dispatch.Demand.ShouldBe(ImplementDemand.Routine);
+    }
+
+    [Fact]
+    public async Task WhenAFreshRunIsClaimedWithoutAVerdict_TheClaimCarriesDemanding()
+    {
+        // Arrange
+        QueuedIssue queued = await SeedAndReloadAsync(new IssueBuilder().FreshQueued());
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        dispatch.Demand.ShouldBe(ImplementDemand.Demanding);
+    }
+
+    [Fact]
+    public async Task WhenAContinuationIsClaimed_TheClaimCarriesTheIssuesDemand()
+    {
+        // Arrange
+        QueuedIssue queued = await SeedAndReloadAsync(
+            new IssueBuilder().WithFailureCategory(FailureCategory.NonZeroExit).ContinuationQueued());
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        dispatch.Demand.ShouldBe(ImplementDemand.Demanding);
+    }
+
+    [Fact]
+    public async Task WhenARevisionIsClaimedAfterEscalation_TheClaimCarriesDemandingOverARoutineVerdict()
+    {
+        // Arrange
+        QueuedIssue queued = await SeedAndReloadAsync(EscalatedFromRoutine(MonitoredRepositoryId.New()));
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        queued.ShouldSatisfyAllConditions(
+            () => queued.TriageVerdict.ShouldBeOfType<TriageVerdict.Ready>().Demand.ShouldBe(ImplementDemand.Routine),
+            () => queued.DemandEscalated.ShouldBeTrue(),
+            () => dispatch.Demand.ShouldBe(ImplementDemand.Demanding));
+    }
+
+    [Fact]
+    public async Task WhenARebaseConflictRevisionIsClaimedAfterEscalation_TheClaimStillCarriesDemanding()
+    {
+        // Arrange
+        RevisionQueuedIssue conflict = EscalatedFromRoutine(MonitoredRepositoryId.New())
+            .Claim(WorkerRunId.New(), Now)
+            .MarkRebasePending(Now, Now)
+            .ResolveConflict(Now);
+        QueuedIssue queued = await SeedAndReloadAsync(conflict);
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        queued.ShouldSatisfyAllConditions(
+            () => ((RevisionQueuedIssue)queued).Trigger.ShouldBeOfType<RevisionTrigger.RebaseConflict>(),
+            () => dispatch.Demand.ShouldBe(ImplementDemand.Demanding));
+    }
+
+    [Fact]
+    public async Task WhenATriageRunIsClaimed_TheClaimCarriesNoDemand()
+    {
+        // Arrange
+        QueuedIssue queued = await SeedAndReloadAsync(new IssueBuilder().TriageQueued());
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        dispatch.Demand.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAReviewRunIsClaimed_TheClaimCarriesNoDemand()
+    {
+        // Arrange
+        QueuedIssue queued = await SeedAndReloadAsync(new IssueBuilder().ReviewQueued());
+
+        // Act
+        ClaimedIssueDispatch dispatch = await ClaimDispatchAsync(queued);
+
+        // Assert
+        dispatch.Demand.ShouldBeNull();
     }
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
