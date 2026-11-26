@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Features.Outcome;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,8 +11,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.ContainerOutputPars
 
 public sealed class ParseTurnLimit
 {
-    private readonly IContainerOutputParser _sut = new ContainerOutputParser(
-        NullLogger<ContainerOutputParser>.Instance);
+    private readonly IContainerOutputParser _sut = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
 
     [Fact]
     public void WhenResultSubtypeIsErrorMaxTurns_ReturnsTurnLimitReached()

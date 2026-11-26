@@ -22,4 +22,11 @@ internal interface IContainerOutputParser
     /// written at startup, so a long run's tail no longer holds it.
     /// </summary>
     Toolchain? ParseToolchain(string? fullLog);
+
+    /// <summary>
+    /// The plan usage the first and the last <c>rate_limit_event</c> in <paramref name="fullLog"/> reported;
+    /// <see langword="null"/> when no event reported it. Reads the whole log, not its tail: a long run's tail no longer
+    /// holds its first event.
+    /// </summary>
+    RunPlanUsage? ParsePlanUsage(string? fullLog);
 }

@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Shared.Infrastructure.Docker;
@@ -34,11 +35,11 @@ internal static class RunFailureClassifier
         WorkerStatus? status,
         string? containerOutput,
         RunResultSummary? summary,
-        WorkerRole role)
+        IResolvableRun run)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
 
-        if (TryClassify(parseResult, role) is { } classified)
+        if (TryClassify(parseResult, run) is { } classified)
         {
             return classified;
         }
@@ -66,7 +67,7 @@ internal static class RunFailureClassifier
     /// <see cref="FailureReason"/>; returns <see langword="null"/> when the parse carries no category.
     /// Shared by the non-zero and the exit-0 paths so both classify a failure identically.
     /// </summary>
-    public static FailureReason? TryClassify(ContainerOutputParseResult parseResult, WorkerRole role)
+    public static FailureReason? TryClassify(ContainerOutputParseResult parseResult, IResolvableRun run)
     {
         return parseResult switch
         {
@@ -80,11 +81,18 @@ internal static class RunFailureClassifier
             ContainerOutputParseResult.CreditsExhausted => new FailureReason.CreditsExhausted(),
             ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),
             ContainerOutputParseResult.TransientApiError => new FailureReason.TransientApiError(),
-            ContainerOutputParseResult.ModelUnavailable => new FailureReason.ModelUnavailable(role.Name),
+            ContainerOutputParseResult.ModelUnavailable => ModelUnavailable(run),
             ContainerOutputParseResult.TurnLimitReached => new FailureReason.TurnLimitReached(),
             _ => null,
         };
     }
+
+    // An implement run names the Tier Model setting it used, read as demanding when the run recorded no demand, as
+    // dispatch reads a claim without one.
+    private static FailureReason.ModelUnavailable ModelUnavailable(IResolvableRun run) =>
+        run.Role == WorkerRole.Implement
+            ? new FailureReason.ModelUnavailable(run.Role.Name, run.Demand ?? ImplementDemand.Demanding)
+            : new FailureReason.ModelUnavailable(run.Role.Name);
 
     /// <summary>
     /// The result line's text made safe to persist as a failure reason: secrets redacted, one line, and bounded

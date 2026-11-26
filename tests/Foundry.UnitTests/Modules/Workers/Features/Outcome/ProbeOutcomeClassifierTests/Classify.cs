@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.Outcome;
 
@@ -12,7 +13,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.ProbeOutcomeClassif
 public sealed class Classify
 {
     private readonly IProbeOutcomeClassifier _sut = new ProbeOutcomeClassifier(
-        new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
+        new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()));
 
     [Fact]
     public void WhenLogsProduceNormalExit_ReturnsAvailable()

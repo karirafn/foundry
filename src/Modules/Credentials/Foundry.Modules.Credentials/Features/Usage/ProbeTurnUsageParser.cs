@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Credentials.Contracts;
+
 namespace Foundry.Modules.Credentials.Features.Usage;
 
 /// <summary>
@@ -97,24 +99,11 @@ internal static class ProbeTurnUsageParser
         JsonObject? last = null;
         bool sawJsonLine = false;
 
-        foreach (string line in log.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (JsonObject node in JsonObjects(log.Split('\n', StringSplitOptions.RemoveEmptyEntries)))
         {
-            string trimmed = line.Trim();
-
-            if (string.IsNullOrEmpty(trimmed))
-            {
-                continue;
-            }
-
-            // Non-JSON lines (stderr notices, truncated tail lines) are skipped, not fatal.
-            if (trimmed[0] != '{' || TryParseObject(trimmed) is not { } node)
-            {
-                continue;
-            }
-
             sawJsonLine = true;
 
-            if (node["type"]?.GetValue<string>() != "rate_limit_event")
+            if (!IsRateLimitEvent(node))
             {
                 continue;
             }
@@ -142,6 +131,63 @@ internal static class ProbeTurnUsageParser
 
         return last;
     }
+
+    /// <summary>
+    /// The plan usage meters of the first and the last <c>rate_limit_event</c> whose
+    /// <c>rate_limit_info.unifiedWindows</c> is present. Unlike <see cref="Parse"/>, a malformed event is skipped rather
+    /// than failing the read, and a malformed or missing window is <see langword="null"/> for that meter only: the
+    /// meters are optional context for a worker run, never a reason to fail it.
+    /// </summary>
+    public static PlanUsageWindows ReadWindows(IEnumerable<string> lines)
+    {
+        PlanUsageMeters? first = null;
+        PlanUsageMeters? last = null;
+
+        foreach (JsonObject node in JsonObjects(lines))
+        {
+            if (!IsRateLimitEvent(node)
+                || node["rate_limit_info"] is not JsonObject rateLimitInfo
+                || rateLimitInfo["unifiedWindows"] is not JsonObject unifiedWindows)
+            {
+                continue;
+            }
+
+            PlanUsageMeters meters = new(
+                ReadUtilization(unifiedWindows[FiveHourKey]),
+                ReadUtilization(unifiedWindows[SevenDayKey]));
+            first ??= meters;
+            last = meters;
+        }
+
+        return new PlanUsageWindows(first, last);
+    }
+
+    private static decimal? ReadUtilization(JsonNode? window) =>
+        window is JsonObject windowObj
+        && windowObj["utilization"] is JsonValue utilization
+        && utilization.GetValueKind() == JsonValueKind.Number
+        && utilization.TryGetValue(out decimal value)
+            ? value
+            : null;
+
+    // Non-JSON lines (stderr notices, truncated tail lines) are skipped, not fatal.
+    private static IEnumerable<JsonObject> JsonObjects(IEnumerable<string> lines)
+    {
+        foreach (string line in lines)
+        {
+            string trimmed = line.Trim();
+
+            if (trimmed.Length > 0 && trimmed[0] == '{' && TryParseObject(trimmed) is { } node)
+            {
+                yield return node;
+            }
+        }
+    }
+
+    private static bool IsRateLimitEvent(JsonObject node) =>
+        node["type"] is JsonValue type
+        && type.GetValueKind() == JsonValueKind.String
+        && type.GetValue<string>() == "rate_limit_event";
 
     private static JsonObject? TryParseObject(string line)
     {

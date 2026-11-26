@@ -45,6 +45,7 @@ public static class CredentialsModule
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
         services.AddScoped<IClaudeApiCredentialReader, ClaudeApiCredentialReader>();
+        services.AddSingleton<IPlanUsageWindowReader, PlanUsageWindowReader>();
 
         services.AddSharedDockerInfrastructure();
         services.AddSingleton<ICredentialsOrchestrator, CredentialsOrchestrator>();

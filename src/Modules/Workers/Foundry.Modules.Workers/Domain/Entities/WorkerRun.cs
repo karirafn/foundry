@@ -193,6 +193,53 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// </summary>
     public Toolchain? Toolchain { get; private set; }
 
+    /// <summary>
+    /// The Implement Demand an implement run was dispatched with, the effective demand at claim time;
+    /// <see langword="null"/> for a triage or review run and for runs recorded before runs kept it.
+    /// </summary>
+    public ImplementDemand? Demand { get; private set; }
+
+    /// <summary>
+    /// The model written to the run's managed settings, empty when none was written so the account default applied;
+    /// <see langword="null"/> for runs recorded before runs kept it.
+    /// </summary>
+    public string? Model { get; private set; }
+
+    /// <summary>
+    /// The effort written to the run's managed settings, empty when none was (always for triage and review);
+    /// <see langword="null"/> for runs recorded before runs kept it.
+    /// </summary>
+    public string? Effort { get; private set; }
+
+    /// <summary>
+    /// The plan usage the first <c>rate_limit_event</c> in the run's output reported; <see langword="null"/> when none
+    /// reported it (an API-key account, an older CLI, a run that ended before its first event, or a run whose full
+    /// log could not be read).
+    /// </summary>
+    public PlanUsage? PlanUsageAtStart { get; private set; }
+
+    /// <summary>The plan usage the last <c>rate_limit_event</c> in the run's output reported; null exactly when <see cref="PlanUsageAtStart"/> is.</summary>
+    public PlanUsage? PlanUsageAtEnd { get; private set; }
+
+    protected void StoreRunModel(RunModel runModel)
+    {
+        ArgumentNullException.ThrowIfNull(runModel);
+        if (runModel.Demand is not null && Role != WorkerRole.Implement)
+        {
+            throw new ArgumentException($"Only an implement run has a demand; this run's role is '{Role.Name}'.", nameof(runModel));
+        }
+
+        Demand = runModel.Demand;
+        Model = runModel.Model;
+        Effort = runModel.Effort;
+    }
+
+    protected void StorePlanUsage(RunPlanUsage? planUsage)
+    {
+        PlanUsageAtStart = planUsage?.AtStart;
+        PlanUsageAtEnd = planUsage?.AtEnd;
+    }
+
     protected void StoreSuppliedOpenIssueNumbers(IReadOnlyList<int>? suppliedOpenIssueNumbers)
     {
         SuppliedOpenIssueNumbers = suppliedOpenIssueNumbers;
@@ -264,6 +311,11 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         StoreSuppliedSpecHash(source.SuppliedSpecHash);
         SourceTokenHash = source.SourceTokenHash;
         StoreToolchain(source.Toolchain);
+        Demand = source.Demand;
+        Model = source.Model;
+        Effort = source.Effort;
+        PlanUsageAtStart = source.PlanUsageAtStart;
+        PlanUsageAtEnd = source.PlanUsageAtEnd;
         RefusesNeedsInput = source.RefusesNeedsInput;
     }
 

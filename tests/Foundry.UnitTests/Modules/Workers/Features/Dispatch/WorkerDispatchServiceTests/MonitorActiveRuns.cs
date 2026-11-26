@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -60,7 +61,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         MonitoringStubWorkerOrchestrator orchestrator = new(status: null);
         DispatchAndPublishTicker sut = base.BuildService(
             orchestrator,
-            containerOutputParser: new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
+            containerOutputParser: new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()));
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
         SeedActiveRun("removed-container");
 

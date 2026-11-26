@@ -130,7 +130,7 @@ internal sealed class WorkerOutcomeResolver(
             MergeRequestPresence.Open when succeeded => ResolveOpen(branched, mr, containerOutput, summary, askedQuestions),
             MergeRequestPresence.Open => new WorkerOutcome.ContinuableFailure(
                 branched.BranchName,
-                RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run.Role),
+                RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run),
                 containerOutput,
                 summary),
             MergeRequestPresence.Closed => await ResolveClosedAsync(branched, containerOutput, summary, cancellationToken),
@@ -333,7 +333,7 @@ internal sealed class WorkerOutcomeResolver(
                 : ResolveSucceededNoCommits(run, containerOutput, summary, askedQuestions);
         }
 
-        FailureReason failureReason = RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run.Role);
+        FailureReason failureReason = RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run.Run);
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
@@ -396,7 +396,7 @@ internal sealed class WorkerOutcomeResolver(
         IReadOnlyList<InputQuestion>? askedQuestions)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-        FailureReason? classified = RunFailureClassifier.TryClassify(parseResult, run.Role);
+        FailureReason? classified = RunFailureClassifier.TryClassify(parseResult, run.Run);
 
         if (classified is not null)
         {

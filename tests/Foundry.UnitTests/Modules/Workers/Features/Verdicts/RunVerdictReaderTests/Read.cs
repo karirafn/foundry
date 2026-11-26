@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
@@ -15,7 +16,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Verdicts.RunVerdictReaderTe
 public sealed class Read
 {
     private readonly RunVerdictReader _sut = new(
-        new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
+        new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()),
         [new ImplementVerdictParser()]);
 
     private static string Log(string resultLine) => string.Join(

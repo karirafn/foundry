@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -29,7 +30,7 @@ public sealed partial class ResolveAsync
         WorkerOutcome.Failure resolved = new(new FailureReason.ContainerError("from the role's resolver"), null, null);
         WorkerOutcomeResolver sut = new(
             new NoProviderCallsQueries(),
-            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
+            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()),
             [new FixedVerdictOutcomeResolver(WorkerRole.Triage, resolved)],
             prRetryDelay: TimeSpan.Zero);
 
@@ -71,7 +72,7 @@ public sealed partial class ResolveAsync
         // Arrange
         WorkerOutcomeResolver sut = new(
             new NoProviderCallsQueries(),
-            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
+            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()),
             verdictOutcomeResolvers: [],
             prRetryDelay: TimeSpan.Zero);
 

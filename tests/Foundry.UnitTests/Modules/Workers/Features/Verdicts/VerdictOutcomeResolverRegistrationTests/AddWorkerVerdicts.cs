@@ -1,3 +1,5 @@
+using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Roles;
@@ -26,6 +28,7 @@ public sealed class AddWorkerVerdicts
         WorkerRole role = WorkerRole.FromStored(roleName);
         ServiceCollection services = new();
         services.AddSingleton<ILogger<ContainerOutputParser>>(NullLogger<ContainerOutputParser>.Instance);
+        services.AddSingleton<IPlanUsageWindowReader, PlanUsageWindowReader>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.Empty());
         services.AddWorkerVerdicts();

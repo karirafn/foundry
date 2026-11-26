@@ -12,8 +12,12 @@ public sealed class ImplementTierSettingsConfiguration : IEntityTypeConfiguratio
     internal const string RoutineToken = "routine";
     internal const string DemandingToken = "demanding";
 
-    private const int DemandMaxLength = 20;
-    private const int EffortMaxLength = 20;
+    internal const int DemandMaxLength = 20;
+    internal const int EffortMaxLength = 20;
+
+    internal static readonly ValueConverter<ImplementDemand, string> DemandConverter = new(
+        demand => demand == ImplementDemand.Routine ? RoutineToken : DemandingToken,
+        token => token == RoutineToken ? ImplementDemand.Routine : ImplementDemand.Demanding);
 
     public void Configure(EntityTypeBuilder<ImplementTierSettings> builder)
     {
@@ -22,9 +26,7 @@ public sealed class ImplementTierSettingsConfiguration : IEntityTypeConfiguratio
         builder.HasKey(s => s.Demand);
 
         builder.Property(s => s.Demand)
-            .HasConversion(new ValueConverter<ImplementDemand, string>(
-                demand => demand == ImplementDemand.Routine ? RoutineToken : DemandingToken,
-                token => token == RoutineToken ? ImplementDemand.Routine : ImplementDemand.Demanding))
+            .HasConversion(DemandConverter)
             .HasMaxLength(DemandMaxLength)
             .IsUnicode(false)
             .HasColumnName("demand");

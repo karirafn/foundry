@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -199,7 +200,47 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         run.Toolchain.ShouldBeNull();
     }
 
-    private static ContainerOutputParser RealParser() => new(NullLogger<ContainerOutputParser>.Instance);
+    // rate_limit_event lines in the shape the CLI emits on a subscription account, with Docker timestamps.
+    private const string FullLogWithPlanUsage =
+        """2026-11-10T10:00:01.000000000Z {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.54,"resetsAt":1793399400,"status":"allowed"},"seven_day":{"utilization":0.47,"resetsAt":1793527200,"status":"allowed"}}}}""" + "\n"
+        + """2026-11-10T10:00:02.000000000Z {"type":"assistant","message":{"content":[{"type":"text","text":"Working."}]}}""" + "\n"
+        + """2026-11-10T10:30:00.000000000Z {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.61,"resetsAt":1793399400,"status":"allowed"}}}}""";
+
+    [Fact]
+    public async Task WhenContainerExitsCleanly_TheRunKeepsThePlanUsageOfItsFullLogThroughPublishing()
+    {
+        // Arrange
+        SeedActiveRun("container-plan-usage");
+        TranscriptStub orchestrator = new(ExitedCleanly, tail: "tail output", fullLog: FullLogWithPlanUsage);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, containerOutputParser: RealParser());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRun run = await LoadRunAsync();
+        run.ShouldBeOfType<CompletedRun>();
+        run.PlanUsageAtStart.ShouldBe(new PlanUsage(0.54m, 0.47m));
+        run.PlanUsageAtEnd.ShouldBe(new PlanUsage(0.61m, null));
+    }
+
+    [Fact]
+    public async Task WhenTheFullLogHasNoRateLimitEvent_RecordsNoPlanUsage()
+    {
+        // Arrange
+        SeedActiveRun("container-plan-usage-absent");
+        TranscriptStub orchestrator = new(ExitedWithFailure, tail: "tail output", fullLog: FullLog);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, containerOutputParser: RealParser());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRun run = await LoadRunAsync();
+        (run.PlanUsageAtStart, run.PlanUsageAtEnd).ShouldBe(((PlanUsage?)null, (PlanUsage?)null));
+    }
+
+    private static ContainerOutputParser RealParser() => new(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
 
     private async Task<WorkerRun> LoadRunAsync()
     {

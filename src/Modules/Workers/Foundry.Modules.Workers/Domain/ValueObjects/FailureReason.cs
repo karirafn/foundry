@@ -100,6 +100,8 @@ public abstract record FailureReason
         PackageRestoreFailed packageRestoreFailed => $"Could not restore packages: {packageRestoreFailed.Detail}",
         TransientApiError => "Transient Anthropic API fault",
         CreditsExhausted => "Credits exhausted",
+        ModelUnavailable { Demand: { } demand } modelUnavailable =>
+            $"The selected model is unavailable to this account. Pick another model in the '{modelUnavailable.Role}' worker role's '{TierSettingName(demand)}' setting",
         ModelUnavailable modelUnavailable =>
             $"The selected model is unavailable to this account. Pick another model in the '{modelUnavailable.Role}' worker role's model setting",
         Cancelled => "Worker run cancelled",
@@ -113,6 +115,10 @@ public abstract record FailureReason
         RepositoryRemoved => "The run was discarded because its repository was removed from Foundry: nothing was pushed",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
+
+    // The section titles the dashboard gives the implement role's Tier Model settings.
+    private static string TierSettingName(ImplementDemand demand) =>
+        demand == ImplementDemand.Routine ? "Routine model" : "Demanding model";
 
     /// <summary>
     /// The container exited non-zero. <see cref="Detail"/> carries what the CLI reported in an <c>is_error</c>
@@ -164,7 +170,12 @@ public abstract record FailureReason
     /// The CLI rejected the run's model on its first request ("There's an issue with the selected model"). The model
     /// comes from the role's model setting, so <see cref="Role"/> names the setting to change.
     /// </summary>
-    public sealed record ModelUnavailable(string Role) : FailureReason;
+    /// <summary>
+    /// The run's model is unavailable to the account. <see cref="Demand"/> is the Implement Demand whose Tier Model an
+    /// implement run used, so the summary names that setting; <see langword="null"/> for triage and review, and for reasons
+    /// stored before it was kept.
+    /// </summary>
+    public sealed record ModelUnavailable(string Role, ImplementDemand? Demand = null) : FailureReason;
 
     /// <summary>
     /// A user cancelled the run from the dashboard; the container was stopped.

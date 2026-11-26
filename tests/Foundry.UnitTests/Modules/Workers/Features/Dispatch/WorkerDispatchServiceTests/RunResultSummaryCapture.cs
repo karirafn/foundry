@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
@@ -207,7 +208,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             .Append("2026-11-02T17:40:00.000000000Z " + StreamJsonFixtures.RecordedResultLine);
         string logs = string.Join('\n', lines);
         logs.Length.ShouldBeGreaterThan(65_536);
-        ContainerOutputParser parser = new(NullLogger<ContainerOutputParser>.Instance);
+        ContainerOutputParser parser = new(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
         StubPostExitProviderQueries queries = new(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/1"));
@@ -246,6 +247,8 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         public JsonObject? ParseStructuredOutput(string? log) => null;
 
         public Toolchain? ParseToolchain(string? fullLog) => null;
+
+        public RunPlanUsage? ParsePlanUsage(string? fullLog) => null;
     }
 
     private sealed class ExitedWorkerOrchestrator(WorkerStatus status, string? logs) : IWorkerOrchestrator

@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -46,8 +47,8 @@ public sealed partial class ResolveAsync
     private static WorkerOutcomeResolver BuildTriageResolver() =>
         new(
             new NoProviderCallsQueries(),
-            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance),
-            [new TriageOutcomeResolver(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance))],
+            new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()),
+            [new TriageOutcomeResolver(new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader()))],
             prRetryDelay: TimeSpan.Zero);
 
     [Fact]

@@ -26,12 +26,12 @@ internal sealed class ReviewOutcomeResolver(
         if (!RunFailureClassifier.Succeeded(status, summary))
         {
             return new WorkerOutcome.Failure(
-                RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run.Role),
+                RunFailureClassifier.Classify(containerOutputParser, status, containerOutput, summary, run),
                 containerOutput,
                 summary);
         }
 
-        if (RunFailureClassifier.TryClassify(containerOutputParser.Parse(containerOutput), run.Role) is { } classified)
+        if (RunFailureClassifier.TryClassify(containerOutputParser.Parse(containerOutput), run) is { } classified)
         {
             return new WorkerOutcome.Failure(classified, containerOutput, summary);
         }

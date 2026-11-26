@@ -1,3 +1,4 @@
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -47,7 +48,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
     {
-        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance);
+        IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance, new PlanUsageWindowReader());
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, containerLogs);
 
         return base.BuildService(
