@@ -123,7 +123,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenChecksPendingAndOutcomePassed_TransitionsToReviewIssue()
+    public async Task WhenChecksPendingAndOutcomePassed_TransitionsToRebasePendingBeforeReady()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -145,12 +145,14 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ReviewIssue reviewIssue = issue.ShouldBeOfType<ReviewIssue>();
-        reviewIssue.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>();
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.Passed>());
     }
 
     [Fact]
-    public async Task WhenChecksPendingAndOutcomeNoneDetected_TransitionsToReviewIssueWithNoneDetected()
+    public async Task WhenChecksPendingAndOutcomeNoneDetected_TransitionsToRebasePendingBeforeReadyWithNoneDetected()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -172,8 +174,10 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ReviewIssue reviewIssue = issue.ShouldBeOfType<ReviewIssue>();
-        reviewIssue.ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>();
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ChecksOutcome.ShouldBeOfType<ChecksOutcome.NoneDetected>());
     }
 
     [Fact]
@@ -455,12 +459,12 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ReviewIssue reviewIssue = issue.ShouldBeOfType<ReviewIssue>();
-        reviewIssue.FeedbackCutoffAt.ShouldBe(seeded.FeedbackCutoffAt);
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.FeedbackCutoffAt.ShouldBe(seeded.FeedbackCutoffAt);
     }
 
     [Fact]
-    public async Task WhenChecksPendingIssueTransitions_DispatchesIssueInReviewEvent()
+    public async Task WhenChecksPendingIssueTransitionsBeforeReady_DispatchesIssueRebasePendingEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -477,9 +481,9 @@ public sealed class HandleAsync : IAsyncDisposable
         await _sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        _dispatcher.DispatchedEvents
-            .OfType<IssueInReview>()
-            .ShouldHaveSingleItem();
+        _dispatcher.DispatchedEvents.ShouldSatisfyAllConditions(
+            () => _dispatcher.DispatchedEvents.OfType<IssueRebasePending>().ShouldHaveSingleItem(),
+            () => _dispatcher.DispatchedEvents.OfType<IssueInReview>().ShouldBeEmpty());
     }
 
     [Fact]
@@ -539,6 +543,32 @@ public sealed class HandleAsync : IAsyncDisposable
     [Theory]
     [InlineData("passed")]
     [InlineData("none_detected")]
+    public async Task WhenChecksPendingRebasesBeforeReady_StoresHeadShaAsVerifiedHead(string outcome)
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: outcome,
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<RebasePendingIssue>().VerifiedHeadSha.ShouldBe(VerifiedHead);
+    }
+
+    [Theory]
     [InlineData("unfinished")]
     [InlineData("unreadable")]
     public async Task WhenChecksPendingTransitionsToReview_StoresHeadShaAsVerifiedHead(string outcome)

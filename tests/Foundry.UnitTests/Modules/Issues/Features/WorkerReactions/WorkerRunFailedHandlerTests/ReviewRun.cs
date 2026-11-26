@@ -91,7 +91,7 @@ public sealed class ReviewRun : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTransientWithRetriesExhausted_TheReviewIsSkippedToAPerson()
+    public async Task WhenTransientWithRetriesExhausted_TheReviewIsSkippedAndRebasesBeforeReady()
     {
         // Arrange
         WorkerRunId workerRunId = WorkerRunId.New();
@@ -103,12 +103,14 @@ public sealed class ReviewRun : IAsyncDisposable
         await BuildSut(consecutiveTransientRuns: maxRetries).HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        ReviewIssue review = (await ReloadAsync(reviewing)).ShouldBeOfType<ReviewIssue>();
-        review.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.TransientApiErrorToken));
+        RebasePendingIssue rebasePending = (await ReloadAsync(reviewing)).ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.TransientApiErrorToken)));
     }
 
     [Fact]
-    public async Task WhenNotTransient_TheReviewIsSkippedToAPersonWithTheCategoryAsReason()
+    public async Task WhenNotTransient_TheReviewIsSkippedWithTheCategoryAsReasonAndRebasesBeforeReady()
     {
         // Arrange
         WorkerRunId workerRunId = WorkerRunId.New();
@@ -119,11 +121,11 @@ public sealed class ReviewRun : IAsyncDisposable
         await BuildSut(consecutiveTransientRuns: 0).HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        ReviewIssue review = (await ReloadAsync(reviewing)).ShouldBeOfType<ReviewIssue>();
-        review.ShouldSatisfyAllConditions(
-            () => review.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.VerdictInvalidToken)),
-            () => review.VerifiedHeadSha.ShouldBe(ReviewedCommit),
-            () => review.MergeOutcome.ShouldBeNull());
+        RebasePendingIssue rebasePending = (await ReloadAsync(reviewing)).ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.VerdictInvalidToken)),
+            () => rebasePending.VerifiedHeadSha.ShouldBe(ReviewedCommit));
     }
 
     [Fact]

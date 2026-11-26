@@ -965,11 +965,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         // Arrange
         WorkerRunId reviewRunId = WorkerRunId.New();
         ReviewInProgressIssue reviewing = new IssueBuilder().WithWorkerRunId(reviewRunId).ReviewInProgress();
-        ReviewIssue review = (ReviewIssue)reviewing.ResolveVerdict(
+        RebasePendingIssue beforeReady = (RebasePendingIssue)reviewing.ResolveVerdict(
             ReviewVerdictOutcome.ApprovedForPerson,
             patchId: null,
             new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Adequate, "Covered."),
             DateTimeOffset.UtcNow);
+        ReviewIssue review = (ReviewIssue)beforeReady.ResolveRebase(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         ReviewQueuedIssue requeued = (ReviewQueuedIssue)review
             .RecheckAfterHeadMoved(DateTimeOffset.UtcNow)
             .ResolveVerdict(new ChecksOutcome.Passed(), autoMerge: false, reviewPullRequests: true, headSha: "abc1234", DateTimeOffset.UtcNow);

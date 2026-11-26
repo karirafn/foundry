@@ -55,11 +55,12 @@ public sealed class RetryReview
     public void WhenTheReviewerHandedThePullRequestToAPerson_ReturnsNull()
     {
         // Arrange
-        ReviewIssue review = (ReviewIssue)new IssueBuilder().ReviewInProgress().ResolveVerdict(
+        RebasePendingIssue beforeReady = (RebasePendingIssue)new IssueBuilder().ReviewInProgress().ResolveVerdict(
             ReviewVerdictOutcome.ApprovedForPerson,
             patchId: null,
             new RevisionTrigger.ReviewFindings([], [], ReviewTestsAssessment.Adequate, "Covered."),
             DateTimeOffset.UtcNow);
+        ReviewIssue review = (ReviewIssue)beforeReady.ResolveRebase(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
 
         // Act
         ReviewQueuedIssue? queued = review.RetryReview(DateTimeOffset.UtcNow);

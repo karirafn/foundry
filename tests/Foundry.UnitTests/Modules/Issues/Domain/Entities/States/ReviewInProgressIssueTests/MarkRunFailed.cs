@@ -35,7 +35,7 @@ public sealed class MarkRunFailed
     }
 
     [Fact]
-    public void WhenTransientWithTheScheduleSpent_SkipsTheReviewToAPerson()
+    public void WhenTransientWithTheScheduleSpent_SkipsTheReviewAndRebasesBeforeReady()
     {
         // Arrange
         ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
@@ -45,12 +45,14 @@ public sealed class MarkRunFailed
         Issue next = reviewing.MarkRunFailed("API overloaded", FailureCategory.TransientApiError, maxRetries, DateTimeOffset.UtcNow);
 
         // Assert
-        next.ShouldBeOfType<ReviewIssue>().ReviewOutcome
-            .ShouldBe(new ReviewOutcome.Skipped(FailureCategory.TransientApiErrorToken));
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.TransientApiErrorToken)));
     }
 
     [Fact]
-    public void WhenNotTransient_SkipsTheReviewToAPersonAndNeverMerges()
+    public void WhenNotTransient_SkipsTheReviewAndRebasesBeforeReadyAndNeverMerges()
     {
         // Arrange
         ReviewInProgressIssue reviewing = new IssueBuilder().WithAutoMerge(true).ReviewInProgress();
@@ -59,10 +61,11 @@ public sealed class MarkRunFailed
         Issue next = reviewing.MarkRunFailed("Verdict missing", FailureCategory.VerdictInvalid, 0, DateTimeOffset.UtcNow);
 
         // Assert
-        ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
-        review.ShouldSatisfyAllConditions(
-            () => review.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.VerdictInvalidToken)),
-            () => reviewing.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem(),
+        RebasePendingIssue rebasePending = next.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Reason.ShouldBeOfType<RebasePendingReason.BeforeReady>(),
+            () => rebasePending.ReviewOutcome.ShouldBe(new ReviewOutcome.Skipped(FailureCategory.VerdictInvalidToken)),
+            () => reviewing.DomainEvents.OfType<IssueRebasePending>().ShouldHaveSingleItem(),
             () => reviewing.DomainEvents.OfType<IssueMergePending>().ShouldBeEmpty());
     }
 }

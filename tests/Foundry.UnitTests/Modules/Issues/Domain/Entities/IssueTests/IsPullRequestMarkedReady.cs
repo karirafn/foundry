@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -103,11 +104,12 @@ public sealed class IsPullRequestMarkedReady
         reviewInProgress.RecordPullRequestMarkedReady(PullRequestUrl);
 
         // Act
-        Issue next = reviewInProgress.MarkRunFailed(
+        RebasePendingIssue beforeReady = (RebasePendingIssue)reviewInProgress.MarkRunFailed(
             "Review verdict invalid",
             FailureCategory.VerdictInvalid,
             consecutiveAutoRetryableFailures: 0,
             Now);
+        Issue next = beforeReady.ResolveRebase(new RebaseOutcome.UpToDate(), Now);
 
         // Assert
         ReviewIssue review = next.ShouldBeOfType<ReviewIssue>();
