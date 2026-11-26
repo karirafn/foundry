@@ -19,7 +19,9 @@ internal sealed class TriageDecisionsRecordedBridge(IIntegrationEventDispatcher 
                     @event.MonitoredRepositoryId,
                     @event.IssueNumber,
                     @event.Decisions,
-                    @event.Release),
+                    @event.Release,
+                    @event.Demand,
+                    @event.DemandReason),
             ],
             cancellationToken);
 }

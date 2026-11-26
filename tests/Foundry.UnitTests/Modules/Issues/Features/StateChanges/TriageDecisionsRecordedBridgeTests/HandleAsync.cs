@@ -27,7 +27,8 @@ public sealed class HandleAsync
             TriageDecisionBuilder.Build(question: "Which cap?"),
             TriageDecisionBuilder.Build(question: "Which log level?", ground: TriageDecisionGround.ImplementationDetail),
         ];
-        TriageDetailsDecided domainEvent = new(issueId, repositoryId, 42, decisions, TriageRelease.WaitingOnBlockers);
+        TriageDetailsDecided domainEvent = new(
+            issueId, repositoryId, 42, decisions, TriageRelease.WaitingOnBlockers, ImplementDemand.Routine, "Copies a sibling.");
 
         // Act
         await sut.HandleAsync(domainEvent, TestContext.Current.CancellationToken);
@@ -41,6 +42,8 @@ public sealed class HandleAsync
             () => published.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => published.IssueNumber.ShouldBe(42),
             () => published.Decisions.ShouldBe(decisions),
-            () => published.Release.ShouldBe(TriageRelease.WaitingOnBlockers));
+            () => published.Release.ShouldBe(TriageRelease.WaitingOnBlockers),
+            () => published.Demand.ShouldBe(ImplementDemand.Routine),
+            () => published.DemandReason.ShouldBe("Copies a sibling."));
     }
 }

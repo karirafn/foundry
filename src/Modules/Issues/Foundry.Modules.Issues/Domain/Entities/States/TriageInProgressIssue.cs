@@ -78,7 +78,9 @@ public sealed class TriageInProgressIssue : Issue
                 MonitoredRepositoryId,
                 IssueNumber,
                 decisions,
-                released.WaitsOnBlockers ? TriageRelease.WaitingOnBlockers : TriageRelease.Queued));
+                released.WaitsOnBlockers ? TriageRelease.WaitingOnBlockers : TriageRelease.Queued,
+                verdict.Demand,
+                verdict.DemandReason));
         }
 
         return released;

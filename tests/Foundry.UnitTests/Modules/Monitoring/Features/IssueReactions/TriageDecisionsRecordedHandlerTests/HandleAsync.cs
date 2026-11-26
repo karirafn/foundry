@@ -73,7 +73,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _provider.Calls.ShouldBe(
-            [$"comment owner/repo Issue {{ IssueNumber = 42 }} {TriageDecisionComment.Compose(@event.Decisions, TriageRelease.Queued)}"]);
+            [$"comment owner/repo Issue {{ IssueNumber = 42 }} {TriageDecisionComment.Compose(@event.Decisions, TriageRelease.Queued, ImplementDemand.Routine, "Copies a sibling.")}"]);
     }
 
     [Fact]
@@ -160,6 +160,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repo.Id,
             IssueNumber,
             [TriageDecisionBuilder.Build(), TriageDecisionBuilder.Build(question: "Which log level?", ground: TriageDecisionGround.ImplementationDetail)],
-            release);
+            release,
+            ImplementDemand.Routine,
+            "Copies a sibling.");
     }
 }
