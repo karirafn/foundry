@@ -4,7 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Signal, WritableSignal, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { vi } from 'vitest';
-import { SettingsService } from './settings.service';
+import { SUBMIT_CODE_ERROR, SettingsService } from './settings.service';
 import { LoginSessionUpdate } from '../models/settings.model';
 import { DispatchService } from './dispatch.service';
 import { SystemSignalRService } from './system-signalr.service';
@@ -1586,6 +1586,131 @@ describe('SettingsService — SignalR login session', () => {
     expect(service.codeSubmitting()).toBe(false);
     expect(service.loginPhase()).toBe('WaitingForAuthorization');
     expect(consoleError).toHaveBeenCalledWith(expect.objectContaining({ status: 422, url: '/api/credentials/login/code' }));
+  });
+
+  function pushWaiting(mockSignalR: ReturnType<typeof createMockSignalRService>): void {
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 's1',
+      phase: 'WaitingForAuthorization',
+      authorizationUrl: 'https://claude.ai',
+      failureReason: null,
+      failureMessage: null,
+    });
+  }
+
+  // Only `detail` matters to the client; ErrorProblemExtensions.ToProblem writes the error message there.
+  const codeRejectedProblem = {
+    title: 'Bad Request',
+    status: 400,
+    detail: "That doesn't look like the full code. Copy all of it, including the # in the middle.",
+  };
+
+  function rejectCode(service: SettingsService, httpMock: HttpTestingController): void {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    service.submitLoginCode('INVALID-CODE');
+    httpMock.expectOne('/api/credentials/login/code').flush(codeRejectedProblem, { status: 400, statusText: 'Bad Request' });
+  }
+
+  it('should expose the server detail as codeError when the code is refused with a 400', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+
+    // Act
+    rejectCode(service, httpMock);
+
+    // Assert
+    expect(service.codeError()).toBe("That doesn't look like the full code. Copy all of it, including the # in the middle.");
+    expect(service.loginPhase()).toBe('WaitingForAuthorization');
+    expect(service.codeSubmitting()).toBe(false);
+  });
+
+  it('should fall back to the generic codeError when a 422 carries no detail', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    service.submitLoginCode('a-code');
+    httpMock.expectOne('/api/credentials/login/code').flush('Unprocessable', { status: 422, statusText: 'Unprocessable Entity' });
+
+    // Assert
+    expect(service.codeError()).toBe(SUBMIT_CODE_ERROR);
+  });
+
+  it('should fall back to the generic codeError on a network error', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    service.submitLoginCode('a-code');
+    httpMock.expectOne('/api/credentials/login/code').error(new ProgressEvent('error'), { status: 0, statusText: '' });
+
+    // Assert
+    expect(service.codeError()).toBe(SUBMIT_CODE_ERROR);
+  });
+
+  it('should clear codeError as soon as the code is submitted again', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+    rejectCode(service, httpMock);
+
+    // Act
+    service.submitLoginCode('INVALID-CODE');
+
+    // Assert
+    expect(service.codeError()).toBeNull();
+    httpMock.expectOne('/api/credentials/login/code').flush(null);
+  });
+
+  it('should clear codeError when cancelLogin is called', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+    rejectCode(service, httpMock);
+
+    // Act
+    service.cancelLogin();
+
+    // Assert
+    expect(service.codeError()).toBeNull();
+  });
+
+  it('should clear codeError when startLogin is called', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+    rejectCode(service, httpMock);
+
+    // Act
+    service.startLogin();
+
+    // Assert
+    expect(service.codeError()).toBeNull();
+    httpMock.expectOne('/api/credentials/login/start').flush({ sessionId: 's2' }, { status: 202, statusText: 'Accepted' });
+  });
+
+  it('should clear codeError when SignalR moves the session to Failed', () => {
+    // Arrange
+    const { service, httpMock, mockSignalR } = setupWithSignalR();
+    pushWaiting(mockSignalR);
+    rejectCode(service, httpMock);
+
+    // Act
+    mockSignalR.loginSessionUpdate.next({
+      sessionId: 's1',
+      phase: 'Failed',
+      authorizationUrl: null,
+      failureReason: 'InvalidCode',
+      failureMessage: null,
+    });
+
+    // Assert
+    expect(service.codeError()).toBeNull();
   });
 
   // Cycle: cancelLogin clears all login signals

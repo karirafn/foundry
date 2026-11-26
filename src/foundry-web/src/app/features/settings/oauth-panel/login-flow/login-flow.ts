@@ -7,8 +7,10 @@ import {
   afterNextRender,
   afterRenderEffect,
   computed,
+  effect,
   inject,
   input,
+  linkedSignal,
   output,
   runInInjectionContext,
   signal,
@@ -46,12 +48,17 @@ function failedCopy(error: LoginError | null): FailedCopy {
   }
 }
 
-function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: string | null): string {
+function liveText(
+  phase: LoginPhase,
+  error: LoginError | null,
+  accountEmail: string | null,
+  codeError: string | null
+): string {
   switch (phase) {
     case 'Starting':
       return 'Starting sign-in…';
     case 'WaitingForAuthorization':
-      return 'Sign-in link ready. Paste your code.';
+      return codeError ?? 'Sign-in link ready. Paste your code.';
     case 'SigningIn':
       return 'Signing you in…';
     case 'Succeeded':
@@ -97,7 +104,8 @@ function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: str
           class="login-flow__code-input"
           type="text"
           aria-label="Authorization code"
-          aria-describedby="login-flow-code-hint"
+          [attr.aria-invalid]="_visibleCodeError() ? true : null"
+          [attr.aria-describedby]="_visibleCodeError() ? 'login-flow-code-error login-flow-code-hint' : 'login-flow-code-hint'"
           placeholder="Paste your code"
           autocomplete="off"
           spellcheck="false"
@@ -106,6 +114,10 @@ function liveText(phase: LoginPhase, error: LoginError | null, accountEmail: str
           (input)="_onCodeInput($event)"
           (keydown)="_onCodeKeydown($event)"
         />
+        <!-- No role: the persistent live region above announces the message. -->
+        @if (_visibleCodeError(); as message) {
+          <p id="login-flow-code-error" class="login-flow__code-error">{{ message }}</p>
+        }
         <span id="login-flow-code-hint" class="login-flow__code-hint">
           After you authorize, Claude shows a code — paste it here.
         </span>
@@ -153,6 +165,7 @@ export class LoginFlowComponent {
   readonly url = input<string | null>(null);
   readonly error = input<LoginError | null>(null);
   readonly accountEmail = input<string | null>(null);
+  readonly codeError = input<string | null>(null);
 
   readonly submitCode = output<string>();
   readonly retry = output<void>();
@@ -166,9 +179,27 @@ export class LoginFlowComponent {
   private readonly _codeValueSignal = signal('');
   protected readonly _codeValue = this._codeValueSignal.asReadonly();
 
+  // The paste survives the SigningIn unmount so a refused code is refilled. An effect, not a
+  // linkedSignal: the value is only read inside the waiting block, so a linkedSignal would miss
+  // a Failed → Starting → WaitingForAuthorization round trip and bring the old code back.
+  private readonly _clearCodeEffect = effect(() => {
+    const phase = this.phase();
+    if (phase !== 'WaitingForAuthorization' && phase !== 'SigningIn') {
+      this._codeValueSignal.set('');
+    }
+  });
+
+  // A fresh source object on every phase or error change, so a second identical refusal is shown again.
+  protected readonly _visibleCodeError = linkedSignal({
+    source: () => ({ phase: this.phase(), codeError: this.codeError() }),
+    computation: ({ codeError }) => codeError,
+  });
+
   protected readonly _canSubmit = computed(() => this._codeValueSignal().trim().length > 0);
 
-  protected readonly _liveText = computed(() => liveText(this.phase(), this.error(), this.accountEmail()));
+  protected readonly _liveText = computed(() =>
+    liveText(this.phase(), this.error(), this.accountEmail(), this.codeError())
+  );
 
   protected readonly _failedCopy = computed(() => failedCopy(this.error()));
 
@@ -176,7 +207,12 @@ export class LoginFlowComponent {
     const phase = this.phase();
     if (phase === 'WaitingForAuthorization') {
       runInInjectionContext(this._injector, () =>
-        afterNextRender(() => this._codeInputRef?.nativeElement.focus())
+        afterNextRender(() => {
+          const codeInput = this._codeInputRef?.nativeElement;
+          codeInput?.focus();
+          // Selected, so pasting a corrected code replaces the refused one in one step.
+          codeInput?.select();
+        })
       );
     }
     if (phase === 'Failed') {
@@ -189,6 +225,7 @@ export class LoginFlowComponent {
   protected _onCodeInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     this._codeValueSignal.set(input.value);
+    this._visibleCodeError.set(null);
   }
 
   protected _onCodeKeydown(event: KeyboardEvent): void {
@@ -202,7 +239,6 @@ export class LoginFlowComponent {
     if (!trimmed) {
       return;
     }
-    this._codeValueSignal.set('');
     this.submitCode.emit(trimmed);
   }
 }

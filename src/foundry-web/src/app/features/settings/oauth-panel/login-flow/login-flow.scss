@@ -78,6 +78,17 @@
     &:focus-visible {
       @include focus-ring;
     }
+
+    &[aria-invalid='true'] {
+      border-color: var(--fd-state-failed);
+    }
+  }
+
+  &__code-error {
+    color: var(--fd-text-error);
+    font-size: 0.8125rem;
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   &__code-hint {
