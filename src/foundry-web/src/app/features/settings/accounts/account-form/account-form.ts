@@ -34,6 +34,12 @@ import {
   narrowTokenValidationKind,
   providerDisplayName,
   wrongTokenKindMessage,
+  wrongTokenKindOffersCreateLink,
+  isConformingToken,
+  isSaveEligible,
+  validationNotAllowed,
+  validationBroadReach,
+  broadReachMessage,
   resolveTokenExpiry,
   resolveTokenStatus,
 } from '../account.model';
@@ -237,7 +243,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
           @let previewExpiry = _resolveTokenExpiry(result.tokenExpiry);
           @switch (_kindOf(result)) {
             @case ('authenticated') {
-              @if (result.missingScopes.length === 0) {
+              @if (_isConformingToken(result)) {
                 <span class="account-form__validation-block">
                   <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
                   <span class="account-form__validation-message account-form__validation-message--valid">
@@ -264,6 +270,30 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                   </span>
                 }
               } @else {
+                @let broadReach = _broadReach(result);
+                @let notAllowed = _notAllowed(result);
+                @if (broadReach.length > 0) {
+                  <span class="account-form__validation-block">
+                    <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                    <span class="account-form__validation-message account-form__validation-message--error">
+                      <span class="sr-only">Error: </span>{{ _broadReachMessage(broadReach) }}
+                    </span>
+                  </span>
+                }
+                @if (notAllowed.length > 0) {
+                  <span class="account-form__validation-block">
+                    <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
+                    <span class="account-form__validation-message account-form__validation-message--error">
+                      <span class="sr-only">Error: </span>This token grants permissions Foundry doesn't allow:
+                      <ul class="account-form__validation-list">
+                        @for (label of notAllowed; track label) {
+                          <li>{{ label }}</li>
+                        }
+                      </ul>
+                    </span>
+                  </span>
+                }
+                @if (result.missingScopes.length > 0) {
                 <span class="account-form__validation-block">
                   <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
                   <span class="account-form__validation-message account-form__validation-message--warning">
@@ -275,33 +305,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                     </ul>
                   </span>
                 </span>
-              }
-            }
-            @case ('scopesUnverifiable') {
-              <span class="account-form__validation-block">
-                <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-                <span class="account-form__validation-message account-form__validation-message--warning">
-                  <span class="sr-only">Warning: </span>Authenticated as <span class="account-form__account-name">{{ result.accountName }}</span> — couldn't verify token scopes
-                </span>
-              </span>
-              @if (previewExpiry.status === 'expiringSoon') {
-                <span class="account-form__validation-block">
-                  <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-                  <span class="account-form__validation-message account-form__validation-message--warning">
-                    <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — pick a longer-lived token to avoid replacing it again soon
-                  </span>
-                </span>
-              } @else if (previewExpiry.status === 'expired') {
-                <span class="account-form__validation-block">
-                  <span class="account-form__validation-dot account-form__validation-dot--warning" aria-hidden="true"></span>
-                  <span class="account-form__validation-message account-form__validation-message--warning">
-                    <span class="sr-only">Warning: </span><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /> — {{ _provider() }} can reject it at any time; create a new token
-                  </span>
-                </span>
-              } @else if (previewExpiry.status !== 'notChecked') {
-                <span class="account-form__validation-block">
-                  <span class="account-form__validation-message"><fd-token-expiry [expiry]="previewExpiry" [providerName]="_provider()" /></span>
-                </span>
+                }
               }
             }
             @case ('wrongTokenKind') {
@@ -309,7 +313,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
                 <span class="account-form__validation-dot account-form__validation-dot--error" aria-hidden="true"></span>
                 <span class="account-form__validation-message account-form__validation-message--error">
                   <span class="sr-only">Error: </span>{{ _wrongTokenKindMessage(result.wrongKind) }}
-                  @if (_createTokenLink(); as link) {
+                  @if (_wrongTokenKindOffersCreateLink(result.wrongKind) && _createTokenLink(); as link) {
                     <a class="account-form__validation-link" [href]="link.url" target="_blank" rel="noopener noreferrer">
                       Create a fine-grained token on {{ link.host }}
                       <span aria-hidden="true">↗</span>
@@ -483,6 +487,11 @@ export class AccountFormComponent implements OnInit {
   );
 
   protected readonly _wrongTokenKindMessage = wrongTokenKindMessage;
+  protected readonly _wrongTokenKindOffersCreateLink = wrongTokenKindOffersCreateLink;
+  protected readonly _isConformingToken = isConformingToken;
+  protected readonly _notAllowed = validationNotAllowed;
+  protected readonly _broadReach = validationBroadReach;
+  protected readonly _broadReachMessage = broadReachMessage;
   /** Tracks visible conflicts (cleared when inputs change). */
   protected readonly _visibleConflicts: WritableSignal<NamespaceConflict[]> = signal([]);
 
@@ -539,25 +548,17 @@ export class AccountFormComponent implements OnInit {
         return false;
       }
       const result = this.validationResult();
-      return result !== null && AccountFormComponent._isSaveEligible(result);
+      return result !== null && isSaveEligible(result);
     }
     if (!this._resultVisible()) {
       return false;
     }
     const result = this.validationResult();
-    if (!result || !AccountFormComponent._isSaveEligible(result)) {
+    if (!result || !isSaveEligible(result)) {
       return false;
     }
     return !!this._token();
   });
-
-  private static _isSaveEligible(result: TokenValidationResult): boolean {
-    const kind = narrowTokenValidationKind(result);
-    if (kind === 'scopesUnverifiable') {
-      return true;
-    }
-    return kind === 'authenticated' && result.missingScopes.length === 0;
-  }
 
   protected readonly _saveLabel: Signal<string> = computed(() => {
     if (this.saving()) {

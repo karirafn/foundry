@@ -41,7 +41,7 @@ internal static class AccountsDatabaseHelpers
     internal static CredentialSummary ToSummary(
         Credential credential,
         DateTimeOffset now,
-        IReadOnlyList<DeniedRepositorySummary> deniedRepositories) =>
+        AccountDenials denials) =>
         new(
             credential.Id.Value,
             credential.Name.Value,
@@ -55,10 +55,11 @@ internal static class AccountsDatabaseHelpers
                     ? invalid.DetectedAt
                     : null,
             TokenExpirySummaries.From(credential.TokenExpiry, now),
-            deniedRepositories,
-            NonConformingTokenOf(credential));
+            denials.Repositories,
+            NonConformingTokenOf(credential) ?? denials.NonConformingToken);
 
-    // Read from the stored token itself, so replacing the token clears it with nothing else to update.
+    // A GitHub token's kind is read from the stored token itself, so replacing the token clears it with
+    // nothing else to update.
     private static NonConformingTokenSummary? NonConformingTokenOf(Credential credential) =>
         credential is GitHubCredential
             && credential.TokenUsability is TokenUsability.Usable usable

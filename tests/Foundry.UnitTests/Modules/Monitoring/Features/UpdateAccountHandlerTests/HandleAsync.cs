@@ -615,15 +615,16 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenScopesUnverifiable_ProceedsToUpdateCredential()
+    public async Task WhenTheTokenGrantsNotAllowedPermissions_RejectsWithNonConformingToken()
     {
         // Arrange
         GitHubCredential credential = await SeedCredentialAsync();
         UpdateAccount.Handler handler = BuildHandler(
             validateToken: new KindValidateTokenHandler(
-                ValidateToken.Kinds.ScopesUnverifiable,
-                AccountName: "unverifiable-user",
-                MissingScopes: []));
+                ValidateToken.Kinds.Authenticated,
+                AccountName: "octocat",
+                MissingScopes: [],
+                NotAllowed: ["delete_project"]));
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
 
         // Act
@@ -632,8 +633,8 @@ public sealed class HandleAsync : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
-        updated.Value.Credential.Name.ShouldBe("unverifiable-user");
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe(CredentialErrors.NonConformingTokenCode);
     }
 
     [Fact]
@@ -712,29 +713,6 @@ public sealed class HandleAsync : IAsyncDisposable
         UpdateAccount.Handler handler = BuildHandler(
             validateToken: new KindValidateTokenHandler(
                 ValidateToken.Kinds.IdentityUnresolved,
-                AccountName: null,
-                MissingScopes: []));
-        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
-
-        // Act
-        UpdateAccount.Outcome outcome = await handler.HandleAsync(
-            command,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
-        rejected.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
-    }
-
-    [Fact]
-    public async Task WhenScopesUnverifiableWithNullAccountName_RejectsWithUnresolvedIdentity()
-    {
-        // Arrange — ScopesUnverifiable with a null AccountName must map to UnresolvedIdentity,
-        // not silently fall through to InvalidToken via the default arm.
-        GitHubCredential credential = await SeedCredentialAsync();
-        UpdateAccount.Handler handler = BuildHandler(
-            validateToken: new KindValidateTokenHandler(
-                ValidateToken.Kinds.ScopesUnverifiable,
                 AccountName: null,
                 MissingScopes: []));
         UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
@@ -1005,7 +983,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1014,7 +994,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string kind,
         string? AccountName,
         IReadOnlyList<string> MissingScopes,
-        string? DetectedProvider = null)
+        string? DetectedProvider = null,
+        IReadOnlyList<string>? NotAllowed = null)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
         public Task<Result<ValidateToken.Response>> HandleAsync(
@@ -1028,7 +1009,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: DetectedProvider,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: NotAllowed ?? [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1192,7 +1175,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

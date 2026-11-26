@@ -22,8 +22,10 @@ internal static class TokenIdentityResolution
     {
         string? resolvedName = response.Kind switch
         {
-            ValidateToken.Kinds.Authenticated when response.MissingScopes.Count == 0 => response.AccountName,
-            ValidateToken.Kinds.ScopesUnverifiable => response.AccountName,
+            ValidateToken.Kinds.Authenticated
+                when response.MissingScopes.Count == 0
+                    && response.NotAllowed.Count == 0
+                    && response.BroadReach.Count == 0 => response.AccountName,
             _ => null,
         };
 
@@ -43,10 +45,11 @@ internal static class TokenIdentityResolution
     private static Error RejectionFor(ValidateToken.Response response) =>
         response.Kind switch
         {
+            ValidateToken.Kinds.Authenticated when response.NotAllowed.Count > 0 || response.BroadReach.Count > 0 =>
+                CredentialErrors.NonConformingToken,
             ValidateToken.Kinds.Authenticated => CredentialErrors.InvalidToken,
             ValidateToken.Kinds.AuthenticationFailed => CredentialErrors.InvalidToken,
             ValidateToken.Kinds.IdentityUnresolved => CredentialErrors.UnresolvedIdentity,
-            ValidateToken.Kinds.ScopesUnverifiable => CredentialErrors.UnresolvedIdentity,
             ValidateToken.Kinds.WrongTokenKind => CredentialErrors.WrongTokenKind,
             ValidateToken.Kinds.ProviderMismatch => CredentialErrors.ProviderMismatch(response.DetectedProvider ?? string.Empty),
             _ => CredentialErrors.InvalidToken,

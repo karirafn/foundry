@@ -64,11 +64,14 @@ public sealed class DeriveAsync
         derived.Namespaces.ShouldContain(ns => ns.Value == "octocat");
     }
 
-    private const string GitLabListingJson = """
-        [
-          { "path_with_namespace": "gitlab-user/project-a", "visibility": "public",
-            "permissions": { "project_access": { "access_level": 40 }, "group_access": null } }
-        ]
+    private const string GitLabSelfJson = """
+        { "scopes": ["granular"], "expires_at": null, "granular_scopes": [
+          { "access": "selected_memberships", "permissions": ["read_project"], "project_id": 5, "group_id": null } ] }
+        """;
+
+    private const string GitLabProjectJson = """
+        { "path_with_namespace": "gitlab-user/project-a", "visibility": "public",
+          "permissions": { "project_access": { "access_level": 40 }, "group_access": null } }
         """;
 
     [Fact]
@@ -76,7 +79,8 @@ public sealed class DeriveAsync
     {
         // Arrange
         Uri apiBaseUrl = new("https://gitlab.com/");
-        HttpClient gitLabClient = new(new StaticJsonHandler(HttpStatusCode.OK, GitLabListingJson));
+        HttpClient gitLabClient = new(new Infrastructure.FakeHandler(HttpStatusCode.OK, GitLabProjectJson)
+            .WithRoute("personal_access_tokens/self", HttpStatusCode.OK, GitLabSelfJson));
         NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()), gitLabClient);
 
         // Act

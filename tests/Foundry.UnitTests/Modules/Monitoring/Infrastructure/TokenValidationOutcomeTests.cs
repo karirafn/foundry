@@ -56,18 +56,20 @@ public sealed class TokenValidationOutcomeTests
     }
 
     [Fact]
-    public void WhenScopesUnverifiable_AccountNameIsRequired_AndIsCarried()
+    public void WhenGrantRead_AccountNameAndGrantAreCarried()
     {
         // Arrange
         const string AccountName = "octocat";
+        GitLabTokenGrant grant = GitLabTokenGrant.Create([]);
 
         // Act
-        TokenValidationOutcome outcome = TokenValidationOutcome.ScopesUnverifiable(AccountName, new TokenExpiry.NotChecked());
+        TokenValidationOutcome outcome = TokenValidationOutcome.GrantRead(AccountName, grant, new TokenExpiry.NotChecked());
 
         // Assert
-        TokenValidationOutcome.ScopesUnverifiableOutcome scopesUnverifiable =
-            outcome.ShouldBeOfType<TokenValidationOutcome.ScopesUnverifiableOutcome>();
-        scopesUnverifiable.AccountName.ShouldBe(AccountName);
+        TokenValidationOutcome.GrantReadOutcome grantRead = outcome.ShouldBeOfType<TokenValidationOutcome.GrantReadOutcome>();
+        grantRead.ShouldSatisfyAllConditions(
+            () => grantRead.AccountName.ShouldBe(AccountName),
+            () => grantRead.Grant.ShouldBeSameAs(grant));
     }
 
     [Fact]
@@ -105,7 +107,7 @@ public sealed class TokenValidationOutcomeTests
         [
             TokenValidationOutcome.Authenticated("octocat", new TokenExpiry.NotChecked()),
             TokenValidationOutcome.AuthenticationFailed(),
-            TokenValidationOutcome.ScopesUnverifiable("octocat", new TokenExpiry.NotChecked()),
+            TokenValidationOutcome.GrantRead("octocat", GitLabTokenGrant.Create([]), new TokenExpiry.NotChecked()),
             TokenValidationOutcome.TokenOfWrongKind("octocat", WrongTokenKind.GitHubClassic, new TokenExpiry.NotChecked()),
             TokenValidationOutcome.IdentityUnresolved(),
             TokenValidationOutcome.ProviderMismatch("gitlab"),
@@ -118,7 +120,7 @@ public sealed class TokenValidationOutcomeTests
             {
                 TokenValidationOutcome.AuthenticatedOutcome => "authenticated",
                 TokenValidationOutcome.AuthenticationFailedOutcome => "authenticationFailed",
-                TokenValidationOutcome.ScopesUnverifiableOutcome => "scopesUnverifiable",
+                TokenValidationOutcome.GrantReadOutcome => "grantRead",
                 TokenValidationOutcome.WrongTokenKindOutcome => "wrongTokenKind",
                 TokenValidationOutcome.IdentityUnresolvedOutcome => "identityUnresolved",
                 TokenValidationOutcome.ProviderMismatchOutcome => "providerMismatch",

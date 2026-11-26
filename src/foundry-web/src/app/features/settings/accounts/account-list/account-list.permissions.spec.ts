@@ -176,7 +176,7 @@ describe('AccountListComponent missing permissions', () => {
     expect(replace.tagName).toBe('BUTTON');
   });
 
-  it('should name the Maintainer role and give the GitLab remedy with no edit-token link', () => {
+  it('should name the Maintainer role and link to a new GitLab token', () => {
     // Act
     const { el } = setup([{ ...GITLAB_ACCOUNT, deniedRepositories: [denied(1, 'Maintainer role')] }]);
 
@@ -184,10 +184,47 @@ describe('AccountListComponent missing permissions', () => {
     const lines = problemLines(el);
     expect(lines[1]).toBe('Missing: Maintainer role.');
     expect(lines[3]).toBe(
-      `Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. ${RECHECK}`,
+      "Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. "
+        + 'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, '
+        + `then replace this one. ${RECHECK}`,
     );
+    expect(text(el.querySelector('.account-list__problem-actions a'))).toContain('Create token on');
+  });
+
+  it('should show each GitLab reason line in order, then the missing permissions', () => {
+    // Act
+    const { el } = setup([
+      {
+        ...GITLAB_ACCOUNT,
+        deniedRepositories: [denied(1, 'Webhook (Integrations): Trigger')],
+        nonConformingToken: { wrongKind: null, notAllowed: ['test_webhook'], broadReach: ['personal-projects'] },
+      },
+    ]);
+
+    // Assert
+    const lines = problemLines(el);
+    expect(text(el.querySelector('.account-list__status--side'))).toBe('Token reaches too much');
+    expect(lines.slice(0, 4)).toEqual([
+      "This token doesn't meet Foundry's requirements, so Foundry won't start work on 1 repository until it does.",
+      'Reaches: your personal projects.',
+      'Not allowed: test_webhook.',
+      'Missing: Webhook (Integrations): Trigger.',
+    ]);
+  });
+
+  it('should tell an old GitLab to upgrade, with no token link', () => {
+    // Act
+    const { el } = setup([
+      {
+        ...GITLAB_ACCOUNT,
+        deniedRepositories: [denied(1)],
+        nonConformingToken: { wrongKind: 'gitlab-version', notAllowed: [], broadReach: [] },
+      },
+    ]);
+
+    // Assert
+    expect(problemLines(el)).toContain(`Upgrade GitLab to 19.5 or later, then re-check. ${RECHECK}`);
     expect(el.querySelector('.account-list__problem-actions a')).toBeNull();
-    expect(actions(el).map((action) => text(action))).toEqual(['Replace token']);
   });
 
   it.each([

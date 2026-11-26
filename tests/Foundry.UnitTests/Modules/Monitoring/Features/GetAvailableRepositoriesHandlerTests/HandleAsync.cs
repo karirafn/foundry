@@ -157,7 +157,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         (Guid accountId, _) = await SeedGitLabAccountAsync(namespaces: ["owner"]);
         FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
-        FakeHandler gitLabFake = new(HttpStatusCode.OK, BuildGitLabRepoJson(["owner/gitlab-repo"]));
+        FakeHandler gitLabFake = GitLabFake("owner/gitlab-repo");
         GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
 
         // Act
@@ -179,7 +179,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         (Guid accountId, _) = await SeedGitLabAccountAsync(namespaces: ["owner"]);
         FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
-        FakeHandler gitLabFake = new(HttpStatusCode.OK, BuildGitLabRepoJson(["owner/gitlab-repo"]));
+        FakeHandler gitLabFake = GitLabFake("owner/gitlab-repo");
         GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
 
         // Act
@@ -227,20 +227,8 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         (Guid accountId, _) = await SeedGitLabAccountAsync(namespaces: ["owner"]);
-        string json = """
-            [
-              {
-                "path_with_namespace": "owner/gitlab-writable",
-                "visibility": "public",
-                "permissions": {
-                  "project_access": { "access_level": 30 },
-                  "group_access": null
-                }
-              }
-            ]
-            """;
         FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
-        FakeHandler gitLabFake = new(HttpStatusCode.OK, json);
+        FakeHandler gitLabFake = GitLabFake("owner/gitlab-writable", accessLevel: 30);
         GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
 
         // Act
@@ -322,7 +310,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange — claim on "group" covers "group/subgroup/project"
         (Guid accountId, _) = await SeedGitLabAccountAsync(namespaces: ["group"]);
         FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
-        FakeHandler gitLabFake = new(HttpStatusCode.OK, BuildGitLabRepoJson(["group/subgroup/project"]));
+        FakeHandler gitLabFake = GitLabFake("group/subgroup/project");
         GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
 
         // Act
@@ -569,7 +557,13 @@ public sealed class HandleAsync : IAsyncDisposable
         "[" + string.Join(",", fullNames.Select(n =>
             $@"{{""full_name"":""{n}"",""private"":false,""permissions"":{{""push"":true}}}}")) + "]";
 
-    private static string BuildGitLabRepoJson(IReadOnlyList<string> paths) =>
-        "[" + string.Join(",", paths.Select(p =>
-            $@"{{""path_with_namespace"":""{p}"",""visibility"":""public"",""permissions"":{{""project_access"":{{""access_level"":40}},""group_access"":null}}}}")) + "]";
+    // The token selects one project (id 1), which GET /projects/1 answers with every other path.
+    private static FakeHandler GitLabFake(string path, int accessLevel = 40) =>
+        new FakeHandler(
+                HttpStatusCode.OK,
+                $$"""{ "path_with_namespace": "{{path}}", "visibility": "public", "permissions": { "project_access": { "access_level": {{accessLevel}} }, "group_access": null } }""")
+            .WithRoute(
+                "personal_access_tokens/self",
+                HttpStatusCode.OK,
+                """{ "scopes": ["granular"], "expires_at": null, "granular_scopes": [{ "access": "selected_memberships", "permissions": ["read_project"], "project_id": 1, "group_id": null }] }""");
 }

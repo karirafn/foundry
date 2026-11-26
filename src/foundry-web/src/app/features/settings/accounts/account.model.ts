@@ -37,7 +37,6 @@ export type AffectedRepositoryStatus =
 export type TokenValidationKind =
   | 'authenticated'
   | 'authenticationFailed'
-  | 'scopesUnverifiable'
   | 'wrongTokenKind'
   | 'identityUnresolved'
   | 'providerMismatch';
@@ -109,6 +108,8 @@ export type AccountStatusTag =
   | { readonly kind: 'token-expired'; readonly label: 'Token expired'; readonly tone: 'warning' }
   | { readonly kind: 'token-expiring'; readonly label: 'Token expires soon'; readonly tone: 'warning' }
   | { readonly kind: 'wrong-token-kind'; readonly label: 'Wrong token kind'; readonly tone: 'warning' }
+  | { readonly kind: 'broad-reach'; readonly label: 'Token reaches too much'; readonly tone: 'warning' }
+  | { readonly kind: 'not-allowed'; readonly label: 'Extra permissions'; readonly tone: 'warning' }
   | { readonly kind: 'missing-permissions'; readonly label: 'Missing permissions'; readonly tone: 'warning' };
 
 /** A problem with the token itself: unreadable, invalid or near its expiry. */
@@ -123,7 +124,11 @@ export interface TokenProblem {
 }
 
 /** How the operator gives the token what it is missing; each has its own remedy text and actions. */
-export type MissingPermissionsRemedy = 'github-fine-grained' | 'github-wrong-kind' | 'gitlab';
+export type MissingPermissionsRemedy =
+  | 'github-fine-grained'
+  | 'github-wrong-kind'
+  | 'gitlab-token'
+  | 'gitlab-version';
 
 /** A link to the provider's token page: `edit` opens the token list, `create` opens a new token. */
 export interface TokenLink {
@@ -158,6 +163,8 @@ const TOKEN_INVALID_TAG: AccountStatusTag = { kind: 'token-invalid', label: 'Tok
 const TOKEN_EXPIRED_TAG: AccountStatusTag = { kind: 'token-expired', label: 'Token expired', tone: 'warning' };
 const TOKEN_EXPIRING_TAG: AccountStatusTag = { kind: 'token-expiring', label: 'Token expires soon', tone: 'warning' };
 const WRONG_TOKEN_KIND_TAG: AccountStatusTag = { kind: 'wrong-token-kind', label: 'Wrong token kind', tone: 'warning' };
+const BROAD_REACH_TAG: AccountStatusTag = { kind: 'broad-reach', label: 'Token reaches too much', tone: 'warning' };
+const NOT_ALLOWED_TAG: AccountStatusTag = { kind: 'not-allowed', label: 'Extra permissions', tone: 'warning' };
 const MISSING_PERMISSIONS_TAG: AccountStatusTag = {
   kind: 'missing-permissions',
   label: 'Missing permissions',
@@ -186,13 +193,21 @@ const TOKEN_INVALID_PROBLEM: TokenProblem = {
 export function accountStatusTag(account: AccountSummary): AccountStatusTag | null {
   const status = resolveTokenStatus(account);
   switch (status) {
-    case 'present':
-      if (nonConformingToken(account)?.wrongKind) {
+    case 'present': {
+      const nonConforming = nonConformingToken(account);
+      if (nonConforming?.wrongKind) {
         return WRONG_TOKEN_KIND_TAG;
+      }
+      if (nonConforming && nonConforming.broadReach.length > 0) {
+        return BROAD_REACH_TAG;
+      }
+      if (nonConforming && nonConforming.notAllowed.length > 0) {
+        return NOT_ALLOWED_TAG;
       }
       return deniedRepositories(account).length > 0
         ? MISSING_PERMISSIONS_TAG
         : expiryStatusTag(resolveTokenExpiry(account.tokenExpiry));
+    }
     case 'absent':
       return NOT_CONFIGURED_TAG;
     case 'unreadable':
@@ -295,15 +310,63 @@ function wrongKindLabel(wrongKind: string): string {
   switch (wrongKind) {
     case 'github-classic':
       return 'classic token';
+    case 'gitlab-legacy':
+      return 'legacy personal access token';
+    case 'gitlab-resource-token':
+      return 'group or project access token';
+    case 'gitlab-version':
+      return 'GitLab older than 19.5';
     default:
       return 'not a fine-grained personal access token';
   }
 }
 
+/** How a broad-reach value reads after "This token reaches", or the value itself when Foundry doesn't know it. */
+function broadReachPhrase(value: string): string {
+  switch (value) {
+    case 'all-projects':
+      return 'all projects';
+    case 'personal-projects':
+      return 'your personal projects';
+    case 'instance':
+      return 'the whole instance';
+    default:
+      return value;
+  }
+}
+
+/** How a broad-reach value reads in the account row's "Reaches:" line. */
+function broadReachListLabel(value: string): string {
+  return value === 'instance' ? 'the instance' : broadReachPhrase(value);
+}
+
+/** "a", "a and b", "a, b and c". */
+function joinWithAnd(items: readonly string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Why the account's token as a whole fails Foundry's requirements, one line each, in display order. The
+ * row shows the missing permissions on their own line after these.
+ */
+function nonConformingReasons(nonConforming: NonConformingTokenSummary | null): string[] {
+  if (nonConforming === null) {
+    return [];
+  }
+  return [
+    ...(nonConforming.wrongKind ? [`Wrong token kind: ${wrongKindLabel(nonConforming.wrongKind)}.`] : []),
+    ...(nonConforming.broadReach.length > 0
+      ? [`Reaches: ${nonConforming.broadReach.map(broadReachListLabel).join('; ')}.`]
+      : []),
+    ...(nonConforming.notAllowed.length > 0 ? [`Not allowed: ${nonConforming.notAllowed.join('; ')}.`] : []),
+  ];
+}
+
 function missingPermissionsProblem(account: AccountSummary): MissingPermissionsProblem | null {
   const repositories = deniedRepositories(account);
-  const wrongKind = nonConformingToken(account)?.wrongKind ?? null;
-  if (repositories.length === 0 && wrongKind === null) {
+  const nonConforming = nonConformingToken(account);
+  const wrongKind = nonConforming?.wrongKind ?? null;
+  if (repositories.length === 0 && nonConforming === null) {
     return null;
   }
 
@@ -318,35 +381,48 @@ function missingPermissionsProblem(account: AccountSummary): MissingPermissionsP
     tone: 'warning',
     ...(isTokenExpiryWarning(expiry) ? { expiry } : {}),
     message:
-      wrongKind === null
+      nonConforming === null
         ? `This token is missing permissions Foundry needs, so Foundry won't start work on ${count} `
           + `${repositoryNoun} until it has them.`
         : `This token doesn't meet Foundry's requirements, so Foundry won't start work on ${count} `
           + `${repositoryNoun} until it does.`,
     missingPermissions,
     repositories,
-    reasons: wrongKind === null ? [] : [`Wrong token kind: ${wrongKindLabel(wrongKind)}.`],
+    reasons: nonConformingReasons(nonConforming),
     remedy,
-    remedyText: remedyText(remedy, account.name),
+    remedyText: remedyText(remedy, account.name, missingPermissions),
     tokenLink: tokenLink(remedy, account.baseUrl),
   };
 }
 
+const MAINTAINER_ROLE_LABEL = 'Maintainer role';
+
 function missingPermissionsRemedy(providerType: string, wrongKind: string | null): MissingPermissionsRemedy {
   if (providerType.toLowerCase() === 'gitlab') {
-    return 'gitlab';
+    return wrongKind === 'gitlab-version' ? 'gitlab-version' : 'gitlab-token';
   }
   return wrongKind === null ? 'github-fine-grained' : 'github-wrong-kind';
 }
 
-function remedyText(remedy: MissingPermissionsRemedy, name: string): string {
+function maintainerSentence(name: string): string {
+  return `Give the token's user, ${name}, the Maintainer role on these repositories, then re-check.`;
+}
+
+function remedyText(remedy: MissingPermissionsRemedy, name: string, missingPermissions: readonly string[]): string {
   switch (remedy) {
     case 'github-fine-grained':
       return `Edit the token's permissions on GitHub, or create a new token, then re-check. ${RECHECK_SENTENCE}`;
     case 'github-wrong-kind':
       return `Create a fine-grained personal access token on GitHub, then replace this one. A classic token can't be converted. ${RECHECK_SENTENCE}`;
-    case 'gitlab':
-      return `Give the token's user, ${name}, the Maintainer role on these repositories, then re-check. ${RECHECK_SENTENCE}`;
+    case 'gitlab-token': {
+      const create =
+        'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, then replace this one.';
+      return missingPermissions.includes(MAINTAINER_ROLE_LABEL)
+        ? `${maintainerSentence(name)} ${create} ${RECHECK_SENTENCE}`
+        : `${create} ${RECHECK_SENTENCE}`;
+    }
+    case 'gitlab-version':
+      return `Upgrade GitLab to 19.5 or later, then re-check. ${RECHECK_SENTENCE}`;
     default:
       return assertNever(remedy);
   }
@@ -354,15 +430,33 @@ function remedyText(remedy: MissingPermissionsRemedy, name: string): string {
 
 const GITHUB_TOKEN_LIST_TEMPLATE = '{baseUrl}/settings/personal-access-tokens';
 const GITHUB_NEW_TOKEN_TEMPLATE = '{baseUrl}/settings/personal-access-tokens/new';
+const GITLAB_NEW_TOKEN_TEMPLATE = '{baseUrl}/-/user_settings/personal_access_tokens';
 
-/** Where the remedy sends the operator on the account's host: GitHub's token list to edit, or its new-token page. */
+/** Where the remedy sends the operator on the account's host: the provider's token list to edit, or its new-token page. */
 function tokenLink(remedy: MissingPermissionsRemedy, baseUrl: string): TokenLink | null {
-  const mode = remedy === 'github-fine-grained' ? 'edit' : remedy === 'github-wrong-kind' ? 'create' : null;
-  if (mode === null) {
+  const link = tokenLinkTemplate(remedy);
+  if (link === null) {
     return null;
   }
-  const url = creationUrl(mode === 'edit' ? GITHUB_TOKEN_LIST_TEMPLATE : GITHUB_NEW_TOKEN_TEMPLATE, baseUrl);
-  return url === null ? null : { url, host: new URL(url).host, mode };
+  const url = creationUrl(link.template, baseUrl);
+  return url === null ? null : { url, host: new URL(url).host, mode: link.mode };
+}
+
+function tokenLinkTemplate(
+  remedy: MissingPermissionsRemedy,
+): { readonly template: string; readonly mode: TokenLink['mode'] } | null {
+  switch (remedy) {
+    case 'github-fine-grained':
+      return { template: GITHUB_TOKEN_LIST_TEMPLATE, mode: 'edit' };
+    case 'github-wrong-kind':
+      return { template: GITHUB_NEW_TOKEN_TEMPLATE, mode: 'create' };
+    case 'gitlab-token':
+      return { template: GITLAB_NEW_TOKEN_TEMPLATE, mode: 'create' };
+    case 'gitlab-version':
+      return null;
+    default:
+      return assertNever(remedy);
+  }
 }
 
 function isHttpUrl(url: string): boolean {
@@ -422,7 +516,6 @@ export function affectedStatusLabel(status: AffectedRepositoryStatus | string): 
 const KNOWN_TOKEN_VALIDATION_KINDS: ReadonlySet<TokenValidationKind> = new Set<TokenValidationKind>([
   'authenticated',
   'authenticationFailed',
-  'scopesUnverifiable',
   'wrongTokenKind',
   'identityUnresolved',
   'providerMismatch',
@@ -455,6 +548,12 @@ export function wrongTokenKindMessage(wrongKind: string | null | undefined): str
   switch (wrongKind) {
     case 'github-classic':
       return 'This is a classic token. Foundry needs a fine-grained personal access token (it starts with github_pat_).';
+    case 'gitlab-legacy':
+      return 'This is a legacy personal access token. Foundry needs a fine-grained personal access token.';
+    case 'gitlab-resource-token':
+      return 'This is a group or project access token. Foundry needs a fine-grained personal access token.';
+    case 'gitlab-version':
+      return "This GitLab is older than 19.5, which doesn't support fine-grained tokens. Upgrade GitLab to 19.5 or later.";
     default:
       return 'Foundry needs a fine-grained personal access token.';
   }
@@ -467,4 +566,38 @@ export function createTokenLink(
 ): { readonly url: string; readonly host: string } | null {
   const url = requirements ? creationUrl(requirements.creationUrlTemplate, baseUrl) : null;
   return url === null ? null : { url, host: new URL(url).host };
+}
+
+/** Whether the validation result for a token Foundry refuses for its kind offers a link to create a new token. */
+export function wrongTokenKindOffersCreateLink(wrongKind: string | null | undefined): boolean {
+  return wrongKind !== 'gitlab-version';
+}
+
+/** The permissions a validated token holds that Foundry doesn't allow; a response predating the field has none. */
+export function validationNotAllowed(result: TokenValidationResult): readonly string[] {
+  return (result as { notAllowed?: string[] }).notAllowed ?? [];
+}
+
+/** How a validated token reaches beyond selected projects; a response predating the field reaches no further. */
+export function validationBroadReach(result: TokenValidationResult): readonly string[] {
+  return (result as { broadReach?: string[] }).broadReach ?? [];
+}
+
+/** The validation result's sentence for a token reaching more than selected projects. */
+export function broadReachMessage(broadReach: readonly string[]): string {
+  return `This token reaches ${joinWithAnd(broadReach.map(broadReachPhrase))}. Foundry needs a token limited to selected projects.`;
+}
+
+/** Whether nothing about an authenticated token needs fixing: no missing, not-allowed or broad-reach finding. */
+export function isConformingToken(result: TokenValidationResult): boolean {
+  return (
+    result.missingScopes.length === 0
+    && validationNotAllowed(result).length === 0
+    && validationBroadReach(result).length === 0
+  );
+}
+
+/** Whether the account form and setup wizard may save the token the result describes. */
+export function isSaveEligible(result: TokenValidationResult): boolean {
+  return narrowTokenValidationKind(result) === 'authenticated' && isConformingToken(result);
 }

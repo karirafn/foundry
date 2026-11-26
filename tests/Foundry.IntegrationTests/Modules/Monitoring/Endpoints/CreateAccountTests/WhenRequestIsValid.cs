@@ -45,7 +45,9 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {

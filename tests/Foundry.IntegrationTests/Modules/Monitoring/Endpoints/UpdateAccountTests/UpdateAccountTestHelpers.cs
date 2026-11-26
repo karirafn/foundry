@@ -30,7 +30,9 @@ internal sealed class StubValidateTokenHandler : IQueryHandler<ValidateToken.Que
             DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
         return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
     }
 }

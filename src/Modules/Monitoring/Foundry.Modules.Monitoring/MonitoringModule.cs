@@ -95,6 +95,7 @@ public static class MonitoringModule
         services.AddScoped<PackageSourceCredentialCommands.Handler>();
         services.AddHttpClient<GitLabHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
+        services.AddTransient<IGitLabTokenGrantReader>(sp => sp.GetRequiredService<GitLabHttpClient>());
 
         services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
         services.AddScoped<RepositoryEligibilityDiffer>();

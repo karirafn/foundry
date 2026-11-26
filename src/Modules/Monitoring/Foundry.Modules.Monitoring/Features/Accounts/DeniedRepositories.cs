@@ -8,6 +8,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
 
+/// <summary>
+/// An account's denied repositories, and why its token as a whole fails Foundry's requirements when a
+/// stored verdict says so.
+/// </summary>
+internal sealed record AccountDenials(
+    IReadOnlyList<DeniedRepositorySummary> Repositories,
+    NonConformingTokenSummary? NonConformingToken)
+{
+    internal static AccountDenials None { get; } = new([], null);
+}
+
 internal static class DeniedRepositories
 {
     /// <summary>
@@ -15,7 +26,7 @@ internal static class DeniedRepositories
     /// resolves to through its namespace claims, the same most-specific rule polling uses. Accounts with
     /// none have no entry.
     /// </summary>
-    internal static async Task<IReadOnlyDictionary<CredentialId, IReadOnlyList<DeniedRepositorySummary>>> ByAccountAsync(
+    internal static async Task<IReadOnlyDictionary<CredentialId, AccountDenials>> ByAccountAsync(
         DbContext dbContext,
         CancellationToken cancellationToken)
     {
@@ -31,7 +42,7 @@ internal static class DeniedRepositories
 
         if (denied.Count == 0)
         {
-            return new Dictionary<CredentialId, IReadOnlyList<DeniedRepositorySummary>>();
+            return new Dictionary<CredentialId, AccountDenials>();
         }
 
         List<string> hosts = denied
@@ -48,6 +59,7 @@ internal static class DeniedRepositories
         ILookup<string, Credential> credentialsByHost = credentials.ToLookup(c => c.Host, StringComparer.Ordinal);
 
         Dictionary<CredentialId, List<DeniedRepositorySummary>> byAccount = [];
+        Dictionary<CredentialId, NonConformingTokenSummary> nonConformingByAccount = [];
         foreach (MonitoredRepository repository in denied)
         {
             Credential? owner = CredentialResolver.SelectMostSpecific(credentialsByHost[repository.Host], repository.Slug);
@@ -69,23 +81,41 @@ internal static class DeniedRepositories
             }
 
             list.Add(summary);
+
+            if (owner is GitLabCredential
+                && NonConformingTokenOf(verdict) is { } nonConforming
+                && !nonConformingByAccount.ContainsKey(owner.Id))
+            {
+                nonConformingByAccount[owner.Id] = nonConforming;
+            }
         }
 
         return byAccount.ToDictionary(
             pair => pair.Key,
-            pair => (IReadOnlyList<DeniedRepositorySummary>)pair.Value);
+            pair => new AccountDenials(
+                pair.Value,
+                nonConformingByAccount.GetValueOrDefault(pair.Key)));
     }
 
     /// <summary>The denied repositories of <paramref name="credentialId"/>, or none.</summary>
-    internal static async Task<IReadOnlyList<DeniedRepositorySummary>> ForAccountAsync(
+    internal static async Task<AccountDenials> ForAccountAsync(
         DbContext dbContext,
         CredentialId credentialId,
         CancellationToken cancellationToken)
     {
-        IReadOnlyDictionary<CredentialId, IReadOnlyList<DeniedRepositorySummary>> byAccount =
-            await ByAccountAsync(dbContext, cancellationToken);
-        return byAccount.TryGetValue(credentialId, out IReadOnlyList<DeniedRepositorySummary>? denied) ? denied : [];
+        IReadOnlyDictionary<CredentialId, AccountDenials> byAccount = await ByAccountAsync(dbContext, cancellationToken);
+        return byAccount.TryGetValue(credentialId, out AccountDenials? denials) ? denials : AccountDenials.None;
     }
+
+    // A GitLab verdict records why the token as a whole is refused, since the account summary makes no
+    // GitLab call; the verdict is re-probed whenever the permission list changes.
+    private static NonConformingTokenSummary? NonConformingTokenOf(WriteProbeVerdict.Denied verdict) =>
+        verdict.WrongKind is null && verdict.NotAllowed.Count == 0 && verdict.BroadReach.Count == 0
+            ? null
+            : new NonConformingTokenSummary(
+                verdict.WrongKind,
+                TokenPermissions.GitLabLabelsOrIdentifiers(verdict.NotAllowed),
+                TokenPermissions.GitLabBroadReachWireNames(verdict.BroadReach));
 
     private static string ProviderTypeOf(Credential credential) =>
         credential is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub;

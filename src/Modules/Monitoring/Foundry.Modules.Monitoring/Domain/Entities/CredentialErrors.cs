@@ -17,6 +17,7 @@ internal static class CredentialErrors
     internal const string NamespaceDerivationUnavailableCode = "Credential.NamespaceDerivationUnavailable";
     internal const string RateLimitExhaustedCode = "Credential.RateLimitExhausted";
     internal const string WrongTokenKindCode = "Credential.WrongTokenKind";
+    internal const string NonConformingTokenCode = "Credential.NonConformingToken";
 
     internal static Error NotFound(CredentialId id) =>
         new(NotFoundCode, $"Credential with ID '{id.Value}' was not found.");
@@ -46,6 +47,9 @@ internal static class CredentialErrors
 
     internal static readonly Error WrongTokenKind =
         new(WrongTokenKindCode, "Foundry needs a fine-grained personal access token; this token is of another kind.");
+
+    internal static readonly Error NonConformingToken =
+        new(NonConformingTokenCode, "The token grants permissions Foundry doesn't allow or reaches more than selected projects.");
 
     internal static readonly Error UnresolvedIdentity =
         new(UnresolvedIdentityCode, "Could not resolve the account identity from the provider.");

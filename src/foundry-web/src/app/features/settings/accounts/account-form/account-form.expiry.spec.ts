@@ -23,6 +23,8 @@ const VALID_RESULT: TokenValidationResult = {
   accountName: 'octocat',
   detectedProvider: null,
   wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -32,15 +34,8 @@ const MISSING_SCOPES_RESULT: TokenValidationResult = {
   accountName: 'octocat',
   detectedProvider: null,
   wrongKind: null,
-  tokenExpiry: { status: 'notChecked', expiresAt: null },
-};
-
-const SCOPES_UNVERIFIABLE_RESULT: TokenValidationResult = {
-  kind: 'scopesUnverifiable',
-  missingScopes: [],
-  accountName: 'octocat',
-  detectedProvider: null,
-  wrongKind: null,
+  notAllowed: [],
+  broadReach: [],
   tokenExpiry: { status: 'notChecked', expiresAt: null },
 };
 
@@ -242,14 +237,6 @@ describe('AccountFormComponent token expiry', () => {
       expect(text(blocks[1])).toBe(
         'Warning: Expires on Nov 20, 2026 (in 3 days) — pick a longer-lived token to avoid replacing it again soon',
       );
-    });
-
-    it('should show the expiry of a token whose scopes cannot be verified', () => {
-      // Act
-      const { el } = checkToken({ ...SCOPES_UNVERIFIABLE_RESULT, tokenExpiry: { status: 'unavailable', expiresAt: null } });
-
-      // Assert
-      expect(text(el.querySelector('#account-token-validation'))).toContain('GitHub reported no expiry for this token');
     });
 
     it('should hide the expiry when it was not checked', () => {

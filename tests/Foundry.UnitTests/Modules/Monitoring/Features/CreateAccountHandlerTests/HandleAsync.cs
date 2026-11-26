@@ -849,7 +849,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenScopesUnverifiable_ProceedsToCreateCredential()
+    public async Task WhenTheTokenGrantsNotAllowedPermissions_RejectsWithNonConformingToken()
     {
         // Arrange
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
@@ -858,16 +858,18 @@ public sealed class HandleAsync : IAsyncDisposable
         CreateAccount.Handler handler = BuildHandler(
             new StubNamespaceDeriver(outcome),
             validateToken: new KindValidateTokenHandler(
-                ValidateToken.Kinds.ScopesUnverifiable,
+                ValidateToken.Kinds.Authenticated,
                 AccountName: "octocat",
-                MissingScopes: []));
-        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+                MissingScopes: [],
+                NotAllowed: ["delete_project"]));
+        CreateAccount.Command command = new("gitlab", "https://gitlab.com", "glpat_test");
 
         // Act
         CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert
-        result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.NonConformingTokenCode);
     }
 
     [Fact]
@@ -939,30 +941,6 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
         failure.Error.Code.ShouldBe(CredentialErrors.InvalidTokenCode);
-    }
-
-    [Fact]
-    public async Task WhenScopesUnverifiableWithNullAccountName_RejectsWithUnresolvedIdentity()
-    {
-        // Arrange — ScopesUnverifiable with a null AccountName must map to UnresolvedIdentity,
-        // not silently fall through to InvalidToken via the default arm.
-        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
-        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
-        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
-        CreateAccount.Handler handler = BuildHandler(
-            new StubNamespaceDeriver(outcome),
-            validateToken: new KindValidateTokenHandler(
-                ValidateToken.Kinds.ScopesUnverifiable,
-                AccountName: null,
-                MissingScopes: []));
-        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
-
-        // Act
-        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
-        failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
     }
 
     [Fact]
@@ -1046,7 +1024,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: null,
                 Expiry: expiry,
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1065,7 +1045,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1087,7 +1069,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -1096,7 +1080,8 @@ public sealed class HandleAsync : IAsyncDisposable
         string kind,
         string? AccountName,
         IReadOnlyList<string> MissingScopes,
-        string? DetectedProvider = null)
+        string? DetectedProvider = null,
+        IReadOnlyList<string>? NotAllowed = null)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
         public Task<Result<ValidateToken.Response>> HandleAsync(
@@ -1110,7 +1095,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 DetectedProvider: DetectedProvider,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: NotAllowed ?? [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

@@ -29,7 +29,11 @@ Foundry verifies this rather than assuming it:
   Workflows (write) cannot be verified before use.
 - **GitHub cannot report a token's permissions**, so extra permissions and "All repositories" access are not checked.
   The account form says so, and the creation link preselects exactly the list.
-- **GitLab** requires the Maintainer role (access level 40) on each repository, up from Developer (30).
+- **GitLab tokens must be fine-grained**, on GitLab 19.5 or later, where `GET /personal_access_tokens/self` reports the token's `granular_scopes`.
+  Foundry checks them exactly: each project entry carries exactly the project permission set, user entries exactly `read_personal_access_token` and `read_user`, and a group entry nothing but `read_package` (allowed for a package feed, never required).
+  An entry reaching all memberships, personal projects or the instance is rejected, as is any missing or extra permission.
+  A repository is covered when a project entry carries its project id, and its token user still needs the Maintainer role (access level 40).
+  Legacy, group and project access tokens are rejected.
 - **A probe verdict records the permission list it was taken against.**
   A verdict taken against an older list counts as unprobed and is re-probed automatically, so adding a permission to the list reaches every repository with no migration.
 - **A Denied verdict is re-probed after a one-hour cooldown**, because a token edited in place on the provider (same token string) raises no credential event.
@@ -47,6 +51,8 @@ Its account row names the missing permissions with the remedy for its provider.
 - **A one-off migration resetting every verdict** — rejected for a recorded permission-list version, which needs no migration the next time the list changes.
 - **Authenticate as a GitHub App minting per-purpose tokens** — still deferred, as in ADR 0084.
   It would restore separation without the operator cost, but is a large prerequisite.
+- **Accept legacy GitLab tokens on hosts older than 19.5** — rejected: a second, unverified path holding the broadest token.
+- **Let group entries carry the project permission set** — rejected: coverage would need group-ancestry lookups and more permissions.
 - **Probe GitHub tokens for extra permissions** — rejected: a denylist reads as complete while every permission off it passes, and probing all of GitHub's ~30 repository permissions costs ~30 requests per repository per check and still misses account permissions.
 
 ## Consequences
@@ -60,7 +66,10 @@ Its account row names the missing permissions with the remedy for its provider.
   It returned 403 for a missing Administration, Webhooks or Contents permission and 422 when granted.
   The missing case for the read GETs was not observed, which is why their unknown responses fail closed.
 - The Actions write probe rests on a spike run on 2026-11-24 against `karirafn/foundry` with two fine-grained tokens: `POST /actions/jobs/1/rerun` returned 404 with Actions write and 403 ("Resource not accessible by personal access token") without it, with or without a malformed body.
+- Every new GitLab project must be added to its account's token by hand.
+- The GitLab rules rest on a spike run on 2026-11-24 against gitlab.com: `granular_scopes[].permissions` reports the names chosen at creation (`read_job`, `run_job`), and `/personal_access_tokens/self`, `/user` and `/projects` each answered 403 `insufficient_granular_scope` without their user-level permission.
 
 ## Revisions
 
 - 2026-11-24 — GitHub account tokens must be fine-grained; Actions needs write, verified by a rerun probe (#1287)
+- 2026-11-24 — GitLab account tokens must be fine-grained and hold exactly the listed permissions on selected projects (#1288)

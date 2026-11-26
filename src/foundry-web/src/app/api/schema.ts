@@ -1819,6 +1819,7 @@ export interface components {
         TokenPermissionRequirement: {
             label: string;
             verification: string;
+            group?: null | string;
         };
         TokenRequirements: {
             providerType: string;
@@ -1976,6 +1977,8 @@ export interface components {
             detectedProvider: null | string;
             tokenExpiry: components["schemas"]["TokenExpirySummary"];
             wrongKind: null | string;
+            notAllowed: string[];
+            broadReach: string[];
         };
         WebhookRegistrationOutcome: {
             kind: string;

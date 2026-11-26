@@ -33,11 +33,23 @@ internal abstract record WriteProbeVerdict
         /// </summary>
         public IReadOnlyList<string> MissingPermissions { get; init; } = [];
 
+        /// <summary>The wire name of the refused token kind when the token as a whole is of the wrong kind.</summary>
+        public string? WrongKind { get; init; }
+
+        /// <summary>The GitLab permission identifiers the token holds but must not.</summary>
+        public IReadOnlyList<string> NotAllowed { get; init; } = [];
+
+        /// <summary>The GitLab <c>access</c> values through which the token reaches beyond selected projects.</summary>
+        public IReadOnlyList<string> BroadReach { get; init; } = [];
+
         public bool Equals(Denied? other) =>
             other is not null
             && base.Equals(other)
             && ProbedAt == other.ProbedAt
-            && MissingPermissions.SequenceEqual(other.MissingPermissions, StringComparer.Ordinal);
+            && MissingPermissions.SequenceEqual(other.MissingPermissions, StringComparer.Ordinal)
+            && WrongKind == other.WrongKind
+            && NotAllowed.SequenceEqual(other.NotAllowed, StringComparer.Ordinal)
+            && BroadReach.SequenceEqual(other.BroadReach, StringComparer.Ordinal);
 
         public override int GetHashCode() => HashCode.Combine(base.GetHashCode(), ProbedAt, MissingPermissions.Count);
     }

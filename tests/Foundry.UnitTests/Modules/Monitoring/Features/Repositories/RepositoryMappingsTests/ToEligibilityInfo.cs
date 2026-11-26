@@ -253,6 +253,21 @@ public sealed class ToEligibilityInfo
     }
 
     [Fact]
+    public void WhenDeniedVerdictNamesGitLabGrantPermissions_CannotPushDescriptionNamesEachLabel()
+    {
+        // Arrange
+        RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.CannotPush("myorg/myrepo")]);
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Denied { MissingPermissions = ["selected_projects", "push_code"] };
+
+        // Act
+        RepositoryEligibilityInfo? result = RepositoryMappings.ToEligibilityInfo(ineligible, verdict, "gitlab");
+
+        // Assert
+        result.ShouldNotBeNull().Violations.ShouldHaveSingleItem().Description.ShouldBe(
+            "Token is missing Only selected projects (select each monitored project individually) and Code: Push for myorg/myrepo.");
+    }
+
+    [Fact]
     public void WhenDeniedVerdictHasNoMissingPermissions_CannotPushDescriptionKeepsTheGenericText()
     {
         // Arrange

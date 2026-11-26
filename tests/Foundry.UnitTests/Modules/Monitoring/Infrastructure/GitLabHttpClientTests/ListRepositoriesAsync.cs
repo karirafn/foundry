@@ -6,12 +6,13 @@ using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
-using Shouldly;
-
-using Xunit;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+
+using Shouldly;
+
+using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitLabHttpClientTests;
 
@@ -19,266 +20,125 @@ public sealed class ListRepositoriesAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://gitlab.com/api/v4");
 
-    private static string BuildPageJson(int count, int startIndex = 0)
-    {
-        string items = string.Join(
-            ",",
-            Enumerable
-                .Range(startIndex, count)
-                .Select(i => $$$"""{"path_with_namespace":"group/project-{{{i}}}","visibility":"public","permissions":{"project_access":{"access_level":40},"group_access":null}}"""));
-        return $"[{items}]";
-    }
+    private const string SelfPath = "personal_access_tokens/self";
+
+    private static GitLabHttpClient CreateSut(FakeHandler handler) =>
+        new(
+            new HttpClient(handler),
+            NullLogger<GitLabHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+            new InMemoryProviderRateBudget(),
+            TimeProvider.System);
+
+    private static string SelfJson(params string[] entries) =>
+        $$"""{ "scopes": ["granular"], "expires_at": null, "granular_scopes": [{{string.Join(",", entries)}}] }""";
+
+    private static string ProjectEntry(int projectId) =>
+        $$"""{ "access": "selected_memberships", "permissions": ["read_project"], "project_id": {{projectId}}, "group_id": null }""";
+
+    private const string UserEntry =
+        """{ "access": "user", "permissions": ["read_personal_access_token", "read_user"], "project_id": null, "group_id": null }""";
+
+    private const string GroupEntry =
+        """{ "access": "selected_memberships", "permissions": ["read_package"], "project_id": null, "group_id": 9 }""";
+
+    private static string ProjectJson(string path, string visibility, int projectLevel, int? groupLevel = null) =>
+        $$"""
+        {
+          "id": 1,
+          "path_with_namespace": "{{path}}",
+          "visibility": "{{visibility}}",
+          "permissions": {
+            "project_access": { "access_level": {{projectLevel}} },
+            "group_access": {{(groupLevel is null ? "null" : $$"""{ "access_level": {{groupLevel}} }""")}}
+          }
+        }
+        """;
+
+    private static async Task<IReadOnlyList<ProviderRepository>> ListAsync(FakeHandler handler) =>
+        (await CreateSut(handler).ListRepositoriesAsync(ValidBaseUrl, "glpat_token123", CancellationToken.None))
+            .ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>().Value;
 
     [Fact]
-    public async Task WhenGitLabReturnsSinglePage_ParsesRepositoriesCorrectly()
+    public async Task WhenTheGrantSelectsProjects_ListsExactlyThoseProjects()
     {
         // Arrange
-        string json = """
-            [
-              {
-                "path_with_namespace": "alice/public-project",
-                "visibility": "public",
-                "permissions": { "project_access": { "access_level": 40 }, "group_access": null }
-              },
-              {
-                "path_with_namespace": "alice/secret-project",
-                "visibility": "private",
-                "permissions": { "project_access": { "access_level": 20 }, "group_access": null }
-              }
-            ]
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, string.Empty)
+            .WithRoute(SelfPath, HttpStatusCode.OK, SelfJson(ProjectEntry(11), ProjectEntry(12), UserEntry, GroupEntry))
+            .WithRoute("projects/11", HttpStatusCode.OK, ProjectJson("alice/public-project", "public", 40))
+            .WithRoute("projects/12", HttpStatusCode.OK, ProjectJson("alice/secret-project", "private", 20));
 
         // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
+        IReadOnlyList<ProviderRepository> repos = await ListAsync(handler);
 
         // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        IReadOnlyList<ProviderRepository> repos = success.Value;
-        repos.Count.ShouldBe(2);
-        repos.ShouldContain(r => r.Slug == "alice/public-project" && !r.IsPrivate && r.CanPush);
-        repos.ShouldContain(r => r.Slug == "alice/secret-project" && r.IsPrivate && !r.CanPush);
-    }
-
-    [Fact]
-    public async Task WhenAccessLevelIsExactlyDeveloper_CanPushIsTrue()
-    {
-        // Arrange — access_level 30 = Developer (threshold)
-        string json = """
-            [
-              {
-                "path_with_namespace": "org/repo",
-                "visibility": "public",
-                "permissions": { "project_access": { "access_level": 30 }, "group_access": null }
-              }
-            ]
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
-
-        // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        success.Value.ShouldContain(r => r.CanPush);
-    }
-
-    [Fact]
-    public async Task WhenAccessLevelIsReporter_CanPushIsFalse()
-    {
-        // Arrange — access_level 20 = Reporter (below Developer)
-        string json = """
-            [
-              {
-                "path_with_namespace": "org/repo",
-                "visibility": "public",
-                "permissions": { "project_access": { "access_level": 20 }, "group_access": null }
-              }
-            ]
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
-
-        // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        success.Value.ShouldContain(r => !r.CanPush);
-    }
-
-    [Fact]
-    public async Task WhenGroupAccessMeetsThreshold_CanPushIsTrue()
-    {
-        // Arrange — project_access null, group_access Developer
-        string json = """
-            [
-              {
-                "path_with_namespace": "org/repo",
-                "visibility": "public",
-                "permissions": { "project_access": null, "group_access": { "access_level": 30 } }
-              }
-            ]
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
-
-        // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        success.Value.ShouldContain(r => r.CanPush);
-    }
-
-    [Fact]
-    public async Task WhenPermissionsAbsent_CanPushIsFalse()
-    {
-        // Arrange — null permissions object
-        string json = """
-            [
-              {
-                "path_with_namespace": "org/repo",
-                "visibility": "public",
-                "permissions": null
-              }
-            ]
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
-
-        // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        success.Value.ShouldContain(r => !r.CanPush);
-    }
-
-    [Fact]
-    public async Task WhenGitLabReturnsMultipleFullPages_PaginatesAndCombinesAllResults()
-    {
-        // Arrange
-        string page1Json = BuildPageJson(100, startIndex: 0);
-        string page2Json = BuildPageJson(50, startIndex: 100);
-
-        SequentialFakeHandler handler = new(
+        repos.ShouldBe(
         [
-            (HttpStatusCode.OK, page1Json),
-            (HttpStatusCode.OK, page2Json),
+            new ProviderRepository("alice/public-project", IsPrivate: false, CanPush: true),
+            new ProviderRepository("alice/secret-project", IsPrivate: true, CanPush: false),
         ]);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-
-        // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
-
-        // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        success.Value.Count.ShouldBe(150);
     }
 
     [Fact]
-    public async Task WhenAllPagesAreFull_StopsAfterFivePages()
+    public async Task WhenTheGrantSelectsProjects_ReadsEachProjectByIdAndNeverListsMemberships()
     {
         // Arrange
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, BuildPageJson(100, startIndex: 0)),
-            (HttpStatusCode.OK, BuildPageJson(100, startIndex: 100)),
-            (HttpStatusCode.OK, BuildPageJson(100, startIndex: 200)),
-            (HttpStatusCode.OK, BuildPageJson(100, startIndex: 300)),
-            (HttpStatusCode.OK, BuildPageJson(100, startIndex: 400)),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, string.Empty)
+            .WithRoute(SelfPath, HttpStatusCode.OK, SelfJson(ProjectEntry(11), UserEntry))
+            .WithRoute("projects/11", HttpStatusCode.OK, ProjectJson("org/repo", "public", 40));
 
         // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            ValidBaseUrl,
-            "glpat_token123",
-            CancellationToken.None);
+        await ListAsync(handler);
 
         // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Success>();
-        success.Value.Count.ShouldBe(500);
+        handler.AllRequests.Select(r => r.RequestUri!.PathAndQuery).ShouldBe(
+            ["/api/v4/personal_access_tokens/self", "/api/v4/projects/11"]);
+    }
+
+    [Theory]
+    [InlineData(30, null, true)]
+    [InlineData(20, null, false)]
+    [InlineData(10, 30, true)]
+    public async Task CanPush_IsTrueFromDeveloperOnTheProjectOrItsGroup(int projectLevel, int? groupLevel, bool expected)
+    {
+        // Arrange
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, string.Empty)
+            .WithRoute(SelfPath, HttpStatusCode.OK, SelfJson(ProjectEntry(11), UserEntry))
+            .WithRoute("projects/11", HttpStatusCode.OK, ProjectJson("org/repo", "public", projectLevel, groupLevel));
+
+        // Act
+        IReadOnlyList<ProviderRepository> repos = await ListAsync(handler);
+
+        // Assert
+        repos.Single().CanPush.ShouldBe(expected);
     }
 
     [Fact]
-    public async Task WhenCalled_UsesCorrectEndpointUrl()
+    public async Task WhenTheTokenReportsNoGrant_ListsNothing()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, string.Empty)
+            .WithRoute(SelfPath, HttpStatusCode.OK, """{ "scopes": ["api"], "expires_at": null }""");
 
         // Act
-        await sut.ListRepositoriesAsync(ValidBaseUrl, "glpat_token", CancellationToken.None);
+        IReadOnlyList<ProviderRepository> repos = await ListAsync(handler);
 
         // Assert
-        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
-        request.RequestUri.ShouldNotBeNull();
-        request.RequestUri.IsAbsoluteUri.ShouldBeTrue();
-        request.RequestUri.AbsolutePath.ShouldBe("/api/v4/projects");
-        request.RequestUri.Query.ShouldContain("membership=true");
-        request.RequestUri.Query.ShouldNotContain("simple=true");
-        request.RequestUri.Query.ShouldContain("per_page=100");
-        request.RequestUri.Query.ShouldContain("page=1");
+        repos.ShouldBeEmpty();
     }
 
     [Fact]
     public async Task WhenCalled_UsesPrivateTokenHeader()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, string.Empty)
+            .WithRoute(SelfPath, HttpStatusCode.OK, SelfJson(UserEntry));
 
         // Act
-        await sut.ListRepositoriesAsync(ValidBaseUrl, "glpat_mytoken", CancellationToken.None);
+        await ListAsync(handler);
 
         // Assert
-        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
-        request.Headers.TryGetValues("PRIVATE-TOKEN", out IEnumerable<string>? values).ShouldBeTrue();
-        values.ShouldNotBeNull();
-        values.FirstOrDefault().ShouldBe("glpat_mytoken");
+        handler.LastRequest!.Headers.GetValues("PRIVATE-TOKEN").ShouldBe(["glpat_token123"]);
     }
 
     [Fact]
@@ -286,39 +146,32 @@ public sealed class ListRepositoriesAsync
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
-            invalidBaseUrl,
-            "glpat_token",
+        Result<IReadOnlyList<ProviderRepository>> result = await CreateSut(handler).ListRepositoriesAsync(
+            new Uri("http://gitlab.com/api/v4"),
+            "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
-        failure.Error.Code.ShouldBe("GitLab.InvalidBaseUrl");
+        result.IsSuccess.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenGitLabReturnsNonSuccessStatus_ReturnsFailure()
+    public async Task WhenAProjectReadFails_ReturnsFailure()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
-        using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, string.Empty)
+            .WithRoute(SelfPath, HttpStatusCode.OK, SelfJson(ProjectEntry(11), UserEntry))
+            .WithRoute("projects/11", HttpStatusCode.InternalServerError, string.Empty);
 
         // Act
-        Result<IReadOnlyList<ProviderRepository>> result = await sut.ListRepositoriesAsync(
+        Result<IReadOnlyList<ProviderRepository>> result = await CreateSut(handler).ListRepositoriesAsync(
             ValidBaseUrl,
-            "glpat_token",
+            "glpat_token123",
             CancellationToken.None);
 
         // Assert
-        Result<IReadOnlyList<ProviderRepository>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderRepository>>.Failure>();
-        failure.Error.Message.ShouldContain("500");
+        result.IsSuccess.ShouldBeFalse();
     }
 }

@@ -42,7 +42,7 @@ public sealed class For
     }
 
     [Fact]
-    public void WhenProviderIsGitLab_ReturnsPersonalAccessTokenLabelAndApiScopeAndGitLabTemplate()
+    public void WhenProviderIsGitLab_ReturnsTheFineGrainedTokenGroupedByGrantLevel()
     {
         // Arrange
 
@@ -53,11 +53,27 @@ public sealed class For
         result.ShouldNotBeNull();
         result.ShouldSatisfyAllConditions(
             () => result.ProviderType.ShouldBe("gitlab"),
-            () => result.TokenTypeLabel.ShouldBe("GitLab personal access token"),
+            () => result.TokenTypeLabel.ShouldBe("GitLab fine-grained personal access token"),
             () => result.Permissions.ShouldBe([
-                new TokenPermissionRequirement("api", "scope"),
-                new TokenPermissionRequirement("Maintainer role", "role")]),
-            () => result.CreationUrlTemplate.ShouldBe("{baseUrl}/-/user_settings/personal_access_tokens"));
+                new TokenPermissionRequirement("Only selected projects (select each monitored project individually)", "granted", "Group and project access"),
+                new TokenPermissionRequirement("Project: Read", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Work Item (Project Planning): Read, Create", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Merge Request (Repository): Read, Create, Update, Merge", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Pipeline (CI/CD): Read", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Job (CI/CD): Read, Run", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Webhook (Integrations): Read, Create, Update, Delete, Trigger", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Branch: Read, Create, Delete, Protect", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Protected Branch: Read, Update", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Repository: Read", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Commit: Read", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Code: Download, Push", "granted", "On each selected project"),
+                new TokenPermissionRequirement("Personal Access Token (System Access): Read", "granted", "On your user"),
+                new TokenPermissionRequirement("User (System Access): Read", "granted", "On your user"),
+                new TokenPermissionRequirement("Package (Packages and Registry): Read", "granted", "On a package feed's group (optional)"),
+                new TokenPermissionRequirement("Maintainer role", "role", "Repository role")]),
+            () => result.CreationUrlTemplate.ShouldBe("{baseUrl}/-/user_settings/personal_access_tokens"),
+            () => result.CreationNote.ShouldBe("Requires GitLab 19.5 or later. On the page, choose Generate token, then Fine-grained token."),
+            () => result.ClosingNote.ShouldBe("Foundry rejects a GitLab token that grants anything else or reaches all projects."));
     }
 
     [Fact]

@@ -159,52 +159,6 @@ public sealed class ResolveAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenScopesUnverifiableWithNullName_RejectsWithUnresolvedIdentity()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCredentialAsync();
-        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-
-        TokenAccountResolver sut = BuildSut(
-            validateToken: new KindValidateTokenHandler(
-                ValidateToken.Kinds.ScopesUnverifiable,
-                AccountName: null,
-                MissingScopes: []));
-
-        // Act
-        TokenResolution result = await sut.ResolveAsync(
-            credential, "ghp_token", baseUrl, isGitLab: false,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        TokenResolution.Rejected rejected = result.ShouldBeOfType<TokenResolution.Rejected>();
-        rejected.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
-    }
-
-    [Fact]
-    public async Task WhenScopesUnverifiableWithName_ReturnsResolved()
-    {
-        // Arrange
-        GitHubCredential credential = await SeedCredentialAsync();
-        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-
-        TokenAccountResolver sut = BuildSut(
-            validateToken: new KindValidateTokenHandler(
-                ValidateToken.Kinds.ScopesUnverifiable,
-                AccountName: "unverifiable-user",
-                MissingScopes: []));
-
-        // Act
-        TokenResolution result = await sut.ResolveAsync(
-            credential, "ghp_token", baseUrl, isGitLab: false,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        TokenResolution.Resolved resolved = result.ShouldBeOfType<TokenResolution.Resolved>();
-        resolved.Identity.Name.Value.ShouldBe("unverifiable-user");
-    }
-
-    [Fact]
     public async Task WhenProviderMismatch_RejectsWithProviderMismatchError()
     {
         // Arrange
@@ -432,7 +386,9 @@ public sealed class ResolveAsync : IAsyncDisposable
                 DetectedProvider: null,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }
@@ -455,7 +411,9 @@ public sealed class ResolveAsync : IAsyncDisposable
                 DetectedProvider: DetectedProvider,
                 Expiry: new TokenExpiry.NotChecked(),
                 TokenExpiry: new TokenExpirySummary("notChecked", null),
-                WrongKind: null);
+                WrongKind: null,
+                NotAllowed: [],
+                BroadReach: []);
             return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
         }
     }

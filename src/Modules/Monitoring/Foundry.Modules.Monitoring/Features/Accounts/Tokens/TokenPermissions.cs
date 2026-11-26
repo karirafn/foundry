@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -42,11 +43,21 @@ internal abstract record PermissionVerification
         internal override string WireName => "role";
     }
 
-    /// <summary>Verified by the token's scopes when the token is validated.</summary>
-    internal sealed record Scope : PermissionVerification
+    /// <summary>
+    /// Verified from a GitLab fine-grained token's grant: <paramref name="Level"/>'s entries must carry the
+    /// permission, which GitLab's form shows as <paramref name="Action"/> on <paramref name="Resource"/>.
+    /// </summary>
+    internal sealed record GitLabGrant(GitLabGrantLevel Level, string Resource, string Action) : PermissionVerification
     {
-        internal override string VersionToken => "scope";
-        internal override string WireName => "scope";
+        internal override string VersionToken => $"gitlab-grant:{Level}";
+        internal override string WireName => "granted";
+    }
+
+    /// <summary>Verified by a project entry of the GitLab token's grant targeting the repository's project.</summary>
+    internal sealed record GitLabSelectedProject : PermissionVerification
+    {
+        internal override string VersionToken => "gitlab-selected-project";
+        internal override string WireName => "granted";
     }
 
     /// <summary>Every token holds it.</summary>
@@ -81,11 +92,26 @@ internal sealed record TemplateParameter(string Name, string Level)
 /// <param name="Label">The text the account form shows for the permission.</param>
 /// <param name="TemplateParameter">The GitHub creation-URL parameter that preselects it, when it has one.</param>
 /// <param name="VerifiedBy">How Foundry checks the token holds it.</param>
+/// <param name="Group">The heading the requirements list shows it under, or <see langword="null"/> for none.</param>
 internal sealed record TokenPermission(
     string Key,
     string Label,
     TemplateParameter? TemplateParameter,
-    PermissionVerification VerifiedBy);
+    PermissionVerification VerifiedBy,
+    string? Group = null);
+
+/// <summary>Which entries of a GitLab fine-grained token's grant carry a permission.</summary>
+internal enum GitLabGrantLevel
+{
+    /// <summary>Each project entry, one per selected project; required.</summary>
+    Project,
+
+    /// <summary>The user entries; required.</summary>
+    User,
+
+    /// <summary>A group entry; allowed, never required.</summary>
+    Group,
+}
 
 /// <summary>
 /// The one list per provider of what an account token needs. The account form, the GitHub creation
@@ -153,15 +179,73 @@ internal static class TokenPermissions
             new PermissionVerification.NotVerified()),
     ];
 
+    private const string GitLabAccessGroup = "Group and project access";
+    private const string GitLabProjectGroup = "On each selected project";
+    private const string GitLabUserGroup = "On your user";
+    private const string GitLabPackageGroup = "On a package feed's group (optional)";
+    private const string GitLabRoleGroup = "Repository role";
+
+    // Keys are GitLab's permission identifiers as granular_scopes[].permissions reports them. The set
+    // covers every GitLab call Foundry makes plus the Publisher's git fetch and push.
     private static readonly IReadOnlyList<TokenPermission> GitLab =
     [
-        new("api", "api", TemplateParameter: null, new PermissionVerification.Scope()),
+        new(
+            "selected_projects",
+            "Only selected projects (select each monitored project individually)",
+            TemplateParameter: null,
+            new PermissionVerification.GitLabSelectedProject(),
+            GitLabAccessGroup),
+        GitLabPermission("read_project", GitLabGrantLevel.Project, "Project", "Read"),
+        GitLabPermission("read_work_item", GitLabGrantLevel.Project, "Work Item (Project Planning)", "Read"),
+        GitLabPermission("create_work_item", GitLabGrantLevel.Project, "Work Item (Project Planning)", "Create"),
+        GitLabPermission("read_merge_request", GitLabGrantLevel.Project, "Merge Request (Repository)", "Read"),
+        GitLabPermission("create_merge_request", GitLabGrantLevel.Project, "Merge Request (Repository)", "Create"),
+        GitLabPermission("update_merge_request", GitLabGrantLevel.Project, "Merge Request (Repository)", "Update"),
+        GitLabPermission("merge_merge_request", GitLabGrantLevel.Project, "Merge Request (Repository)", "Merge"),
+        GitLabPermission("read_pipeline", GitLabGrantLevel.Project, "Pipeline (CI/CD)", "Read"),
+        GitLabPermission("read_job", GitLabGrantLevel.Project, "Job (CI/CD)", "Read"),
+        GitLabPermission("run_job", GitLabGrantLevel.Project, "Job (CI/CD)", "Run"),
+        GitLabPermission("read_webhook", GitLabGrantLevel.Project, "Webhook (Integrations)", "Read"),
+        GitLabPermission("create_webhook", GitLabGrantLevel.Project, "Webhook (Integrations)", "Create"),
+        GitLabPermission("update_webhook", GitLabGrantLevel.Project, "Webhook (Integrations)", "Update"),
+        GitLabPermission("delete_webhook", GitLabGrantLevel.Project, "Webhook (Integrations)", "Delete"),
+        GitLabPermission("trigger_webhook", GitLabGrantLevel.Project, "Webhook (Integrations)", "Trigger"),
+        GitLabPermission("read_branch", GitLabGrantLevel.Project, "Branch", "Read"),
+        GitLabPermission("create_branch", GitLabGrantLevel.Project, "Branch", "Create"),
+        GitLabPermission("delete_branch", GitLabGrantLevel.Project, "Branch", "Delete"),
+        GitLabPermission("protect_branch", GitLabGrantLevel.Project, "Branch", "Protect"),
+        GitLabPermission("read_protected_branch", GitLabGrantLevel.Project, "Protected Branch", "Read"),
+        GitLabPermission("update_protected_branch", GitLabGrantLevel.Project, "Protected Branch", "Update"),
+        GitLabPermission("read_repository", GitLabGrantLevel.Project, "Repository", "Read"),
+        GitLabPermission("read_commit", GitLabGrantLevel.Project, "Commit", "Read"),
+        GitLabPermission("download_code", GitLabGrantLevel.Project, "Code", "Download"),
+        GitLabPermission("push_code", GitLabGrantLevel.Project, "Code", "Push"),
+        GitLabPermission(GitLabReadOwnTokenKey, GitLabGrantLevel.User, "Personal Access Token (System Access)", "Read"),
+        GitLabPermission("read_user", GitLabGrantLevel.User, "User (System Access)", "Read"),
+        GitLabPermission("read_package", GitLabGrantLevel.Group, "Package (Packages and Registry)", "Read"),
         new(
             "maintainer_role",
             "Maintainer role",
             TemplateParameter: null,
-            new PermissionVerification.GitLabRole(GitLabMaintainerAccessLevel)),
+            new PermissionVerification.GitLabRole(GitLabMaintainerAccessLevel),
+            GitLabRoleGroup),
     ];
+
+    /// <summary>The key of the permission a GitLab token needs to read its own grant.</summary>
+    internal const string GitLabReadOwnTokenKey = "read_personal_access_token";
+
+    private static TokenPermission GitLabPermission(string key, GitLabGrantLevel level, string resource, string action) =>
+        new(
+            key,
+            $"{resource}: {action}",
+            TemplateParameter: null,
+            new PermissionVerification.GitLabGrant(level, resource, action),
+            level switch
+            {
+                GitLabGrantLevel.Project => GitLabProjectGroup,
+                GitLabGrantLevel.User => GitLabUserGroup,
+                _ => GitLabPackageGroup,
+            });
 
     private static readonly FrozenDictionary<string, IReadOnlyList<TokenPermission>> ByProvider =
         new Dictionary<string, IReadOnlyList<TokenPermission>>
@@ -173,11 +257,33 @@ internal static class TokenPermissions
     internal static IReadOnlyList<TokenPermission> For(string providerType) =>
         ByProvider.TryGetValue(providerType, out IReadOnlyList<TokenPermission>? entries) ? entries : [];
 
-    /// <summary>What the account form and setup wizard list for <paramref name="providerType"/>, in list order.</summary>
-    internal static IReadOnlyList<TokenPermissionRequirement> RequirementsFor(string providerType) =>
-        For(providerType)
-            .Select(entry => new TokenPermissionRequirement(entry.Label, entry.VerifiedBy.WireName))
-            .ToList();
+    /// <summary>
+    /// What the account form and setup wizard list for <paramref name="providerType"/>, in list order.
+    /// Consecutive GitLab grant permissions on one resource share a row, such as <c>Code: Download, Push</c>.
+    /// </summary>
+    internal static IReadOnlyList<TokenPermissionRequirement> RequirementsFor(string providerType)
+    {
+        List<TokenPermissionRequirement> rows = [];
+        PermissionVerification.GitLabGrant? previous = null;
+
+        foreach (TokenPermission entry in For(providerType))
+        {
+            PermissionVerification.GitLabGrant? grant = entry.VerifiedBy as PermissionVerification.GitLabGrant;
+            if (grant is not null && previous is not null
+                && previous.Resource == grant.Resource && previous.Level == grant.Level)
+            {
+                rows[^1] = rows[^1] with { Label = $"{rows[^1].Label}, {grant.Action}" };
+            }
+            else
+            {
+                rows.Add(new TokenPermissionRequirement(entry.Label, entry.VerifiedBy.WireName, entry.Group));
+            }
+
+            previous = grant;
+        }
+
+        return rows;
+    }
 
     /// <summary>The GitHub probes, write and read, in the order they run.</summary>
     internal static IReadOnlyList<WritePermission> GitHubProbes { get; } = GitHub
@@ -193,11 +299,48 @@ internal static class TokenPermissions
             .OfType<TemplateParameter>()
             .Select(parameter => parameter.ToString()));
 
-    /// <summary>The scopes a GitLab token must carry, checked when the token is validated.</summary>
-    internal static IReadOnlyList<string> GitLabScopes { get; } = GitLab
-        .Where(entry => entry.VerifiedBy is PermissionVerification.Scope)
-        .Select(entry => entry.Label)
-        .ToList();
+    /// <summary>The permission identifiers each level of a GitLab token's grant must, or may, carry.</summary>
+    internal static GitLabGrantRequirements GitLabGrantRequirements { get; } = new(
+        Project: GitLabGrantKeys(GitLabGrantLevel.Project),
+        User: GitLabGrantKeys(GitLabGrantLevel.User),
+        GroupAllowed: GitLabGrantKeys(GitLabGrantLevel.Group));
+
+    /// <summary>The key a GitLab <c>Denied</c> verdict stores for a repository no project entry targets.</summary>
+    internal static string GitLabSelectedProjectKey { get; } = GitLab
+        .Single(entry => entry.VerifiedBy is PermissionVerification.GitLabSelectedProject)
+        .Key;
+
+    /// <summary>
+    /// The label of each GitLab permission identifier in <paramref name="identifiers"/>, in their order; an
+    /// identifier the list does not hold is shown as GitLab sent it.
+    /// </summary>
+    internal static IReadOnlyList<string> GitLabLabelsOrIdentifiers(IEnumerable<string> identifiers) =>
+        identifiers
+            .Select(identifier => GitLab.FirstOrDefault(entry =>
+                    entry.VerifiedBy is PermissionVerification.GitLabGrant
+                    && string.Equals(entry.Key, identifier, StringComparison.Ordinal))?.Label
+                ?? identifier)
+            .ToList();
+
+    /// <summary>
+    /// The wire names of broad-reach <c>access</c> values: <c>all-projects</c>, <c>personal-projects</c> and
+    /// <c>instance</c>; a value GitLab adds later is sent as GitLab sent it.
+    /// </summary>
+    internal static IReadOnlyList<string> GitLabBroadReachWireNames(IEnumerable<string> access) =>
+        access
+            .Select(value => value switch
+            {
+                "all_memberships" => "all-projects",
+                "personal_projects" => "personal-projects",
+                _ => value,
+            })
+            .ToList();
+
+    private static List<string> GitLabGrantKeys(GitLabGrantLevel level) =>
+        GitLab
+            .Where(entry => entry.VerifiedBy is PermissionVerification.GitLabGrant grant && grant.Level == level)
+            .Select(entry => entry.Key)
+            .ToList();
 
     /// <summary>The GitLab access level the token's user needs on a repository.</summary>
     internal static int GitLabMinimumAccessLevel { get; } = GitLab

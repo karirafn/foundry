@@ -19,7 +19,7 @@ public sealed class Resolve
         IReadOnlyList<string> missingScopes,
         string? detectedProvider,
         TokenExpiry? expiry = null) =>
-        new(kind, accountName, missingScopes, detectedProvider, expiry ?? new TokenExpiry.NotChecked(), new TokenExpirySummary("notChecked", null), WrongKind: null);
+        new(kind, accountName, missingScopes, detectedProvider, expiry ?? new TokenExpiry.NotChecked(), new TokenExpirySummary("notChecked", null), WrongKind: null, NotAllowed: [], BroadReach: []);
 
     [Fact]
     public void WhenAuthenticated_CarriesTheTokenExpiry()
@@ -50,16 +50,35 @@ public sealed class Resolve
     }
 
     [Fact]
-    public void WhenScopesUnverifiable_ReturnsTheAccountName()
+    public void WhenAuthenticatedWithNotAllowedPermissions_ReturnsNonConformingToken()
     {
         // Arrange
-        ValidateToken.Response response = Response(ValidateToken.Kinds.ScopesUnverifiable, "group-bot", [], null);
+        ValidateToken.Response response = Response(ValidateToken.Kinds.Authenticated, "octocat", [], null) with
+        {
+            NotAllowed = ["delete_project"],
+        };
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
 
         // Assert
-        result.ValueOrThrow().Name.Value.ShouldBe("group-bot");
+        ErrorOf(result).ShouldBe(CredentialErrors.NonConformingToken);
+    }
+
+    [Fact]
+    public void WhenAuthenticatedWithBroadReach_ReturnsNonConformingToken()
+    {
+        // Arrange
+        ValidateToken.Response response = Response(ValidateToken.Kinds.Authenticated, "octocat", [], null) with
+        {
+            BroadReach = ["all-projects"],
+        };
+
+        // Act
+        Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
+
+        // Assert
+        ErrorOf(result).ShouldBe(CredentialErrors.NonConformingToken);
     }
 
     [Fact]
@@ -122,22 +141,6 @@ public sealed class Resolve
     {
         // Arrange
         ValidateToken.Response response = Response(ValidateToken.Kinds.IdentityUnresolved, null, [], null);
-
-        // Act
-        Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);
-
-        // Assert
-        ErrorOf(result).ShouldBe(CredentialErrors.UnresolvedIdentity);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void WhenScopesUnverifiableWithABlankAccountName_ReturnsUnresolvedIdentity(string? accountName)
-    {
-        // Arrange
-        ValidateToken.Response response = Response(ValidateToken.Kinds.ScopesUnverifiable, accountName, [], null);
 
         // Act
         Result<ResolvedTokenIdentity> result = TokenIdentityResolution.Resolve(response);

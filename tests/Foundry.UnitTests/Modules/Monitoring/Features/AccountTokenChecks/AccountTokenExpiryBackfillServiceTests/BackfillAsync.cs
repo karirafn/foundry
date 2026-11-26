@@ -56,7 +56,7 @@ public sealed class BackfillAsync : IAsyncDisposable
         CredentialId unavailableAccount = await SeedAccountAsync("unavailable-org", "ghp_unavailable");
         _validator.Respond("ghp_on", TokenValidationOutcome.Authenticated("on-org", ExpiresOn));
         _validator.Respond("ghp_never", TokenValidationOutcome.Authenticated("never-org", new TokenExpiry.Never()));
-        _validator.Respond("ghp_unavailable", TokenValidationOutcome.ScopesUnverifiable("unavailable-org", new TokenExpiry.Unavailable()));
+        _validator.Respond("ghp_unavailable", TokenValidationOutcome.TokenOfWrongKind("unavailable-org", WrongTokenKind.GitLabResourceToken, new TokenExpiry.Unavailable()));
         AccountTokenExpiryBackfillService sut = BuildService();
 
         // Act

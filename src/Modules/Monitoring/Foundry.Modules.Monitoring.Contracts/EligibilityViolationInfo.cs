@@ -74,11 +74,10 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
             return CannotPushDescription(slug, providerType);
         }
 
-        return providerType switch
-        {
-            "gitlab" => $"Token's user needs the Maintainer role on {slug}.",
-            _ => $"Token is missing {JoinWithAnd(missingPermissionLabels)} for {slug}.",
-        };
+        // A GitLab role is fixed on the members page, not on the token, so it reads as the user's need.
+        return providerType == "gitlab" && missingPermissionLabels is ["Maintainer role"]
+            ? $"Token's user needs the Maintainer role on {slug}."
+            : $"Token is missing {JoinWithAnd(missingPermissionLabels)} for {slug}.";
     }
 
     private static string JoinWithAnd(IReadOnlyList<string> items) =>
