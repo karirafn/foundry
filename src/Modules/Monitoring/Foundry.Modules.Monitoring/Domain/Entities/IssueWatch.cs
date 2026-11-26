@@ -7,9 +7,10 @@ namespace Foundry.Modules.Monitoring.Domain.Entities;
 /// <summary>
 /// Monitoring's per-issue record of the provider state Foundry compares against while it waits on a person
 /// (ADR 0096), keyed by repository and issue number. It holds the issue-body baseline taken when the question was
-/// posted, or when a pass first saw a failed triage (issue #773), and the resume branch's head baseline taken when the
-/// question was posted (issue #1035); for each, a pending change with the time Foundry first saw it. A pending change
-/// settles once it has stayed the same for the quiet period. The record is removed when the issue stops waiting.
+/// posted, when a pass first saw a failed triage (issue #773), or from the spec an issue with open work was last
+/// triaged on (ADR 0125), and the resume branch's head baseline taken when the question was posted (issue #1035);
+/// for each, a pending change with the time Foundry first saw it. A pending change settles once it has stayed the same
+/// for the quiet period. The record is removed when the issue stops waiting.
 /// </summary>
 public sealed class IssueWatch
 {
@@ -97,6 +98,28 @@ public sealed class IssueWatch
             IssueNumber = issueNumber,
             Wait = WatchedWait.TriageFailed,
             BaselineBodyHash = baselineBodyHash,
+        };
+    }
+
+    /// <summary>
+    /// Starts watching the spec of an issue with open work (ADR 0125). <paramref name="baselineSpecHash"/> is the
+    /// <see cref="IssueBodyHash.OfSpec"/> hash the issue's last triage judged or, for an issue no triage recorded one for,
+    /// the first read: a spec that differs from the one triage judged is a change even when it was rewritten before the
+    /// watch started.
+    /// </summary>
+    public static IssueWatch StartForSpecChange(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        IssueBodyHash baselineSpecHash)
+    {
+        ArgumentNullException.ThrowIfNull(baselineSpecHash);
+
+        return new()
+        {
+            MonitoredRepositoryId = repositoryId,
+            IssueNumber = issueNumber,
+            Wait = WatchedWait.SpecChanged,
+            BaselineBodyHash = baselineSpecHash,
         };
     }
 
@@ -214,7 +237,7 @@ public sealed class IssueWatch
 
     /// <summary>
     /// Decides whether a body change alone has settled, under the same quiet-period rule as <see cref="Settle"/>: a
-    /// failed triage asked no question, so no comment counts as input.
+    /// failed triage or a watched spec asked no question, so no comment counts as input.
     /// </summary>
     internal InputSettlement SettleBodyChange(DateTimeOffset now) => Settle(NoComments, now);
 
@@ -236,6 +259,12 @@ public enum WatchedWait
 
     /// <summary>A <c>triage_failed</c> issue, which an edit sends back to triage (issue #773).</summary>
     TriageFailed,
+
+    /// <summary>
+    /// An issue with open work waiting to start a run or on a person, which a rewritten spec sends back to triage
+    /// (ADR 0125).
+    /// </summary>
+    SpecChanged,
 }
 
 /// <summary>An issue body other than the baseline, with the time Foundry first saw it.</summary>

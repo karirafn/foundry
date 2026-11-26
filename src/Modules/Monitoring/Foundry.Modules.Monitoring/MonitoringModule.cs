@@ -28,6 +28,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
+using Foundry.Modules.Monitoring.Features.SpecRewrite;
 using Foundry.Modules.Monitoring.Features.TriageFailed;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
@@ -138,6 +139,7 @@ public static class MonitoringModule
             () => sp.GetRequiredService<IIssueQueries>()));
         services.AddScoped<AwaitingInputStep>();
         services.AddScoped<TriageFailedEditStep>();
+        services.AddScoped<SpecRewriteStep>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
         services.AddQueryHandler<GetTokenRequirements.Query, TokenRequirements, GetTokenRequirements.Handler>();

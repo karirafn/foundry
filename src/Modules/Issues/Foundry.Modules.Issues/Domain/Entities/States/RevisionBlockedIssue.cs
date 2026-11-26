@@ -77,14 +77,15 @@ public sealed class RevisionBlockedIssue : Issue
     }
 
     /// <summary>
-    /// Triage released an issue that holds <paramref name="openWork"/> while it has open blockers: the
+    /// Triage released an issue that holds open work with a pull request while it has open blockers: the
     /// <see cref="RevisionTrigger.SpecChanged"/> revision on its branch and pull request waits for them, as
     /// <see cref="RevisionQueuedIssue.FromTriage"/> would queue it.
     /// </summary>
     internal static RevisionBlockedIssue FromTriage(
         Issue source,
         TriageVerdict.Ready? verdict,
-        OpenWork openWork,
+        string branchName,
+        string pullRequestUrl,
         DateTimeOffset transitionedAt)
     {
         if (source.BlockedBy.Count == 0)
@@ -101,8 +102,8 @@ public sealed class RevisionBlockedIssue : Issue
         }
 
         blocked.ReleaseOpenWork();
-        blocked.BranchName = openWork.BranchName;
-        blocked.PullRequestUrl = openWork.PullRequestUrl;
+        blocked.BranchName = branchName;
+        blocked.PullRequestUrl = pullRequestUrl;
         blocked.Trigger = new RevisionTrigger.SpecChanged();
         blocked.StartRound();
         blocked.ResetReviewFixAttempts();
@@ -128,5 +129,19 @@ public sealed class RevisionBlockedIssue : Issue
             failedAt);
         AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
         return failed;
+    }
+
+    /// <summary>
+    /// The issue's spec was rewritten since its last triage (ADR 0125): it goes back to triage holding its branch and
+    /// pull request, so a ready verdict resumes the work on them.
+    /// </summary>
+    public TriageQueuedIssue RetriageRewrittenSpec(DateTimeOffset transitionedAt)
+    {
+        TriageQueuedIssue queued = TriageQueuedIssue.HoldingOpenWork(
+            this,
+            OpenWork.Of(BranchName, PullRequestUrl),
+            transitionedAt);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 }
