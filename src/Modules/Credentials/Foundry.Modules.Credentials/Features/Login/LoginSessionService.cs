@@ -260,7 +260,6 @@ internal sealed class LoginSessionService(
     // Lines longer than this are skipped — a legitimate OAuth URL is never this long.
     private const int MaxUrlLineLengthChars = 8_192;
 
-    // Maximum length of the last CLI line written to the sign-in timeout warning.
     private const int MaxLoggedLineLengthChars = 500;
 
     /// <summary>
