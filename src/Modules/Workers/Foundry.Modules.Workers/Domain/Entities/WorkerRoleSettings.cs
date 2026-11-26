@@ -4,7 +4,8 @@ namespace Foundry.Modules.Workers.Domain.Entities;
 
 /// <summary>
 /// The operator settings of one <see cref="WorkerRole"/>, keyed by role name (ADR 0095). The model is the only
-/// per-role setting: everything else a role runs with ships in the worker image.
+/// per-role setting: everything else a role runs with ships in the worker image. The implement role has no row: its
+/// model is set per demand in <see cref="ImplementTierSettings"/>.
 /// </summary>
 public sealed class WorkerRoleSettings
 {

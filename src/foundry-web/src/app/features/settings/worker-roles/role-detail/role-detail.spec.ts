@@ -9,6 +9,7 @@ import { unsavedChangesGuard } from '../../guards/unsaved-changes.guard';
 import { ConfirmDialogService } from '../../../../shared/components/confirm-dialog/confirm-dialog.service';
 import { WorkerRoleCard, WorkerRoleCatalog, WorkerRoleService } from '../worker-role.service';
 import {
+  buildImplementRole,
   buildModelOptions,
   buildWorkerRole,
   buildWorkerRoleCatalog,
@@ -274,6 +275,60 @@ describe('RoleDetailComponent', () => {
       expect(rail.querySelector('fd-role-image')).not.toBeNull();
     });
 
+    it('should render one model setting per demand, routine first, each its own rail block', async () => {
+      // Act
+      const { el } = await openRole(buildImplementRole());
+
+      // Assert
+      const settings = Array.from(el().querySelectorAll('aside fd-worker-role-model'));
+      expect(settings).toHaveLength(2);
+      expect(settings.every((s) => s.classList.contains('role-detail__rail-block'))).toBe(true);
+      expect(settings.map((s) => text(s.querySelector('h3')))).toEqual(['Routine model', 'Demanding model']);
+    });
+
+    it('should keep every id unique across the two settings', async () => {
+      // Act
+      const { el } = await openRole(buildImplementRole());
+
+      // Assert
+      const ids = Array.from(el().querySelectorAll('[id]')).map((node) => node.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(el().querySelector('#worker-role-implement-routine-model')).not.toBeNull();
+      expect(el().querySelector('#worker-role-implement-demanding-effort')).not.toBeNull();
+    });
+
+    it('should show the model-list refresh error once, on the routine setting', async () => {
+      // Arrange
+      const ctx = await open();
+      ctx.httpMock.expectOne(API_URL).flush(buildWorkerRoleCatalog({ roles: [buildImplementRole()] }));
+      TestBed.inject(WorkerRoleService).loadModelOptions(true);
+      ctx.httpMock
+        .expectOne((req) => req.url === MODELS_URL)
+        .flush(buildModelOptions({ models: [], refreshError: 'HTTP 503' }));
+
+      // Act
+      ctx.harness.detectChanges();
+
+      // Assert
+      const callouts = ctx.el().querySelectorAll('.role-model__refresh-error');
+      expect(callouts).toHaveLength(1);
+      expect(callouts[0].closest('fd-worker-role-model')!.querySelector('h3')!.textContent).toContain('Routine');
+    });
+
+    it('should render the single model setting for a role without demand settings', async () => {
+      // Act
+      const { el } = await openLoaded(
+        buildWorkerRoleCatalog({ roles: [buildImplementRole(), buildWorkerRole({ name: 'triage' })] }),
+        'triage',
+      );
+
+      // Assert
+      const settings = el().querySelectorAll('aside fd-worker-role-model');
+      expect(settings).toHaveLength(1);
+      expect(text(settings[0].querySelector('h3'))).toBe('Model');
+      expect(settings[0].querySelector('.role-model__select--effort')).toBeNull();
+    });
+
     it('should show the unverified warning in the rail image block', async () => {
       // Arrange
       const catalog = buildWorkerRoleCatalog();
@@ -502,6 +557,64 @@ describe('RoleDetailComponent', () => {
       // Assert
       expect(confirm).not.toHaveBeenCalled();
       expect(navigated).toBe(true);
+    });
+
+    describe('with demand settings', () => {
+      function pickEffort(el: HTMLElement, demand: 'routine' | 'demanding', value: string): void {
+        const select = el.querySelector<HTMLSelectElement>(`#worker-role-implement-${demand}-effort`)!;
+        select.value = value;
+        select.dispatchEvent(new Event('change'));
+      }
+
+      it('should report unsaved changes when only the demanding setting changed', async () => {
+        // Arrange
+        const { el, harness } = await openRole(buildImplementRole());
+
+        // Act
+        pickEffort(el(), 'demanding', 'high');
+        harness.detectChanges();
+
+        // Assert
+        const component = harness.routeDebugElement!.componentInstance as RoleDetailComponent;
+        expect(component.hasUnsavedChanges()).toBe(true);
+      });
+
+      it('should ask before leaving with an unsaved routine setting', async () => {
+        // Arrange
+        const { el, harness } = await openRole(buildImplementRole());
+        const confirm = vi.spyOn(TestBed.inject(ConfirmDialogService), 'confirm').mockResolvedValue(false);
+        pickEffort(el(), 'routine', 'low');
+        harness.detectChanges();
+
+        // Act
+        const navigated = await TestBed.inject(Router).navigateByUrl('/settings/roles');
+
+        // Assert
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(navigated).toBe(false);
+      });
+
+      it('should leave without asking once the changed setting is saved through its demand', async () => {
+        // Arrange
+        const { el, harness, httpMock } = await openRole(buildImplementRole());
+        const confirm = vi.spyOn(TestBed.inject(ConfirmDialogService), 'confirm');
+        pickEffort(el(), 'demanding', 'xhigh');
+        harness.detectChanges();
+        const demanding = el().querySelectorAll('fd-worker-role-model')[1];
+        demanding.querySelector<HTMLButtonElement>('.role-model__save')!.click();
+        httpMock
+          .expectOne('/api/worker-roles/implement/demand-models/demanding')
+          .flush({ demand: 'demanding', model: '', effort: 'xhigh' });
+        harness.detectChanges();
+
+        // Act
+        const navigated = await TestBed.inject(Router).navigateByUrl('/settings/roles');
+
+        // Assert
+        httpMock.expectNone('/api/worker-roles/implement/model');
+        expect(confirm).not.toHaveBeenCalled();
+        expect(navigated).toBe(true);
+      });
     });
   });
 });

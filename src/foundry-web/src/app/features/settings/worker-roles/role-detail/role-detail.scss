@@ -298,9 +298,17 @@ code {
       padding-inline-end: var(--fd-spacing-xl);
     }
 
-    // Sticky only beside the content and when the viewport can show the whole rail (about 42rem at worst).
+    // Sticky only beside the content and when the viewport can show the whole rail: about 42rem at worst with one
+    // model setting, about 60rem with two (an unverified image, the refresh callout and both save errors showing).
     @media (min-height: 50rem) {
-      &__rail {
+      &__rail:not(&__rail--demands) {
+        inset-block-start: var(--fd-spacing-lg);
+        position: sticky;
+      }
+    }
+
+    @media (min-height: 62rem) {
+      &__rail--demands {
         inset-block-start: var(--fd-spacing-lg);
         position: sticky;
       }

@@ -14,6 +14,25 @@ export type PromptSectionCondition = components['schemas']['PromptSectionConditi
 export type WorkerRoleModelOptions = components['schemas']['WorkerRoleModelOptionsResponse'];
 export type WorkerRoleModelOption = components['schemas']['WorkerRoleModelOption'];
 export type WorkerRoleModelResponse = components['schemas']['WorkerRoleModelResponse'];
+/** How demanding triage judged an issue; the implement role sets its model and effort per demand. */
+export type ImplementDemand = components['schemas']['ImplementDemand'];
+/** One demand's model and effort; an empty value leaves it to the account or model default. */
+export type DemandModel = components['schemas']['ImplementDemandModel'];
+
+/** The effort levels a demand setting may name besides the empty default. Mirrors the backend's accepted values. */
+export const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh'];
+
+/** One demand setting of one role. */
+export interface WorkerRoleDemandSetting {
+  readonly role: string;
+  readonly demand: ImplementDemand;
+}
+
+/** A rejected demand save, keyed to the role and demand whose setting it belongs to. */
+export interface WorkerRoleDemandSaveError extends WorkerRoleDemandSetting {
+  readonly code: string | null;
+  readonly message: string;
+}
 
 /** Lifecycle of the catalog fetch. `notReady` is the 503 returned before the worker image build has read the catalog. */
 export type WorkerRoleCatalogStatus = 'idle' | 'loading' | 'loaded' | 'notReady' | 'error';
@@ -68,6 +87,18 @@ export class WorkerRoleService {
   private readonly _savedModelSignal: WritableSignal<string | null> = signal(null);
   /** The role whose model was saved most recently. */
   readonly savedModel: Signal<string | null> = this._savedModelSignal.asReadonly();
+
+  // Each demand setting saves on its own, so these hold every setting in that state rather than the last one.
+  private readonly _savingDemandSignal: WritableSignal<readonly WorkerRoleDemandSetting[]> = signal([]);
+  /** The demand settings being saved. */
+  readonly savingDemand: Signal<readonly WorkerRoleDemandSetting[]> = this._savingDemandSignal.asReadonly();
+
+  private readonly _saveDemandErrorSignal: WritableSignal<readonly WorkerRoleDemandSaveError[]> = signal([]);
+  readonly saveDemandError: Signal<readonly WorkerRoleDemandSaveError[]> = this._saveDemandErrorSignal.asReadonly();
+
+  private readonly _savedDemandSignal: WritableSignal<readonly WorkerRoleDemandSetting[]> = signal([]);
+  /** The demand settings saved since their last save started. */
+  readonly savedDemand: Signal<readonly WorkerRoleDemandSetting[]> = this._savedDemandSignal.asReadonly();
 
   private _requestToken = 0;
   private _modelsRequestToken = 0;
@@ -129,7 +160,7 @@ export class WorkerRoleService {
     });
   }
 
-  /** Saves a role's model; an empty value means the CLI's account default. */
+  /** Saves a role's model; an empty value means the CLI's account default. Never called for a role with demand settings. */
   saveModel(role: string, model: string): void {
     this._savingModelSignal.set(role);
     this._saveModelErrorSignal.set(null);
@@ -163,4 +194,61 @@ export class WorkerRoleService {
         },
       });
   }
+
+  /**
+   * Saves one demand's model and effort; empty values mean the account default and the model's default. A role
+   * with demand settings is saved only through here: its role-wide model endpoint rejects every save.
+   */
+  saveDemandModel(role: string, demand: ImplementDemand, model: string, effort: string): void {
+    const setting: WorkerRoleDemandSetting = { role, demand };
+    this._savingDemandSignal.update((list) => [...without(list, setting), setting]);
+    this._saveDemandErrorSignal.update((list) => without(list, setting));
+    this._savedDemandSignal.update((list) => without(list, setting));
+
+    this._http
+      .put<DemandModel>(
+        `${API_URL}/${encodeURIComponent(role)}/demand-models/${encodeURIComponent(demand)}`,
+        { model, effort },
+      )
+      .subscribe({
+        next: (saved) => {
+          this._catalogSignal.update((catalog) =>
+            catalog === null
+              ? null
+              : {
+                  ...catalog,
+                  roles: catalog.roles.map((card) =>
+                    card.name === role
+                      ? {
+                          ...card,
+                          demandModels: card.demandModels.map((entry) =>
+                            entry.demand === saved.demand ? { ...saved } : entry,
+                          ),
+                        }
+                      : card,
+                  ),
+                },
+          );
+          this._savingDemandSignal.update((list) => without(list, setting));
+          this._savedDemandSignal.update((list) => [...without(list, setting), setting]);
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._saveDemandErrorSignal.update((list) => [
+            ...without(list, setting),
+            { ...setting, code: extractErrorCode(err), message: extractErrorMessage(err) ?? SAVE_MODEL_ERROR },
+          ]);
+          this._savingDemandSignal.update((list) => without(list, setting));
+        },
+      });
+  }
+}
+
+/** True when the entry is the given role's demand setting. */
+export function isDemandSetting(entry: WorkerRoleDemandSetting, role: string, demand: ImplementDemand): boolean {
+  return entry.role === role && entry.demand === demand;
+}
+
+function without<T extends WorkerRoleDemandSetting>(list: readonly T[], setting: WorkerRoleDemandSetting): T[] {
+  return list.filter((entry) => !isDemandSetting(entry, setting.role, setting.demand));
 }

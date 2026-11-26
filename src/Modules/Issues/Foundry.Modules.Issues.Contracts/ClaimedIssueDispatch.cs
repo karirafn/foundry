@@ -10,6 +10,10 @@ namespace Foundry.Modules.Issues.Contracts;
 /// The issue's clarification log (ADR 0096), rendered into the run's prompt. Optional only so claims enqueued before
 /// the log existed still deserialize; <see langword="null"/> reads as an empty log.
 /// </param>
+/// <param name="Demand">
+/// The issue's Implement Demand for an implement run. Optional so claims enqueued before it existed still deserialize;
+/// Workers reads <see langword="null"/> as <see cref="ImplementDemand.Demanding"/>.
+/// </param>
 public sealed record ClaimedIssueDispatch(
     IssueId IssueId,
     WorkerRunId WorkerRunId,
@@ -22,4 +26,5 @@ public sealed record ClaimedIssueDispatch(
     WorkerProvider Provider,
     DispatchContext Context,
     string IssueApiUrl,
-    IReadOnlyList<Clarification>? Clarifications = null);
+    IReadOnlyList<Clarification>? Clarifications = null,
+    ImplementDemand? Demand = null);

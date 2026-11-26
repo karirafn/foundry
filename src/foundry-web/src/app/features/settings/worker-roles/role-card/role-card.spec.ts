@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RoleCardComponent } from './role-card';
-import { buildWorkerRole } from '../../testing/worker-role-catalog.fixture';
+import { buildImplementRole, buildWorkerRole } from '../../testing/worker-role-catalog.fixture';
 import { WorkerRoleCard } from '../worker-role.service';
 
 function render(overrides: Partial<WorkerRoleCard> = {}): HTMLElement {
@@ -112,5 +112,25 @@ describe('RoleCardComponent', () => {
 
     // Assert
     expect(text(el.querySelector('.role-card__verdict'))).toBe('Yes');
+  });
+
+  it('should show a Routine and a Demanding fact instead of Model for a role with demand settings', () => {
+    // Act
+    const el = render(buildImplementRole({ model: '', effort: '' }, { model: 'opus', effort: 'xhigh' }));
+
+    // Assert
+    const terms = Array.from(el.querySelectorAll('.role-card__facts dt')).map((dt) => text(dt));
+    expect(terms).toEqual(['Routine', 'Demanding', 'Skills', 'Agents', 'Verdict']);
+    const models = Array.from(el.querySelectorAll('.role-card__model')).map((dd) => text(dd));
+    expect(models).toEqual(['Default', 'opus · xhigh']);
+  });
+
+  it('should add the effort to a Default model and omit it when unset', () => {
+    // Act
+    const el = render(buildImplementRole({ model: '', effort: 'low' }, { model: 'sonnet', effort: '' }));
+
+    // Assert
+    const models = Array.from(el.querySelectorAll('.role-card__model')).map((dd) => text(dd));
+    expect(models).toEqual(['Default · low', 'sonnet']);
   });
 });

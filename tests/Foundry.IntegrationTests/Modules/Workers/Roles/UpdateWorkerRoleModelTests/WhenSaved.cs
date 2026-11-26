@@ -104,21 +104,21 @@ public sealed class WhenSaved : IAsyncDisposable
     public async Task WhenModelIsEmptyAnAliasOrListed_ReturnsOkWithTheSavedModel(string model)
     {
         // Act
-        HttpResponseMessage response = await PutModelAsync("implement", model);
+        HttpResponseMessage response = await PutModelAsync("triage", model);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         WorkerRoleModelResponse saved = (await response.Content.ReadFromJsonAsync<WorkerRoleModelResponse>(
             FoundryWebAppFactory.JsonOptions,
             TestContext.Current.CancellationToken)).ShouldNotBeNull();
-        saved.ShouldBe(new WorkerRoleModelResponse("implement", model));
+        saved.ShouldBe(new WorkerRoleModelResponse("triage", model));
     }
 
     [Fact]
     public async Task WhenModelIsNotListed_ReturnsAFieldKeyedBadRequest()
     {
         // Act
-        HttpResponseMessage response = await PutModelAsync("implement", "claude-typo");
+        HttpResponseMessage response = await PutModelAsync("triage", "claude-typo");
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -136,10 +136,8 @@ public sealed class WhenSaved : IAsyncDisposable
         (await ProblemTypeAsync(response)).ShouldEndWith("/Worker.RoleNotFound");
     }
 
-    [Fact]
-    public async Task TheRoleCardCarriesTheSavedModel()
+    private void PublishCatalog()
     {
-        // Arrange
         WorkerRoleCatalogContent content = WorkerRoleCatalogReader.Parse(new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["implement/.claude-plugin/plugin.json"] = """{"name":"implement","description":"Implements an issue."}""",
@@ -162,7 +160,81 @@ public sealed class WhenSaved : IAsyncDisposable
         _factory.Services.GetRequiredService<IWorkerRoleCatalogStore>().Publish(new WorkerRoleCatalog(
             content,
             new WorkerImageProvenance("foundry-worker:local", null, DateTimeOffset.UnixEpoch, null, Verified: true)));
-        (await PutModelAsync("implement", "sonnet")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private Task<HttpResponseMessage> PutDemandModelAsync(string demand, string model, string effort) =>
+        _client.PutAsJsonAsync(
+            new Uri($"/api/worker-roles/implement/demand-models/{demand}", UriKind.Relative),
+            new { model, effort },
+            TestContext.Current.CancellationToken);
+
+    [Fact]
+    public async Task WhenRoleIsImplement_ReturnsABadRequestNamingThePerDemandSetting()
+    {
+        // Act
+        HttpResponseMessage response = await PutModelAsync("implement", "opus");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemTypeAsync(response)).ShouldEndWith("/Worker.RoleModelPerDemand");
+    }
+
+    [Fact]
+    public async Task WhenADemandModelIsSaved_ReturnsOkWithTheSavedValues()
+    {
+        // Act
+        HttpResponseMessage response = await PutDemandModelAsync("routine", $" {ListedModel} ", "high");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using JsonDocument document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        JsonElement saved = document.RootElement;
+        saved.ShouldSatisfyAllConditions(
+            () => saved.GetProperty("demand").GetString().ShouldBe("routine"),
+            () => saved.GetProperty("model").GetString().ShouldBe(ListedModel),
+            () => saved.GetProperty("effort").GetString().ShouldBe("high"));
+    }
+
+    [Fact]
+    public async Task WhenADemandModelEffortIsInvalid_ReturnsABadRequest()
+    {
+        // Act
+        HttpResponseMessage response = await PutDemandModelAsync("demanding", "opus", "max");
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemTypeAsync(response)).ShouldEndWith("/Worker.TierEffortInvalid");
+    }
+
+    [Fact]
+    public async Task WhenADemandModelIsNotListed_ReturnsABadRequest()
+    {
+        // Act
+        HttpResponseMessage response = await PutDemandModelAsync("demanding", "claude-typo", string.Empty);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemTypeAsync(response)).ShouldEndWith("/Worker.RoleModelNotListed");
+    }
+
+    [Fact]
+    public async Task WhenTheDemandIsUnknown_ReturnsNotFound()
+    {
+        // Act
+        HttpResponseMessage response = await PutDemandModelAsync("urgent", "opus", string.Empty);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task TheImplementCardCarriesItsDemandModelsRoutineFirstAndNoRoleModel()
+    {
+        // Arrange
+        PublishCatalog();
+        (await PutDemandModelAsync("demanding", "opus", "xhigh")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PutDemandModelAsync("routine", "sonnet", string.Empty)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(
@@ -172,7 +244,37 @@ public sealed class WhenSaved : IAsyncDisposable
         // Assert
         using JsonDocument document = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        document.RootElement.GetProperty("roles")[1].GetProperty("model").GetString().ShouldBe("sonnet");
+        JsonElement implement = document.RootElement.GetProperty("roles")[1];
+        string[] demandModels =
+        [
+            .. implement.GetProperty("demandModels").EnumerateArray().Select(entry =>
+                $"{entry.GetProperty("demand").GetString()}:{entry.GetProperty("model").GetString()}:{entry.GetProperty("effort").GetString()}"),
+        ];
+        implement.ShouldSatisfyAllConditions(
+            () => implement.GetProperty("name").GetString().ShouldBe("implement"),
+            () => implement.GetProperty("model").GetString().ShouldBeEmpty(),
+            () => demandModels.ShouldBe(["routine:sonnet:", "demanding:opus:xhigh"]));
+    }
+
+    [Fact]
+    public async Task TheRoleCardCarriesTheSavedModel()
+    {
+        // Arrange
+        PublishCatalog();
+        (await PutModelAsync("triage", "sonnet")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/worker-roles", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        using JsonDocument document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        JsonElement triage = document.RootElement.GetProperty("roles")[0];
+        triage.ShouldSatisfyAllConditions(
+            () => triage.GetProperty("model").GetString().ShouldBe("sonnet"),
+            () => triage.GetProperty("demandModels").GetArrayLength().ShouldBe(0));
     }
 
     private sealed class StubCredentialReader : IClaudeApiCredentialReader

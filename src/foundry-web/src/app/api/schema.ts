@@ -867,8 +867,25 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Sets a worker role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API */
+        /** Sets the triage or review role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API; the implement role's model is set per demand */
         put: operations["UpdateWorkerRoleModel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/worker-roles/implement/demand-models/{demand}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets the implement role's model and effort for one Implement Demand (routine or demanding): an empty model for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API; an empty effort for the model's default */
+        put: operations["UpdateImplementDemandModel"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1325,6 +1342,13 @@ export interface components {
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
+        /** @enum {unknown} */
+        ImplementDemand: "routine" | "demanding";
+        ImplementDemandModel: {
+            demand: components["schemas"]["ImplementDemand"];
+            model: string;
+            effort: string;
+        };
         InputPartDetails: components["schemas"]["InputPartDetailsInputPartDetailsComments"] | components["schemas"]["InputPartDetailsInputPartDetailsDescriptionEdited"] | components["schemas"]["InputPartDetailsInputPartDetailsBranchUpdated"] | components["schemas"]["InputPartDetailsInputPartDetailsContinuedWithoutAnswer"];
         InputPartDetailsInputPartDetailsBranchUpdated: {
             /** @enum {string} */
@@ -1893,6 +1917,10 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: number | string;
         };
+        UpdateImplementDemandModelRequestBody: {
+            model: null | string;
+            effort: null | string;
+        };
         UpdateNestedDockerRequestBody: {
             enabled: boolean;
         };
@@ -2014,6 +2042,7 @@ export interface components {
             agents: components["schemas"]["RolePluginComponent"][];
             verdictSchema: null | string;
             model: string;
+            demandModels: components["schemas"]["ImplementDemandModel"][];
             principleSections: string[];
             principles: string;
             decisionRule: string;
@@ -4188,6 +4217,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerRoleModelResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateImplementDemandModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                demand: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateImplementDemandModelRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImplementDemandModel"];
                 };
             };
             /** @description Bad Request */

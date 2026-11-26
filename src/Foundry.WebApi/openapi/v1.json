@@ -2614,7 +2614,7 @@
         "tags": [
           "Worker Roles"
         ],
-        "summary": "Sets a worker role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API",
+        "summary": "Sets the triage or review role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API; the implement role's model is set per demand",
         "operationId": "UpdateWorkerRoleModel",
         "parameters": [
           {
@@ -2643,6 +2643,67 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkerRoleModelResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/worker-roles/implement/demand-models/{demand}": {
+      "put": {
+        "tags": [
+          "Worker Roles"
+        ],
+        "summary": "Sets the implement role's model and effort for one Implement Demand (routine or demanding): an empty model for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API; an empty effort for the model's default",
+        "operationId": "UpdateImplementDemandModel",
+        "parameters": [
+          {
+            "name": "demand",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateImplementDemandModelRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImplementDemandModel"
                 }
               }
             }
@@ -4237,6 +4298,31 @@
           "Building",
           "Failed"
         ]
+      },
+      "ImplementDemand": {
+        "enum": [
+          "routine",
+          "demanding"
+        ]
+      },
+      "ImplementDemandModel": {
+        "required": [
+          "demand",
+          "model",
+          "effort"
+        ],
+        "type": "object",
+        "properties": {
+          "demand": {
+            "$ref": "#/components/schemas/ImplementDemand"
+          },
+          "model": {
+            "type": "string"
+          },
+          "effort": {
+            "type": "string"
+          }
+        }
       },
       "InputPartDetails": {
         "required": [
@@ -6723,6 +6809,27 @@
           }
         }
       },
+      "UpdateImplementDemandModelRequestBody": {
+        "required": [
+          "model",
+          "effort"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "effort": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "UpdateNestedDockerRequestBody": {
         "required": [
           "enabled"
@@ -7245,6 +7352,7 @@
           "agents",
           "verdictSchema",
           "model",
+          "demandModels",
           "principleSections",
           "principles",
           "decisionRule"
@@ -7289,6 +7397,12 @@
           },
           "model": {
             "type": "string"
+          },
+          "demandModels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImplementDemandModel"
+            }
           },
           "principleSections": {
             "type": "array",

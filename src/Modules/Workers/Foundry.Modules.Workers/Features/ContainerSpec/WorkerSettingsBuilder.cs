@@ -31,8 +31,9 @@ internal static class WorkerSettingsBuilder
     };
 
     /// <param name="claudeCode">The Claude Code policy applied to every worker.</param>
-    /// <param name="model">The role's model setting; empty leaves the model unset so the CLI's account default applies.</param>
-    public static string Build(ClaudeCodeSettingsSnapshot claudeCode, string model)
+    /// <param name="model">The run's model setting; empty leaves the model unset so the CLI's account default applies.</param>
+    /// <param name="effort">The run's effort level; empty leaves <c>effortLevel</c> unset so the model's default applies.</param>
+    public static string Build(ClaudeCodeSettingsSnapshot claudeCode, string model, string effort)
     {
         string[] denyRules =
         [
@@ -43,6 +44,7 @@ internal static class WorkerSettingsBuilder
         SettingsDocument document = new()
         {
             Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim(),
+            EffortLevel = string.IsNullOrWhiteSpace(effort) ? null : effort.Trim(),
             Permissions = new() { Deny = denyRules },
             Attribution = new(),
         };
@@ -53,6 +55,8 @@ internal static class WorkerSettingsBuilder
     private sealed class SettingsDocument
     {
         public string? Model { get; set; }
+
+        public string? EffortLevel { get; set; }
 
         public required PermissionsSection Permissions { get; set; }
 

@@ -117,7 +117,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
         DispatchContext? context = null,
         WorkerProvider? provider = null,
         string? cloneUrl = null,
-        bool withoutBranch = false)
+        bool withoutBranch = false,
+        ImplementDemand? demand = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -130,7 +131,8 @@ public sealed partial class HandleAsync : IAsyncDisposable
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
             context ?? new DispatchContext.Fresh(branchName),
-            $"https://api.github.com/repos/{repositorySlug}/issues/{issueNumber}");
+            $"https://api.github.com/repos/{repositorySlug}/issues/{issueNumber}",
+            Demand: demand);
         return new IssueClaimed(dispatch);
     }
 
@@ -729,7 +731,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenClaudeCodeSettingsAndRoleModelAreSet_ClaudeSettingsJsonEnvVarReflectsThem()
+    public async Task WhenClaudeCodeSettingsAndTierModelAreSet_ClaudeSettingsJsonEnvVarReflectsThem()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-custom");
@@ -737,9 +739,9 @@ public sealed partial class HandleAsync : IAsyncDisposable
         {
             ClaudeCodeSettings = new ClaudeCodeSettingsSnapshot(["Bash(rm:*)"]),
         };
-        WorkerRoleSettings roleSettings = WorkerRoleSettings.Create(WorkerRole.Implement);
-        roleSettings.ChangeModel("claude-test-model");
-        _dbContext.Set<WorkerRoleSettings>().Add(roleSettings);
+        ImplementTierSettings tierSettings = ImplementTierSettings.Create(ImplementDemand.Demanding);
+        tierSettings.ChangeModel("claude-test-model");
+        _dbContext.Set<ImplementTierSettings>().Add(tierSettings);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
@@ -766,7 +768,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRoleModelIsNotSet_ClaudeSettingsJsonOmitsModel()
+    public async Task WhenTierModelIsNotSet_ClaudeSettingsJsonOmitsModelAndEffort()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-default-model");
@@ -781,7 +783,9 @@ public sealed partial class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
 
         using JsonDocument doc = JsonDocument.Parse(spec.EnvironmentVariables["CLAUDE_SETTINGS_JSON"]);
-        doc.RootElement.TryGetProperty("model", out _).ShouldBeFalse();
+        doc.RootElement.ShouldSatisfyAllConditions(
+            () => doc.RootElement.TryGetProperty("model", out _).ShouldBeFalse(),
+            () => doc.RootElement.TryGetProperty("effortLevel", out _).ShouldBeFalse());
     }
 
     [Fact]
