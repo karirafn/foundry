@@ -59,7 +59,8 @@ internal sealed class IssueClaimer(
             candidate.DispatchInfo.Provider,
             issue.Context,
             issueApiUrl,
-            issue.Clarifications);
+            issue.Clarifications,
+            issue.Context.Role == DispatchRole.Implement ? issue.ImplementDemand : null);
 
         await integrationEventDispatcher.DispatchAsync([new IssueClaimed(dispatch)], cancellationToken);
 

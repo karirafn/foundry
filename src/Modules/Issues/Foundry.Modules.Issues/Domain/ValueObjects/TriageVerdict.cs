@@ -23,10 +23,39 @@ public abstract record TriageVerdict
 
     public sealed record Ready : TriageVerdict
     {
-        public Ready(IssueKind kind, DateTimeOffset decidedAt)
+        /// <param name="demand">Triage's judgment of the implement work; a verdict that carries none is demanding.</param>
+        /// <param name="demandReason">Triage's one-line reason; empty or whitespace is stored as none.</param>
+        public Ready(
+            IssueKind kind,
+            DateTimeOffset decidedAt,
+            ImplementDemand demand = ImplementDemand.Demanding,
+            string? demandReason = null)
             : base(kind, decidedAt)
         {
+            if (!Enum.IsDefined(demand))
+            {
+                throw new ArgumentOutOfRangeException(nameof(demand), demand, "Unknown implement demand.");
+            }
+
+            string? reason = string.IsNullOrWhiteSpace(demandReason) ? null : demandReason;
+
+            if (reason?.Length > DemandReasonMaxLength)
+            {
+                throw new ArgumentException(
+                    $"A ready triage verdict's demand reason may be at most {DemandReasonMaxLength} characters.",
+                    nameof(demandReason));
+            }
+
+            Demand = demand;
+            DemandReason = reason;
         }
+
+        /// <summary>The producer enforces the same cap, so both modules read the contract's value.</summary>
+        public const int DemandReasonMaxLength = TriageResult.Ready.DemandReasonMaxLength;
+
+        public ImplementDemand Demand { get; }
+
+        public string? DemandReason { get; }
     }
 
     public sealed record NeedsInput : TriageVerdict

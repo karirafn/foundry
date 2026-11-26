@@ -59,15 +59,31 @@ public abstract record TriageResult
     public const int MaxDecisions = 20;
 
     /// <param name="Decisions">The details triage settled itself (ADR 0123); empty when it settled none.</param>
-    public sealed record Ready(TriageKind Kind, IReadOnlyList<TriageDecision> Decisions) : TriageResult
+    /// <param name="Demand">
+    /// Triage's judgment of the implement work. An outbox row written before triage judged it reads as
+    /// <see cref="ImplementDemand.Demanding"/>.
+    /// </param>
+    /// <param name="DemandReason">Triage's one-line reason for <paramref name="Demand"/>, or <see langword="null"/>.</param>
+    public sealed record Ready(
+        TriageKind Kind,
+        IReadOnlyList<TriageDecision> Decisions,
+        ImplementDemand Demand = ImplementDemand.Demanding,
+        string? DemandReason = null) : TriageResult
     {
+        /// <summary>The longest demand reason a ready verdict may carry; producer and consumer read this one value.</summary>
+        public const int DemandReasonMaxLength = 200;
+
         // An outbox row written before decisions existed carries none.
         public IReadOnlyList<TriageDecision> Decisions { get; init; } = Decisions ?? [];
 
         public bool Equals(Ready? other) =>
-            other is not null && Kind == other.Kind && Decisions.SequenceEqual(other.Decisions);
+            other is not null
+            && Kind == other.Kind
+            && Decisions.SequenceEqual(other.Decisions)
+            && Demand == other.Demand
+            && DemandReason == other.DemandReason;
 
-        public override int GetHashCode() => HashCode.Combine(Kind, Decisions.Count);
+        public override int GetHashCode() => HashCode.Combine(Kind, Decisions.Count, Demand, DemandReason);
     }
 
     /// <param name="Decisions">The details triage settled itself beside its questions (ADR 0123); empty when none.</param>

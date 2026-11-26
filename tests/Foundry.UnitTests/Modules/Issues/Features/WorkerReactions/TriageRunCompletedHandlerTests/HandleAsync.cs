@@ -116,6 +116,29 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReadyWithADemand_TheRecordedVerdictCarriesTheDemandAndReason()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Ready(TriageKind.Documentation, [], ImplementDemand.Routine, "none"),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageVerdict.Ready verdict = (await ReloadAsync(triaging)).TriageVerdict.ShouldBeOfType<TriageVerdict.Ready>();
+        verdict.ShouldSatisfyAllConditions(
+            () => verdict.Demand.ShouldBe(ImplementDemand.Routine),
+            () => verdict.DemandReason.ShouldBe("none"));
+    }
+
+    [Fact]
     public async Task WhenReadyWithOpenBlockers_TheIssueIsBlocked()
     {
         // Arrange

@@ -175,6 +175,22 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public int BeforeReadyRounds { get; private set; }
 
     /// <summary>
+    /// True once a revision for review findings or failed checks was queued (Demand Escalation): the issue's implement
+    /// runs are then <see cref="ImplementDemand.Demanding"/> whatever triage judged. Set only by
+    /// <see cref="EscalateDemand"/> and carried through every transition with the shared properties; nothing resets it,
+    /// because a re-triage or a person's input is no evidence the earlier code was easy.
+    /// </summary>
+    public bool DemandEscalated { get; private set; }
+
+    /// <summary>
+    /// The Implement Demand the issue's implement runs use: demanding once escalated, otherwise the latest ready
+    /// verdict's demand. No verdict, or a needs-input or blocked one, is demanding: a missing judgment takes the
+    /// demanding model.
+    /// </summary>
+    public ImplementDemand ImplementDemand =>
+        !DemandEscalated && TriageVerdict is TriageVerdict.Ready ready ? ready.Demand : ImplementDemand.Demanding;
+
+    /// <summary>
     /// The issue's most recent review verdict (ADR 0113), or <see langword="null"/> when no review completed. Carried
     /// through every transition with the shared properties, so a later review of an unchanged change can carry it.
     /// </summary>
@@ -311,6 +327,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         ReviewFixAttempts = source.ReviewFixAttempts;
         ChecksFixAttempts = source.ChecksFixAttempts;
         BeforeReadyRounds = source.BeforeReadyRounds;
+        DemandEscalated = source.DemandEscalated;
         LatestReview = source.LatestReview;
         TriagedSpecHash = source.TriagedSpecHash;
         _openWorkBranchName = source._openWorkBranchName;
@@ -383,6 +400,15 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     private protected void RecordReviewFix()
     {
         ReviewFixAttempts++;
+    }
+
+    /// <summary>
+    /// Review or checks found defects in the issue's code: its implement runs are demanding from here on, so a routine
+    /// judgment that proved wrong exits to the demanding model on its own.
+    /// </summary>
+    private protected void EscalateDemand()
+    {
+        DemandEscalated = true;
     }
 
     /// <summary>A person started a new round of review: the reviewer gets its full fix budget again.</summary>

@@ -225,6 +225,13 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasDefaultValue(0)
             .HasColumnName("before_ready_rounds");
 
+        builder.Property(i => i.DemandEscalated)
+            .IsRequired()
+            .HasDefaultValue(false)
+            .HasColumnName("demand_escalated");
+
+        builder.Ignore(i => i.ImplementDemand);
+
         builder.Property(i => i.LatestReview)
             .HasConversion(LatestReviewJsonConversion.Converter, LatestReviewJsonConversion.Comparer)
             .HasColumnType("TEXT")

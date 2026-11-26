@@ -17,6 +17,8 @@ internal static class TriageVerdictJsonConversion
     private const string ReadyOutcome = "ready";
     private const string NeedsInputOutcome = "needs_input";
     private const string BlockedOutcome = "blocked";
+    private const string RoutineDemand = "routine";
+    private const string DemandingDemand = "demanding";
 
     public static ValueConverter<TriageVerdict?, string> Converter { get; } = new(
         verdict => Serialize(verdict!),
@@ -31,7 +33,14 @@ internal static class TriageVerdictJsonConversion
     {
         TriageVerdictDto dto = verdict switch
         {
-            TriageVerdict.Ready ready => new TriageVerdictDto(ReadyOutcome, ready.Kind.Value, null, null, ready.DecidedAt),
+            TriageVerdict.Ready ready => new TriageVerdictDto(
+                ReadyOutcome,
+                ready.Kind.Value,
+                null,
+                null,
+                ready.DecidedAt,
+                JsonValue.Create(DemandToken(ready.Demand)),
+                ready.DemandReason),
             TriageVerdict.NeedsInput needsInput => new TriageVerdictDto(
                 NeedsInputOutcome,
                 needsInput.Kind.Value,
@@ -78,7 +87,7 @@ internal static class TriageVerdictJsonConversion
 
         return dto.Outcome switch
         {
-            ReadyOutcome => new TriageVerdict.Ready(kind, dto.DecidedAt),
+            ReadyOutcome => new TriageVerdict.Ready(kind, dto.DecidedAt, DemandOf(dto.Demand), dto.DemandReason),
             NeedsInputOutcome => new TriageVerdict.NeedsInput(
                 kind,
                 InputQuestionJson.FromNode(dto.Questions),
@@ -91,6 +100,20 @@ internal static class TriageVerdictJsonConversion
         };
     }
 
+    private static string DemandToken(ImplementDemand demand) => demand switch
+    {
+        ImplementDemand.Routine => RoutineDemand,
+        ImplementDemand.Demanding => DemandingDemand,
+        _ => throw new UnreachableException($"Unknown ImplementDemand: {demand}"),
+    };
+
+    // A verdict stored before triage judged a demand, or holding a token this code does not know, reads as demanding:
+    // the demand only selects a model, so it never makes the verdict itself unreadable.
+    private static ImplementDemand DemandOf(JsonNode? stored) =>
+        stored is JsonValue value && value.TryGetValue(out string? token) && token == RoutineDemand
+            ? ImplementDemand.Routine
+            : ImplementDemand.Demanding;
+
     private sealed record TriageVerdictDto(
         [property: JsonPropertyName("outcome")] string Outcome,
         [property: JsonPropertyName("kind")] string Kind,
@@ -98,7 +121,11 @@ internal static class TriageVerdictJsonConversion
         JsonNode? Questions,
         [property: JsonPropertyName("blockedBy"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<BlockedByDto>? BlockedBy,
-        [property: JsonPropertyName("decidedAt")] DateTimeOffset DecidedAt);
+        [property: JsonPropertyName("decidedAt")] DateTimeOffset DecidedAt,
+        [property: JsonPropertyName("demand"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        JsonNode? Demand = null,
+        [property: JsonPropertyName("demandReason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? DemandReason = null);
 
     private sealed record BlockedByDto(
         [property: JsonPropertyName("issue")] int Issue,
