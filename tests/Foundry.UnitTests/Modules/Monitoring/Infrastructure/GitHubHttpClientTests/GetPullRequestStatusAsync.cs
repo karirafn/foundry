@@ -39,12 +39,13 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenPrIsMerged_ReturnsMergedAndClosedStatus()
     {
         // Arrange
+        // pullRequest shape captured from GitHub on 2026-11-27: a merged pull request reads state MERGED, merged true.
         string json = $$"""
             {
               "data": {
                 "rateLimit":{{CapturedRateLimit}},
                 "repository": {
-                  "pullRequest": { "state": "CLOSED", "merged": true }
+                  "pullRequest": { "state": "MERGED", "merged": true }
                 }
               }
             }

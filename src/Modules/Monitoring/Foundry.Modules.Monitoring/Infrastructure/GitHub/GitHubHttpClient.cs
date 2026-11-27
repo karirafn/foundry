@@ -652,7 +652,8 @@ internal sealed partial class GitHubHttpClient(
         }
 
         GraphQlPullRequestStatus? pr = dataSuccess.Value.Repository?.PullRequest;
-        bool isClosed = string.Equals(pr?.State, "CLOSED", StringComparison.OrdinalIgnoreCase);
+        bool isClosed = pr?.State is { } state
+            && (state.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) || state.Equals("MERGED", StringComparison.OrdinalIgnoreCase));
         bool isMerged = pr?.Merged ?? false;
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, pr?.HeadRefOid, pr?.IsDraft ?? false));
     }
