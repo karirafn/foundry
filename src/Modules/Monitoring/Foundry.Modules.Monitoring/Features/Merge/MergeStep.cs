@@ -9,11 +9,14 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Merge;
+using Foundry.Modules.Monitoring.Features.PullRequestWatch;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+using Watch = Foundry.Modules.Monitoring.Features.PullRequestWatch.PullRequestWatch;
 
 namespace Foundry.Modules.Monitoring.Features.Merge;
 
@@ -340,13 +343,17 @@ internal sealed class MergeStep(
             return new StepResult.Resolved(MergeOutcomes.Disabled);
         }
 
-        PullRequestRead read = await ReadPullRequestAsync(repository, provider, pending, cancellationToken);
-        if (read is PullRequestRead.Settled settled)
-        {
-            return settled.Result;
-        }
+        Result<PullRequestWayOut> wayOutResult = await Watch.ReadAsync(
+            provider,
+            repository.Slug,
+            pending.IssueNumber,
+            pending.PullRequestUrl,
+            cancellationToken);
 
-        PullRequestStatus status = ((PullRequestRead.Open)read).Status;
+        if (wayOutResult is not Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.Open open })
+        {
+            return Settle(repository, pending, wayOutResult);
+        }
 
         StepResult? feedback = await DetectFeedbackAsync(repository, provider, pending, postedComments, cancellationToken);
         if (feedback is not null)
@@ -358,10 +365,10 @@ internal sealed class MergeStep(
         // brings it up to date but a catch-up (ADR 0111).
         if (merge.AwaitsCatchUp)
         {
-            return await TryStartCatchUpAsync(repository, provider, pending, merge, pass, status, cancellationToken);
+            return await TryStartCatchUpAsync(repository, provider, pending, merge, pass, open, cancellationToken);
         }
 
-        StepResult? notReady = await EnsureMarkedReadyAsync(repository, provider, pending, status, markedReady, cancellationToken);
+        StepResult? notReady = await EnsureMarkedReadyAsync(repository, provider, pending, open, markedReady, cancellationToken);
         if (notReady is not null)
         {
             return notReady;
@@ -401,16 +408,16 @@ internal sealed class MergeStep(
         MonitoredRepository repository,
         IIssueProvider provider,
         MergePendingIssueInfo pending,
-        PullRequestStatus status,
+        PullRequestWayOut.Open open,
         List<IIntegrationEvent> markedReady,
         CancellationToken cancellationToken)
     {
         if (pending.IsPullRequestMarkedReady)
         {
-            return status.IsDraft ? Skipped(MergeSkipReasons.Draft) : null;
+            return open.IsDraft ? Skipped(MergeSkipReasons.Draft) : null;
         }
 
-        if (status.IsDraft)
+        if (open.IsDraft)
         {
             Result marked = await provider.MarkPullRequestReadyAsync(
                 repository.Slug,
@@ -473,7 +480,7 @@ internal sealed class MergeStep(
         MergePendingIssueInfo pending,
         PendingMerge merge,
         QueuePass pass,
-        PullRequestStatus status,
+        PullRequestWayOut.Open open,
         CancellationToken cancellationToken)
     {
         if (pass.Queue.Head(pass.HeldIssueNumbers) != merge)
@@ -495,61 +502,31 @@ internal sealed class MergeStep(
             }
         }
 
-        return status.HeadSha switch
-        {
-            null => new StepResult.Transient("The pull request's head commit could not be read."),
-            { } headSha when string.Equals(headSha, pending.HeadSha, StringComparison.OrdinalIgnoreCase) =>
-                new StepResult.CatchUp(),
-            _ => Skipped(MergeSkipReasons.HeadMoved),
-        };
+        return string.Equals(open.Head.Value, pending.HeadSha, StringComparison.OrdinalIgnoreCase)
+            ? new StepResult.CatchUp()
+            : Skipped(MergeSkipReasons.HeadMoved);
     }
 
     /// <summary>
     /// An issue closed while merge-pending completes it, and a pull request closed without merge fails it, as the
-    /// rebase step does. A pull request someone else merged resolves <c>merged</c>: the work landed. An open pull
-    /// request returns its status for the steps that follow.
+    /// rebase step does. A pull request someone else merged resolves <c>merged</c>: the work landed. A failed read is
+    /// transient. An open pull request is not settled here: the steps that follow act on it.
     /// </summary>
-    private static async Task<PullRequestRead> ReadPullRequestAsync(
+    private static StepResult Settle(
         MonitoredRepository repository,
-        IIssueProvider provider,
         MergePendingIssueInfo pending,
-        CancellationToken cancellationToken)
-    {
-        Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
-            repository.Slug,
-            pending.IssueNumber,
-            cancellationToken);
-
-        if (isClosedResult is Result<bool>.Failure isClosedFailure)
+        Result<PullRequestWayOut> wayOutResult) =>
+        wayOutResult switch
         {
-            return new PullRequestRead.Settled(new StepResult.Transient(isClosedFailure.Error.Message));
-        }
-
-        if (isClosedResult is Result<bool>.Success { Value: true })
-        {
-            return new PullRequestRead.Settled(
-                new StepResult.Closed(new ProviderIssueClosed(repository.Id, pending.IssueNumber)));
-        }
-
-        Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
-            repository.Slug,
-            pending.PullRequestUrl,
-            cancellationToken);
-
-        if (prStatusResult is Result<PullRequestStatus>.Failure prStatusFailure)
-        {
-            return new PullRequestRead.Settled(new StepResult.Transient(prStatusFailure.Error.Message));
-        }
-
-        PullRequestStatus status = ((Result<PullRequestStatus>.Success)prStatusResult).Value;
-        return status switch
-        {
-            { IsMerged: true } => new PullRequestRead.Settled(new StepResult.Resolved(MergeOutcomes.Merged)),
-            { IsClosed: true } => new PullRequestRead.Settled(
-                new StepResult.Closed(new ProviderPullRequestClosed(repository.Id, pending.IssueNumber))),
-            _ => new PullRequestRead.Open(status),
+            Result<PullRequestWayOut>.Failure failure => new StepResult.Transient(failure.Error.Message),
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.IssueClosed } =>
+                new StepResult.Closed(new ProviderIssueClosed(repository.Id, pending.IssueNumber)),
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.PullRequestClosed } =>
+                new StepResult.Closed(new ProviderPullRequestClosed(repository.Id, pending.IssueNumber)),
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.Merged } =>
+                new StepResult.Resolved(MergeOutcomes.Merged),
+            _ => throw new UnreachableException("An open pull request is not settled."),
         };
-    }
 
     /// <summary>
     /// Reads the pull request's review feedback since the issue's cutoff, with the review pass's actionable-feedback
@@ -624,16 +601,6 @@ internal sealed class MergeStep(
         /// names the up-to-date issue it waits for, if any.
         /// </summary>
         public sealed record Waiting(string Reason, int? AwaitedIssueNumber) : StepResult;
-    }
-
-    /// <summary>The pull request read that precedes every merge decision.</summary>
-    private abstract record PullRequestRead
-    {
-        /// <summary>The issue or pull request closed, merged, or could not be read: the step stops with this result.</summary>
-        public sealed record Settled(StepResult Result) : PullRequestRead;
-
-        /// <summary>The pull request is open, at <see cref="PullRequestStatus.HeadSha"/>.</summary>
-        public sealed record Open(PullRequestStatus Status) : PullRequestRead;
     }
 
     /// <summary>

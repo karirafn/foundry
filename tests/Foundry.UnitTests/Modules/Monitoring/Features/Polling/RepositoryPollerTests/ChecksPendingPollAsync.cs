@@ -118,10 +118,10 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         IReadOnlyDictionary<long, Result>? retryResults = null) =>
         new(
             checksResults: new Dictionary<string, Result<Checks>> { [issue.PullRequestUrl] = Result<Checks>.Ok(checks) },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
-                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: headSha, IsDraft: false)),
+                [issue.PullRequestUrl] = Result<PullRequestState>.Ok(
+                    new PullRequestState.Open(CommitSha.From(headSha), IsDraft: false)),
             },
             ciJobIdsByCheckName: jobIds ?? new Dictionary<string, long> { ["build"] = 11, ["test"] = 12 },
             retryResults: retryResults);
@@ -379,10 +379,10 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             {
                 [issue.PullRequestUrl] = Result<Checks>.Ok(new Checks.Green()),
             },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
-                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: "abc123", IsDraft: true)),
+                [issue.PullRequestUrl] = Result<PullRequestState>.Ok(
+                    new PullRequestState.Open(CommitSha.From(RedHead), IsDraft: true)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -609,10 +609,10 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             {
                 [issue.PullRequestUrl] = Result<Checks>.Ok(checks),
             },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
-                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: headSha, IsDraft: false)),
+                [issue.PullRequestUrl] = Result<PullRequestState>.Ok(
+                    new PullRequestState.Open(CommitSha.From(headSha), IsDraft: false)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -945,9 +945,9 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             {
                 [55] = Result<bool>.Ok(false),
             },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false)),
+                [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Closed()),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -978,9 +978,9 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             {
                 [55] = Result<bool>.Ok(false),
             },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
+                [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Merged()),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -1007,9 +1007,9 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             {
                 [55] = Result<bool>.Ok(false),
             },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
+                [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Merged()),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -1019,6 +1019,29 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
         // Assert
         result.IsSuccess.ShouldBeTrue();
         provider.GetChecksCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingIssuePullRequestReadFails_ReadsNoChecksAndRecordsNoVerdict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue(issueNumber: 55, pullRequestUrl: prUrl);
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        StubIssueProvider provider = new(
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
+            {
+                [prUrl] = Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead()),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: null, Now, CancellationToken.None);
+
+        // Assert
+        provider.GetChecksCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
 
     [Fact]
@@ -1158,7 +1181,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
     private sealed class StubIssueProvider(
         IReadOnlyDictionary<string, Result<Checks>>? checksResults = null,
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
-        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
+        IReadOnlyDictionary<string, Result<PullRequestState>>? pullRequestStateResults = null,
         IReadOnlyDictionary<string, long>? ciJobIdsByCheckName = null,
         IReadOnlyDictionary<long, Result>? retryResults = null) : IIssueProvider
     {
@@ -1224,14 +1247,20 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
         {
-            if (pullRequestStatusResults is not null
-                && pullRequestStatusResults.TryGetValue(pullRequestUrl, out Result<PullRequestStatus>? result))
+            if (pullRequestStateResults is not null
+                && pullRequestStateResults.TryGetValue(pullRequestUrl, out Result<PullRequestState>? result))
             {
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
+            return Task.FromResult(Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(RedHead), IsDraft: false)));
         }
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(

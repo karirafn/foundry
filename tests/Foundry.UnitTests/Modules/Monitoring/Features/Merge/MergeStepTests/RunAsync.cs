@@ -318,7 +318,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: VerifiedHead, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Merged());
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -333,7 +333,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: VerifiedHead, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Closed());
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -342,6 +342,23 @@ public sealed class RunAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents.ShouldHaveSingleItem().ShouldBeOfType<ProviderPullRequestClosed>()
             .IssueNumber.ShouldBe(IssueNumber);
         _provider.MergeCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPullRequestReadFails_CountsATransientFailureWithoutMerging()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.PullRequestState = Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead());
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.MergeCalls.ShouldBeEmpty();
+        _provider.FeedbackReads.ShouldBeEmpty();
+        LoadProgress().TransientFailures.ShouldBe(1);
     }
 
     [Fact]
@@ -667,7 +684,7 @@ public sealed class RunAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         RefuseBehind();
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: new string('2', 40), IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(new string('2', 40)), IsDraft: false));
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now.AddMinutes(1), TestContext.Current.CancellationToken);
@@ -1054,7 +1071,7 @@ public sealed class RunAsync : IAsyncDisposable
     private const string GitLabMrUrl = "https://gitlab.com/group/project/-/merge_requests/99";
 
     private void ReadDraft(bool isDraft) =>
-        _provider.PullRequestStatus = new(IsClosed: false, IsMerged: false, HeadSha: VerifiedHead, IsDraft: isDraft);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), isDraft));
 
     [Theory]
     [InlineData(PrUrl)]
@@ -1354,7 +1371,8 @@ public sealed class RunAsync : IAsyncDisposable
 
         public bool IssueClosed { get; set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: VerifiedHead, IsDraft: false);
+        public Result<PullRequestState> PullRequestState { get; set; } =
+            Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false));
 
         public Exception? ThrowOnMerge { get; set; }
 
@@ -1410,7 +1428,13 @@ public sealed class RunAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(PullRequestStatus));
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(PullRequestState);
 
         public Task<Result<IssueListing>> GetIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken)
             => throw new NotSupportedException();
