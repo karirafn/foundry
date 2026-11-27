@@ -10,6 +10,8 @@ using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -121,6 +123,87 @@ public sealed class ReservesSlot : WorkerDispatchServiceTestBase
 
         // Assert
         dispatcher.Captured.ShouldNotContain(e => e is WorkerCapacityAvailable);
+    }
+
+    [Fact]
+    public async Task WhenReservationOutstandingWithFreeSlots_WritesNoNewReservationAndDispatchesNothing()
+    {
+        // Arrange
+        WorkerRunId outstandingRunId = WorkerRunId.New();
+        await SeedReservationAsync(new DispatchReservationBuilder()
+            .WithWorkerRunId(outstandingRunId)
+            .Build());
+
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 120);
+        DispatchAndPublishTicker sut = base.BuildService(
+            new NullWorkerOrchestrator(),
+            integrationEventDispatcher: dispatcher,
+            settingsQueries: settingsQueries);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        dispatcher.Captured.ShouldNotContain(e => e is WorkerCapacityAvailable);
+        using FoundryDbContext db = CreateDbContext();
+        DispatchReservation reservation = await db.Set<DispatchReservation>()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        reservation.Id.ShouldBe(outstandingRunId);
+    }
+
+    [Fact]
+    public async Task WhenOrphanedReservationIsSweptAsStale_DispatchResumesOnNextTick()
+    {
+        // Arrange
+        WorkerRunId orphanedRunId = WorkerRunId.New();
+        await SeedReservationAsync(new DispatchReservationBuilder()
+            .WithWorkerRunId(orphanedRunId)
+            .WithReservedAt(DateTimeOffset.UtcNow - TimeSpan.FromMinutes(3))
+            .Build());
+
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 120);
+        DispatchAndPublishTicker sut = base.BuildService(
+            new NullWorkerOrchestrator(),
+            integrationEventDispatcher: dispatcher,
+            settingsQueries: settingsQueries);
+        StaleReservationService sweeper = BuildStaleReservationService();
+
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        dispatcher.Captured.ShouldNotContain(e => e is WorkerCapacityAvailable);
+
+        // Act
+        await sweeper.TickForTest(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerCapacityAvailable dispatched = dispatcher.Captured
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<WorkerCapacityAvailable>();
+        using FoundryDbContext db = CreateDbContext();
+        DispatchReservation reservation = await db.Set<DispatchReservation>()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        reservation.Id.ShouldBe(dispatched.WorkerRunId);
+        reservation.Id.ShouldNotBe(orphanedRunId);
+    }
+
+    private async Task SeedReservationAsync(DispatchReservation reservation)
+    {
+        using FoundryDbContext seedDb = CreateDbContext();
+        seedDb.Set<DispatchReservation>().Add(reservation);
+        await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    private StaleReservationService BuildStaleReservationService()
+    {
+        ServiceCollection services = new();
+        services.AddScoped<DbContext>(_ => CreateDbContext());
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        return new StaleReservationService(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<StaleReservationService>.Instance);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
