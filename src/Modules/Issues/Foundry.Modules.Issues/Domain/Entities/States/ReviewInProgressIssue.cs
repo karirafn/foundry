@@ -180,7 +180,7 @@ public sealed class ReviewInProgressIssue : Issue, IReviewStepState
     private ReviewIssue ToReview(DateTimeOffset transitionedAt)
     {
         ReviewIssue review = ReviewIssue.FromReviewInProgress(this, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId, IssueNumber));
         return review;
     }
 

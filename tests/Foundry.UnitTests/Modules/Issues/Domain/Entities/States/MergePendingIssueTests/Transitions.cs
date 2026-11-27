@@ -68,7 +68,8 @@ public sealed class Transitions
             () => review.RebaseOutcome.ShouldBe(rebaseOutcome),
             () => review.MergeOutcome.ShouldBe(mergeOutcome),
             () => review.VerifiedHeadSha.ShouldBe(Head));
-        mergePending.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem();
+        mergePending.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem()
+            .IssueNumber.ShouldBe(mergePending.IssueNumber);
     }
 
     [Fact]

@@ -308,7 +308,7 @@ public sealed class ChecksPendingIssue : Issue
     public ReviewIssue ToReview(ChecksOutcome checksOutcome, string? verifiedHeadSha, DateTimeOffset transitionedAt)
     {
         ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome, verifiedHeadSha, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId, IssueNumber));
         return review;
     }
 

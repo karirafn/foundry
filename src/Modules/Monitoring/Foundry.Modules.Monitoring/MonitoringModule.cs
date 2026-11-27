@@ -200,6 +200,7 @@ public static class MonitoringModule
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredRebasePending, IssueEnteredRebasePendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredMergePending, IssueEnteredMergePendingHandler>();
+        services.AddIntegrationEventHandler<IssueEnteredReview, IssueEnteredReviewHandler>();
         services.AddIntegrationEventHandler<IssueEnteredAwaitingInput, IssueEnteredAwaitingInputHandler>();
         services.AddIntegrationEventHandler<TriageBlockersFound, TriageBlockersFoundHandler>();
         services.AddIntegrationEventHandler<TriageDecisionsRecorded, TriageDecisionsRecordedHandler>();

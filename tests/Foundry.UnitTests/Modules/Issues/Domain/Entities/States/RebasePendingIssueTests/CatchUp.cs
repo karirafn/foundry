@@ -116,7 +116,8 @@ public sealed class CatchUp
             () => review.VerifiedHeadSha.ShouldBe(Head),
             () => review.BranchName.ShouldBe(rebasePending.BranchName),
             () => review.PullRequestUrl.ShouldBe(rebasePending.PullRequestUrl));
-        rebasePending.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
+        rebasePending.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>()
+            .IssueNumber.ShouldBe(rebasePending.IssueNumber);
     }
 
     [Fact]

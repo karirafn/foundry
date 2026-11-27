@@ -105,6 +105,7 @@ public sealed class ToReview
             .ShouldBeOfType<IssueInReview>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(checksPending.Id),
-            () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
+            () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => domainEvent.IssueNumber.ShouldBe(checksPending.IssueNumber));
     }
 }

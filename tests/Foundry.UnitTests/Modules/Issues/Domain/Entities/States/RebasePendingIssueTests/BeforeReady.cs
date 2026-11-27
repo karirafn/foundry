@@ -44,7 +44,8 @@ public sealed class BeforeReady
             () => review.RebaseOutcome.ShouldBe(new RebaseOutcome.UpToDate()),
             () => review.ReviewOutcome.ShouldBeNull(),
             () => review.BeforeReadyRounds.ShouldBe(0),
-            () => rebasePending.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>());
+            () => rebasePending.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>()
+                .IssueNumber.ShouldBe(rebasePending.IssueNumber));
     }
 
     [Fact]

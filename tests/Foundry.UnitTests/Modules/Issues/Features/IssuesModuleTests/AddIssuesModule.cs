@@ -309,9 +309,11 @@ public sealed class AddIssuesModule : IAsyncDisposable
         using IServiceScope scope = _serviceProvider.CreateScope();
 
         // Assert
-        IDomainEventHandler<IssueInReview> handler =
-            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueInReview>>();
-        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueInReview>>();
+        IEnumerable<IDomainEventHandler<IssueInReview>> handlers =
+            scope.ServiceProvider.GetServices<IDomainEventHandler<IssueInReview>>();
+        handlers.ShouldSatisfyAllConditions(
+            () => handlers.ShouldContain(handler => handler is IssueStateChangedAdapter<IssueInReview>),
+            () => handlers.ShouldContain(handler => handler is IssueReviewNudgeBridge));
     }
 
     [Fact]
