@@ -28,7 +28,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed class ConsumesReservation : IAsyncDisposable
 {
@@ -56,9 +56,9 @@ public sealed class ConsumesReservation : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private IssueClaimedHandler BuildHandler()
+    private ClaimedRunPipeline BuildHandler()
     {
-        return new IssueClaimedHandler(
+        return new ClaimedRunPipeline(
             _dbContext,
             _orchestrator,
             new FakePublisher(),
@@ -74,7 +74,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             new StubTrackerContextQueries(),
             new CapturingSystemNotificationBroadcaster(),
             new StubWorkerHostEntryResolver(),
-            NullLogger<IssueClaimedHandler>.Instance);
+            NullLogger<WorkerRunStart>.Instance);
     }
 
     private static IssueClaimed BuildEvent(WorkerRunId workerRunId)
@@ -106,7 +106,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
         IssueClaimed @event = BuildEvent(workerRunId);
 
         // Act
@@ -128,7 +128,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
     {
         // Arrange — no reservation seeded (redelivery / already swept scenario)
         WorkerRunId workerRunId = WorkerRunId.New();
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
         IssueClaimed @event = BuildEvent(workerRunId);
 
         // Act
@@ -155,7 +155,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -172,7 +172,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
         // Arrange — a prior delivery committed the StartingRun but never recorded completion
         WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimed @event = BuildEvent(workerRunId);
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

@@ -20,7 +20,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed partial class HandleAsync
 {
@@ -72,12 +72,12 @@ public sealed partial class HandleAsync
         };
     }
 
-    private IssueClaimedHandler BuildReviewHandler(
+    private ClaimedRunPipeline BuildReviewHandler(
         StubWorkerOrchestrator? orchestrator = null,
         FakePublisher? publisher = null,
         string issueBody = ReviewIssueBody,
         StubIssueContentQueries? issueContentQueries = null,
-        ILogger<IssueClaimedHandler>? logger = null)
+        ILogger<WorkerRunStart>? logger = null)
     {
         return BuildHandler(
             orchestrator: orchestrator,
@@ -97,7 +97,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         FakePublisher publisher = new(reviewPacket: ReviewPacket);
-        IssueClaimedHandler sut = BuildReviewHandler(publisher: publisher);
+        ClaimedRunPipeline sut = BuildReviewHandler(publisher: publisher);
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -113,7 +113,7 @@ public sealed partial class HandleAsync
     public async Task WhenTheContextIsReview_TheRunRecordsTheFactsComputedFromThePacketAndTheIssueBody()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildReviewHandler();
+        ClaimedRunPipeline sut = BuildReviewHandler();
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -138,7 +138,7 @@ public sealed partial class HandleAsync
     public async Task WhenTheContextIsReview_TheRunRecordsWhetherChecksPassed(bool checksPassed)
     {
         // Arrange
-        IssueClaimedHandler sut = BuildReviewHandler();
+        ClaimedRunPipeline sut = BuildReviewHandler();
 
         // Act
         await sut.HandleAsync(
@@ -155,7 +155,7 @@ public sealed partial class HandleAsync
     public async Task WhenTheReviewedIssueHasNoAcceptanceCriteriaHeading_TheRunRecordsNoCriteria()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildReviewHandler(issueBody: "Adds retries.");
+        ClaimedRunPipeline sut = BuildReviewHandler(issueBody: "Adds retries.");
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -170,7 +170,7 @@ public sealed partial class HandleAsync
     public async Task WhenTheReviewedChangeHasNoChangedPaths_TheRunRecordsAnEmptyTableNoFlagAndNoPatchId()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildReviewHandler(publisher: new FakePublisher(reviewPacket: new ReviewPacketFacts([], patchId: null)));
+        ClaimedRunPipeline sut = BuildReviewHandler(publisher: new FakePublisher(reviewPacket: new ReviewPacketFacts([], patchId: null)));
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -190,7 +190,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -211,7 +211,7 @@ public sealed partial class HandleAsync
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         StubIssueContentQueries contentQueries = ReviewContentQueries(Result<string>.Ok("## Post-merge steps\r\n\n1. Run <migrate>."));
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator, issueContentQueries: contentQueries);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator, issueContentQueries: contentQueries);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
         // Act
@@ -233,8 +233,8 @@ public sealed partial class HandleAsync
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        CapturingLogger<IssueClaimedHandler> logger = new();
-        IssueClaimedHandler sut = BuildReviewHandler(
+        CapturingLogger<WorkerRunStart> logger = new();
+        ClaimedRunPipeline sut = BuildReviewHandler(
             orchestrator: orchestrator,
             issueContentQueries: ReviewContentQueries(Result<string>.Fail(new Error("GitHub.Unexpected", "boom"))),
             logger: logger);
@@ -263,7 +263,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -292,7 +292,7 @@ public sealed partial class HandleAsync
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         FailureReason reason = new FailureReason.WorkerBootstrapFailed(
             "FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=REVIEW_COMMIT is not on the branch");
-        IssueClaimedHandler sut = BuildReviewHandler(
+        ClaimedRunPipeline sut = BuildReviewHandler(
             orchestrator: orchestrator,
             publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
 
@@ -312,7 +312,7 @@ public sealed partial class HandleAsync
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         PrepareOutcome withoutPacket = new PrepareOutcome.Prepared(new RunBase(FakePublisher.DefaultBranchHead, RunBranchHead: null));
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator, publisher: new FakePublisher(withoutPacket));
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator, publisher: new FakePublisher(withoutPacket));
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -329,7 +329,7 @@ public sealed partial class HandleAsync
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         FakePublisher publisher = new(reviewPacket: ReviewPacket);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator, publisher: publisher);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator, publisher: publisher);
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(ReviewContext(reviewedCommit: "main")), TestContext.Current.CancellationToken);
@@ -358,7 +358,7 @@ public sealed partial class HandleAsync
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             publisher: publisher,
             roleCatalog: restricted

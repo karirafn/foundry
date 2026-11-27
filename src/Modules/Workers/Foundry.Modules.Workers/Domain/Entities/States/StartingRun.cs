@@ -26,7 +26,8 @@ public sealed class StartingRun : WorkerRun
     /// <summary>
     /// Begins a run. <paramref name="role"/> defaults to <see cref="WorkerRole.Implement"/>; <paramref name="image"/> is the
     /// worker image the run is dispatched on (see <see cref="WorkerRun.Image"/>). <paramref name="refusesNeedsInput"/> marks a run started
-    /// by Continue without answer (see <see cref="WorkerRun.RefusesNeedsInput"/>).
+    /// by Continue without answer (see <see cref="WorkerRun.RefusesNeedsInput"/>). <paramref name="claim"/> is the claim the
+    /// run is started from, kept so the run starts outside the event that claimed it.
     /// </summary>
     /// <remarks>
     /// Every run mints a Run Source Token (ADR 0112): the run persists only its hash, and the token itself is readable
@@ -38,12 +39,14 @@ public sealed class StartingRun : WorkerRun
         WorkerRole? role = null,
         string? image = null,
         bool refusesNeedsInput = false,
-        RunModel? runModel = null)
+        RunModel? runModel = null,
+        ClaimedIssueDispatch? claim = null)
     {
         RunSourceToken sourceToken = RunSourceToken.Mint();
         StartingRun starting = new(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image)
         {
             SourceToken = sourceToken,
+            Claim = claim,
         };
         starting.StoreSourceTokenHash(sourceToken.Hash);
         if (runModel is not null)
@@ -63,6 +66,40 @@ public sealed class StartingRun : WorkerRun
     /// persisted, so a run loaded from the database has none.
     /// </summary>
     public RunSourceToken? SourceToken { get; private init; }
+
+    /// <summary>
+    /// The claim the run was begun from; <see langword="null"/> for a run begun without one, which is never started
+    /// from it.
+    /// </summary>
+    public ClaimedIssueDispatch? Claim { get; private init; }
+
+    /// <summary>
+    /// When starting the run from its <see cref="Claim"/> was attempted; <see langword="null"/> until then. A start is
+    /// attempted at most once, so an interrupted start is left to fail as stale rather than started twice.
+    /// </summary>
+    public DateTimeOffset? StartAttemptedAt { get; private set; }
+
+    /// <summary>
+    /// Marks the start attempted at <paramref name="attemptedAt"/> and mints the run's Run Source Token for it (ADR 0112):
+    /// a run loaded from the database has no token, so the start gets a fresh one and the run keeps only its hash.
+    /// </summary>
+    public RunSourceToken BeginStartAttempt(DateTimeOffset attemptedAt)
+    {
+        if (Claim is null)
+        {
+            throw new InvalidOperationException($"Worker run {Id} has no claim to start from.");
+        }
+
+        if (StartAttemptedAt is not null)
+        {
+            throw new InvalidOperationException($"Starting worker run {Id} was already attempted.");
+        }
+
+        RunSourceToken sourceToken = RunSourceToken.Mint();
+        StoreSourceTokenHash(sourceToken.Hash);
+        StartAttemptedAt = attemptedAt;
+        return sourceToken;
+    }
 
     /// <summary>
     /// Records the base the Publisher prepared for the run (ADR 0100) from <paramref name="repositoryId"/>; later states

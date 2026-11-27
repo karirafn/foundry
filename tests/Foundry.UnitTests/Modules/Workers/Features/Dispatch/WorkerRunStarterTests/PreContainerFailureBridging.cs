@@ -33,10 +33,10 @@ using Xunit;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 /// <summary>
-/// Tests the end-to-end pipeline: pre-container failures in IssueClaimedHandler raise the
+/// Tests the end-to-end pipeline: pre-container failures in WorkerRunStart raise the
 /// domain WorkerRunFailed event → WorkerRunFailedBridgeHandler converts it to the integration
 /// event → integration event is dispatched exactly once.
 /// </summary>
@@ -89,7 +89,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         }
     }
 
-    private IssueClaimedHandler BuildHandler(
+    private ClaimedRunPipeline BuildHandler(
         CapturingIntegrationEventDispatcher integrationEventDispatcher,
         IWorkerOrchestrator? orchestrator = null,
         IPostExitProviderQueries? postExitProviderQueries = null)
@@ -104,7 +104,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         IDomainEventDispatcher domainDispatcher =
             _serviceScope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
 
-        return new IssueClaimedHandler(
+        return new ClaimedRunPipeline(
             _dbContext,
             orchestrator ?? new AlwaysFailingOrchestrator(),
             new FakePublisher(),
@@ -120,7 +120,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             new StubTrackerContextQueries(),
             new CapturingSystemNotificationBroadcaster(),
             new StubWorkerHostEntryResolver(),
-            NullLogger<IssueClaimedHandler>.Instance);
+            NullLogger<WorkerRunStart>.Instance);
     }
 
     private static IssueClaimed BuildEvent(IssueId? issueId = null)
@@ -145,7 +145,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     {
         // Arrange — branch pre-creation failure is always terminal (null branch)
         CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             integrationEventDispatcher,
             postExitProviderQueries: new BranchCreationFailsQueries());
         IssueClaimed @event = BuildEvent();
@@ -167,7 +167,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     {
         // Arrange
         CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             integrationEventDispatcher,
             postExitProviderQueries: new BranchCreationFailsQueries());
         IssueClaimed @event = BuildEvent();
@@ -190,7 +190,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     {
         // Arrange — container-start failure must still map to ContainerError (not ProviderError)
         CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             integrationEventDispatcher,
             orchestrator: new AlwaysFailingOrchestrator(),
             postExitProviderQueries: new BranchCreationSucceedsQueries());
@@ -212,7 +212,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     {
         // Arrange — container-start failure is pre-container (always terminal, null branch)
         CapturingIntegrationEventDispatcher integrationEventDispatcher = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             integrationEventDispatcher,
             orchestrator: new AlwaysFailingOrchestrator(),
             postExitProviderQueries: new BranchCreationSucceedsQueries());

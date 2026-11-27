@@ -15,7 +15,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed partial class HandleAsync
 {
@@ -30,7 +30,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
-        IssueClaimedHandler sut = BuildHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
 
         // Act
         await sut.HandleAsync(BuildEvent(demand: ImplementDemand.Routine), TestContext.Current.CancellationToken);
@@ -45,7 +45,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
-        IssueClaimedHandler sut = BuildHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
 
         // Act
         await sut.HandleAsync(BuildEvent(demand: null), TestContext.Current.CancellationToken);
@@ -59,7 +59,7 @@ public sealed partial class HandleAsync
     public async Task WhenNoTierModelIsSet_TheRunRecordsAnEmptyModelAndEffort()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
 
         // Act
         await sut.HandleAsync(BuildEvent(demand: ImplementDemand.Routine), TestContext.Current.CancellationToken);
@@ -74,7 +74,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: new StubWorkerOrchestrator(succeeds: true),
             roleCatalog: new StubWorkerRoleCatalogStore(CatalogWithRestricted(WorkerRole.Triage)));
 
@@ -93,7 +93,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: new StubWorkerOrchestrator(succeeds: true));
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);
@@ -108,7 +108,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             issueContentQueries: new StubIssueContentQueries(
                 Result<IssueContent>.Fail(new Error("GitHub.Unexpected", "boom"))));
 

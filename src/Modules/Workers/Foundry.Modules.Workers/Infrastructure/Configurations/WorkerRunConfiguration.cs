@@ -8,6 +8,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -360,6 +361,18 @@ public sealed class StartingRunConfiguration : IEntityTypeConfiguration<Starting
     {
         // The Run Source Token itself is never persisted (ADR 0112); the run keeps only its hash.
         builder.Ignore(r => r.SourceToken);
+
+        // Serialized as the outbox serializes the IssueClaimed event that carries it, so the claim round-trips the
+        // same way in both places.
+        builder.Property(r => r.Claim)
+            .HasConversion(new ValueConverter<ClaimedIssueDispatch?, string?>(
+                claim => JsonSerializer.Serialize(claim, OutboxSerializerOptions.Default),
+                value => JsonSerializer.Deserialize<ClaimedIssueDispatch>(value!, OutboxSerializerOptions.Default)))
+            .HasColumnType("TEXT")
+            .HasColumnName("claim");
+
+        builder.Property(r => r.StartAttemptedAt)
+            .HasColumnName("start_attempted_at");
     }
 }
 

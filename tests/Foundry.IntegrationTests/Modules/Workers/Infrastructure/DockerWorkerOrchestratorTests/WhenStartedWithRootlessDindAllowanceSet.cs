@@ -180,7 +180,7 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         }
     }
 
-    // Composed as IssueClaimedHandler composes it: the hardened baseline, then the DinD relaxations.
+    // Composed as WorkerRunStart composes it: the hardened baseline, then the DinD relaxations.
     private WorkerContainerSpec BuildDindSpec(IReadOnlyList<string> command) =>
         WorkerHardeningSpec.Apply(new(
             Image: Image,

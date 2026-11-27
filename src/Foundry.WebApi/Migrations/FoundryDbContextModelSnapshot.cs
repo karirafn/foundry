@@ -3877,6 +3877,14 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Workers.Domain.Entities.WorkerRun");
 
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("claim");
+
+                    b.Property<DateTimeOffset?>("StartAttemptedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("start_attempted_at");
+
                     b.ToTable(t =>
                         {
                             t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");

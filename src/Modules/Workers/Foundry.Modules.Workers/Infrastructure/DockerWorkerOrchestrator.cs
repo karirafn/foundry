@@ -137,7 +137,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
     {
         // Name-prefix detection is safe here as a quick guard for the common case where no
         // data-root mount is present. The authoritative ownership marker for orphan reaping is
-        // the "foundry.worker-run-id" label — IssueClaimedHandler.ApplyRootlessDinD is the
+        // the "foundry.worker-run-id" label — WorkerRunStart.ApplyRootlessDinD is the
         // only producer of a data-root mount, so prefix-matching is a sound, low-cost filter.
         VolumeMount? dataRootMount = spec.VolumeMounts
             .FirstOrDefault(m => m.VolumeName.StartsWith(
