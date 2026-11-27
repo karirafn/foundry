@@ -96,6 +96,17 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// <summary>The commits the run's branch held beyond the default branch once the run was published.</summary>
     public int? PublishedBranchCommitCount { get; private set; }
 
+    /// <summary>
+    /// The hash of the pull request body Foundry last wrote for this run (ADR 0100); <see langword="null"/> when it
+    /// wrote none. A later run of the issue replaces the body only while the live body still hashes to it.
+    /// </summary>
+    public PullRequestBodyHash? PullRequestBodyHash { get; private set; }
+
+    protected void StorePullRequestBodyHash(PullRequestBodyHash? pullRequestBodyHash)
+    {
+        PullRequestBodyHash = pullRequestBodyHash;
+    }
+
     /// <summary>The side branch the run's work went to because its own branch diverged; <see langword="null"/> otherwise.</summary>
     public BranchName? DivergedSideBranch { get; private set; }
 

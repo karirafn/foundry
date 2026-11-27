@@ -262,6 +262,15 @@ internal sealed partial class GitHubIssueProvider(
         };
     }
 
+    public Task<Result> UpdatePullRequestBodyAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.UpdatePullRequestBodyAsync(apiBaseUrl, slug, pullRequestUrl, body, token, cancellationToken);
+    }
+
     public Task<Result> MarkPullRequestReadyAsync(
         RepositorySlug slug,
         string pullRequestUrl,

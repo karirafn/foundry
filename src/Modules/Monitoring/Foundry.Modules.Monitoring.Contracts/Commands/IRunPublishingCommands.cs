@@ -30,6 +30,17 @@ public interface IRunPublishingCommands
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Replaces the description of the pull/merge request at <paramref name="pullRequestUrl"/> with
+    /// <paramref name="body"/>, leaving its title as it is. A provider that refuses the account token (404, or a 403
+    /// that is not rate limiting) fails with <see cref="RunPublishingErrors.RefusedCode"/>.
+    /// </summary>
+    Task<Result> UpdatePullRequestBodyAsync(
+        MonitoredRepositoryId repositoryId,
+        string pullRequestUrl,
+        string body,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Posts <paramref name="body"/> as one comment on the pull/merge request at
     /// <paramref name="pullRequestUrl"/> and saves its ID in the posted-comment registry in the same call,
     /// so no comment reader treats it as review feedback.

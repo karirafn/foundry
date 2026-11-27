@@ -93,6 +93,13 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
     /// <summary>Records that the pull request step is done, so a retried publish never repeats it.</summary>
     public void RecordPullRequestSettled(DateTimeOffset settledAt) => PullRequestSettledAt ??= settledAt;
 
+    /// <summary>Records the hash of the pull request body the provider accepted from this run.</summary>
+    public void RecordPullRequestBodyHash(PullRequestBodyHash bodyHash)
+    {
+        ArgumentNullException.ThrowIfNull(bodyHash);
+        StorePullRequestBodyHash(bodyHash);
+    }
+
     /// <summary>
     /// A publish attempt failed. A transient failure under the attempt cap is retried after the policy's delay; any
     /// other failure waits for an operator's Retry publish.

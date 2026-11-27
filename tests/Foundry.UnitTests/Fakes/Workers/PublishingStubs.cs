@@ -29,7 +29,7 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
 
     public List<(string PullRequestUrl, string CommitSha, string Summary, IReadOnlyList<InlineReviewComment> Comments)> InlineReviews { get; } = [];
 
-    /// <summary>Every call in order: <c>inline</c> or <c>summary</c>.</summary>
+    /// <summary>Every call in order: <c>inline</c>, <c>body</c> or <c>summary</c>.</summary>
     public List<string> Calls { get; } = [];
 
     public Task<Result<InlineReviewResult>> PostInlineReviewAsync(
@@ -69,6 +69,27 @@ internal sealed class RecordingRunPublishingCommands : IRunPublishingCommands
 
         _opened.Add((branchName, title, body));
         return Task.FromResult(Result<string>.Ok("https://github.com/owner/repo/pull/7"));
+    }
+
+    public Error? BodyUpdateError { get; init; }
+
+    public List<(string PullRequestUrl, string Body)> BodyUpdates { get; } = [];
+
+    public Task<Result> UpdatePullRequestBodyAsync(
+        MonitoredRepositoryId repositoryId,
+        string pullRequestUrl,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        Calls.Add("body");
+
+        if (BodyUpdateError is not null)
+        {
+            return Task.FromResult(Result.Fail(BodyUpdateError));
+        }
+
+        BodyUpdates.Add((pullRequestUrl, body));
+        return Task.FromResult(Result.Ok());
     }
 
     public Task<Result> PostRunSummaryAsync(

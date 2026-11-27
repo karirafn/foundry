@@ -84,6 +84,60 @@ internal sealed partial class GitHubHttpClient
     }
 
     /// <summary>
+    /// Replaces the body of the pull request at <paramref name="pullRequestUrl"/>
+    /// (<c>PATCH /repos/{owner}/{repo}/pulls/{pull_number}</c> with <c>body</c> only, so the title is kept). A 404, or a
+    /// 403 that is not rate limiting, is a refusal of the token, like opening a pull request.
+    /// </summary>
+    public async Task<Result> UpdatePullRequestBodyAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string body,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result.Fail(RunPublishingErrors.Permanent(GitHubErrors.InvalidBaseUrl.Message));
+        }
+
+        if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
+        {
+            return Result.Fail(RunPublishingErrors.Permanent(GitHubErrors.InvalidPullRequestUrl.Message));
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        string action = $"Replacing the description of pull request #{prNumber} on {slug}";
+
+        using HttpRequestMessage request = new(
+            HttpMethod.Patch,
+            new Uri(EnsureTrailingSlash(apiBaseUrl), $"repos/{owner}/{repo}/pulls/{prNumber}"));
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(new GitHubPullRequestBodyWriteDto(body), JsonOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        Result<HttpResponseMessage> sent = await SendPublishingRequestAsync(request, action, cancellationToken);
+        if (sent is not Result<HttpResponseMessage>.Success { Value: { } response })
+        {
+            return Result.Fail(((Result<HttpResponseMessage>.Failure)sent).Error);
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result.Fail(ClassifyPullRequestOpenFailure(response, action));
+            }
+
+            RecordRestHeadroom(response);
+            return Result.Ok();
+        }
+    }
+
+    /// <summary>
     /// Lists the web URLs of the open pull requests whose head is <paramref name="headBranch"/> in the repository
     /// itself (<c>GET /repos/{owner}/{repo}/pulls?head={owner}:{branch}&amp;state=open</c>).
     /// </summary>
@@ -312,6 +366,8 @@ internal sealed partial class GitHubHttpClient
     }
 
     private sealed record GitHubPullRequestWriteDto(string Title, string Head, string Base, string Body, bool Draft);
+
+    private sealed record GitHubPullRequestBodyWriteDto(string Body);
 
     private sealed record GitHubCreatedPullRequestDto(string? HtmlUrl);
 

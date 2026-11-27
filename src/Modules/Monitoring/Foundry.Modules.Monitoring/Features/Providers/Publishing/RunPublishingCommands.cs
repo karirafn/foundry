@@ -30,6 +30,24 @@ internal sealed class RunPublishingCommands(
             (provider, repo) => provider.CreatePullRequestAsync(repo.Slug, branchName, title, body, cancellationToken),
             cancellationToken);
 
+    public async Task<Result> UpdatePullRequestBodyAsync(
+        MonitoredRepositoryId repositoryId,
+        string pullRequestUrl,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        Result<bool> updated = await CallProviderAsync(
+            repositoryId,
+            async (provider, repo) =>
+                await provider.UpdatePullRequestBodyAsync(repo.Slug, pullRequestUrl, body, cancellationToken)
+                    is Result.Failure failure
+                    ? Result<bool>.Fail(failure.Error)
+                    : Result<bool>.Ok(true),
+            cancellationToken);
+
+        return updated is Result<bool>.Failure updateFailure ? Result.Fail(updateFailure.Error) : Result.Ok();
+    }
+
     public async Task<Result> PostRunSummaryAsync(
         MonitoredRepositoryId repositoryId,
         string pullRequestUrl,

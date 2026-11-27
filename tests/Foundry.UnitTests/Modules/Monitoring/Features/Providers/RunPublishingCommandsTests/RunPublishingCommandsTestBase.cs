@@ -86,6 +86,15 @@ public abstract class RunPublishingCommandsTestBase : IAsyncDisposable
 
         public Result<InlineReviewPosting>? InlineReview { get; set; }
 
+        public Result BodyUpdate { get; set; } = Result.Ok();
+
+        public Task<Result> UpdatePullRequestBodyAsync(
+            RepositorySlug slug, string pullRequestUrl, string body, CancellationToken cancellationToken)
+        {
+            Record($"update-pr-body {slug} {pullRequestUrl} {body}");
+            return Task.FromResult(BodyUpdate);
+        }
+
         public Task<Result<InlineReviewPosting>> PostInlineReviewAsync(
             RepositorySlug slug,
             string pullRequestUrl,

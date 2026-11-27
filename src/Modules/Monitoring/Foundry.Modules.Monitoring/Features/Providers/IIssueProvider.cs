@@ -227,6 +227,22 @@ internal interface IIssueProvider
             RunPublishingErrors.Permanent("This provider does not support opening pull requests.")));
 
     /// <summary>
+    /// Replaces the description of the pull/merge request at <paramref name="pullRequestUrl"/> (GitHub's
+    /// <c>body</c>, GitLab's <c>description</c>), leaving its title as it is. A failure is
+    /// <see cref="RunPublishingErrors.TransientCode"/>, <see cref="RunPublishingErrors.PermanentCode"/> or, when the
+    /// provider refuses the token, <see cref="RunPublishingErrors.RefusedCode"/>; this call never retries.
+    /// </summary>
+    /// <remarks>Providers without a description write keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result> UpdatePullRequestBodyAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string body,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result.Fail(
+            RunPublishingErrors.Permanent("This provider does not support replacing pull request descriptions.")));
+
+    /// <summary>
     /// Marks the draft pull/merge request at <paramref name="pullRequestUrl"/> ready for review. One that is
     /// already ready succeeds without a change. GitLab has no draft attribute on its update endpoint, so only a
     /// leading <c>Draft:</c>, <c>[Draft]</c> or <c>(Draft)</c> is removed from the title and the rest is kept as

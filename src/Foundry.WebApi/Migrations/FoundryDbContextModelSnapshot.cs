@@ -1158,6 +1158,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("published_head");
 
+                    b.Property<string>("PullRequestBodyHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_request_body_hash");
+
                     b.Property<bool>("RefusesNeedsInput")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")

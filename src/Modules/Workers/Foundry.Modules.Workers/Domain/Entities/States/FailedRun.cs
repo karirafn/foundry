@@ -91,6 +91,7 @@ public sealed class FailedRun : WorkerRun
         failed.RecordVerdict(verdict);
         failed.CarryDispatchFactsFrom(unpublished);
         failed.CarryConfirmationFrom(unpublished);
+        failed.StorePullRequestBodyHash(unpublished.PullRequestBodyHash);
         failed.RecordPublishFacts(
             unpublished.PublishedHead,
             unpublished.PublishedBranchCommitCount,

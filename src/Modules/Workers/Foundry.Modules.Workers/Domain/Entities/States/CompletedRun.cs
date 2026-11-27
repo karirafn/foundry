@@ -106,6 +106,7 @@ public sealed class CompletedRun : WorkerRun
         completed.RecordReviewVerdict(reviewVerdict);
         completed.CarryDispatchFactsFrom(publishing);
         completed.CarryConfirmationFrom(publishing);
+        completed.StorePullRequestBodyHash(publishing.PullRequestBodyHash);
         completed.RecordPublishFacts(
             publishing.PublishedHead,
             publishing.PublishedBranchCommitCount,

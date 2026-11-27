@@ -298,6 +298,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddScoped<IPublisher>(_ => new FakePublisher());
         services.AddScoped<IRepositoryDispatchQueries>(_ => StubRepositoryDispatchQueries.WithToken("ghp_test"));
         services.AddScoped<IRunPublishingCommands>(_ => new RecordingRunPublishingCommands());
+        services.AddScoped<IIssueContentQueries>(_ => new StubIssueContentQueries());
         services.AddScoped<IIssueQueries>(_ => new StubIssueQueries());
         services.AddScoped<WorkerRunMonitor>();
         services.AddWorkerVerdicts();
