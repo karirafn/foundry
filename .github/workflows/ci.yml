@@ -230,6 +230,28 @@ jobs:
             || { echo "FAIL: playwright-core could not launch CHROME_BIN and render a page"; exit 1; }
           echo "PASS: playwright-core launches the image's Chromium and renders a page"
 
+      - name: Image contract check — npm follows the packageManager pin
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        # Run as a worker runs: node, read-only root, no capabilities, scratch home and /tmp. The project mount lives
+        # outside /tmp so it does not collide with the /tmp tmpfs.
+        run: |
+          pinned=$(node -p "require('./src/foundry-web/package.json').packageManager.replace(/^npm@/, '').split('+')[0]")
+          mkdir -p "$RUNNER_TEMP/pinned"
+          printf '{"packageManager":"npm@%s"}\n' "$pinned" > "$RUNNER_TEMP/pinned/package.json"
+          run_npm() {
+            docker run --rm --user node --read-only --cap-drop ALL --security-opt no-new-privileges \
+              --tmpfs /home/node --tmpfs /tmp "$@" foundry-worker:ci npm --version
+          }
+          actual=$(run_npm -v "$RUNNER_TEMP/pinned:/project:ro" --workdir /project) \
+            || { echo "FAIL: npm --version failed in a directory pinned to npm@$pinned"; exit 1; }
+          [ "$actual" = "$pinned" ] \
+            || { echo "FAIL: npm --version is '$actual' in a directory pinned to npm@$pinned"; exit 1; }
+          echo "PASS: npm $actual follows the packageManager pin"
+
+          run_npm --workdir /tmp >/dev/null \
+            || { echo "FAIL: npm --version failed in a directory with no packageManager pin"; exit 1; }
+          echo "PASS: npm works in a directory with no packageManager pin"
+
       - name: Image test — workers get the task-list tools
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: WORKER_IMAGE=foundry-worker:ci bats workers/tests/task_tools.bats

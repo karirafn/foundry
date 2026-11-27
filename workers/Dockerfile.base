@@ -58,6 +58,16 @@ COPY package.json package-lock.json /opt/claude-code/
 RUN npm ci --prefix /opt/claude-code --omit=dev --no-audit --no-fund && npm cache clean --force
 ENV PATH=/opt/claude-code/node_modules/.bin:$PATH
 
+# Make npm, npx, pnpm and yarn Corepack shims so they follow the `packageManager` pin of the directory they run in,
+# for any repository a worker clones. Corepack comes from /opt/claude-code (Dependabot-bumped) because Node 25+ no
+# longer bundles it. The shims go in /usr/local/bin, replacing Node's bundled npm.
+RUN /opt/claude-code/node_modules/.bin/corepack enable --install-directory /usr/local/bin \
+    && /opt/claude-code/node_modules/.bin/corepack enable npm --install-directory /usr/local/bin
+# No interactive download prompt in a run; a directory without a pin gets the npm this Corepack release names as its
+# default, not a network lookup of the latest. COREPACK_HOME keeps its default under /home/node, writable when hardened.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ENV COREPACK_DEFAULT_TO_LATEST=0
+
 # Pre-create ~/.claude, ~/.claude-credentials and ~/.runtime owned by the built-in node
 # user (UID 1000).  ~/.claude is the container-local Claude config dir; an OAuth worker
 # mounts the shared credential volume at ~/.claude-credentials (ADR 0090), and a node-owned
