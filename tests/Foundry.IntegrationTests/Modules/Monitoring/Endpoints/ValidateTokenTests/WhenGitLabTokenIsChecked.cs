@@ -130,6 +130,31 @@ public sealed class WhenGitLabTokenIsChecked
     }
 
     [Fact]
+    public async Task WhenTheGrantReachesAllGroupsAndProjectsWithPackageRead_IsAuthenticatedWithNothingToFix()
+    {
+        // Arrange
+        // The all_memberships entry shape was captured from gitlab.com on 2026-11-27.
+        string allMembershipsEntry =
+            $$"""{"access":"all_memberships","permissions":{{ConformingProjectPermissions.Replace("]", ",\"read_package\"]", StringComparison.Ordinal)}},"project_id":null,"group_id":null}""";
+        const string userEntryWithProjectRead =
+            """{"access":"user","permissions":["read_personal_access_token","read_user","read_project"],"project_id":null,"group_id":null}""";
+
+        // Act
+        (HttpStatusCode status, ValidateToken.Response? body) = await ValidateAsync(
+            HttpStatusCode.OK,
+            GrantJson(allMembershipsEntry, userEntryWithProjectRead));
+
+        // Assert
+        status.ShouldBe(HttpStatusCode.OK);
+        body.ShouldNotBeNull();
+        body.ShouldSatisfyAllConditions(
+            () => body.Kind.ShouldBe(ValidateToken.Kinds.Authenticated),
+            () => body.MissingScopes.ShouldBeEmpty(),
+            () => body.NotAllowed.ShouldBeEmpty(),
+            () => body.BroadReach.ShouldBeEmpty());
+    }
+
+    [Fact]
     public async Task WhenTheGrantBreaksEveryRule_ListsMissingNotAllowedAndBroadReach()
     {
         // Arrange

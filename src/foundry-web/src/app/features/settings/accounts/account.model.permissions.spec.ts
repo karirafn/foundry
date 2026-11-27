@@ -232,7 +232,7 @@ describe('account.model missing permissions', () => {
       expect(problem.missingPermissions).toEqual(['Maintainer role']);
       expect(problem.remedyText).toBe(
         "Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. "
-          + 'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, '
+          + 'Create a fine-grained token on GitLab with exactly the required permissions, on all groups and projects or on selected projects only, '
           + `then replace this one. ${RECHECK}`,
       );
       expect(problem.tokenLink).toEqual({
@@ -265,7 +265,7 @@ describe('account.model missing permissions', () => {
         'Not allowed: Webhook (Integrations): Test; delete_project.',
       ]);
       expect(problem.remedyText).toBe(
-        'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, '
+        'Create a fine-grained token on GitLab with exactly the required permissions, on all groups and projects or on selected projects only, '
           + `then replace this one. ${RECHECK}`,
       );
     });

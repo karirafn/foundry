@@ -185,7 +185,7 @@ describe('AccountListComponent missing permissions', () => {
     expect(lines[1]).toBe('Missing: Maintainer role.');
     expect(lines[3]).toBe(
       "Give the token's user, gl-user, the Maintainer role on these repositories, then re-check. "
-        + 'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, '
+        + 'Create a fine-grained token on GitLab with exactly the required permissions, on all groups and projects or on selected projects only, '
         + `then replace this one. ${RECHECK}`,
     );
     expect(text(el.querySelector('.account-list__problem-actions a'))).toContain('Create token on');

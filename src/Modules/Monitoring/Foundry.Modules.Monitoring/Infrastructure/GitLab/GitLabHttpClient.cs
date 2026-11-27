@@ -32,6 +32,7 @@ internal sealed partial class GitLabHttpClient(
 {
     private const int MaxIssuePages = 20;
     private const int IssuesPerPage = 100;
+    private const int ProjectsPerPage = 100;
     private const int MaxDiscussionPages = 20;
     private const int DiscussionsPerPage = 100;
     private const int MaxFilePathLength = 4096; // PATH_MAX
@@ -636,7 +637,8 @@ internal sealed partial class GitLabHttpClient(
     }
 
     /// <summary>
-    /// Lists exactly the projects the token's grant selects, each read with <c>GET /projects/:id</c>. A token
+    /// Lists the projects the token's grant reaches: every project its user is a member of when it reaches all
+    /// memberships, otherwise exactly the projects it selects, each read with <c>GET /projects/:id</c>. A token
     /// that reports no grant selects no project.
     /// </summary>
     public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
@@ -658,6 +660,11 @@ internal sealed partial class GitLabHttpClient(
         if (self is not Result<GitLabTokenSelf>.Success { Value: GitLabTokenSelf.FineGrained fineGrained })
         {
             return Result<IReadOnlyList<ProviderRepository>>.Ok([]);
+        }
+
+        if (fineGrained.Grant.ReachesAllMemberships)
+        {
+            return await ListMemberProjectsAsync(apiBaseUrl, token, cancellationToken);
         }
 
         List<ProviderRepository> repositories = [];
@@ -689,16 +696,58 @@ internal sealed partial class GitLabHttpClient(
                     GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
             }
 
-            // The permissions object carries project_access and group_access levels; Developer (30) or
-            // above can push.
-            bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
-            int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
-            int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
-            bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabWritableRepositoryAccessLevel;
-            repositories.Add(new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush));
+            repositories.Add(ToProviderRepository(dto));
         }
 
         return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
+    }
+
+    private async Task<Result<IReadOnlyList<ProviderRepository>>> ListMemberProjectsAsync(
+        Uri apiBaseUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        List<ProviderRepository> repositories = [];
+
+        for (int page = 1; ; page++)
+        {
+            Uri requestUri = new(
+                EnsureTrailingSlash(apiBaseUrl),
+                $"projects?membership=true&per_page={ProjectsPerPage}&page={page.ToString(CultureInfo.InvariantCulture)}");
+
+            using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+            AddCommonHeaders(request, token);
+
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
+            }
+
+            RecordRestHeadroom(response);
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            List<GitLabProjectListItemDto> pageItems =
+                JsonSerializer.Deserialize<List<GitLabProjectListItemDto>>(body, JsonOptions) ?? [];
+
+            repositories.AddRange(pageItems.Select(ToProviderRepository));
+
+            if (pageItems.Count < ProjectsPerPage)
+            {
+                return Result<IReadOnlyList<ProviderRepository>>.Ok(repositories);
+            }
+        }
+    }
+
+    private static ProviderRepository ToProviderRepository(GitLabProjectListItemDto dto)
+    {
+        // The permissions object carries project_access and group_access levels; Developer (30) or above can push.
+        bool isPrivate = string.Equals(dto.Visibility, "private", StringComparison.OrdinalIgnoreCase);
+        int projectLevel = dto.Permissions?.ProjectAccess?.AccessLevel ?? 0;
+        int groupLevel = dto.Permissions?.GroupAccess?.AccessLevel ?? 0;
+        bool canPush = Math.Max(projectLevel, groupLevel) >= GitLabWritableRepositoryAccessLevel;
+        return new ProviderRepository(dto.PathWithNamespace, isPrivate, canPush);
     }
 
     public async Task<Result<bool>> CreateBranchAsync(

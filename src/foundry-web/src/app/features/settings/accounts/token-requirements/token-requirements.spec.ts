@@ -29,28 +29,29 @@ const GITLAB_REQUIREMENTS: TokenRequirements = {
   tokenTypeLabel: 'GitLab fine-grained personal access token',
   permissions: [
     {
-      label: 'Only selected projects (select each monitored project individually)',
+      label: 'All groups and projects I have access to, or only selected projects (select each monitored project individually)',
       verification: 'granted',
       group: 'Group and project access',
     },
-    { label: 'Project: Read', verification: 'granted', group: 'On each selected project' },
+    { label: 'Project: Read', verification: 'granted', group: 'On each selected project, or on all groups and projects' },
     {
       label: 'Webhook (Integrations): Read, Create, Update, Delete, Trigger',
       verification: 'granted',
-      group: 'On each selected project',
+      group: 'On each selected project, or on all groups and projects',
     },
     { label: 'Personal Access Token (System Access): Read', verification: 'granted', group: 'On your user' },
     { label: 'User (System Access): Read', verification: 'granted', group: 'On your user' },
+    { label: 'Project: Read', verification: 'granted', group: 'On your user, only with all groups and projects' },
     {
       label: 'Package (Packages and Registry): Read',
       verification: 'granted',
-      group: "On a package feed's group (optional)",
+      group: 'Optional, for a GitLab-hosted NuGet feed',
     },
     { label: 'Maintainer role', verification: 'role', group: 'Repository role' },
   ],
   creationUrlTemplate: '{baseUrl}/-/user_settings/personal_access_tokens',
   resourceOwnerHint: null,
-  closingNote: 'Foundry rejects a GitLab token that grants anything else or reaches all projects.',
+  closingNote: 'Foundry rejects a GitLab token that grants anything else, or that reaches only your personal projects or the whole instance.',
   creationNote: 'Requires GitLab 19.5 or later. On the page, choose Generate token, then Fine-grained token.',
 };
 
@@ -110,9 +111,10 @@ describe('TokenRequirementsComponent', () => {
     const groups = Array.from(el.querySelectorAll('ul.token-requirements__list > li.token-requirements__group'));
     expect(groups.map((group) => group.querySelector('.token-requirements__group-heading')?.textContent)).toEqual([
       'Group and project access',
-      'On each selected project',
+      'On each selected project, or on all groups and projects',
       'On your user',
-      "On a package feed's group (optional)",
+      'On your user, only with all groups and projects',
+      'Optional, for a GitLab-hosted NuGet feed',
       'Repository role',
     ]);
     expect(

@@ -109,7 +109,10 @@ internal enum GitLabGrantLevel
     /// <summary>The user entries; required.</summary>
     User,
 
-    /// <summary>A group entry; allowed, never required.</summary>
+    /// <summary>The user entries; required only when the token reaches all memberships, and not allowed otherwise.</summary>
+    UserWithAllMemberships,
+
+    /// <summary>A group, project or all-memberships entry; allowed, never required.</summary>
     Group,
 }
 
@@ -180,9 +183,10 @@ internal static class TokenPermissions
     ];
 
     private const string GitLabAccessGroup = "Group and project access";
-    private const string GitLabProjectGroup = "On each selected project";
+    private const string GitLabProjectGroup = "On each selected project, or on all groups and projects";
     private const string GitLabUserGroup = "On your user";
-    private const string GitLabPackageGroup = "On a package feed's group (optional)";
+    private const string GitLabUserWithAllMembershipsGroup = "On your user, only with all groups and projects";
+    private const string GitLabPackageGroup = "Optional, for a GitLab-hosted NuGet feed";
     private const string GitLabRoleGroup = "Repository role";
 
     // Keys are GitLab's permission identifiers as granular_scopes[].permissions reports them. The set
@@ -191,7 +195,7 @@ internal static class TokenPermissions
     [
         new(
             "selected_projects",
-            "Only selected projects (select each monitored project individually)",
+            "All groups and projects I have access to, or only selected projects (select each monitored project individually)",
             TemplateParameter: null,
             new PermissionVerification.GitLabSelectedProject(),
             GitLabAccessGroup),
@@ -222,6 +226,7 @@ internal static class TokenPermissions
         GitLabPermission("push_code", GitLabGrantLevel.Project, "Code", "Push"),
         GitLabPermission(GitLabReadOwnTokenKey, GitLabGrantLevel.User, "Personal Access Token (System Access)", "Read"),
         GitLabPermission("read_user", GitLabGrantLevel.User, "User (System Access)", "Read"),
+        GitLabPermission("read_project", GitLabGrantLevel.UserWithAllMemberships, "Project", "Read"),
         GitLabPermission("read_package", GitLabGrantLevel.Group, "Package (Packages and Registry)", "Read"),
         new(
             "maintainer_role",
@@ -244,6 +249,7 @@ internal static class TokenPermissions
             {
                 GitLabGrantLevel.Project => GitLabProjectGroup,
                 GitLabGrantLevel.User => GitLabUserGroup,
+                GitLabGrantLevel.UserWithAllMemberships => GitLabUserWithAllMembershipsGroup,
                 _ => GitLabPackageGroup,
             });
 
@@ -303,6 +309,7 @@ internal static class TokenPermissions
     internal static GitLabGrantRequirements GitLabGrantRequirements { get; } = new(
         Project: GitLabGrantKeys(GitLabGrantLevel.Project),
         User: GitLabGrantKeys(GitLabGrantLevel.User),
+        UserWithAllMemberships: GitLabGrantKeys(GitLabGrantLevel.UserWithAllMemberships),
         GroupAllowed: GitLabGrantKeys(GitLabGrantLevel.Group));
 
     /// <summary>The key a GitLab <c>Denied</c> verdict stores for a repository no project entry targets.</summary>
@@ -320,6 +327,7 @@ internal static class TokenPermissions
                     entry.VerifiedBy is PermissionVerification.GitLabGrant
                     && string.Equals(entry.Key, identifier, StringComparison.Ordinal))?.Label
                 ?? identifier)
+            .Distinct(StringComparer.Ordinal)
             .ToList();
 
     /// <summary>
@@ -374,11 +382,14 @@ internal static class TokenPermissions
             .Select(entry => entry.Key)
             .ToList();
 
-    /// <summary>The labels of <paramref name="keys"/> in list order; keys the list no longer holds are skipped.</summary>
+    /// <summary>
+    /// The labels of <paramref name="keys"/> in list order, each once; keys the list no longer holds are skipped.
+    /// </summary>
     internal static IReadOnlyList<string> LabelsOf(string providerType, IReadOnlyCollection<string> keys) =>
         For(providerType)
             .Where(entry => keys.Contains(entry.Key, StringComparer.Ordinal))
             .Select(entry => entry.Label)
+            .Distinct(StringComparer.Ordinal)
             .ToList();
 
     private static WritePermission? ProbedPermissionOf(TokenPermission entry) => entry.VerifiedBy switch

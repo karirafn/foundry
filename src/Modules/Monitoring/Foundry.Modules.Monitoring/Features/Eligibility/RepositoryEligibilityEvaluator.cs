@@ -362,9 +362,12 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         return projectId switch
         {
+            // A token reaching all memberships carries no project ids: GitLab resolving the project for it is the
+            // coverage, and the Maintainer role check that follows confines it to projects the user belongs to.
+            Result<int>.Success when grant.ReachesAllMemberships => null,
             Result<int>.Success { Value: int id } when grant.Covers(id) => null,
             Result<int>.Success => NotSelected(now),
-            // A project the token does not select is hidden from it, so GitLab answers 404 or 403.
+            // A project the token does not reach is hidden from it, so GitLab answers 404 or 403.
             Result<int>.Failure failure
                 when GitLabErrors.TryGetStatusCode(failure.Error, out int status) && status is 403 or 404 => NotSelected(now),
             _ => new WriteProbeVerdict.Unknown(LastAttemptedAt: now),

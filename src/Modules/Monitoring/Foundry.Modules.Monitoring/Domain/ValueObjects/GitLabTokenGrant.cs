@@ -11,11 +11,14 @@ internal sealed record GitLabTokenGrantEntry(
     long? GroupId)
 {
     internal const string SelectedMemberships = "selected_memberships";
+    internal const string AllMemberships = "all_memberships";
     internal const string User = "user";
 
     internal bool IsProjectEntry => Access == SelectedMemberships && ProjectId is not null;
 
     internal bool IsGroupEntry => Access == SelectedMemberships && ProjectId is null && GroupId is not null;
+
+    internal bool IsAllMembershipsEntry => Access == AllMemberships && ProjectId is null && GroupId is null;
 
     internal bool IsUserEntry => Access == User;
 
@@ -31,11 +34,14 @@ internal sealed record GitLabTokenGrantEntry(
 
 /// <summary>
 /// The permission identifiers each grant level must hold. <see cref="Project"/> and <see cref="User"/> are
-/// required exactly; <see cref="GroupAllowed"/> is all a group entry may carry, and none of it is required.
+/// required exactly; <see cref="UserWithAllMemberships"/> is required on the user entries as well when the token
+/// reaches all memberships, because listing member projects needs it. <see cref="GroupAllowed"/> is all a group
+/// entry may carry, and a project or all-memberships entry may carry it too; none of it is required.
 /// </summary>
 internal sealed record GitLabGrantRequirements(
     IReadOnlyList<string> Project,
     IReadOnlyList<string> User,
+    IReadOnlyList<string> UserWithAllMemberships,
     IReadOnlyList<string> GroupAllowed);
 
 /// <summary>What a GitLab fine-grained token holds, as <c>GET /personal_access_tokens/self</c> reports it.</summary>
@@ -47,6 +53,9 @@ internal sealed class GitLabTokenGrant
     }
 
     internal IReadOnlyList<GitLabTokenGrantEntry> Entries { get; }
+
+    /// <summary>Whether an entry reaches every project and group the token user is a member of.</summary>
+    internal bool ReachesAllMemberships => Entries.Any(entry => entry.IsAllMembershipsEntry);
 
     internal static GitLabTokenGrant Create(IEnumerable<GitLabTokenGrantEntry> entries) =>
         new(entries
@@ -66,9 +75,9 @@ internal sealed class GitLabTokenGrant
             .ToList();
 
     /// <summary>
-    /// Checks the grant against <paramref name="requirements"/>: an entry reaching more than selected
-    /// projects or groups is broad reach, a permission outside its level's set is not allowed, and a
-    /// project entry or the user entries lacking a required permission is missing. Every finding that
+    /// Checks the grant against <paramref name="requirements"/>: an entry reaching personal projects, the
+    /// instance or anything unknown is broad reach, a permission outside its level's set is not allowed, and a
+    /// project or all-memberships entry or the user entries lacking a required permission is missing. Every finding that
     /// holds is reported, in that order.
     /// </summary>
     internal GitLabGrantEvaluation Evaluate(GitLabGrantRequirements requirements)
@@ -77,13 +86,17 @@ internal sealed class GitLabTokenGrant
         List<string> notAllowed = [];
         HashSet<string> missingProject = new(StringComparer.Ordinal);
         HashSet<string> userHeld = new(StringComparer.Ordinal);
+        IReadOnlyList<string> reachAllowed = [.. requirements.Project, .. requirements.GroupAllowed];
+        IReadOnlyList<string> userRequired = ReachesAllMemberships
+            ? [.. requirements.User, .. requirements.UserWithAllMemberships]
+            : requirements.User;
 
         foreach (GitLabTokenGrantEntry entry in Entries)
         {
             IReadOnlyList<string>? allowed = entry switch
             {
-                { IsProjectEntry: true } => requirements.Project,
-                { IsUserEntry: true } => requirements.User,
+                { IsProjectEntry: true } or { IsAllMembershipsEntry: true } => reachAllowed,
+                { IsUserEntry: true } => userRequired,
                 { IsGroupEntry: true } => requirements.GroupAllowed,
                 _ => null,
             };
@@ -99,7 +112,7 @@ internal sealed class GitLabTokenGrant
                 AddOnce(notAllowed, permission);
             }
 
-            if (entry.IsProjectEntry)
+            if (entry.IsProjectEntry || entry.IsAllMembershipsEntry)
             {
                 missingProject.UnionWith(requirements.Project.Except(entry.Permissions, StringComparer.Ordinal));
             }
@@ -112,7 +125,7 @@ internal sealed class GitLabTokenGrant
         List<string> missing =
         [
             .. requirements.Project.Where(missingProject.Contains),
-            .. requirements.User.Where(permission => !userHeld.Contains(permission)),
+            .. userRequired.Where(permission => !userHeld.Contains(permission) && !missingProject.Contains(permission)),
         ];
 
         List<GitLabGrantFinding> findings = [];
