@@ -133,6 +133,13 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
+        // One authorization in flight at a time, so a slow outbox cannot pile up reservations (ADR 0069).
+        if (await dbContext.Set<DispatchReservation>().AsNoTracking().AnyAsync(cancellationToken))
+        {
+            logger.LogDebug("Dispatch skipped: a dispatch reservation is still outstanding.");
+            return;
+        }
+
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Persist the reservation before dispatching so the slot is durably held as soon as
