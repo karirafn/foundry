@@ -32,7 +32,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed partial class HandleAsync : IAsyncDisposable
 {
@@ -72,7 +72,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private IssueClaimedHandler BuildHandler(
+    private ClaimedRunPipeline BuildHandler(
         IWorkerOrchestrator? orchestrator = null,
         IGlobalSettingsQueries? settingsQueries = null,
         ICredentialQueries? credentialQueries = null,
@@ -85,9 +85,9 @@ public sealed partial class HandleAsync : IAsyncDisposable
         IPublisher? publisher = null,
         ISystemNotificationBroadcaster? broadcaster = null,
         IWorkerHostEntryResolver? hostEntryResolver = null,
-        ILogger<IssueClaimedHandler>? logger = null)
+        ILogger<WorkerRunStart>? logger = null)
     {
-        return new IssueClaimedHandler(
+        return new ClaimedRunPipeline(
             _dbContext,
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
             publisher ?? new FakePublisher(),
@@ -103,7 +103,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             trackerContextQueries ?? new StubTrackerContextQueries(),
             broadcaster ?? new CapturingSystemNotificationBroadcaster(),
             hostEntryResolver ?? new StubWorkerHostEntryResolver(),
-            logger ?? NullLogger<IssueClaimedHandler>.Instance);
+            logger ?? NullLogger<WorkerRunStart>.Instance);
     }
 
     private static IssueClaimed BuildEvent(
@@ -140,7 +140,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenOrchestratorSucceeds_CreatesActiveRunInDatabase()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: new StubWorkerOrchestrator(succeeds: true, containerId: "container-abc"));
         IssueClaimed @event = BuildEvent();
 
@@ -158,7 +158,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenTheClaimResumesARoundContinuedWithoutAnswer_TheRunRefusesNeedsInput()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
         DispatchContext context = new DispatchContext.Continuation("feat/42-test-issue") { ContinuedWithoutAnswer = true };
 
         // Act
@@ -174,7 +174,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenTheClaimIsAnyOtherRun_TheRunMayAsk()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -189,7 +189,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenClaimed_RunRoleComesFromDispatchContextRole()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
         DispatchContext context = new DispatchContext.Continuation("feat/42-test-issue", "timed out");
         IssueClaimed @event = BuildEvent(context: context);
 
@@ -206,7 +206,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenOrchestratorSucceeds_ActiveRunHasCorrectContainerId()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: new StubWorkerOrchestrator(succeeds: true, containerId: "container-xyz"));
         IssueClaimed @event = BuildEvent();
 
@@ -224,7 +224,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenOrchestratorFails_CreatesFailedRun()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: new StubWorkerOrchestrator(succeeds: false, errorMessage: "Docker daemon unreachable"));
         IssueClaimed @event = BuildEvent();
 
@@ -244,7 +244,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c1");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("ghp_my_token"));
@@ -272,7 +272,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
@@ -292,7 +292,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-dir");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
@@ -311,7 +311,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-local-config");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
@@ -331,7 +331,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-no-token");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
@@ -350,7 +350,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-vol");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: StubCredentialQueries.ForOAuth());
         IssueClaimed @event = BuildEvent();
@@ -367,7 +367,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent();
@@ -384,7 +384,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey-vol");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")));
         IssueClaimed @event = BuildEvent();
@@ -402,7 +402,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenNoAuthConfigured_CreatesFailedRunWithNoAuthError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             credentialQueries: new StubCredentialQueries(authVar: null, settingsExist: false));
         IssueClaimed @event = BuildEvent();
 
@@ -421,7 +421,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenApiKeyModeButNoEnvVarConfigured_CreatesFailedRunWithNoAuthError()
     {
         // Arrange — auth mode says "ApiKey" but GetAuthEnvironmentVariableAsync returns null
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             credentialQueries: StubCredentialQueries.ForApiKeyModeWithNoEnvVar());
         IssueClaimed @event = BuildEvent();
 
@@ -441,7 +441,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c2");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -460,7 +460,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-limits");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(limits: new WorkerResourceLimitsSnapshot(4096, 1.5, 128)));
         IssueClaimed @event = BuildEvent();
@@ -479,7 +479,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c3");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -496,7 +496,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenAccountTokenIsNull_CreatesFailedRunWithEmptyPatError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(null));
+        ClaimedRunPipeline sut = BuildHandler(repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(null));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -513,7 +513,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenAccountTokenIsEmpty_CreatesFailedRunWithEmptyPatError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(string.Empty));
+        ClaimedRunPipeline sut = BuildHandler(repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(string.Empty));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -530,7 +530,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenDispatchInfoCannotBeResolved_FailsWithTheEmptyPatError()
     {
         // Arrange — the account was removed or its token is unreadable.
-        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: new StubRepositoryDispatchQueries(null));
+        ClaimedRunPipeline sut = BuildHandler(repositoryDispatchQueries: new StubRepositoryDispatchQueries(null));
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -549,7 +549,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubRepositoryDispatchQueries dispatchQueries = StubRepositoryDispatchQueries.WithToken("ghp_current_token");
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-resolved");
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries, publisher: publisher);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries, publisher: publisher);
 
         // Act
         await sut.HandleAsync(BuildEvent(monitoredRepositoryId: repositoryId), TestContext.Current.CancellationToken);
@@ -590,7 +590,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubRepositoryDispatchQueries dispatchQueries = StubRepositoryDispatchQueries.WithToken("ghp_current_token");
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-legacy");
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries, publisher: publisher);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries, publisher: publisher);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -609,7 +609,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c4");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         DispatchContext.Revision revision = new(
             "feat/42-fix",
             "https://github.com/owner/repo/pull/10",
@@ -631,7 +631,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c5");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent(branchName: "feat/42-my-issue");
 
         // Act
@@ -649,7 +649,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c6");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(taskPrompt: "Implement issue {issueNumber}."));
         IssueClaimed @event = BuildEvent(issueNumber: 42);
@@ -670,7 +670,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c7");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -688,7 +688,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -705,7 +705,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-deny");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -744,7 +744,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         _dbContext.Set<ImplementTierSettings>().Add(tierSettings);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -772,7 +772,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-default-model");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -793,7 +793,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         DispatchContext.Continuation continuation = new("feat/103-my-feature");
         IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", context: continuation);
 
@@ -811,7 +811,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenBranchCreationFails_CreatesFailedRunWithProviderError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             postExitProviderQueries: new StubPostExitProviderQueries(branchCreationSucceeds: false));
         IssueClaimed @event = BuildEvent();
 
@@ -831,7 +831,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-start");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             postExitProviderQueries: new StubPostExitProviderQueries(branchCreationSucceeds: false));
         IssueClaimed @event = BuildEvent();
@@ -852,7 +852,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-job-logs");
         StubFailingJobLogQueries logQueries = new StubFailingJobLogQueries().WithLog("ci/build", "error CS0103: name missing");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, failingJobLogQueries: logQueries);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, failingJobLogQueries: logQueries);
         IssueClaimed @event = BuildEvent(
             branchName: "feat/42-fix",
             context: FailedChecksRevision(
@@ -879,7 +879,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubFailingJobLogQueries logQueries = new StubFailingJobLogQueries()
             .WithFailure("ci/build")
             .WithException("ci/lint");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, failingJobLogQueries: logQueries);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, failingJobLogQueries: logQueries);
         IssueClaimed @event = BuildEvent(
             branchName: "feat/42-fix",
             context: FailedChecksRevision(
@@ -902,7 +902,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubFailingJobLogQueries logQueries = new();
-        IssueClaimedHandler sut = BuildHandler(failingJobLogQueries: logQueries);
+        ClaimedRunPipeline sut = BuildHandler(failingJobLogQueries: logQueries);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -916,7 +916,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-continuation-prompt");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         DispatchContext.Continuation continuation = new("feat/103-my-feature");
         IssueClaimed @event = BuildEvent(branchName: "feat/103-my-feature", context: continuation);
 
@@ -935,7 +935,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-system-template");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(systemPrompt: "Custom system prompt for issue #{issueNumber}. {issueContent}"));
         IssueClaimed @event = BuildEvent(issueNumber: 99);
@@ -979,7 +979,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-principles");
         StubWorkerRoleCatalogStore store = StubWorkerRoleCatalogStore.With();
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: store);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, roleCatalog: store);
 
         // Act
         await sut.HandleAsync(BuildEvent(context: context), TestContext.Current.CancellationToken);
@@ -1012,7 +1012,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         {
             Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
         };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
 
         // Act
         await sut.HandleAsync(
@@ -1033,7 +1033,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: StubWorkerRoleCatalogStore.With());
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, roleCatalog: StubWorkerRoleCatalogStore.With());
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1060,7 +1060,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         {
             Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
         };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
 
         // Act
         await sut.HandleAsync(
@@ -1077,7 +1077,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-worker-template");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(taskPrompt: "Custom worker prompt for #{issueNumber}."));
         IssueClaimed @event = BuildEvent(issueNumber: 55);
@@ -1096,7 +1096,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-no-gh-token");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("glpat_test_token"));
         IssueClaimed @event = BuildEvent(
@@ -1119,7 +1119,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-token");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(token));
         IssueClaimed @event = provider == "github"
@@ -1143,7 +1143,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-no-gl-token");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("ghp_test_token"));
         IssueClaimed @event = BuildEvent(
@@ -1164,7 +1164,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         const string taskPromptTemplate = "DB template for issue {issueNumber}.";
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-db-template");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(taskPrompt: taskPromptTemplate));
         IssueClaimed @event = BuildEvent(issueNumber: 7);
@@ -1185,7 +1185,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent(workerRunId: runId);
@@ -1217,7 +1217,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind-parity");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent(workerRunId: runId);
@@ -1240,7 +1240,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind-tmp");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent();
@@ -1261,7 +1261,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: false));
         IssueClaimed @event = BuildEvent();
@@ -1293,7 +1293,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-restricted-no-dind");
-        IssueClaimedHandler sut = BuildRestrictedHandler(
+        ClaimedRunPipeline sut = BuildRestrictedHandler(
             orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
         IssueClaimed @event = BuildEvent(workerRunId: runId);
@@ -1318,7 +1318,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-nested-docker-env");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
 
@@ -1334,7 +1334,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-nested-docker-env");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: false));
 
@@ -1350,7 +1350,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-restricted-no-nested-docker-env");
-        IssueClaimedHandler sut = BuildRestrictedHandler(
+        ClaimedRunPipeline sut = BuildRestrictedHandler(
             orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
 
@@ -1366,7 +1366,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-role");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1380,7 +1380,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenDispatched_TheRunRecordsItsRoleAndTheImageItRanOn()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             roleCatalog: StubWorkerRoleCatalogStore.With(imageTag: "foundry-worker:local", imageId: "sha256:abc"));
 
         // Act
@@ -1400,7 +1400,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-catalog");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(imageTag: "foundry-worker:local"),
             roleCatalog: StubWorkerRoleCatalogStore.Empty());
@@ -1424,7 +1424,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange — a role system prompt template large enough to exceed the 120_000-byte ceiling
         string hugeTemplate = new string('X', 200_000);
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             roleCatalog: StubWorkerRoleCatalogStore.With(systemPrompt: hugeTemplate));
         IssueClaimed @event = BuildEvent();
 
@@ -1445,7 +1445,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         const string dbImageTag = "ghcr.io/owner/repo:db-tag-123";
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-db-image-tag");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(imageTag: dbImageTag));
         IssueClaimed @event = BuildEvent();
@@ -1465,7 +1465,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-docker");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
@@ -1488,7 +1488,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: false, csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-no-docker");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true),
             roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
@@ -1509,7 +1509,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-dotnet");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
@@ -1529,7 +1529,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, imageId: ToolchainImageId);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(orchestrator, imageId: ToolchainImageId);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1545,7 +1545,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await StoreToolchainAsync(ToolchainImageId, ToolchainFixtures.With(docker: true, csharpLs: false));
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-no-dotnet");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
         IssueClaimed @event = BuildEvent();
@@ -1565,7 +1565,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await StoreToolchainAsync("sha256:an-older-image", ToolchainFixtures.With(docker: true, csharpLs: true));
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true),
             roleCatalog: StubWorkerRoleCatalogStore.With(imageId: ToolchainImageId));
@@ -1585,7 +1585,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true),
             roleCatalog: StubWorkerRoleCatalogStore.With(imageId: null));
@@ -1605,7 +1605,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange — timeout is 120 minutes (stub default)
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-publishing-section");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1627,7 +1627,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         StubTrackerContextQueries trackerContext = new(new TrackerContext([], [], false, [new OpenIssue(901, "Tracked elsewhere")]));
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, trackerContextQueries: trackerContext);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, trackerContextQueries: trackerContext);
 
         // Act
         await sut.HandleAsync(BuildEvent(issueNumber: 42), TestContext.Current.CancellationToken);
@@ -1643,7 +1643,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         StubTrackerContextQueries trackerContext = new(new TrackerContext([], [], false, [new OpenIssue(901, "Tracked elsewhere")]));
-        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, trackerContextQueries: trackerContext);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(orchestrator, trackerContextQueries: trackerContext);
 
         // Act
         await sut.HandleAsync(BuildEvent(issueNumber: 7), TestContext.Current.CancellationToken);
@@ -1660,7 +1660,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         IssueContent content = new("Add retry", "Retry webhook delivery.", [], SpecHashFixtures.Any);
         StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(content));
         StubTrackerContextQueries trackerContext = new();
-        IssueClaimedHandler sut = BuildHandler(issueContentQueries: issueContent, trackerContextQueries: trackerContext);
+        ClaimedRunPipeline sut = BuildHandler(issueContentQueries: issueContent, trackerContextQueries: trackerContext);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
         // Act
@@ -1672,7 +1672,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         trackerContext.Requests.ShouldBe([(repositoryId, 42, content)]);
     }
 
-    private IssueClaimedHandler BuildRestrictedHandler(
+    private ClaimedRunPipeline BuildRestrictedHandler(
         StubWorkerOrchestrator orchestrator,
         StubPostExitProviderQueries? postExitProviderQueries = null,
         IIssueContentQueries? issueContentQueries = null,
@@ -1695,7 +1695,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
-        IssueClaimedHandler sut = BuildRestrictedHandler(new StubWorkerOrchestrator(succeeds: true), provider);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(new StubWorkerOrchestrator(succeeds: true), provider);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1724,7 +1724,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         {
             Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
         };
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             postExitProviderQueries: provider,
             roleCatalog: new StubWorkerRoleCatalogStore(catalog));
@@ -1749,7 +1749,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(withoutBranch: true), TestContext.Current.CancellationToken);
@@ -1765,7 +1765,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
-        IssueClaimedHandler sut = BuildHandler(postExitProviderQueries: provider);
+        ClaimedRunPipeline sut = BuildHandler(postExitProviderQueries: provider);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1781,7 +1781,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(orchestrator);
         WorkerProvider provider = gitHub ? new WorkerProvider.GitHub() : new WorkerProvider.GitLab();
 
         // Act
@@ -1801,7 +1801,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1815,7 +1815,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1834,7 +1834,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             "Retry webhook delivery.",
             [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)],
             SpecHashFixtures.Any)));
-        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
         // Act
@@ -1858,7 +1858,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildRestrictedHandler(
+        ClaimedRunPipeline sut = BuildRestrictedHandler(
             orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(nestedDockerEnabled: true));
 
@@ -1881,7 +1881,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         StubIssueContentQueries issueContent = new(
             Result<IssueContent>.Fail(new Error("GitHub.Unexpected", "The provider returned 502.")));
-        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
+        ClaimedRunPipeline sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1917,7 +1917,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             "Retry webhook delivery.",
             [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)],
             SpecHashFixtures.Any)));
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, issueContentQueries: issueContent);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, issueContentQueries: issueContent);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
         // Act
@@ -1942,7 +1942,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -1959,7 +1959,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
         StubIssueContentQueries issueContent = new(
             Result<IssueContent>.Fail(new Error("GitHub.Unexpected", "The provider returned 502.")));
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             postExitProviderQueries: provider,
             issueContentQueries: issueContent);
@@ -1984,7 +1984,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         const string xml = "<configuration><packageSources /></configuration>";
         StubRepositoryDispatchQueries dispatchQueries = new(PackageSourceDispatchInfo()) { WorkerNuGetConfig = new WorkerNuGetConfig(xml, ProxyBaseUrl) };
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-nuget");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2004,7 +2004,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             WorkerNuGetConfig = new WorkerNuGetConfig("<configuration />", ProxyBaseUrl),
         };
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-proxy");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2022,7 +2022,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         {
             WorkerNuGetConfig = new WorkerNuGetConfig("<configuration />", ProxyBaseUrl),
         };
-        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: dispatchQueries);
+        ClaimedRunPipeline sut = BuildHandler(repositoryDispatchQueries: dispatchQueries);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2039,7 +2039,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-plain");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             repositoryDispatchQueries: new StubRepositoryDispatchQueries(PackageSourceDispatchInfo()));
 
@@ -2057,7 +2057,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             hostEntryResolver: new StubWorkerHostEntryResolver("host.docker.internal:172.20.5.9"));
 
@@ -2085,7 +2085,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         {
             Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
         };
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: new StubWorkerRoleCatalogStore(catalog),
             hostEntryResolver: new StubWorkerHostEntryResolver("host.docker.internal:172.20.5.9"));
@@ -2106,7 +2106,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         new WorkerProvider.GitHub(),
         "https://api.github.com/repos/owner/repo/issues",
         "github.com");
-    private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
+    internal sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
         public int CreateBranchCallCount { get; private set; }
 
@@ -2149,7 +2149,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = restricted ? BuildRestrictedHandler(orchestrator) : BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = restricted ? BuildRestrictedHandler(orchestrator) : BuildHandler(orchestrator: orchestrator);
         WorkerProvider provider = gitHub ? new WorkerProvider.GitHub() : new WorkerProvider.GitLab();
 
         // Act
@@ -2165,7 +2165,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(publisher: publisher);
+        ClaimedRunPipeline sut = BuildHandler(publisher: publisher);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -2192,7 +2192,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(publisher: publisher);
+        ClaimedRunPipeline sut = BuildHandler(publisher: publisher);
 
         // Act
         await sut.HandleAsync(BuildEvent(context: context), TestContext.Current.CancellationToken);
@@ -2206,7 +2206,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             publisher: publisher,
             roleCatalog: StubWorkerRoleCatalogStore.With(
                 systemPrompt: "You are triaging issue #{issueNumber}.\n\n{issueContent}",
@@ -2226,7 +2226,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -2241,7 +2241,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     public async Task WhenPrepared_ActiveRunPersistsTheReportedBase()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
 
         // Act
         await sut.HandleAsync(
@@ -2261,7 +2261,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
         FailureReason reason = new FailureReason.WorkerBootstrapFailed(
             "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=the run's branch feat/42-test-issue does not exist on the remote");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator, publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2287,7 +2287,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             "https://gitlab.example.test/api/v4/projects/owner%2Frepo/issues",
             "gitlab.example.test"));
         FailureReason reason = new FailureReason.ProviderUnreachable("fatal: unable to access: Could not resolve host");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             repositoryDispatchQueries: dispatchQueries,
             publisher: new FakePublisher(new PrepareOutcome.Failed(reason)),
             broadcaster: broadcaster);
@@ -2317,7 +2317,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             settings.RecordProbeUnreachable("github.com", pausedAt.AddMinutes(1));
         });
         CapturingSystemNotificationBroadcaster broadcaster = new();
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             publisher: new FakePublisher(new PrepareOutcome.Failed(new FailureReason.ProviderUnreachable("timed out"))),
             broadcaster: broadcaster);
 
@@ -2340,7 +2340,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         // Arrange
         await SeedDispatchPauseAsync();
         FailureReason reason = new FailureReason.WorkerBootstrapFailed("FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=403");
-        IssueClaimedHandler sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
+        ClaimedRunPipeline sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2358,7 +2358,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         await SeedDispatchPauseAsync();
         CapturingSystemNotificationBroadcaster broadcaster = new();
         FailureReason reason = new FailureReason.FetchFailed("fatal: fetch-pack: invalid index-pack output");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             publisher: new FakePublisher(new PrepareOutcome.Failed(reason)),
             broadcaster: broadcaster);
 
@@ -2383,7 +2383,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FailureReason reason = new FailureReason.AccessRefused(
             "could not reach the repository: fatal: unable to access 'x': The requested URL returned error: 403");
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             publisher: new FakePublisher(new PrepareOutcome.Failed(reason)),
             broadcaster: broadcaster);
 
@@ -2406,7 +2406,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FailureReason reason = new FailureReason.WorkerBootstrapFailed("FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=401");
-        IssueClaimedHandler sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
+        ClaimedRunPipeline sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2420,7 +2420,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        IssueClaimedHandler sut = BuildHandler();
+        ClaimedRunPipeline sut = BuildHandler();
 
         // Act
         await sut.HandleAsync(BuildEvent(monitoredRepositoryId: repositoryId), TestContext.Current.CancellationToken);
@@ -2445,7 +2445,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FakePublisher publisher = new();
-        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: new StubRepositoryDispatchQueries(null), publisher: publisher);
+        ClaimedRunPipeline sut = BuildHandler(repositoryDispatchQueries: new StubRepositoryDispatchQueries(null), publisher: publisher);
 
         // Act
         await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
@@ -2454,7 +2454,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
         publisher.Requests.ShouldBeEmpty();
     }
 
-    private sealed class StubWorkerOrchestrator : IWorkerOrchestrator
+    internal sealed class StubWorkerOrchestrator : IWorkerOrchestrator
     {
         private readonly bool _succeeds;
         private readonly string? _containerId;
@@ -2522,7 +2522,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             => Task.CompletedTask;
     }
 
-    private sealed class StubCredentialQueries(
+    internal sealed class StubCredentialQueries(
         (string Key, string Value)? authVar,
         bool settingsExist = true,
         string? authModeOverride = null) : ICredentialQueries
@@ -2559,7 +2559,7 @@ public sealed partial class HandleAsync : IAsyncDisposable
             => Task.FromResult<ClaudeAccountSummary?>(null);
     }
 
-    private sealed class StubGlobalSettingsQueries(
+    internal sealed class StubGlobalSettingsQueries(
         bool nestedDockerEnabled = false,
         string imageTag = "stub-image:v1",
         WorkerResourceLimitsSnapshot? limits = null) : IGlobalSettingsQueries

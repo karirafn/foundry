@@ -98,7 +98,7 @@ public sealed class AllowanceSet
         });
 
         // Act
-        // Composed as IssueClaimedHandler composes it: the hardened baseline, then the DinD relaxations.
+        // Composed as WorkerRunStart composes it: the hardened baseline, then the DinD relaxations.
         WorkerContainerSpec dind = hardened with
         {
             Capabilities = RootlessDindRunSpec.Capabilities,

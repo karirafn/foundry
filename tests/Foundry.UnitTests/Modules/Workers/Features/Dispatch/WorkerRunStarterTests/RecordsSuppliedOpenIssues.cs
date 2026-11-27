@@ -27,7 +27,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
 {
@@ -60,7 +60,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
         TrackerContext trackerContext = new TrackerContextBuilder()
             .WithOpenIssueNumbers(7, 12, 31)
             .Build();
-        IssueClaimedHandler sut = BuildHandler(trackerContext);
+        ClaimedRunPipeline sut = BuildHandler(trackerContext);
         IssueClaimed @event = BuildEvent(WorkerRunId.New());
 
         // Act
@@ -78,7 +78,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
     public async Task WhenRunIsDispatched_ActiveRunHoldsTheSpecHashOfTheIssueBodyItWasGiven()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             new TrackerContextBuilder().Build(),
             new StubIssueContentQueries(Result<IssueContent>.Ok(new IssueContentBuilder().WithSpecHash(SpecHashFixtures.Other).Build())));
 
@@ -90,9 +90,9 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
         _dbContext.Set<WorkerRun>().OfType<ActiveRun>().Single().SuppliedSpecHash.ShouldBe(SpecHashFixtures.Other);
     }
 
-    private IssueClaimedHandler BuildHandler(TrackerContext trackerContext, StubIssueContentQueries? issueContent = null)
+    private ClaimedRunPipeline BuildHandler(TrackerContext trackerContext, StubIssueContentQueries? issueContent = null)
     {
-        return new IssueClaimedHandler(
+        return new ClaimedRunPipeline(
             _dbContext,
             new StubWorkerOrchestrator(),
             new FakePublisher(),
@@ -108,7 +108,7 @@ public sealed class RecordsSuppliedOpenIssues : IAsyncDisposable
             new StubTrackerContextQueries(trackerContext),
             new CapturingSystemNotificationBroadcaster(),
             new StubWorkerHostEntryResolver(),
-            NullLogger<IssueClaimedHandler>.Instance);
+            NullLogger<WorkerRunStart>.Instance);
     }
 
     private static IssueClaimed BuildEvent(WorkerRunId workerRunId)

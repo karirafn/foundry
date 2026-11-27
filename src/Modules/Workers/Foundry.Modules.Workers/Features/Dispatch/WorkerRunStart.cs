@@ -1,0 +1,666 @@
+using System.Globalization;
+using System.Text;
+
+using Foundry.Modules.Credentials.Contracts.Queries;
+using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.Entities.States;
+using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.ContainerSpec;
+using Foundry.Modules.Workers.Features.HostPauses;
+using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Modules.Workers.Features.Roles;
+using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace Foundry.Modules.Workers.Features.Dispatch;
+
+/// <summary>
+/// Starts one <see cref="StartingRun"/> from the claim it carries: reads the issue, pre-creates its branch, has the
+/// Publisher prepare its base and starts its container, ending it active, completed or failed. Runs off the outbox
+/// relay in <see cref="WorkerRunStarter"/>, one scope per run.
+/// </summary>
+internal sealed class WorkerRunStart(
+    DbContext dbContext,
+    IWorkerOrchestrator orchestrator,
+    IPublisher publisher,
+    IDomainEventDispatcher domainEventDispatcher,
+    IIntegrationEventDispatcher integrationEventDispatcher,
+    IGlobalSettingsQueries settingsQueries,
+    ICredentialQueries credentialQueries,
+    IPostExitProviderQueries postExitProviderQueries,
+    IFailingJobLogQueries failingJobLogQueries,
+    IWorkerRoleCatalogStore roleCatalog,
+    IRepositoryDispatchQueries repositoryDispatchQueries,
+    IIssueContentQueries issueContentQueries,
+    ITrackerContextQueries trackerContextQueries,
+    ISystemNotificationBroadcaster broadcaster,
+    IWorkerHostEntryResolver hostEntryResolver,
+    ILogger<WorkerRunStart> logger)
+{
+    private const string NuGetConfigVariable = "FOUNDRY_NUGET_CONFIG";
+    private const string PackageProxyUrlVariable = "FOUNDRY_PACKAGE_PROXY_URL";
+
+    private static readonly Error EmptyGitPatError =
+        new("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings.");
+
+    /// <summary>
+    /// Starts run <paramref name="workerRunId"/> with <paramref name="sourceToken"/>, the Run Source Token minted when its
+    /// start was attempted. A run that is no longer starting, or carries no claim, is left alone.
+    /// </summary>
+    public async Task StartAsync(WorkerRunId workerRunId, RunSourceToken sourceToken, CancellationToken cancellationToken)
+    {
+        StartingRun? startingRun = await dbContext.Set<StartingRun>()
+            .FirstOrDefaultAsync(run => run.Id == workerRunId, cancellationToken);
+
+        if (startingRun?.Claim is not { } claimed)
+        {
+            return;
+        }
+
+        WorkerRoleCatalog? catalog = roleCatalog.Current;
+        RunModel runModel = new(startingRun.Demand, startingRun.Model ?? string.Empty, startingRun.Effort ?? string.Empty);
+
+        // The profile comes from the role's definition, never its name (ADR 0098). A role the catalog does not hold is
+        // failed by BuildSpecAsync; until then it is treated as Full, as every run was before profiles.
+        bool restricted = catalog?.Content.Find(startingRun.Role) is { Capability: WorkerCapability.Restricted };
+
+        // Every run gets the issue from this read rather than from the provider (ADR 0098, ADR 0100): the run works
+        // from this dispatch-time snapshot, and no run starts without it.
+        Result<IssueContent> contentResult = await issueContentQueries.GetIssueContentAsync(
+            claimed.MonitoredRepositoryId,
+            claimed.IssueNumber,
+            cancellationToken);
+
+        if (contentResult is not Result<IssueContent>.Success { Value: { } issueContent })
+        {
+            await FailBeforeContainerAsync(
+                startingRun,
+                claimed,
+                "reading the issue content failed",
+                ((Result<IssueContent>.Failure)contentResult).Error,
+                cancellationToken);
+            return;
+        }
+
+        // The tracker read never fails: whatever it could not read is named in the context it returns.
+        TrackerContext trackerContext = await trackerContextQueries.GetTrackerContextAsync(
+            claimed.MonitoredRepositoryId,
+            claimed.IssueNumber,
+            issueContent,
+            cancellationToken);
+
+        // A restricted run gets no branch.
+        if (!restricted)
+        {
+            if (claimed.BranchName is not { } branchName)
+            {
+                // Only a restricted run is dispatched without a branch; a full run without one cannot start.
+                await FailBeforeContainerAsync(
+                    startingRun,
+                    claimed,
+                    "branch pre-creation failed",
+                    new Error("Worker.MissingBranch", $"The '{startingRun.Role.Name}' run was claimed without a branch."),
+                    cancellationToken);
+                return;
+            }
+
+            Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
+                claimed.MonitoredRepositoryId,
+                branchName.Value,
+                cancellationToken);
+
+            if (branchResult is Result<bool>.Failure branchFailure)
+            {
+                await FailBeforeContainerAsync(startingRun, claimed, "branch pre-creation failed", branchFailure.Error, cancellationToken);
+                return;
+            }
+        }
+
+        // A review reads the commit its context names (ADR 0114); a malformed one fails before anything is prepared.
+        ReviewDispatch? review = null;
+
+        if (claimed.Context is DispatchContext.Review reviewContext)
+        {
+            Result<ReviewDispatch> reviewResult = ReviewDispatch.From(reviewContext);
+
+            if (reviewResult is Result<ReviewDispatch>.Failure reviewFailure)
+            {
+                await FailBeforeContainerAsync(startingRun, claimed, "reading the review target failed", reviewFailure.Error, cancellationToken);
+                return;
+            }
+
+            review = ((Result<ReviewDispatch>.Success)reviewResult).Value;
+        }
+
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            claimed.MonitoredRepositoryId,
+            cancellationToken);
+
+        if (GitPatOf(dispatchInfo) is not { } gitPat)
+        {
+            await FailWithContainerErrorAsync(startingRun, claimed, EmptyGitPatError, cancellationToken);
+            return;
+        }
+
+        // The Publisher fetches with the token and leaves a base bundle for the worker, so the worker's own spec
+        // carries no GIT_PAT (ADR 0100). Without a base bundle no worker starts. It runs before the spec is built
+        // because a review's prompt shows the facts computed from what it prepared.
+        PrepareOutcome prepareOutcome = await publisher.PrepareAsync(
+            new PrepareRequest(
+                startingRun.Id,
+                claimed.CloneUrl,
+                gitPat,
+                RunBranchToPrepare(claimed, restricted),
+                await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken),
+                review?.Target),
+            cancellationToken);
+
+        if (prepareOutcome is PrepareOutcome.Failed prepareFailure)
+        {
+            // Staged before the transition so the host pause commits in the run's failure save.
+            string? pausedHost = prepareFailure.Reason is FailureReason.ProviderUnreachable && dispatchInfo is not null
+                ? await StageHostPauseAsync(dispatchInfo.Host, cancellationToken)
+                : null;
+
+            // Dispatched before the transition so Monitoring's re-probe commits in the run's failure save (ADR 0054).
+            if (prepareFailure.Reason is FailureReason.AccessRefused)
+            {
+                await integrationEventDispatcher.DispatchAsync(
+                    [new WorkerRunAccessRefused(startingRun.Id, claimed.MonitoredRepositoryId.Value)],
+                    cancellationToken);
+            }
+
+            FailedRun failedRun = startingRun.Fail(prepareFailure.Reason);
+            await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: preparing the run's base failed: {Error}",
+                startingRun.Id,
+                claimed.IssueNumber,
+                prepareFailure.Reason.Summary);
+
+            if (pausedHost is not null)
+            {
+                logger.LogWarning(
+                    "Dispatch to {Host} is paused: its provider is unreachable. A probe re-checks it and resumes dispatch.",
+                    pausedHost);
+                await HostPauseBroadcast.SendAsync(broadcaster, hostPaused: true, logger, cancellationToken);
+            }
+
+            return;
+        }
+
+        PrepareOutcome.Prepared prepared = (PrepareOutcome.Prepared)prepareOutcome;
+        SuppliedReviewFacts? reviewFacts = null;
+
+        if (review is not null)
+        {
+            Result<SuppliedReviewFacts> factsResult = review.FactsFrom(prepared, issueContent.Body);
+
+            if (factsResult is Result<SuppliedReviewFacts>.Failure factsFailure)
+            {
+                await FailWithContainerErrorAsync(startingRun, claimed, factsFailure.Error, cancellationToken);
+                return;
+            }
+
+            reviewFacts = ((Result<SuppliedReviewFacts>.Success)factsResult).Value;
+        }
+
+        if (claimed.Context is DispatchContext.Review carriedContext
+            && reviewFacts is not null
+            && await CarriedApproval.FindAsync(dbContext, claimed.IssueId, carriedContext, reviewFacts, cancellationToken) is { } carried)
+        {
+            await CompleteCarriedAsync(startingRun, claimed, prepared, trackerContext, reviewFacts, carried, cancellationToken);
+            return;
+        }
+
+        // Read after the carried-approval check, so a carried review makes no provider call for it.
+        ReviewPromptInput? reviewPrompt = reviewFacts is null
+            ? null
+            : new ReviewPromptInput(
+                reviewFacts,
+                await ReadPullRequestDescriptionAsync(startingRun, claimed, reviewFacts.PullRequestUrl, cancellationToken));
+
+        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(
+            startingRun,
+            claimed,
+            catalog,
+            issueContent,
+            trackerContext,
+            reviewPrompt,
+            runModel,
+            sourceToken,
+            cancellationToken);
+
+        if (specResult is not Result<WorkerContainerSpec>.Success { Value: { } spec })
+        {
+            await FailWithContainerErrorAsync(
+                startingRun,
+                claimed,
+                ((Result<WorkerContainerSpec>.Failure)specResult).Error,
+                cancellationToken);
+            return;
+        }
+
+        startingRun.RecordPreparedBase(prepared.Base, claimed.MonitoredRepositoryId);
+        startingRun.RecordSuppliedOpenIssues(trackerContext);
+        startingRun.RecordSuppliedSpecHash(issueContent.SpecHash);
+
+        if (reviewFacts is not null)
+        {
+            startingRun.RecordSuppliedReviewFacts(reviewFacts);
+        }
+
+        Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
+
+        if (startResult is Result<ContainerId>.Success success)
+        {
+            ActiveRun activeRun = startingRun.Activate(success.Value, claimed.BranchName, claimed.MonitoredRepositoryId);
+            await dbContext.TransitionAsync(startingRun, activeRun, domainEventDispatcher, cancellationToken);
+
+            logger.LogDebug(
+                "Worker run {WorkerRunId} started for issue #{IssueNumber} (container: {ContainerId}).",
+                startingRun.Id,
+                claimed.IssueNumber,
+                success.Value.Value);
+        }
+        else if (startResult is Result<ContainerId>.Failure failure)
+        {
+            FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(failure.Error.Message));
+            await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} failed to start for issue #{IssueNumber}: {Error}",
+                startingRun.Id,
+                claimed.IssueNumber,
+                failure.Error.Message);
+        }
+    }
+
+    /// <summary>
+    /// Completes the review with the issue's latest approval carried to the reviewed commit (ADR 0113): the change is
+    /// unchanged since that approval, so no worker starts. The issue routes the carried outcome as it routed the
+    /// approval.
+    /// </summary>
+    private async Task CompleteCarriedAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        PrepareOutcome.Prepared prepared,
+        TrackerContext trackerContext,
+        SuppliedReviewFacts reviewFacts,
+        RecordedReviewVerdict carried,
+        CancellationToken cancellationToken)
+    {
+        startingRun.RecordPreparedBase(prepared.Base, claimed.MonitoredRepositoryId);
+        startingRun.RecordSuppliedOpenIssues(trackerContext);
+        startingRun.RecordSuppliedReviewFacts(reviewFacts);
+        CompletedRun completed = startingRun.CompleteCarried(carried);
+
+        // An approval has no unmet criteria: every criterion was met, or could not be verified.
+        await integrationEventDispatcher.DispatchAsync(
+            [new ReviewRunCompleted(
+                claimed.IssueId.Value,
+                startingRun.Id,
+                carried.Outcome,
+                carried.ReviewedCommit,
+                carried.PatchId,
+                [.. carried.Findings.Where(finding => finding.Severity == ReviewSeverity.Blocking)],
+                UnmetCriteria: [],
+                carried.Tests.Assessment,
+                DateTimeOffset.UtcNow,
+                [.. carried.Findings.Where(finding => finding.Severity == ReviewSeverity.Advisory)],
+                UnmetCriterionDetails: [],
+                carried.Tests.Reason)],
+            cancellationToken);
+        await dbContext.TransitionAsync(startingRun, completed, domainEventDispatcher, cancellationToken);
+
+        // No worker will read the prepared bundle.
+        await orchestrator.DeleteHandOffVolumeAsync(startingRun.Id, cancellationToken);
+
+        logger.LogInformation(
+            "Worker run {WorkerRunId} carried the approval of run {CarriedRunId} to commit {ReviewedCommit} for issue #{IssueNumber}: the change is unchanged.",
+            startingRun.Id,
+            carried.CarriedFrom!.RunId,
+            carried.ReviewedCommit,
+            claimed.IssueNumber);
+    }
+
+    private async Task FailBeforeContainerAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        string step,
+        Error error,
+        CancellationToken cancellationToken)
+    {
+        FailedRun failedRun = startingRun.Fail(new FailureReason.ProviderError(error.Message));
+        await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Step}: {Error}",
+            startingRun.Id,
+            claimed.IssueNumber,
+            step,
+            error.Message);
+    }
+
+    private async Task FailWithContainerErrorAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        Error error,
+        CancellationToken cancellationToken)
+    {
+        FailedRun failedRun = startingRun.Fail(new FailureReason.ContainerError(error.Message));
+        await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Error}",
+            startingRun.Id,
+            claimed.IssueNumber,
+            error.Message);
+    }
+
+    // Logs are read at dispatch rather than stored with the trigger, so log text never reaches the database. A log
+    // that cannot be read leaves its check listed without one: a missing log never blocks a revision.
+    private async Task<IReadOnlyList<FailingJobLog>> ReadFailingJobLogsAsync(
+        ClaimedIssueDispatch claimed,
+        CancellationToken cancellationToken)
+    {
+        if (claimed.Context is not DispatchContext.Revision { Trigger: RevisionTrigger.FailedChecks failedChecks })
+        {
+            return [];
+        }
+
+        List<FailingJobLog> logs = [];
+        foreach (FailingCheck check in failedChecks.FailingChecks)
+        {
+            Result<CiJobLog> result;
+            try
+            {
+                result = await failingJobLogQueries.GetFailingJobLogAsync(
+                    claimed.MonitoredRepositoryId,
+                    check,
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Reading the log of failing check {CheckName} for issue #{IssueNumber} threw; listing it without a log.",
+                    check.Name,
+                    claimed.IssueNumber);
+                continue;
+            }
+
+            if (result is Result<CiJobLog>.Success { Value: CiJobLog.Available available })
+            {
+                logs.Add(new FailingJobLog(check.Name, available.Text, available.Length, available.FailureExcerpt));
+            }
+            else if (result is Result<CiJobLog>.Failure failure)
+            {
+                logger.LogWarning(
+                    "Could not read the log of failing check {CheckName} for issue #{IssueNumber}; listing it without a log: {Error}",
+                    check.Name,
+                    claimed.IssueNumber,
+                    failure.Error.Message);
+            }
+        }
+
+        return logs;
+    }
+
+    // Most reviews need no description, so a failed read leaves the review running with the description marked
+    // unreadable rather than failing it.
+    private async Task<LivePullRequestBody> ReadPullRequestDescriptionAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        PullRequestUrl pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        Result<string> result;
+        try
+        {
+            result = await issueContentQueries.GetPullRequestDescriptionAsync(
+                claimed.MonitoredRepositoryId,
+                pullRequestUrl.Value,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                ex,
+                "Worker run {WorkerRunId} for issue #{IssueNumber} could not read the pull request description; "
+                + "the review proceeds without it.",
+                startingRun.Id,
+                claimed.IssueNumber);
+            return new LivePullRequestBody.Unreadable();
+        }
+
+        if (result is Result<string>.Success success)
+        {
+            return new LivePullRequestBody.Read(success.Value);
+        }
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} for issue #{IssueNumber} could not read the pull request description; "
+            + "the review proceeds without it: {Error}",
+            startingRun.Id,
+            claimed.IssueNumber,
+            ((Result<string>.Failure)result).Error.Message);
+
+        return new LivePullRequestBody.Unreadable();
+    }
+
+    // Resolved at use time rather than carried on the event: outbox payloads are plaintext, the stored token is not.
+    private static string? GitPatOf(RepositoryDispatchInfo? dispatchInfo) =>
+        dispatchInfo?.AccountToken is { Length: > 0 } gitPat ? gitPat : null;
+
+    /// <summary>
+    /// Pauses <paramref name="host"/> on the tracked settings, unsaved. Returns the host when this added its pause;
+    /// <see langword="null"/> when it was already paused (its backoff is left alone) or no dispatch pause row exists.
+    /// </summary>
+    private async Task<string?> StageHostPauseAsync(string host, CancellationToken cancellationToken)
+    {
+        bool added = await HostPauseStaging.StageAsync(dbContext, host, DateTimeOffset.UtcNow, logger, cancellationToken);
+        return added ? host : null;
+    }
+
+    // A Continuation or Revision resumes the branch's earlier work, so its branch goes into the base bundle. A Fresh
+    // run creates its branch from the default branch, and a restricted run gets no branch at all.
+    private static BranchName? RunBranchToPrepare(ClaimedIssueDispatch claimed, bool restricted) =>
+        !restricted && claimed.Context is DispatchContext.Continuation or DispatchContext.Revision ? claimed.BranchName : null;
+
+    private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        WorkerRoleCatalog? catalog,
+        IssueContent issueContent,
+        TrackerContext trackerContext,
+        ReviewPromptInput? reviewPrompt,
+        RunModel runModel,
+        RunSourceToken sourceToken,
+        CancellationToken cancellationToken)
+    {
+        if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
+        {
+            return Result<WorkerContainerSpec>.Fail(new Error(
+                "Worker.RoleUnavailable",
+                $"The worker role '{startingRun.Role.Name}' is not loaded: dispatch ran before the worker role catalog loaded. Retry the issue."));
+        }
+
+        int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+        Toolchain toolchain = await dbContext.GetRecordedToolchainAsync(catalog.Image.ImageId, cancellationToken);
+        string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+        ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
+        WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
+        IReadOnlyList<FailingJobLog> failingJobLogs = await ReadFailingJobLogsAsync(claimed, cancellationToken);
+
+        bool restricted = role.Capability == WorkerCapability.Restricted;
+
+        // Nested Docker is an operator switch (ADR 0110) that only a profile able to run commands can use (ADR 0098).
+        bool nestedDocker = role.Capability.UsesDocker()
+            && await settingsQueries.GetNestedDockerEnabledAsync(cancellationToken);
+
+        Result<string> systemPromptResult = restricted
+            ? SystemPromptBuilder.BuildRestricted(
+                principles: content.PrinciplesFor(role.Role),
+                issueNumber: claimed.IssueNumber,
+                systemPromptTemplate: role.SystemPromptTemplate,
+                issueContent,
+                toolchain,
+                claimed.Clarifications ?? [],
+                trackerContext: trackerContext,
+                review: reviewPrompt,
+                decisionRule: content.DecisionRuleFor(role.Role))
+            : SystemPromptBuilder.Build(
+                principles: content.PrinciplesFor(role.Role),
+                issueNumber: claimed.IssueNumber,
+                systemPromptTemplate: role.SystemPromptTemplate,
+                claimed.Context,
+                issueContent,
+                timeoutMinutes,
+                toolchain,
+                failingJobLogs,
+                claimed.Clarifications ?? [],
+                trackerContext: trackerContext,
+                decisionRule: content.DecisionRuleFor(role.Role));
+
+        if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
+        {
+            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)systemPromptResult).Error);
+        }
+
+        string systemPrompt = systemPromptSuccess.Value;
+
+        string workerPrompt = role.TaskPromptTemplate
+            .Replace(RolePromptPlaceholders.IssueNumber, claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
+        string? authMode = await credentialQueries.GetAuthModeAsync(cancellationToken);
+
+        if (authMode is null)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+        }
+
+        bool isOAuthMode = authMode == "OAuth";
+
+        (string Key, string Value)? authVar = isOAuthMode
+            ? null
+            : await credentialQueries.GetAuthEnvironmentVariableAsync(cancellationToken);
+
+        if (!isOAuthMode && authVar is null)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.NoAuthConfigured", "No authentication credential configured. Configure an API key or OAuth token in Settings."));
+        }
+
+        Dictionary<string, string> envVars = new()
+        {
+            ["CLONE_URL"] = claimed.CloneUrl.ToString(),
+            ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
+            ["SYSTEM_PROMPT"] = systemPrompt,
+            ["WORKER_PROMPT"] = workerPrompt,
+            ["WORKER_ROLE"] = role.Role.Name,
+            ["WORKER_CAPABILITY"] = role.Capability.ToName(),
+            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, runModel.Model, runModel.Effort),
+        };
+
+        if (nestedDocker)
+        {
+            envVars["FOUNDRY_NESTED_DOCKER"] = "1";
+        }
+
+        // A repository with Package Sources restores them through the Package Source Proxy (ADR 0112); the entrypoint
+        // writes this config and points RestoreConfigFile at it. Base64 keeps the XML one env line. The entrypoint
+        // requests the proxy URL before Claude starts and fails the bootstrap when it gets no answer, so a run never
+        // writes code it cannot restore.
+        if (await repositoryDispatchQueries.GetWorkerNuGetConfigAsync(claimed.MonitoredRepositoryId, sourceToken.Value, cancellationToken) is { } nuGetConfig)
+        {
+            envVars[NuGetConfigVariable] = Convert.ToBase64String(Encoding.UTF8.GetBytes(nuGetConfig.Xml));
+            envVars[PackageProxyUrlVariable] = nuGetConfig.ProxyBaseUrl.AbsoluteUri;
+        }
+
+        // A restricted run gets no branch.
+        if (!restricted && claimed.BranchName is { } branchName)
+        {
+            envVars["BRANCH_NAME"] = branchName.Value;
+        }
+
+        // The entrypoint checks the reviewed commit out read-only; the Publisher already bundled it (ADR 0114).
+        if (reviewPrompt is not null)
+        {
+            envVars[ReviewDispatch.ReviewCommitVariable] = reviewPrompt.Facts.ReviewedCommit.Value;
+        }
+
+        // The worker clones the base bundle from the Hand-off volume and leaves its Run bundle there (ADR 0100). It holds
+        // no provider credential, so the Publisher, not the worker, pushes that bundle.
+        List<VolumeMount> volumeMounts =
+        [
+            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(startingRun.Id), WorkerVolumeNames.HandOffContainerPath),
+        ];
+
+        if (isOAuthMode)
+        {
+            await orchestrator.EnsureCredentialVolumeAsync(cancellationToken);
+            volumeMounts.Add(new VolumeMount(CredentialVolume.VolumeName, CredentialVolume.ContainerPath));
+            // Only the credential store is shared; CLAUDE_CONFIG_DIR is left at the container-local ~/.claude.
+            envVars[CredentialVolume.SecureStorageDirEnvVar] = CredentialVolume.ContainerPath;
+        }
+        else
+        {
+            envVars[authVar!.Value.Key] = authVar.Value.Value;
+        }
+
+        Dictionary<string, string> labels = new()
+        {
+            ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
+        };
+
+        WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
+            imageTag,
+            envVars,
+            labels,
+            ["/entrypoint.sh"])
+        {
+            MemoryLimitMb = limits.MemoryLimitMb,
+            CpuLimit = limits.CpuLimit,
+            PidsLimit = limits.PidsLimit,
+            VolumeMounts = volumeMounts,
+            // The worker reaches the Package Source Proxy at host.docker.internal. Docker Desktop maps that name to its own
+            // Windows-host address (192.168.65.254 and an IPv6 twin), not to the WSL2 distro Foundry may run in, so the
+            // resolver picks the entry per dispatch instead of always using host-gateway.
+            ExtraHosts = [await hostEntryResolver.ResolveAsync(cancellationToken)],
+        });
+
+        return nestedDocker
+            ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))
+            : Result<WorkerContainerSpec>.Ok(spec);
+    }
+
+    private static WorkerContainerSpec ApplyRootlessDinD(WorkerContainerSpec spec, WorkerRunId runId)
+    {
+        return spec with
+        {
+            Capabilities = RootlessDindRunSpec.Capabilities,
+            SecurityOptions = RootlessDindRunSpec.SecurityOptions,
+            Devices = RootlessDindRunSpec.Devices,
+            UnmaskSystemPaths = RootlessDindRunSpec.UnmaskSystemPaths,
+            VolumeMounts =
+            [
+                .. spec.VolumeMounts,
+                new VolumeMount(WorkerVolumeNames.DataRootVolumeName(runId), RootlessDindRunSpec.DataRootContainerPath),
+            ],
+        };
+    }
+}

@@ -11,7 +11,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed partial class HandleAsync
 {
@@ -48,7 +48,7 @@ public sealed partial class HandleAsync
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(demand: ImplementDemand.Routine), TestContext.Current.CancellationToken);
@@ -63,7 +63,7 @@ public sealed partial class HandleAsync
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildEvent(demand: ImplementDemand.Demanding), TestContext.Current.CancellationToken);
@@ -96,7 +96,7 @@ public sealed partial class HandleAsync
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildHandler(
+        ClaimedRunPipeline sut = BuildHandler(
             orchestrator: orchestrator,
             roleCatalog: new StubWorkerRoleCatalogStore(CatalogWithRestricted(WorkerRole.Triage)));
 
@@ -115,7 +115,7 @@ public sealed partial class HandleAsync
         // Arrange
         await StoreTierModelsAndRoleModelsAsync();
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
 
         // Act
         await sut.HandleAsync(BuildReviewEvent(), TestContext.Current.CancellationToken);

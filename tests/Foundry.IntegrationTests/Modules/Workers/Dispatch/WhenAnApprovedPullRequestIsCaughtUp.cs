@@ -15,6 +15,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
+using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Roles;
@@ -25,6 +26,7 @@ using Foundry.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -186,6 +188,7 @@ public sealed class WhenAnApprovedPullRequestIsCaughtUp : IAsyncDisposable
 
         await HandleAsync(new WorkerCapacityAvailable(WorkerRunId.New()), ct);
         await HandleAsync(await ReadOutboxAsync<IssueClaimed>(ct), ct);
+        await StartClaimedRunsAsync(ct);
     }
 
     private async Task<MonitoredRepositoryId> SeedEnvironmentAsync(CancellationToken ct)
@@ -234,6 +237,16 @@ public sealed class WhenAnApprovedPullRequestIsCaughtUp : IAsyncDisposable
         dbContext.Set<Issue>().Add(issue);
         dbContext.Set<WorkerRun>().Add(active.Complete(0, branchName: null, pullRequestUrl: null, reviewVerdict: approval));
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    // Hosted services are off in this host, so the starter IssueClaimedHandler signals runs one tick here.
+    private async Task StartClaimedRunsAsync(CancellationToken ct)
+    {
+        using WorkerRunStarter starter = new(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            _factory.Services.GetRequiredService<WorkerRunStartSignal>(),
+            NullLogger<WorkerRunStarter>.Instance);
+        await starter.TickForTest(ct);
     }
 
     private async Task HandleAsync<TEvent>(TEvent @event, CancellationToken ct)

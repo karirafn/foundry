@@ -15,7 +15,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerRunStarterTests;
 
 public sealed partial class HandleAsync
 {
@@ -70,7 +70,7 @@ public sealed partial class HandleAsync
         IssueId issueId = IssueId.New();
         WorkerRunId earlierRunId = await SeedEarlierReviewAsync(issueId, EarlierVerdict());
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -99,7 +99,7 @@ public sealed partial class HandleAsync
         IssueId issueId = IssueId.New();
         await SeedEarlierReviewAsync(issueId, EarlierVerdict());
         StubIssueContentQueries contentQueries = ReviewContentQueries();
-        IssueClaimedHandler sut = BuildReviewHandler(issueContentQueries: contentQueries);
+        ClaimedRunPipeline sut = BuildReviewHandler(issueContentQueries: contentQueries);
 
         // Act
         await sut.HandleAsync(
@@ -119,7 +119,7 @@ public sealed partial class HandleAsync
         // Arrange
         IssueId issueId = IssueId.New();
         await SeedEarlierReviewAsync(issueId, EarlierVerdict(outcome));
-        IssueClaimedHandler sut = BuildReviewHandler();
+        ClaimedRunPipeline sut = BuildReviewHandler();
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -148,7 +148,7 @@ public sealed partial class HandleAsync
         WorkerRunId originalRunId = WorkerRunId.New();
         RecordedReviewVerdict carriedOnce = EarlierVerdict().CarryTo("2222222222222222222222222222222222222222", originalRunId);
         await SeedEarlierReviewAsync(issueId, carriedOnce);
-        IssueClaimedHandler sut = BuildReviewHandler();
+        ClaimedRunPipeline sut = BuildReviewHandler();
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -168,7 +168,7 @@ public sealed partial class HandleAsync
         IssueId issueId = IssueId.New();
         await SeedEarlierReviewAsync(issueId, EarlierVerdict());
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -188,7 +188,7 @@ public sealed partial class HandleAsync
         IssueId issueId = IssueId.New();
         await SeedEarlierReviewAsync(issueId, EarlierVerdict());
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -208,7 +208,7 @@ public sealed partial class HandleAsync
         IssueId issueId = IssueId.New();
         await SeedEarlierReviewAsync(issueId, EarlierVerdict());
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(
+        ClaimedRunPipeline sut = BuildReviewHandler(
             orchestrator: orchestrator,
             publisher: new FakePublisher(reviewPacket: new ReviewPacketFacts(ReviewPacket.ChangedPaths, patchId: null)));
         WorkerRunId runId = WorkerRunId.New();
@@ -230,7 +230,7 @@ public sealed partial class HandleAsync
         IssueId issueId = IssueId.New();
         await SeedEarlierReviewAsync(issueId, EarlierVerdict(ReviewVerdictOutcome.ChangesRequested));
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act
@@ -248,7 +248,7 @@ public sealed partial class HandleAsync
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
-        IssueClaimedHandler sut = BuildReviewHandler(orchestrator: orchestrator);
+        ClaimedRunPipeline sut = BuildReviewHandler(orchestrator: orchestrator);
         WorkerRunId runId = WorkerRunId.New();
 
         // Act

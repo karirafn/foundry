@@ -116,6 +116,8 @@ public static class WorkersModule
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
+        services.AddScoped<WorkerRunStart>();
+        services.AddSingleton<WorkerRunStartSignal>();
         services.AddScoped<WorkerRunPublisher>();
         services.AddScoped<HostProber>();
         services.AddScoped<PackageProxyProber>();
@@ -127,6 +129,7 @@ public static class WorkersModule
         services.AddHostedService<WorkerImageRebuildScheduler>();
         services.AddHostedService(sp => sp.GetRequiredService<WorkerImageToolchainRecorder>());
         services.AddHostedService<StaleStartingRunService>();
+        services.AddHostedService<WorkerRunStarter>();
         services.AddHostedService<StaleReservationService>();
         services.AddHostedService<RunTranscriptRetentionService>();
         services.AddHostedService<HostProbeService>();
