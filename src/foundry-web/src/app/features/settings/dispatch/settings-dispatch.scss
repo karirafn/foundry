@@ -1,7 +1,22 @@
-@use '../settings-shared' as *;
 @use '../../../../styles/controls' as *;
+@use '../../../../styles/settings-form' as *;
 
 .general-settings {
+  @include settings-form-section;
+  @include settings-form-field;
+  @include settings-form-field-hint;
+  @include settings-form-number-input;
+  @include settings-form-text-input;
+  @include settings-form-errors;
+  @include settings-form-save;
+  @include settings-form-limits;
+  @include settings-form-checkbox-row;
+
+  &__dispatch-form,
+  &__limits-form {
+    @include settings-form-stack;
+  }
+
   &__webhook-port {
     display: flex;
     flex-direction: column;

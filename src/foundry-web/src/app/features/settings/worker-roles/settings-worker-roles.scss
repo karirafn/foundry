@@ -1,3 +1,12 @@
-// Only the shared settings styles: they already sit near the 10 kB component style budget, so
-// page layout reuses shared classes and the grid styles live in role-card-grid.scss.
-@use '../settings-shared' as *;
+// Only the shared settings styles: page layout reuses shared classes and the grid styles live in
+// role-card-grid.scss.
+@use '../../../../styles/settings-form' as *;
+
+.general-settings {
+  @include settings-form-section;
+  @include settings-form-field;
+  @include settings-form-callout;
+  @include settings-form-errors;
+  @include settings-form-retry-btn;
+  @include settings-form-image-status;
+}

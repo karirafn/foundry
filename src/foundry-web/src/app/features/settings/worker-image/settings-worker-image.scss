@@ -1,1 +1,75 @@
-@use '../settings-shared' as *;
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/settings-form' as *;
+
+.general-settings {
+  @include settings-form-section;
+  @include settings-form-field;
+  @include settings-form-field-hint;
+  @include settings-form-callout;
+  @include settings-form-text-input;
+  @include settings-form-errors;
+  @include settings-form-save;
+  @include settings-form-retry-btn;
+  @include settings-form-image-status;
+  @include settings-form-checkbox-row;
+
+  &__image-form {
+    @include settings-form-stack;
+  }
+
+  &__nested-docker-form {
+    border-top: 1px solid var(--fd-border-default);
+    margin-top: var(--fd-spacing-xl);
+    padding-top: var(--fd-spacing-xl);
+  }
+
+  // Checkbox toggle: checkbox + label row (__toggle-row, shared with __checkbox-label) with the hint stacked
+  // underneath, indented to the label text.
+  &__toggle {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__toggle-hint {
+    margin-left: calc(16px + var(--fd-spacing-sm));
+  }
+
+  // Groups the status/alert live regions above Save into one column gap. Regions stay in
+  // the DOM (so role="status"/"alert" still announce) but collapse to zero height when empty.
+  &__image-feedback {
+    display: flex;
+    flex-direction: column;
+
+    > :not(:empty):not(.sr-only) ~ :not(:empty) {
+      margin-top: var(--fd-spacing-xs);
+    }
+  }
+
+  &__image-spinner {
+    animation: gs-spin 1s linear infinite;
+    border: 2px solid var(--fd-border-default);
+    border-radius: 50%;
+    border-top-color: var(--fd-text-link);
+    flex-shrink: 0;
+    height: 14px;
+    width: 14px;
+  }
+
+  @keyframes gs-spin { to { transform: rotate(360deg); } }
+
+  &__image-log {
+    background: var(--fd-bg-error-subtle);
+    border: 1px solid var(--fd-state-failed);
+    border-radius: var(--fd-radius-sm);
+    font-family: var(--fd-font-mono);
+    font-size: 0.75rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    white-space: pre-wrap;
+    word-break: break-word;
+
+    &:focus-visible { @include focus-ring; }
+  }
+}
