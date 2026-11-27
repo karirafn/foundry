@@ -14,6 +14,13 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # 11.0.0 ships only `tools/net11.0/GetDocument.Insider.dll`, so the net10.0
+      # build fails with "The application to execute does not exist". Drop this
+      # entry once the repo targets net11.0.
+      - dependency-name: Microsoft.Extensions.ApiDescription.Server
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: npm
     directory: /src/foundry-web
