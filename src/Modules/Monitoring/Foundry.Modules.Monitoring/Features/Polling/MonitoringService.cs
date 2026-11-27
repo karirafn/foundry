@@ -356,9 +356,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     }
 
     /// <summary>
-    /// Runs every nudged pass that is due at <paramref name="now"/>. Each key is rate-capped at the
-    /// repository's normal effective poll interval, so webhook mode never polls a pass more often than
-    /// normal polling would.
+    /// Runs every nudged pass that is due at <paramref name="now"/>. Each key is rate-capped at
+    /// <see cref="NudgeScheduler.RateFloor"/>, independent of the repository's poll interval.
     /// </summary>
     internal async Task ExecuteNudgesAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -373,19 +372,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         IIssueProviderFactory providerFactory = scope.ServiceProvider.GetRequiredService<IIssueProviderFactory>();
         ICredentialResolver credentialResolver = scope.ServiceProvider.GetRequiredService<ICredentialResolver>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
-        IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
         MergeStep? mergeStep = scope.ServiceProvider.GetService<MergeStep>();
         AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
 
-        TimeSpan pollInterval = TimeSpan.FromSeconds(await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken));
-
         Dictionary<MonitoredRepositoryId, MonitoredRepository> repos =
             (await LoadActiveReposAsync(dbContext, cancellationToken)).ToDictionary(r => r.Id);
 
-        IReadOnlyList<NudgeKey> due = _scheduler.TakeDue(
-            now,
-            id => repos.TryGetValue(id, out MonitoredRepository? repo) ? repo.EffectivePollInterval(pollInterval) : null);
+        IReadOnlyList<NudgeKey> due = _scheduler.TakeDue(now, repos.ContainsKey);
 
         foreach (IGrouping<MonitoredRepositoryId, NudgeKey> group in due.GroupBy(k => k.RepositoryId))
         {

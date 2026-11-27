@@ -11,11 +11,10 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Webhooks.Nudges.NudgeSch
 public sealed class TakeDue
 {
     private static readonly DateTimeOffset T0 = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
     private static readonly MonitoredRepositoryId RepoId = MonitoredRepositoryId.New();
     private static readonly NudgeKey Key = new(RepoId, NudgePass.Checks, 7);
 
-    private static TimeSpan? IntervalFor(MonitoredRepositoryId id) => id == RepoId ? Interval : null;
+    private static bool IsMonitored(MonitoredRepositoryId id) => id == RepoId;
 
     [Fact]
     public void WhenSeveralNudgesForOneKeyArePending_RunsOnce()
@@ -27,46 +26,78 @@ public sealed class TakeDue
         scheduler.Add(new Nudge(Key), T0.AddSeconds(2));
 
         // Act
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0.AddSeconds(2), IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0.AddSeconds(2), IsMonitored);
 
         // Assert
         due.ShouldBe([Key]);
-        scheduler.TakeDue(T0.AddSeconds(2), IntervalFor).ShouldBeEmpty();
+        scheduler.TakeDue(T0.AddSeconds(2), IsMonitored).ShouldBeEmpty();
     }
 
     [Fact]
-    public void WhenKeyRanLessThanOneIntervalAgo_CoalescesIntoOneTrailingRunAtIntervalEnd()
+    public void WhenSingleNudgeArrives_IsDueAfterTheCoalescingWindow()
     {
         // Arrange
         NudgeScheduler scheduler = new();
         scheduler.Add(new Nudge(Key), T0);
-        scheduler.TakeDue(T0, IntervalFor);
+
+        // Act
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0 + NudgeScheduler.CoalescingWindow, IsMonitored);
+
+        // Assert
+        due.ShouldBe([Key]);
+    }
+
+    [Fact]
+    public void WhenKeyRanFiveSecondsAgoAndRepositoryHasFiveMinutePollInterval_TrailingRunIsStillAtRunPlusFloor()
+    {
+        // Arrange — the scheduler never sees the repository's poll interval, so the floor is fixed
+        NudgeScheduler scheduler = new();
+        scheduler.Add(new Nudge(Key), T0);
+        scheduler.TakeDue(T0, IsMonitored);
+        scheduler.Add(new Nudge(Key), T0.AddSeconds(5));
+
+        // Act
+        IReadOnlyList<NudgeKey> early = scheduler.TakeDue(T0.AddSeconds(9), IsMonitored);
+        IReadOnlyList<NudgeKey> trailing = scheduler.TakeDue(T0.AddSeconds(10), IsMonitored);
+
+        // Assert
+        early.ShouldBeEmpty();
+        trailing.ShouldBe([Key]);
+    }
+
+    [Fact]
+    public void WhenKeyRanLessThanOneFloorAgo_CoalescesIntoOneTrailingRunAtFloorEnd()
+    {
+        // Arrange
+        NudgeScheduler scheduler = new();
+        scheduler.Add(new Nudge(Key), T0);
+        scheduler.TakeDue(T0, IsMonitored);
 
         scheduler.Add(new Nudge(Key), T0.AddSeconds(5));
         scheduler.Add(new Nudge(Key), T0.AddSeconds(10));
 
         // Act
-        IReadOnlyList<NudgeKey> early = scheduler.TakeDue(T0.AddSeconds(29), IntervalFor);
+        IReadOnlyList<NudgeKey> early = scheduler.TakeDue(T0 + NudgeScheduler.RateFloor - TimeSpan.FromSeconds(1), IsMonitored);
         DateTimeOffset? wake = scheduler.NextWakeAt;
-        IReadOnlyList<NudgeKey> trailing = scheduler.TakeDue(T0.AddSeconds(30), IntervalFor);
+        IReadOnlyList<NudgeKey> trailing = scheduler.TakeDue(T0 + NudgeScheduler.RateFloor, IsMonitored);
 
         // Assert
         early.ShouldBeEmpty();
-        wake.ShouldBe(T0.AddSeconds(30));
+        wake.ShouldBe(T0 + NudgeScheduler.RateFloor);
         trailing.ShouldBe([Key]);
     }
 
     [Fact]
-    public void WhenNudgeArrivesExactlyOneIntervalAfterPreviousRun_RunsImmediately()
+    public void WhenNudgeArrivesExactlyOneFloorAfterPreviousRun_RunsImmediately()
     {
         // Arrange
         NudgeScheduler scheduler = new();
         scheduler.Add(new Nudge(Key), T0);
-        scheduler.TakeDue(T0, IntervalFor);
-        scheduler.Add(new Nudge(Key), T0 + Interval);
+        scheduler.TakeDue(T0, IsMonitored);
+        scheduler.Add(new Nudge(Key), T0 + NudgeScheduler.RateFloor);
 
         // Act
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0 + Interval, IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0 + NudgeScheduler.RateFloor, IsMonitored);
 
         // Assert
         due.ShouldBe([Key]);
@@ -81,9 +112,9 @@ public sealed class TakeDue
         scheduler.Add(new Nudge(Key, deadline), T0);
 
         // Act
-        IReadOnlyList<NudgeKey> before = scheduler.TakeDue(deadline.AddSeconds(-1), IntervalFor);
+        IReadOnlyList<NudgeKey> before = scheduler.TakeDue(deadline.AddSeconds(-1), IsMonitored);
         DateTimeOffset? wake = scheduler.NextWakeAt;
-        IReadOnlyList<NudgeKey> at = scheduler.TakeDue(deadline, IntervalFor);
+        IReadOnlyList<NudgeKey> at = scheduler.TakeDue(deadline, IsMonitored);
 
         // Assert
         before.ShouldBeEmpty();
@@ -100,7 +131,7 @@ public sealed class TakeDue
         scheduler.Add(new Nudge(orphan), T0);
 
         // Act
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0, IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0, IsMonitored);
 
         // Assert
         due.ShouldBeEmpty();
@@ -119,7 +150,7 @@ public sealed class TakeDue
         scheduler.Add(new Nudge(listing), T0);
 
         // Act
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0, IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0, IsMonitored);
 
         // Assert
         due.Count.ShouldBe(3);
@@ -134,7 +165,7 @@ public sealed class TakeDue
 
         // Act
         scheduler.Add(deferred, T0);
-        scheduler.Add(deferred, T0.AddSeconds(30));
+        scheduler.Add(deferred, T0 + NudgeScheduler.RateFloor);
 
         // Assert
         scheduler.PendingCount.ShouldBe(1);
@@ -147,13 +178,13 @@ public sealed class TakeDue
         NudgeKey reviewKey = new(RepoId, NudgePass.Review, 7);
         NudgeScheduler scheduler = new();
         scheduler.Add(new Nudge(reviewKey), T0);
-        scheduler.TakeDue(T0, IntervalFor);
+        scheduler.TakeDue(T0, IsMonitored);
         scheduler.Add(new Nudge(reviewKey, T0.AddMinutes(2)), T0.AddSeconds(1));
 
         // Act
-        IReadOnlyList<NudgeKey> early = scheduler.TakeDue(T0.AddMinutes(1), IntervalFor);
+        IReadOnlyList<NudgeKey> early = scheduler.TakeDue(T0.AddMinutes(1), IsMonitored);
         DateTimeOffset? wake = scheduler.NextWakeAt;
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0.AddMinutes(2), IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0.AddMinutes(2), IsMonitored);
 
         // Assert
         early.ShouldBeEmpty();
@@ -162,77 +193,76 @@ public sealed class TakeDue
     }
 
     [Fact]
-    public void WhenDeadlineArrivesLessThanOneIntervalAfterPreviousRun_RunsAtTheDeadline()
+    public void WhenDeadlineArrivesLessThanOneFloorAfterPreviousRun_RunsAtTheDeadline()
     {
-        // Arrange — the key ran at T0; a deadline nudge for T0 + 10 s is scheduled right after
+        // Arrange — the key ran at T0; a deadline nudge for T0 + 5 s is scheduled right after
         NudgeScheduler scheduler = new();
         scheduler.Add(new Nudge(Key), T0);
-        scheduler.TakeDue(T0, IntervalFor);
-        DateTimeOffset deadline = T0.AddSeconds(10);
+        scheduler.TakeDue(T0, IsMonitored);
+        DateTimeOffset deadline = T0.AddSeconds(5);
         scheduler.Add(new Nudge(Key, deadline), T0.AddSeconds(1));
 
         // Act
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(deadline, IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(deadline, IsMonitored);
 
         // Assert
         due.ShouldBe([Key]);
     }
 
     [Fact]
-    public void WhenDeadlineNudgeRuns_DoesNotStampTheRateCapWindow()
+    public void WhenDeadlineNudgeRuns_DoesNotStampTheFloorWindow()
     {
-        // Arrange — a deadline run at T0 + 10 s, then a webhook nudge one second later
+        // Arrange — a deadline run at T0 + 5 s, then a webhook nudge one second later
         NudgeScheduler scheduler = new();
-        DateTimeOffset deadline = T0.AddSeconds(10);
+        DateTimeOffset deadline = T0.AddSeconds(5);
         scheduler.Add(new Nudge(Key, deadline), T0);
-        scheduler.TakeDue(deadline, IntervalFor);
+        scheduler.TakeDue(deadline, IsMonitored);
         scheduler.Add(new Nudge(Key), deadline.AddSeconds(1));
 
         // Act
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(deadline.AddSeconds(1), IntervalFor);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(deadline.AddSeconds(1), IsMonitored);
 
-        // Assert — no webhook-originated run preceded it, so nothing caps it
+        // Assert — no webhook-originated run preceded it, so nothing floors it
         due.ShouldBe([Key]);
     }
 
     [Fact]
-    public void WhenDeadlineMergesWithCappedWebhookNudge_RunsOnceImmediatelyAndConsumesIt()
+    public void WhenDeadlineMergesWithFlooredWebhookNudge_RunsOnceImmediatelyAndConsumesIt()
     {
-        // Arrange — a webhook run at T0, a capped webhook nudge waiting for T0 + 30 s, a deadline at T0 + 10 s
+        // Arrange — a webhook run at T0, a floored webhook nudge waiting for T0 + 10 s, a deadline at T0 + 8 s
         NudgeScheduler scheduler = new();
         scheduler.Add(new Nudge(Key), T0);
-        scheduler.TakeDue(T0, IntervalFor);
+        scheduler.TakeDue(T0, IsMonitored);
         scheduler.Add(new Nudge(Key), T0.AddSeconds(5));
-        DateTimeOffset deadline = T0.AddSeconds(10);
+        DateTimeOffset deadline = T0.AddSeconds(8);
         scheduler.Add(new Nudge(Key, deadline), T0.AddSeconds(6));
 
         // Act
-        IReadOnlyList<NudgeKey> atDeadline = scheduler.TakeDue(deadline, IntervalFor);
-        IReadOnlyList<NudgeKey> atIntervalEnd = scheduler.TakeDue(T0 + Interval, IntervalFor);
-        scheduler.Add(new Nudge(Key), T0 + Interval);
-        IReadOnlyList<NudgeKey> nextWebhook = scheduler.TakeDue(T0 + Interval, IntervalFor);
+        IReadOnlyList<NudgeKey> atDeadline = scheduler.TakeDue(deadline, IsMonitored);
+        IReadOnlyList<NudgeKey> atFloorEnd = scheduler.TakeDue(T0 + NudgeScheduler.RateFloor, IsMonitored);
+        scheduler.Add(new Nudge(Key), T0 + NudgeScheduler.RateFloor);
+        IReadOnlyList<NudgeKey> nextWebhook = scheduler.TakeDue(T0 + NudgeScheduler.RateFloor, IsMonitored);
 
-        // Assert — the deadline run consumed the capped nudge and left the cap window at T0
+        // Assert — the deadline run consumed the floored nudge and left the floor window at T0
         atDeadline.ShouldBe([Key]);
-        atIntervalEnd.ShouldBeEmpty();
+        atFloorEnd.ShouldBeEmpty();
         nextWebhook.ShouldBe([Key]);
     }
 
     [Fact]
-    public void WhenRebaseStepSchedulesLandingRecheck_RunsAfterLandingPollDelayNotOnePollIntervalLater()
+    public void WhenRebaseStepSchedulesLandingRecheck_RunsAfterLandingPollDelay()
     {
-        // Arrange — a 5-minute poll interval; the rebase pass ran at T0 and requested the rebase
-        TimeSpan pollInterval = TimeSpan.FromMinutes(5);
+        // Arrange — the rebase pass ran at T0 and requested the rebase
         NudgeKey rebaseKey = new(RepoId, NudgePass.Rebase, 7);
         NudgeScheduler scheduler = new();
         scheduler.Add(new Nudge(rebaseKey), T0);
-        scheduler.TakeDue(T0, _ => pollInterval);
+        scheduler.TakeDue(T0, _ => true);
         DateTimeOffset recheckAt = T0 + PendingRebase.LandingPollDelay;
         scheduler.Add(new Nudge(rebaseKey, recheckAt), T0);
 
         // Act
         DateTimeOffset? wake = scheduler.NextWakeAt;
-        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(recheckAt + NudgeScheduler.CoalescingWindow, _ => pollInterval);
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(recheckAt + NudgeScheduler.CoalescingWindow, _ => true);
 
         // Assert
         wake.ShouldBe(recheckAt);

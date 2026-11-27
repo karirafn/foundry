@@ -7,13 +7,12 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 /// owned and driven only by <see cref="Polling.MonitoringService"/>.
 /// <list type="bullet">
 /// <item>Nudges for the same <see cref="NudgeKey"/> that are pending together run once.</item>
-/// <item>An event-triggered nudge runs a key at most once per rate interval (the repository's normal
-/// effective poll interval): a nudge less than one interval after the key's previous event-triggered run
-/// coalesces into a single trailing run at the end of that interval; a nudge exactly one interval later
-/// runs immediately.</item>
-/// <item>A not-before (deadline) nudge runs at its deadline, outside the rate cap, and does not stamp the
-/// cap window; a capped event-triggered nudge pending for the same key runs with it. Each deadline producer
-/// bounds its own re-arming.</item>
+/// <item>An event-triggered nudge runs a key at most once per <see cref="RateFloor"/>: a nudge less than
+/// <see cref="RateFloor"/> after the key's previous event-triggered run joins a single trailing run at last
+/// run + <see cref="RateFloor"/>; a nudge exactly <see cref="RateFloor"/> later runs immediately.</item>
+/// <item>A not-before (deadline) nudge runs at its deadline, outside the floor, and does not stamp the
+/// floor window; a floored event-triggered nudge pending for the same key runs with it. Each deadline
+/// producer bounds its own re-arming.</item>
 /// </list>
 /// </summary>
 internal sealed class NudgeScheduler
@@ -24,7 +23,13 @@ internal sealed class NudgeScheduler
     /// </summary>
     internal static readonly TimeSpan CoalescingWindow = TimeSpan.FromSeconds(2);
 
-    /// <summary>Last-run records older than this are forgotten; any rate interval is far shorter.</summary>
+    /// <summary>
+    /// The shortest time between two event-triggered runs of one nudge key, independent of the repository's
+    /// poll interval: webhooks are the primary change signal, so their changes must appear within seconds.
+    /// </summary>
+    internal static readonly TimeSpan RateFloor = TimeSpan.FromSeconds(10);
+
+    /// <summary>Last-run records older than this are forgotten; the floor is far shorter.</summary>
     private static readonly TimeSpan LastRunRetention = TimeSpan.FromDays(1);
 
     private readonly Dictionary<NudgeKey, PendingNudge> _pending = [];
@@ -65,12 +70,12 @@ internal sealed class NudgeScheduler
 
     /// <summary>
     /// Removes and returns every key due at <paramref name="now"/>, recording each event-triggered run.
-    /// <paramref name="rateIntervalFor"/> yields the repository's rate interval, or <see langword="null"/>
-    /// when the repository is no longer monitored (its nudges are dropped).
+    /// <paramref name="isMonitored"/> is <see langword="false"/> for a repository that is no longer
+    /// monitored (its nudges are dropped).
     /// </summary>
     public IReadOnlyList<NudgeKey> TakeDue(
         DateTimeOffset now,
-        Func<MonitoredRepositoryId, TimeSpan?> rateIntervalFor)
+        Func<MonitoredRepositoryId, bool> isMonitored)
     {
         for (int i = _deferred.Count - 1; i >= 0; i--)
         {
@@ -87,7 +92,7 @@ internal sealed class NudgeScheduler
 
         foreach ((NudgeKey key, PendingNudge pending) in _pending.ToList())
         {
-            if (rateIntervalFor(key.RepositoryId) is not { } interval)
+            if (!isMonitored(key.RepositoryId))
             {
                 _pending.Remove(key);
                 continue;
@@ -95,13 +100,13 @@ internal sealed class NudgeScheduler
 
             if (pending.DeadlineReached)
             {
-                // A deadline run leaves the cap window alone, so an event arriving just after it is not deferred.
+                // A deadline run leaves the floor window alone, so an event arriving just after it is not deferred.
                 _pending.Remove(key);
                 due.Add(key);
                 continue;
             }
 
-            DateTimeOffset dueAt = DueAt(key, pending.ReceivedAt, interval);
+            DateTimeOffset dueAt = DueAt(key, pending.ReceivedAt);
             if (dueAt <= now)
             {
                 _pending.Remove(key);
@@ -145,11 +150,11 @@ internal sealed class NudgeScheduler
         NextWakeAt = Earliest(NextWakeAt, receivedAt);
     }
 
-    private DateTimeOffset DueAt(NudgeKey key, DateTimeOffset receivedAt, TimeSpan interval)
+    private DateTimeOffset DueAt(NudgeKey key, DateTimeOffset receivedAt)
     {
-        if (_lastRun.TryGetValue(key, out DateTimeOffset lastRun) && lastRun + interval > receivedAt)
+        if (_lastRun.TryGetValue(key, out DateTimeOffset lastRun) && lastRun + RateFloor > receivedAt)
         {
-            return lastRun + interval;
+            return lastRun + RateFloor;
         }
 
         return receivedAt;
