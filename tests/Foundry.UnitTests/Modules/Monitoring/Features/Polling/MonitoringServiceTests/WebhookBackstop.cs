@@ -129,6 +129,46 @@ public sealed class WebhookBackstop : IAsyncDisposable
         (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Pending);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WhenNudgeForTheChangedCategoryIsWaiting_HookStaysActiveAndIsNotReRegistered(bool deferred)
+    {
+        // Arrange — the delivery for issue 5 was verified; its listing nudge has not run yet.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            registerWebhooks: true));
+        service.Scheduler.Add(
+            new Nudge(new NudgeKey(repoId, NudgePass.IssueListing), deferred ? Now.AddMinutes(1) : null),
+            Now);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Active);
+    }
+
+    [Fact]
+    public async Task WhenNudgeForAnotherCategoryIsWaiting_ChangeStillCountsAsMissed()
+    {
+        // Arrange — a pending review nudge exempts only the review category.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        MonitoringService service = BuildService(BuildServiceProvider(provider, ingressConfigured: true));
+        service.Scheduler.Add(new Nudge(new NudgeKey(repoId, NudgePass.Review, 7)), Now);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Silent);
+    }
+
     [Fact]
     public async Task WhenAlreadySilent_ADueScheduledPollDoesNotRetryRegistration()
     {

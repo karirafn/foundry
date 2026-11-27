@@ -335,12 +335,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             // Missed change: a scheduled poll of an Active hook found a change the provider has a webhook
             // event for, yet no delivery announced — fall back to the normal interval until the next
             // verified delivery. Changes the provider has no event for (GitLab issue links and protected
-            // branches) never count. The startup catch-up is exempt: a change it finds was lost to
+            // branches) never count. A category with a nudge still waiting for this repository was announced
+            // by a delivery, so it does not count either. The startup catch-up is exempt: a change it finds was lost to
             // downtime, not to a silent hook.
             if (!catchUp
                 && backstopInterval is not null
                 && pollResult is Result<PollChanges>.Success pollSuccess
-                && IsMissedChange(pollSuccess.Value, resolvedProvider.Credential)
+                && IsMissedChange(pollSuccess.Value & ~_scheduler.PendingCategories(repo.Id), resolvedProvider.Credential)
                 && repo.RecordMissedChange())
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
