@@ -25,13 +25,15 @@ public sealed class GetReferencedIssueAsync
     private static readonly Uri GitHubComBaseUrl = new("https://api.github.com");
 
     // Captured 2026-11-12 with the issueOrPullRequest(number: 847) query on karirafn/foundry; body trimmed to 40 characters.
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
     private const string Captured847 = """
-        {"data":{"rateLimit":{"cost":1,"limit":5000,"remaining":4986,"resetAt":"2026-11-12T17:16:50Z"},"repository":{"issueOrPullRequest":{"__typename":"Issue","body":"## Summary\n\nEvery question a worker run ","closedByPullRequestsReferences":{"nodes":[{"state":"MERGED"}]},"labels":{"nodes":[{"name":"feature"},{"name":"foundry"}]},"state":"CLOSED","title":"feat(workers): each question a run asks carries one recommendation, and a reply accepts the ones it leaves unaddressed"}}}}
+        {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issueOrPullRequest":{"__typename":"Issue","body":"## Summary\n\nEvery question a worker run ","closedByPullRequestsReferences":{"nodes":[{"state":"MERGED"}]},"labels":{"nodes":[{"name":"feature"},{"name":"foundry"}]},"state":"CLOSED","title":"feat(workers): each question a run asks carries one recommendation, and a reply accepts the ones it leaves unaddressed"}}}}
         """;
 
     // Captured 2026-11-12 with the issueOrPullRequest(number: 865) query on karirafn/foundry; body trimmed to 40 characters.
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
     private const string Captured865 = """
-        {"data":{"rateLimit":{"cost":1,"limit":5000,"remaining":4904,"resetAt":"2026-11-12T16:44:39Z"},"repository":{"issueOrPullRequest":{"__typename":"Issue","body":"## Summary\n\nBoth provider clients cut ev","closedByPullRequestsReferences":{"nodes":[{"state":"OPEN"}]},"labels":{"nodes":[{"name":"bug"}]},"state":"OPEN","title":"fix(monitoring): a long comment reaches the run whole, and the prompt fits the clarification log instead of each comment being cut at 4,000 characters"}}}}
+        {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issueOrPullRequest":{"__typename":"Issue","body":"## Summary\n\nBoth provider clients cut ev","closedByPullRequestsReferences":{"nodes":[{"state":"OPEN"}]},"labels":{"nodes":[{"name":"bug"}]},"state":"OPEN","title":"fix(monitoring): a long comment reaches the run whole, and the prompt fits the clarification log instead of each comment being cut at 4,000 characters"}}}}
         """;
 
     private static RepositorySlug Slug => RepositorySlug.Create("karirafn/foundry").ValueOrThrow();
@@ -81,8 +83,9 @@ public sealed class GetReferencedIssueAsync
     {
         // Arrange
         // Captured 2026-11-12 with the issueOrPullRequest(number: 868) query on karirafn/foundry.
+        // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
         string capturedPullRequest = """
-            {"data":{"rateLimit":{"cost":1,"limit":5000,"remaining":4902,"resetAt":"2026-11-12T16:44:39Z"},"repository":{"issueOrPullRequest":{"__typename":"PullRequest"}}}}
+            {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issueOrPullRequest":{"__typename":"PullRequest"}}}}
             """;
         GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, capturedPullRequest));
 
@@ -99,8 +102,9 @@ public sealed class GetReferencedIssueAsync
     {
         // Arrange
         // Captured 2026-11-12 with the issueOrPullRequest(number: 999999) query on karirafn/foundry.
+        // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
         string capturedNotFound = """
-            {"data":{"rateLimit":{"cost":1,"remaining":4901,"limit":5000,"resetAt":"2026-11-12T16:44:39Z"},"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"locations":[{"line":1,"column":157}],"message":"Could not resolve to an issue or pull request with the number of 999999."}]}
+            {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"locations":[{"line":1,"column":157}],"message":"Could not resolve to an issue or pull request with the number of 999999."}]}
             """;
         GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, capturedNotFound));
 
@@ -163,7 +167,7 @@ public sealed class GetReferencedIssueAsync
     }
 
     [Fact]
-    public async Task WhenReading_RecordsTheGraphQlHeadroom()
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
     {
         // Arrange
         InMemoryProviderRateBudget budget = new();
@@ -174,7 +178,10 @@ public sealed class GetReferencedIssueAsync
 
         // Assert
         RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
-        reading.Remaining.ShouldBe(4986);
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 
     [Fact]
@@ -193,5 +200,29 @@ public sealed class GetReferencedIssueAsync
             () => issue.IsOpen.ShouldBeFalse(),
             () => issue.Labels.ShouldBe(["feature", "foundry"]),
             () => issue.Body.ShouldStartWith("## Summary"));
+    }
+
+    [Fact]
+    public async Task WhenGitHubAnswersWithANotFoundEnvelope_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        // Captured 2026-11-12 with the issueOrPullRequest(number: 999999) query on karirafn/foundry.
+        // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+        string capturedNotFound = """
+            {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","issueOrPullRequest"],"locations":[{"line":1,"column":157}],"message":"Could not resolve to an issue or pull request with the number of 999999."}]}
+            """;
+        InMemoryProviderRateBudget budget = new();
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, capturedNotFound), budget);
+
+        // Act
+        Result<ProviderReferencedIssue> result = await ReadAsync(sut, 999999);
+
+        // Assert
+        result.ShouldBeOfType<Result<ProviderReferencedIssue>.Failure>().Error.Kind.ShouldBe(ErrorKind.NotFound);
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }

@@ -45,9 +45,13 @@ internal sealed partial class GitHubHttpClient(
     private const int MaxPermissionsLength = 200;
     private const string Ellipsis = "...";
 
-    private const string IssueListQuery = """
+    // Selected by every query: GitHub returns it inside "data", and the budget store keeps only the last reading,
+    // so a query selecting fewer fields would overwrite limit and resetAt with null.
+    private const string RateLimitSelection = "rateLimit { cost remaining limit resetAt }";
+
+    private const string IssueListQuery = $$"""
         query IssueList($owner: String!, $name: String!, $issuesAfter: String) {
-          rateLimit { cost remaining limit resetAt }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             defaultBranchRef { name }
             issues(
@@ -79,27 +83,27 @@ internal sealed partial class GitHubHttpClient(
         }
         """;
 
-    private const string IssueStateQuery = """
+    private const string IssueStateQuery = $$"""
         query IssueState($owner: String!, $name: String!, $number: Int!) {
-          rateLimit { cost remaining }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             issue(number: $number) { state }
           }
         }
         """;
 
-    private const string PrStatusQuery = """
+    private const string PrStatusQuery = $$"""
         query PrStatus($owner: String!, $name: String!, $number: Int!) {
-          rateLimit { cost remaining }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             pullRequest(number: $number) { id state merged headRefOid isDraft }
           }
         }
         """;
 
-    private const string PrReviewFeedbackQuery = """
+    private const string PrReviewFeedbackQuery = $$"""
         query PrReviewFeedback($owner: String!, $name: String!, $number: Int!) {
-          rateLimit { cost remaining }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             pullRequest(number: $number) {
               comments(first: 100) {
@@ -145,9 +149,9 @@ internal sealed partial class GitHubHttpClient(
     // for the common case. GitHub may occasionally perturb `state` when many context nodes are
     // fetched at once, but the spec says `state` is the rollup truth — classification is taken
     // from state, and contexts is enumerated only to populate FailingCheck names/urls.
-    private const string PrChecksQuery = """
+    private const string PrChecksQuery = $$"""
         query PrChecks($owner: String!, $name: String!, $pr: Int!) {
-          rateLimit { cost remaining }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             pullRequest(number: $pr) {
               commits(last: 1) {
@@ -179,9 +183,9 @@ internal sealed partial class GitHubHttpClient(
         }
         """;
 
-    private const string BlockedByPageQuery = """
+    private const string BlockedByPageQuery = $$"""
         query BlockedByPage($owner: String!, $name: String!, $number: Int!, $blockedByAfter: String) {
-          rateLimit { cost remaining }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             issue(number: $number) {
               blockedBy(first: 50, after: $blockedByAfter) {
@@ -334,8 +338,10 @@ internal sealed partial class GitHubHttpClient(
         }
 
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        GraphQlEnvelope<TData>? envelope =
-            JsonSerializer.Deserialize<GraphQlEnvelope<TData>>(responseBody, GraphQlJsonOptions);
+        GraphQlEnvelope? envelope = JsonSerializer.Deserialize<GraphQlEnvelope>(responseBody, GraphQlJsonOptions);
+
+        // GitHub charges an errored query too and still reports its rateLimit block, so the reading is taken first.
+        RecordGraphQlHeadroom(envelope?.Data);
 
         if (envelope?.Errors is { Count: > 0 } errors)
         {
@@ -356,28 +362,34 @@ internal sealed partial class GitHubHttpClient(
             return Result<TData>.Fail(onlyNotFound ? graphQlError with { Kind = ErrorKind.NotFound } : graphQlError);
         }
 
-        if (envelope?.Data is null)
+        if (envelope?.Data is not { ValueKind: not JsonValueKind.Null } data
+            || data.Deserialize<TData>(GraphQlJsonOptions) is not { } typedData)
         {
             return Result<TData>.Fail(
                 GitHubErrors.ProviderError("GraphQL response contained neither data nor errors."));
         }
 
-        // GitHub returns a queried rateLimit block inside "data", not beside it.
-        GraphQlRateLimit? reportedRateLimit = envelope.RateLimit ?? (envelope.Data as IReportsRateLimit)?.RateLimit;
+        return Result<TData>.Ok(typedData);
+    }
 
-        if (reportedRateLimit is { } rateLimit)
+    private void RecordGraphQlHeadroom(JsonElement? data)
+    {
+        if (data is not { ValueKind: JsonValueKind.Object } dataObject
+            || !dataObject.TryGetProperty("rateLimit", out JsonElement rateLimitElement)
+            || rateLimitElement.ValueKind is not JsonValueKind.Object
+            || rateLimitElement.Deserialize<GraphQlRateLimit>(GraphQlJsonOptions) is not { } rateLimit)
         {
-            logger.LogDebug(
-                "GitHub GraphQL cost={Cost} remaining={Remaining}",
-                rateLimit.Cost,
-                rateLimit.Remaining);
-
-            rateBudget.Record(
-                ProviderBudgetKey.GitHubGraphQl,
-                new RateBudgetReading(rateLimit.Remaining, rateLimit.Limit, rateLimit.ResetAt, timeProvider.GetUtcNow()));
+            return;
         }
 
-        return Result<TData>.Ok(envelope.Data);
+        logger.LogDebug(
+            "GitHub GraphQL cost={Cost} remaining={Remaining}",
+            rateLimit.Cost,
+            rateLimit.Remaining);
+
+        rateBudget.Record(
+            ProviderBudgetKey.GitHubGraphQl,
+            new RateBudgetReading(rateLimit.Remaining, rateLimit.Limit, rateLimit.ResetAt, timeProvider.GetUtcNow()));
     }
 
     private static Uri DeriveGraphQlEndpoint(Uri restBaseUrl)
@@ -663,8 +675,8 @@ internal sealed partial class GitHubHttpClient(
         }
 
         object variables = new { owner = slug.Owner, name = slug.Name, pr = prNumber };
-        Result<PrChecksData> dataResult = await ExecuteGraphQlWithUnauthorizedMappingAsync<PrChecksData>(
-            apiBaseUrl, PrChecksQuery, variables, token, cancellationToken);
+        Result<PrChecksData> dataResult = await ExecuteGraphQlAsync<PrChecksData>(
+            apiBaseUrl, PrChecksQuery, variables, token, cancellationToken, ClassifyUnreadable);
 
         if (dataResult is not Result<PrChecksData>.Success dataSuccess)
         {
@@ -726,81 +738,13 @@ internal sealed partial class GitHubHttpClient(
         return failing;
     }
 
-    // Wraps ExecuteGraphQlAsync and maps 401/403 (non-rate-limited) to a sentinel error code
-    // so GetChecksAsync can convert it to Checks.Unreadable without returning a Result failure.
-    private async Task<Result<TData>> ExecuteGraphQlWithUnauthorizedMappingAsync<TData>(
-        Uri restBaseUrl,
-        string query,
-        object variables,
-        string token,
-        CancellationToken cancellationToken)
-        where TData : class
-    {
-        if (restBaseUrl.Scheme is not "https")
-        {
-            return Result<TData>.Fail(GitHubErrors.InvalidBaseUrl);
-        }
-
-        Uri graphQlEndpoint = DeriveGraphQlEndpoint(restBaseUrl);
-        string requestBody = JsonSerializer.Serialize(new { query, variables }, GraphQlJsonOptions);
-
-        using HttpRequestMessage request = new(HttpMethod.Post, graphQlEndpoint);
-        AddGitHubHeaders(request, token);
-        request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        // 401/403 without rate-limit headers signals an auth failure; map to Unreadable.
-        if (response.StatusCode is HttpStatusCode.Unauthorized ||
-            (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response)))
-        {
-            return Result<TData>.Fail(GitHubErrors.Unreadable);
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<TData>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        GraphQlEnvelope<TData>? envelope =
-            JsonSerializer.Deserialize<GraphQlEnvelope<TData>>(responseBody, GraphQlJsonOptions);
-
-        if (envelope?.Errors is { Count: > 0 } errors)
-        {
-            bool hasRateLimit = errors.Any(
-                e => string.Equals(e.Type, "RATE_LIMITED", StringComparison.OrdinalIgnoreCase));
-
-            if (hasRateLimit)
-            {
-                return Result<TData>.Fail(GitHubErrors.RateLimitExhausted);
-            }
-
-            string rawMessage = string.Join("; ", errors.Select(e => e.Message));
-            string safeMessage = TruncateWithEllipsis(RedactSecrets(rawMessage), MaxBranchErrorBodyLength);
-            return Result<TData>.Fail(GitHubErrors.GraphQlError(safeMessage));
-        }
-
-        if (envelope?.Data is null)
-        {
-            return Result<TData>.Fail(
-                GitHubErrors.ProviderError("GraphQL response contained neither data nor errors."));
-        }
-
-        if (envelope.RateLimit is { } rateLimit)
-        {
-            logger.LogDebug(
-                "GitHub GraphQL cost={Cost} remaining={Remaining}",
-                rateLimit.Cost,
-                rateLimit.Remaining);
-
-            rateBudget.Record(
-                ProviderBudgetKey.GitHubGraphQl,
-                new RateBudgetReading(rateLimit.Remaining, rateLimit.Limit, rateLimit.ResetAt, timeProvider.GetUtcNow()));
-        }
-
-        return Result<TData>.Ok(envelope.Data);
-    }
+    // A 401, or a 403 that is not rate limiting, means the token cannot read the pull request: the caller reports
+    // it as unreadable rather than as a failure.
+    private static Error ClassifyUnreadable(HttpResponseMessage response) =>
+        response.StatusCode is HttpStatusCode.Unauthorized
+        || (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response))
+            ? GitHubErrors.Unreadable
+            : ErrorFromNonSuccess(response);
 
     public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
         Uri apiBaseUrl,
@@ -1982,12 +1926,10 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GitHubErrorBodyDto(string? Message);
 
     // GraphQL envelope records — deserialized with GraphQlJsonOptions (camelCase).
-    // TData is unconstrained here so Data can be null when the GraphQL response omits or nulls it.
-    private sealed record GraphQlEnvelope<TData>(
-        TData? Data,
-        IReadOnlyList<GraphQlError>? Errors,
-        GraphQlRateLimit? RateLimit)
-        where TData : class;
+    // Data stays a JsonElement so its rateLimit block is read whatever shape the query's data record has.
+    private sealed record GraphQlEnvelope(
+        JsonElement? Data,
+        IReadOnlyList<GraphQlError>? Errors);
 
     private sealed record GraphQlError(
         string Message,
@@ -1999,7 +1941,7 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlRateLimit(int Cost, int Remaining, int? Limit, DateTimeOffset? ResetAt);
 
     // GraphQL issue-list DTOs — deserialized with GraphQlJsonOptions (camelCase).
-    private sealed record IssueListData(GraphQlRateLimit? RateLimit, GraphQlRepository? Repository);
+    private sealed record IssueListData(GraphQlRepository? Repository);
 
     private sealed record GraphQlRepository(
         GraphQlRef? DefaultBranchRef,
@@ -2040,28 +1982,28 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlBlockerRepo(string NameWithOwner);
 
     // GraphQL blockedBy follow-up page DTOs — deserialized with GraphQlJsonOptions (camelCase).
-    private sealed record BlockedByPageData(GraphQlRateLimit? RateLimit, GraphQlBlockedByPageRepository? Repository);
+    private sealed record BlockedByPageData(GraphQlBlockedByPageRepository? Repository);
 
     private sealed record GraphQlBlockedByPageRepository(GraphQlBlockedByPageIssue? Issue);
 
     private sealed record GraphQlBlockedByPageIssue(GraphQlBlockedByConnection? BlockedBy);
 
     // GraphQL IssueState query DTOs — deserialized with GraphQlJsonOptions (camelCase).
-    private sealed record IssueStateData(GraphQlRateLimit? RateLimit, IssueStateRepository? Repository);
+    private sealed record IssueStateData(IssueStateRepository? Repository);
 
     private sealed record IssueStateRepository(IssueStateNode? Issue);
 
     private sealed record IssueStateNode(string State);
 
     // GraphQL PrStatus query DTOs — deserialized with GraphQlJsonOptions (camelCase).
-    private sealed record PrStatusData(GraphQlRateLimit? RateLimit, PrStatusRepository? Repository);
+    private sealed record PrStatusData(PrStatusRepository? Repository);
 
     private sealed record PrStatusRepository(GraphQlPullRequestStatus? PullRequest);
 
     private sealed record GraphQlPullRequestStatus(string? Id, string State, bool Merged, string? HeadRefOid, bool IsDraft);
 
     // GraphQL PrReviewFeedback query DTOs — deserialized with GraphQlJsonOptions (camelCase).
-    private sealed record PrReviewFeedbackData(GraphQlRateLimit? RateLimit, PrReviewFeedbackRepository? Repository);
+    private sealed record PrReviewFeedbackData(PrReviewFeedbackRepository? Repository);
 
     private sealed record PrReviewFeedbackRepository(PrReviewFeedbackPullRequest? PullRequest);
 
@@ -2111,7 +2053,7 @@ internal sealed partial class GitHubHttpClient(
         GraphQlCommentAuthor? Author);
 
     // GraphQL PrChecks query DTOs — deserialized with GraphQlJsonOptions (camelCase).
-    private sealed record PrChecksData(GraphQlRateLimit? RateLimit, PrChecksRepository? Repository);
+    private sealed record PrChecksData(PrChecksRepository? Repository);
 
     private sealed record PrChecksRepository(PrChecksPullRequest? PullRequest);
 

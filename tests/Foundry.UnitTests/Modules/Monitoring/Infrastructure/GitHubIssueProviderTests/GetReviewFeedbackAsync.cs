@@ -25,6 +25,9 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubIssueProvide
 
 public sealed class GetReviewFeedbackAsync
 {
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+    private const string CapturedRateLimit = """{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"}""";
+
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
     private const string ValidToken = "ghp_token";
     private const string ValidPrUrl = "https://github.com/owner/repo/pull/1";
@@ -54,7 +57,7 @@ public sealed class GetReviewFeedbackAsync
         return $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -125,10 +128,10 @@ public sealed class GetReviewFeedbackAsync
     public async Task WhenFeedbackHasComments_NewestCommentAtAndOmittedCountArePopulated()
     {
         // Arrange — two comments after since, both pass policy
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -184,7 +187,7 @@ public sealed class GetReviewFeedbackAsync
         string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -225,10 +228,10 @@ public sealed class GetReviewFeedbackAsync
     public async Task WhenTheReviewIsInPostedRegistry_SkipsItsThreadCommentAndSummaryButKeepsAPersonsReply()
     {
         // Arrange — Foundry's review 700 posted comment 7001 and summary; alice's reply 7002 belongs to her review 701
-        const string json = """
+        const string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": { "nodes": [] },

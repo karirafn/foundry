@@ -16,8 +16,8 @@ nothing reconciled the two ADRs — the contradiction was left standing until
 
 This ADR records three decisions made together as part of issue #454:
 
-1. Foundry reads issues via **GitHub GraphQL** and consumes the `rateLimit` envelope it already
-   parses, making provider headroom observable.
+1. Foundry reads issues via **GitHub GraphQL** and records the `rateLimit` block each query
+   selects, making provider headroom observable.
 2. The per-cycle provider call cost is bounded by a named constant and enforced by a compile-time
    invariance test.
 3. A governor records and surfaces headroom but **does not block polling**.
@@ -44,9 +44,15 @@ GitLab headroom is recorded for visibility but is not evaluated against a floor.
 ### 1. GraphQL for issue reads
 
 Foundry reads monitored-repository issues via the GitHub GraphQL API.
-The GraphQL response envelope already contains `rateLimit { cost remaining limit resetAt }`.
-`remaining` is recorded by the governor on every GraphQL response; `limit` and `resetAt` are
-carried for display.
+`rateLimit` is a Query-root field, so GitHub returns it inside `data`
+(`{"data": {"rateLimit": {...}, ...}}`), not beside it in the envelope.
+Every GraphQL query selects all four fields, `rateLimit { cost remaining limit resetAt }`, through
+one shared constant (`RateLimitSelection` in `GitHubHttpClient`); the store keeps only the last
+reading, so a query selecting fewer fields would overwrite `limit` and `resetAt` with null.
+Every response that carries a `data.rateLimit` block records it, including a response that also
+carries `errors`, because GitHub charges errored queries too. A response without the block, such as
+a mutation's, records nothing.
+`remaining` is evaluated by the governor; `limit` and `resetAt` are carried for display.
 
 ### 2. Named fixed-cost cap constant
 
@@ -139,3 +145,6 @@ This ADR therefore does **not** re-state the cadence resolution.
   [ADR 0014](0014-remove-immediate-requeue-always-pause.md) (parseable reset time as
   usage-limit discriminator) and [ADR 0058](0058-429-primary-usage-limit-signal.md) (429 as
   primary usage-limit signal).
+
+## Revisions
+- 2026-11-27 — rateLimit is read from data, not the envelope (#873)

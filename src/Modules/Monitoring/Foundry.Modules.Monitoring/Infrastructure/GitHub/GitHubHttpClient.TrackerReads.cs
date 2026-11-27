@@ -16,9 +16,9 @@ internal sealed partial class GitHubHttpClient
     private const int DependenciesPerPage = 100;
     private const string IssueTypeName = "Issue";
 
-    private const string OpenIssueIndexQuery = """
+    private const string OpenIssueIndexQuery = $$"""
         query OpenIssueIndex($owner: String!, $name: String!) {
-          rateLimit { cost remaining limit resetAt }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             issues(first: 100, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
               nodes { number title }
@@ -27,9 +27,9 @@ internal sealed partial class GitHubHttpClient
         }
         """;
 
-    private const string ReferencedIssueQuery = """
+    private const string ReferencedIssueQuery = $$"""
         query ReferencedIssue($owner: String!, $name: String!, $number: Int!) {
-          rateLimit { cost remaining limit resetAt }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             issueOrPullRequest(number: $number) {
               __typename
@@ -45,9 +45,9 @@ internal sealed partial class GitHubHttpClient
         }
         """;
 
-    private const string IssueStatusQuery = """
+    private const string IssueStatusQuery = $$"""
         query IssueStatus($owner: String!, $name: String!, $number: Int!) {
-          rateLimit { cost remaining }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             issue(number: $number) { state body }
           }
@@ -267,20 +267,13 @@ internal sealed partial class GitHubHttpClient
         return Result<IReadOnlyList<IssueReference>>.Ok(references);
     }
 
-    private interface IReportsRateLimit
-    {
-        GraphQlRateLimit? RateLimit { get; }
-    }
-
-    private sealed record IssueStatusData(GraphQlRateLimit? RateLimit, IssueStatusRepository? Repository)
-        : IReportsRateLimit;
+    private sealed record IssueStatusData(IssueStatusRepository? Repository);
 
     private sealed record IssueStatusRepository(IssueStatusNode? Issue);
 
     private sealed record IssueStatusNode(string? State, string? Body);
 
-    private sealed record OpenIssueIndexData(GraphQlRateLimit? RateLimit, OpenIssueIndexRepository? Repository)
-        : IReportsRateLimit;
+    private sealed record OpenIssueIndexData(OpenIssueIndexRepository? Repository);
 
     private sealed record OpenIssueIndexRepository(OpenIssueIndexConnection? Issues);
 
@@ -288,8 +281,7 @@ internal sealed partial class GitHubHttpClient
 
     private sealed record OpenIssueIndexNode(int Number, string Title);
 
-    private sealed record ReferencedIssueData(GraphQlRateLimit? RateLimit, ReferencedIssueRepository? Repository)
-        : IReportsRateLimit;
+    private sealed record ReferencedIssueData(ReferencedIssueRepository? Repository);
 
     private sealed record ReferencedIssueRepository(ReferencedIssueNode? IssueOrPullRequest);
 

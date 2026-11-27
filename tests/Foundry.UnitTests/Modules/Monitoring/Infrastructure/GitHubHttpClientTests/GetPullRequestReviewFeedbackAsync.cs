@@ -21,18 +21,21 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTe
 
 public sealed class GetPullRequestReviewFeedbackAsync
 {
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+    private const string CapturedRateLimit = """{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"}""";
+
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
     private const string ValidPrUrl = "https://github.com/owner/repo/pull/1";
 
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(FakeHandler handler) =>
+    private static GitHubHttpClient BuildSut(FakeHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
-            new InMemoryProviderRateBudget(),
+            budget ?? new InMemoryProviderRateBudget(),
             TimeProvider.System);
 
     private static string BuildThreeSurfaceJson(
@@ -76,7 +79,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         return $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -412,10 +415,10 @@ public sealed class GetPullRequestReviewFeedbackAsync
     {
         // Arrange — same comment appears in both conversation comments and review threads.
         // The review-thread copy (with FilePath/Line) must be the one kept.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -484,10 +487,10 @@ public sealed class GetPullRequestReviewFeedbackAsync
     {
         // Arrange — two separate comments happen to have identical body, timestamp, and author.
         // Distinct databaseIds must prevent them from colliding in the de-dup set.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -539,7 +542,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -632,10 +635,10 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenNullAuthor_MapsAuthorLoginAsEmptyAndIsNotBot()
     {
         // Arrange — null author represents deleted users
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -778,10 +781,10 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Arrange — both the review-thread copy and the conversation copy have databaseId=null
         // but share the same body, createdAt, and author. The inline copy (with FilePath/Line)
         // must win, and only one entry must be emitted.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -849,10 +852,10 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Arrange — the review-thread copy has databaseId=888 (seeds deduplicatedIds and
         // deduplicatedKeys cross-surface guard), while the conversation copy has databaseId=null
         // and must be suppressed by the content-key fallback. Only the inline copy must survive.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "comments": {
@@ -1022,5 +1025,28 @@ public sealed class GetPullRequestReviewFeedbackAsync
 
         // Assert
         result.ValueOrThrow().Single(c => c.Origin == CommentOrigin.Conversation).Id.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        InMemoryProviderRateBudget budget = new();
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, BuildThreeSurfaceJson()), budget);
+
+        // Act
+        await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }

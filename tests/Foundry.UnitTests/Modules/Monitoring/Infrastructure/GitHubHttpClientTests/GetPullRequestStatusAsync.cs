@@ -21,25 +21,28 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTe
 
 public sealed class GetPullRequestStatusAsync
 {
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+    private const string CapturedRateLimit = """{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"}""";
+
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
 
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(FakeHandler handler) =>
+    private static GitHubHttpClient BuildSut(FakeHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), budget ?? new InMemoryProviderRateBudget(), TimeProvider.System);
 
     [Fact]
     public async Task WhenPrIsMerged_ReturnsMergedAndClosedStatus()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "CLOSED", "merged": true }
                 }
@@ -69,10 +72,10 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenPrIsClosedWithoutMerge_ReturnsClosedNotMerged()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "CLOSED", "merged": false }
                 }
@@ -102,10 +105,10 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenPrIsOpen_ReturnsNotClosedNotMerged()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "OPEN", "merged": false }
                 }
@@ -135,10 +138,10 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenResponseCarriesHeadRefOid_ReturnsItAsHeadSha()
     {
         // Arrange — field shape per GitHub's GraphQL PullRequest.headRefOid (GitObjectID), as GitHubHttpClient.Rebase reads it.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "OPEN", "merged": false, "headRefOid": "6dcb09b5b57875f334f61aebed695e2e4193db5e" }
                 }
@@ -165,10 +168,10 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenResponseLacksHeadRefOid_ReturnsNullHeadSha()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "OPEN", "merged": false }
                 }
@@ -305,10 +308,10 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenCalled_PostsToGraphQlEndpoint()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "OPEN", "merged": false }
                 }
@@ -337,10 +340,10 @@ public sealed class GetPullRequestStatusAsync
     public async Task WhenCalled_RequestBodyContainsPrNumber()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": { "state": "OPEN", "merged": false }
                 }
@@ -392,5 +395,38 @@ public sealed class GetPullRequestStatusAsync
 
         // Assert
         result.ShouldBeOfType<Result<PullRequestStatus>.Success>().Value.IsDraft.ShouldBe(isDraft);
+    }
+
+    [Fact]
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit":{{CapturedRateLimit}},
+                "repository": {
+                  "pullRequest": { "state": "OPEN", "merged": false }
+                }
+              }
+            }
+            """;
+        InMemoryProviderRateBudget budget = new();
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, json), budget);
+
+        // Act
+        await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: "https://github.com/owner/repo/pull/123",
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }
