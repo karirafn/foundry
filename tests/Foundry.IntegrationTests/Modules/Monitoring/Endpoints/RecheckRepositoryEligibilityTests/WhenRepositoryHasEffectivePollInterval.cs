@@ -155,12 +155,6 @@ public sealed class WhenRepositoryHasEffectivePollInterval : IAsyncDisposable
             CancellationToken cancellationToken) =>
             Task.FromResult(Result<bool>.Ok(false));
 
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false, null, false)));
-
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,
             string pullRequestUrl,

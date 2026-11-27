@@ -1202,12 +1202,6 @@ public sealed class RunAsync : IAsyncDisposable
                 : Result<IssueStatus>.Ok(new IssueStatus(IssueClosed, IssueBody)));
         }
 
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            CancellationToken cancellationToken)
-            => throw new NotSupportedException();
-
         public Task<Result<PullRequestState>> GetPullRequestStateAsync(
             RepositorySlug slug,
             string pullRequestUrl,

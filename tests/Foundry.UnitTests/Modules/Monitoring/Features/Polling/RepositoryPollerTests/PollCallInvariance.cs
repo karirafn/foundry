@@ -173,7 +173,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
         // Arrange
         // Granted verdict → cheap eligibility path → 1 GetBranchProtectionAsync.
         // Empty dispatch candidates → no GetDependenciesAsync.
-        // Empty review issues → no IsIssueClosedAsync / GetPullRequestStatusAsync / GetReviewFeedbackAsync.
+        // Empty review issues → no IsIssueClosedAsync / GetPullRequestStateAsync / GetReviewFeedbackAsync.
         MonitoredRepository repository = SeedRepositoryWithGrantedVerdict();
         CountingIssueProvider provider = new();
         RepositoryPoller poller = BuildPoller(provider, new EmptyIssueQueries());

@@ -26,10 +26,10 @@ internal sealed partial class GitLabIssueProvider(
     string token,
     Uri apiBaseUrl) : IIssueProvider
 {
-    // Merge request snapshots read for a status, keyed by merge request URL. GitLab returns the status and
-    // the head pipeline from one GET, so the checks pass (status, then checks, for the same open merge
+    // Merge request snapshots read for a state, keyed by merge request URL. GitLab returns the state and
+    // the head pipeline from one GET, so the checks pass (state, then checks, for the same open merge
     // request) fetches the merge request once instead of twice. The snapshot holds only the head pipeline;
-    // its failed jobs are read when GetChecksAsync consumes the verdict, so status reads never pay for them.
+    // its failed jobs are read when GetChecksAsync consumes the verdict, so state reads never pay for them.
     // Each entry is consumed once, so a verdict is never served from an earlier pass. The provider is
     // scoped to one poll tick.
     private readonly Dictionary<string, MergeRequestSnapshot> _snapshotsReadWithStatus = new(StringComparer.Ordinal);
@@ -94,28 +94,6 @@ internal sealed partial class GitLabIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.GetBranchHeadAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
-    }
-
-    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        RepositorySlug slug,
-        string pullRequestUrl,
-        CancellationToken cancellationToken)
-    {
-        Result<MergeRequestSnapshot> snapshot = await httpClient.GetMergeRequestSnapshotAsync(
-            apiBaseUrl,
-            slug,
-            pullRequestUrl,
-            token,
-            cancellationToken);
-
-        if (snapshot is not Result<MergeRequestSnapshot>.Success success)
-        {
-            _snapshotsReadWithStatus.Remove(pullRequestUrl);
-            return Result<PullRequestStatus>.Fail(((Result<MergeRequestSnapshot>.Failure)snapshot).Error);
-        }
-
-        _snapshotsReadWithStatus[pullRequestUrl] = success.Value;
-        return Result<PullRequestStatus>.Ok(success.Value.Status);
     }
 
     public async Task<Result<PullRequestState>> GetPullRequestStateAsync(

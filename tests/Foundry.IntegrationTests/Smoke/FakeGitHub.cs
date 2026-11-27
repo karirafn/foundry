@@ -57,9 +57,6 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
     public Task<Result<bool>> IsIssueClosedAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
         => Task.FromResult(Result<bool>.Ok(false));
 
-    public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken)
-        => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
-
     public Task<Result<PullRequestState>> GetPullRequestStateAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken)
         => Task.FromResult(Result<PullRequestState>.Ok(
             new PullRequestState.Open(CommitSha.From("0123456789abcdef0123456789abcdef01234567"), IsDraft: false)));

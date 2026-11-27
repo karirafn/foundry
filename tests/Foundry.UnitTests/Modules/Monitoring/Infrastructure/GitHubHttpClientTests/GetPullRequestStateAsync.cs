@@ -31,12 +31,12 @@ public sealed class GetPullRequestStateAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(FakeHandler handler) =>
+    private static GitHubHttpClient BuildSut(FakeHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
-            new InMemoryProviderRateBudget(),
+            budget ?? new InMemoryProviderRateBudget(),
             TimeProvider.System);
 
     private static string Response(string pullRequestJson) => $$"""
@@ -233,6 +233,7 @@ public sealed class GetPullRequestStateAsync
         requestBody.ShouldSatisfyAllConditions(
             () => requestBody.ShouldContain("query PrStatus"),
             () => requestBody.ShouldContain("id state merged headRefOid isDraft"),
+            () => requestBody.ShouldContain("rateLimit"),
             () => requestBody.ShouldContain("123"));
     }
 
@@ -301,5 +302,65 @@ public sealed class GetPullRequestStateAsync
 
         // Assert
         presence.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithRateLimitExhausted_PassesTheFailureThrough()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
+
+        // Act
+        Result<PullRequestState> result = await BuildSut(handler).GetPullRequestStateAsync(
+            ValidBaseUrl, ValidSlug, PullRequestUrl, "ghp_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestState>.Failure>().Error.Code.ShouldBe("GitHub.RateLimitExhausted");
+    }
+
+    [Fact]
+    public async Task WhenStateIsRead_PostsToTheGraphQlEndpoint()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, Response($$"""{ "state": "OPEN", "merged": false, "headRefOid": "{{Head}}" }"""));
+
+        // Act
+        await BuildSut(handler).GetPullRequestStateAsync(ValidBaseUrl, ValidSlug, PullRequestUrl, "ghp_token", CancellationToken.None);
+
+        // Assert
+        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
+        request.ShouldSatisfyAllConditions(
+            () => request.RequestUri.ShouldNotBeNull().AbsolutePath.ShouldBe("/graphql"),
+            () => request.Method.ShouldBe(HttpMethod.Post));
+    }
+
+    [Fact]
+    public async Task WhenStateIsRead_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},
+                "repository": {
+                  "pullRequest": { "state": "OPEN", "merged": false, "headRefOid": "{{Head}}" }
+                }
+              }
+            }
+            """;
+        InMemoryProviderRateBudget budget = new();
+
+        // Act
+        await BuildSut(new FakeHandler(HttpStatusCode.OK, json), budget).GetPullRequestStateAsync(
+            ValidBaseUrl, ValidSlug, PullRequestUrl, "ghp_token", CancellationToken.None);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }

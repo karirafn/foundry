@@ -486,31 +486,9 @@ internal sealed partial class GitLabHttpClient(
         return Result<GitLabIssueStateDto>.Ok(dto);
     }
 
-    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        Uri apiBaseUrl,
-        RepositorySlug slug,
-        string pullRequestUrl,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        Result<MergeRequestSnapshot> snapshot = await GetMergeRequestSnapshotAsync(
-            apiBaseUrl,
-            slug,
-            pullRequestUrl,
-            token,
-            cancellationToken);
-
-        return snapshot switch
-        {
-            Result<MergeRequestSnapshot>.Success success => Result<PullRequestStatus>.Ok(success.Value.Status),
-            Result<MergeRequestSnapshot>.Failure failure => Result<PullRequestStatus>.Fail(failure.Error),
-            _ => throw new InvalidOperationException("Unexpected result."),
-        };
-    }
-
     /// <summary>
     /// Reads one merge request — <c>GET projects/:id/merge_requests/:iid</c> — and returns both its
-    /// open/closed/merged status and the id and status of its <c>head_pipeline</c>, so a checks pass
+    /// raw state, head commit and draft flag, and the id and status of its <c>head_pipeline</c>, so a checks pass
     /// needs a single fetch per merge request. The pipeline's failed jobs are read later, by
     /// <see cref="GetPipelineChecksAsync"/>, only when the checks verdict is consumed. Any non-success
     /// response is a failure.
@@ -552,13 +530,10 @@ internal sealed partial class GitLabHttpClient(
         GitLabMergeRequestWithPipelineDto? dto =
             JsonSerializer.Deserialize<GitLabMergeRequestWithPipelineDto>(body, JsonOptions);
 
-        bool isMerged = string.Equals(dto?.State, "merged", StringComparison.OrdinalIgnoreCase);
-        bool isClosed = isMerged ||
-            string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
-
         return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
-            new PullRequestStatus(isClosed, isMerged, dto?.Sha, dto?.Draft ?? false),
             dto?.State,
+            dto?.Sha,
+            dto?.Draft ?? false,
             dto?.HeadPipeline?.Id,
             dto?.HeadPipeline?.Status));
     }

@@ -624,40 +624,6 @@ internal sealed partial class GitHubHttpClient(
         return Result<bool>.Ok(isClosed);
     }
 
-    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        Uri apiBaseUrl,
-        RepositorySlug slug,
-        string pullRequestUrl,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
-        }
-
-        if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
-        {
-            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidPullRequestUrl);
-        }
-
-        object variables = new { owner = slug.Owner, name = slug.Name, number = prNumber };
-        Result<PrStatusData> dataResult = await ExecuteGraphQlAsync<PrStatusData>(
-            apiBaseUrl, PrStatusQuery, variables, token, cancellationToken);
-
-        if (dataResult is not Result<PrStatusData>.Success dataSuccess)
-        {
-            Error error = ((Result<PrStatusData>.Failure)dataResult).Error;
-            return Result<PullRequestStatus>.Fail(error);
-        }
-
-        GraphQlPullRequestStatus? pr = dataSuccess.Value.Repository?.PullRequest;
-        bool isClosed = pr?.State is { } state
-            && (state.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) || state.Equals("MERGED", StringComparison.OrdinalIgnoreCase));
-        bool isMerged = pr?.Merged ?? false;
-        return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, pr?.HeadRefOid, pr?.IsDraft ?? false));
-    }
-
     public async Task<Result<Checks>> GetChecksAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,

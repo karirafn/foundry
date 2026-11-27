@@ -114,14 +114,6 @@ internal sealed partial class GitHubIssueProvider(
         return httpClient.GetBranchHeadAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
-    public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        RepositorySlug slug,
-        string pullRequestUrl,
-        CancellationToken cancellationToken)
-    {
-        return httpClient.GetPullRequestStatusAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
-    }
-
     public Task<Result<PullRequestState>> GetPullRequestStateAsync(
         RepositorySlug slug,
         string pullRequestUrl,

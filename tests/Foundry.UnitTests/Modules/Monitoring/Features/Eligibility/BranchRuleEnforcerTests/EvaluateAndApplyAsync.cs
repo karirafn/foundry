@@ -403,10 +403,6 @@ public sealed class EvaluateAndApplyAsync
             RepositorySlug slug, int issueNumber, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, PostedCommentIds postedComments, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

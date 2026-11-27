@@ -482,9 +482,6 @@ public sealed class RunAsync : IAsyncDisposable
         public Task<Result<bool>> IsIssueClosedAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken)
-            => throw new NotSupportedException();
-
         public Task<Result<ProviderCommentId>> PostCommentAsync(RepositorySlug slug, CommentThread thread, string body, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 

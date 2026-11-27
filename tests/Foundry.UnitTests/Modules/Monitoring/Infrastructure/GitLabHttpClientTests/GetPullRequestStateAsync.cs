@@ -194,6 +194,20 @@ public sealed class GetPullRequestStateAsync
     }
 
     [Fact]
+    public async Task WhenBaseUrlIsNotHttps_FailsWithInvalidBaseUrl()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "{}");
+
+        // Act
+        Result<PullRequestState> result = await BuildSut(handler).GetPullRequestStateAsync(
+            new Uri("ftp://gitlab.com/api/v4"), ValidSlug, MergeRequestUrl, "glpat_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestState>.Failure>().Error.Code.ShouldBe("GitLab.InvalidBaseUrl");
+    }
+
+    [Fact]
     public async Task WhenStateIsRead_ReadsTheSingleMergeRequestEndpoint()
     {
         // Arrange
