@@ -17,7 +17,7 @@
     vertical-align: middle;
   }
   &__no-data,
-  &__visibility-only { color: var(--fd-text-tertiary); font-size: 0.75rem; font-style: italic; }
+  &__visibility-only { color: var(--fd-text-secondary); font-size: 0.75rem; font-style: italic; }
   &__badge {
     border-radius: var(--fd-radius-sm);
     display: inline-block;
