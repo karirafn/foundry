@@ -145,7 +145,7 @@ jobs:
       - name: Install bats
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         # npm-registry pin is reproducible across runner-image updates; apt version pins are not
-        run: sudo npm install -g bats@1.11.1
+        run: sudo npm install -g "bats@$(node -p "require('./workers/package.json').dependencies.bats")"
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
@@ -266,11 +266,39 @@ jobs:
             || { echo "FAIL: expected exactly one line, got: $output"; exit 1; }
           json=${output#FOUNDRY_TOOLCHAIN }
           [ "$json" != "$output" ] || { echo "FAIL: no FOUNDRY_TOOLCHAIN prefix: $output"; exit 1; }
-          for tool in node claude-code dotnet-sdk csharp-ls chromium playwright-core docker git; do
+          for tool in node claude-code dotnet-sdk csharp-ls chromium playwright-core bats docker git; do
             jq -e --arg tool "$tool" 'any(.[]; .name == $tool and (.version | length > 0))' <<<"$json" >/dev/null \
               || { echo "FAIL: $tool missing from $json"; exit 1; }
           done
           echo "PASS: $output"
+
+      - name: Image contract check — bats matches workers/package.json and runs a suite
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          pinned=$(node -p "require('./workers/package.json').dependencies.bats")
+          actual=$(docker run --rm --user node --read-only --cap-drop ALL --security-opt no-new-privileges -v /home/node -v /tmp foundry-worker:ci bats --version)
+          [ "$actual" = "Bats $pinned" ] \
+            || { echo "FAIL: bats --version is '$actual', workers/package.json pins $pinned"; exit 1; }
+          echo "PASS: $actual matches workers/package.json"
+
+          mkdir -p "$RUNNER_TEMP/bats-suite"
+          cat > "$RUNNER_TEMP/bats-suite/contract.bats" <<'SUITE'
+          bats_require_minimum_version 1.5.0
+
+          @test "run -0 asserts a zero exit" {
+              run -0 echo ok
+              [ "$output" = "ok" ]
+          }
+
+          @test "a test writes under BATS_TEST_TMPDIR" {
+              echo data > "$BATS_TEST_TMPDIR/file"
+              [ "$(cat "$BATS_TEST_TMPDIR/file")" = "data" ]
+          }
+          SUITE
+          docker run --rm --user node --read-only --cap-drop ALL --security-opt no-new-privileges -v /home/node -v /tmp \
+            -v "$RUNNER_TEMP/bats-suite:/suite:ro" foundry-worker:ci bats /suite/contract.bats \
+            || { echo "FAIL: the inline bats suite did not pass in the hardened worker shape"; exit 1; }
+          echo "PASS: an inline bats suite passes in the hardened worker shape"
 
       - name: Image contract check — every supported .NET SDK is installed, and a console project builds and runs on each
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
@@ -552,12 +580,13 @@ jobs:
               - 'docs/adr/**'
               - 'DOMAIN.md'
               - 'scripts/**'
+              - 'workers/package.json'
               - '.github/workflows/**'
 
       - name: Install bats
         if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
         # npm-registry pin is reproducible across runner-image updates; apt version pins are not
-        run: sudo npm install -g bats@1.11.1
+        run: sudo npm install -g "bats@$(node -p "require('./workers/package.json').dependencies.bats")"
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'

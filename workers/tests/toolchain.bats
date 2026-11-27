@@ -52,6 +52,7 @@ stub_every_tool() {
     stub docker "Docker version 29.9.3, build 1a2b3c4"
     package "$CLAUDE_CODE_DIR/node_modules/playwright-core" "1.65.1"
     package "$CLAUDE_CODE_DIR/node_modules/corepack" "0.36.0"
+    package "$CLAUDE_CODE_DIR/node_modules/bats" "1.13.0"
     printf '#!/bin/bash\nprintf "gh version 2.63.0 (2024-11-27)\\nhttps://github.com/cli/cli/releases/tag/v2.63.0\\n"\n' >"$STUB_DIR/gh"
     chmod +x "$STUB_DIR/gh"
     stub glab "glab 1.46.1 (abcdef0)"
@@ -69,7 +70,7 @@ json_of() {
     run_script --separate-stderr
 
     [ "$status" -eq 0 ]
-    expected='[{"name":"node","version":"22.22.3"},{"name":"claude-code","version":"2.1.319"},{"name":"dotnet-sdk","version":"10.0.404"},{"name":"csharp-ls","version":"0.28.0"},{"name":"angular-cli","version":"21.2.30"},{"name":"chromium","version":"156.0.8078.79"},{"name":"docker","version":"29.9.3"},{"name":"playwright-core","version":"1.65.1"},{"name":"corepack","version":"0.36.0"},{"name":"gh","version":"2.63.0"},{"name":"glab","version":"1.46.1"},{"name":"git","version":"2.39.5"}]'
+    expected='[{"name":"node","version":"22.22.3"},{"name":"claude-code","version":"2.1.319"},{"name":"dotnet-sdk","version":"10.0.404"},{"name":"csharp-ls","version":"0.28.0"},{"name":"angular-cli","version":"21.2.30"},{"name":"chromium","version":"156.0.8078.79"},{"name":"docker","version":"29.9.3"},{"name":"playwright-core","version":"1.65.1"},{"name":"corepack","version":"0.36.0"},{"name":"bats","version":"1.13.0"},{"name":"gh","version":"2.63.0"},{"name":"glab","version":"1.46.1"},{"name":"git","version":"2.39.5"}]'
     [ "$output" = "FOUNDRY_TOOLCHAIN $expected" ]
 }
 
@@ -82,7 +83,7 @@ json_of() {
 
     [ "$status" -eq 0 ]
     names="$(json_of "$output" | jq -r '[.[].name] | join(",")')"
-    [ "$names" = "node,claude-code,dotnet-sdk,csharp-ls,angular-cli,chromium,corepack,gh,glab,git" ]
+    [ "$names" = "node,claude-code,dotnet-sdk,csharp-ls,angular-cli,chromium,corepack,bats,gh,glab,git" ]
 }
 
 @test "an absent corepack package omits only corepack" {
@@ -92,7 +93,17 @@ json_of() {
     run_script --separate-stderr
 
     [ "$status" -eq 0 ]
-    json_of "$output" | jq -e 'map(.name) | index("corepack") == null and index("playwright-core") != null and length == 11'
+    json_of "$output" | jq -e 'map(.name) | index("corepack") == null and index("playwright-core") != null and length == 12'
+}
+
+@test "an absent bats package omits only bats" {
+    stub_every_tool
+    rm -r "$CLAUDE_CODE_DIR/node_modules/bats"
+
+    run_script --separate-stderr
+
+    [ "$status" -eq 0 ]
+    json_of "$output" | jq -e 'map(.name) | index("bats") == null and index("corepack") != null and index("playwright-core") != null and length == 11'
 }
 
 @test "no tools at all yields an empty list" {
