@@ -1,9 +1,10 @@
 {
   "name": "foundry-workers",
   "private": true,
-  "description": "Pins the Claude Code CLI and playwright-core installed into the worker and login images (see Dockerfile.base). playwright-core downloads no browser; it drives the image's Chromium. Dependabot bumps both.",
+  "description": "Pins the Claude Code CLI, playwright-core and corepack installed into the worker and login images (see Dockerfile.base). playwright-core downloads no browser; it drives the image's Chromium. corepack provides the npm, npx, pnpm and yarn shims that follow a repository's packageManager pin. Dependabot bumps all three.",
   "dependencies": {
     "@anthropic-ai/claude-code": "2.1.331",
+    "corepack": "0.36.0",
     "playwright-core": "1.65.1"
   }
 }
