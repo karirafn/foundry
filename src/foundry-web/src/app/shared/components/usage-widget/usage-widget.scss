@@ -57,7 +57,7 @@
 
   .usage-widget__severity-dot {
     background: transparent;
-    border: 1px solid var(--fd-text-tertiary);
+    border: 1px solid var(--fd-graphic-muted);
   }
 }
 
@@ -298,8 +298,7 @@
 }
 
 .usage-popover__asof {
-  // --fd-text-tertiary (#6e7681) = 3.77:1 on --fd-bg-card at 12px — fails WCAG 1.4.3.
-  // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
+  // Text needs 4.5:1 (WCAG 1.4.3), so it uses --fd-text-secondary.
   color: var(--fd-text-secondary);
   font-size: 0.75rem;
   margin: 0;
@@ -388,8 +387,7 @@
 
 .usage-popover__reset {
   font-size: 0.75rem;
-  // --fd-text-tertiary (#6e7681) = 3.77:1 on --fd-bg-card at 12px — fails WCAG 1.4.3.
-  // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
+  // Text needs 4.5:1 (WCAG 1.4.3), so it uses --fd-text-secondary.
   color: var(--fd-text-secondary);
   margin: 0;
   padding-inline-start: 0;

@@ -60,7 +60,7 @@
 
 @mixin settings-form-field-hint {
   &__field-hint {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.75rem;
   }
 }
@@ -149,7 +149,7 @@
     width: 100%;
 
     &::placeholder {
-      color: var(--fd-text-tertiary);
+      color: var(--fd-text-secondary);
     }
   }
 }
