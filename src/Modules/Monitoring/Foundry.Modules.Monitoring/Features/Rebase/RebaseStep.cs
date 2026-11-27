@@ -5,11 +5,14 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
+using Foundry.Modules.Monitoring.Features.PullRequestWatch;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+using Watch = Foundry.Modules.Monitoring.Features.PullRequestWatch.PullRequestWatch;
 
 namespace Foundry.Modules.Monitoring.Features.Rebase;
 
@@ -236,43 +239,25 @@ internal sealed class RebaseStep(
         RebasePendingIssueInfo pending,
         CancellationToken cancellationToken)
     {
-        Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+        Result<PullRequestWayOut> wayOutResult = await Watch.ReadAsync(
+            provider,
             repository.Slug,
             pending.IssueNumber,
-            cancellationToken);
-
-        if (isClosedResult is Result<bool>.Failure isClosedFailure)
-        {
-            return new StepResult.Transient(isClosedFailure.Error.Message);
-        }
-
-        if (isClosedResult is Result<bool>.Success { Value: true })
-        {
-            return new StepResult.Closed(new ProviderIssueClosed(repository.Id, pending.IssueNumber));
-        }
-
-        Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
-            repository.Slug,
             pending.PullRequestUrl,
             cancellationToken);
 
-        if (prStatusResult is Result<PullRequestStatus>.Failure prStatusFailure)
+        return wayOutResult switch
         {
-            return new StepResult.Transient(prStatusFailure.Error.Message);
-        }
+            Result<PullRequestWayOut>.Failure failure => new StepResult.Transient(failure.Error.Message),
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.IssueClosed } =>
+                new StepResult.Closed(new ProviderIssueClosed(repository.Id, pending.IssueNumber)),
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.PullRequestClosed } =>
+                new StepResult.Closed(new ProviderPullRequestClosed(repository.Id, pending.IssueNumber)),
 
-        if (prStatusResult is Result<PullRequestStatus>.Success { Value: { IsClosed: true, IsMerged: false } })
-        {
-            return new StepResult.Closed(new ProviderPullRequestClosed(repository.Id, pending.IssueNumber));
-        }
-
-        if (prStatusResult is Result<PullRequestStatus>.Success { Value.IsClosed: true })
-        {
             // Merged: nothing to rebase; the issue completes on a later poll when its provider issue closes.
-            return new StepResult.Idle();
-        }
-
-        return null;
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.Merged } => new StepResult.Idle(),
+            _ => null,
+        };
     }
 
     /// <summary>

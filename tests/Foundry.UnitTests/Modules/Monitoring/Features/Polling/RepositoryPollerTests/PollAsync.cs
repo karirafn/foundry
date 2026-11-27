@@ -478,7 +478,7 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewIssueInfo reviewIssue = new(
             IssueNumber: 42,
             PullRequestUrl: "https://github.com/owner/repo/pull/99",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -511,7 +511,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -522,11 +522,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Closed()),
         };
-        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -588,11 +588,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: isClosed, IsMerged: isMerged, HeadSha: null, IsDraft: false)),
+            [prUrl] = StateOf(isClosed, isMerged),
         };
-        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -600,6 +600,33 @@ public sealed class PollAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().Any().ShouldBe(expectClosed);
+    }
+
+    [Fact]
+    public async Task WhenAReviewStepIssuePullRequestReadFails_RaisesNothing()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewStepIssues: [new ReviewStepIssueInfo(42, prUrl)]);
+        StubIssueProvider provider = new(
+            [],
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
+            {
+                [prUrl] = Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead()),
+            });
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        await sut.PollAsync(repository, provider, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestClosed>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
     }
 
     [Theory]
@@ -619,11 +646,11 @@ public sealed class PollAsync : IAsyncDisposable
             new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: null,
             queuedRevisions: [new QueuedRevisionIssueInfo(43, prUrl)]);
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: isClosed, IsMerged: isMerged, HeadSha: null, IsDraft: false)),
+            [prUrl] = StateOf(isClosed, isMerged),
         };
-        StubIssueProvider provider = new([], pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -641,7 +668,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -652,11 +679,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
         };
-        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -677,8 +704,8 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewIssueInfo failingIssue = new(
             IssueNumber: 10,
             PullRequestUrl: "https://github.com/owner/repo/pull/100",
-            FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -713,7 +740,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -724,11 +751,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Merged()),
         };
-        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -741,12 +768,12 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGetPullRequestStatusFailsForReviewIssue_SkipsThatIssue()
+    public async Task WhenPullRequestReadFailsForReviewIssue_SkipsThatIssue()
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -758,11 +785,11 @@ public sealed class PollAsync : IAsyncDisposable
             [42] = Result<bool>.Ok(false),
         };
         Error providerError = new("GitHub.Unavailable", "Service unavailable");
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Fail(providerError),
+            [prUrl] = Result<PullRequestState>.Fail(providerError),
         };
-        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -813,7 +840,7 @@ public sealed class PollAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
         DateTimeOffset cutoff = Now.AddHours(-1);
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -824,9 +851,9 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
         };
         ReviewComment comment = new("Please fix the indentation", "src/Foo.cs", 42);
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
@@ -836,7 +863,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueProvider provider = new(
             [],
             isClosedResults: isClosedResults,
-            pullRequestStatusResults: prStatusResults,
+            pullRequestStateResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -869,13 +896,13 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: null,
-            reviewIssues: [new ReviewIssueInfo(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false)]);
+            reviewIssues: [new ReviewIssueInfo(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false)]);
         StubIssueProvider provider = new(
             [],
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+                [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
             });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -894,7 +921,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -905,9 +932,9 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
         };
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
@@ -916,7 +943,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueProvider provider = new(
             [],
             isClosedResults: isClosedResults,
-            pullRequestStatusResults: prStatusResults,
+            pullRequestStateResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -935,8 +962,8 @@ public sealed class PollAsync : IAsyncDisposable
         MonitoredRepository repository = SeedRepository();
         string prUrl1 = "https://github.com/owner/repo/pull/10";
         string prUrl2 = "https://github.com/owner/repo/pull/20";
-        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
-        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo failingIssue = new(IssueNumber: 10, PullRequestUrl: prUrl1, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo successIssue = new(IssueNumber: 20, PullRequestUrl: prUrl2, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -948,10 +975,10 @@ public sealed class PollAsync : IAsyncDisposable
             [10] = Result<bool>.Ok(false),
             [20] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl1] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
-            [prUrl2] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl1] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
+            [prUrl2] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
         };
         Error feedbackError = new("GitHub.RateLimited", "Rate limited");
         ReviewComment comment = new("Please address this");
@@ -963,7 +990,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueProvider provider = new(
             [],
             isClosedResults: isClosedResults,
-            pullRequestStatusResults: prStatusResults,
+            pullRequestStateResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -988,7 +1015,7 @@ public sealed class PollAsync : IAsyncDisposable
         string prUrl = "https://github.com/owner/repo/pull/99";
         DateTimeOffset cutoff = Now.AddHours(-1);
         DateTimeOffset newestCommentAt = Now.AddMinutes(-5);
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -999,9 +1026,9 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)),
         };
         ReviewComment comment = new("Fix this");
         ReviewFeedback feedback = new([comment], OmittedCommentCount: 12, NewestCommentAt: newestCommentAt);
@@ -1012,7 +1039,7 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueProvider provider = new(
             [],
             isClosedResults: isClosedResults,
-            pullRequestStatusResults: prStatusResults,
+            pullRequestStateResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
         RepositoryPoller sut = new(
             issueQueries,
@@ -1043,7 +1070,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -1054,12 +1081,12 @@ public sealed class PollAsync : IAsyncDisposable
         {
             [42] = Result<bool>.Ok(false),
         };
-        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        Dictionary<string, Result<PullRequestState>> prStatusResults = new()
         {
-            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
+            [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Merged()),
         };
         // No feedback configured — if called, stub returns empty feedback (not a problem for this test's assertion)
-        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
+        StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStateResults: prStatusResults);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -1076,7 +1103,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         string prUrl = "https://github.com/owner/repo/pull/99";
-        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: VerifiedHead, ChecksPassed: true, IsPullRequestMarkedReady: false);
         StubIssueQueries issueQueries = new(
             new HashSet<int>(),
             new Dictionary<int, IssueSnapshot>(),
@@ -1085,9 +1112,9 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueProvider provider = new(
             [],
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: true)),
+                [prUrl] = Result<PullRequestState>.Ok(new PullRequestState.Merged()),
             });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -1834,13 +1861,21 @@ public sealed class PollAsync : IAsyncDisposable
 
     private static readonly ReviewFeedback NoFeedback = new([], OmittedCommentCount: 0, NewestCommentAt: null);
 
+    private static Result<PullRequestState> OpenAt(string head) =>
+        Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(head), IsDraft: false));
+
+    private static Result<PullRequestState> StateOf(bool isClosed, bool isMerged) =>
+        isMerged ? Result<PullRequestState>.Ok(new PullRequestState.Merged())
+        : isClosed ? Result<PullRequestState>.Ok(new PullRequestState.Closed())
+        : OpenAt(VerifiedHead);
+
     [Fact]
     public async Task WhenReviewPullRequestHeadMovedWithNoFeedback_RaisesProviderPullRequestHeadMoved()
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
-            NoFeedback, verifiedHeadSha: VerifiedHead, currentHeadSha: MovedHead);
+            NoFeedback, verifiedHeadSha: VerifiedHead, pullRequest: OpenAt(MovedHead));
 
         // Act
         bool changed = await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
@@ -1859,7 +1894,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
-            NoFeedback, verifiedHeadSha: VerifiedHead, currentHeadSha: VerifiedHead);
+            NoFeedback, verifiedHeadSha: VerifiedHead, pullRequest: OpenAt(VerifiedHead));
 
         // Act
         bool changed = await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
@@ -1875,7 +1910,7 @@ public sealed class PollAsync : IAsyncDisposable
         // Arrange
         MonitoredRepository repository = SeedRepository();
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
-            NoFeedback, verifiedHeadSha: null, currentHeadSha: VerifiedHead);
+            NoFeedback, verifiedHeadSha: null, pullRequest: OpenAt(VerifiedHead));
 
         // Act
         await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
@@ -1887,18 +1922,21 @@ public sealed class PollAsync : IAsyncDisposable
     [Theory]
     [InlineData(VerifiedHead)]
     [InlineData(null)]
-    public async Task WhenStatusReadReturnsNoHead_RaisesNoHeadMoved(string? verifiedHeadSha)
+    public async Task WhenAnOpenPullRequestHasNoValidHead_SkipsTheIssueWithoutReadingFeedback(string? verifiedHeadSha)
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
-            NoFeedback, verifiedHeadSha: verifiedHeadSha, currentHeadSha: null);
+            NoFeedback,
+            verifiedHeadSha: verifiedHeadSha,
+            pullRequest: Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead()));
 
         // Act
         await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
 
         // Assert
-        _dispatcher.DispatchedEvents.OfType<ProviderPullRequestHeadMoved>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        provider.LastPostedComments.ShouldBeNull();
     }
 
     [Fact]
@@ -1909,7 +1947,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             new ReviewFeedback([new ReviewComment("Please fix")], OmittedCommentCount: 0, NewestCommentAt: Now.AddMinutes(-5)),
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: MovedHead);
+            pullRequest: OpenAt(MovedHead));
 
         // Act
         await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
@@ -1928,7 +1966,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null, HeldBackUntil: Now.AddMinutes(2)),
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: MovedHead);
+            pullRequest: OpenAt(MovedHead));
 
         // Act
         await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
@@ -1940,16 +1978,14 @@ public sealed class PollAsync : IAsyncDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task WhenReviewPullRequestIsClosedWithMovedHead_RaisesNoHeadMoved(bool isMerged)
+    public async Task WhenReviewPullRequestIsClosedOrMerged_RaisesNoHeadMoved(bool isMerged)
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             NoFeedback,
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: MovedHead,
-            isClosed: true,
-            isMerged: isMerged);
+            pullRequest: StateOf(isClosed: true, isMerged));
 
         // Act
         await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
@@ -1966,7 +2002,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             NoFeedback,
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: VerifiedHead,
+            pullRequest: OpenAt(VerifiedHead),
             checksPassed: false,
             checksResult: Result<Checks>.Ok(new Checks.Green()));
 
@@ -2003,7 +2039,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             NoFeedback,
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: VerifiedHead,
+            pullRequest: OpenAt(VerifiedHead),
             checksPassed: false,
             checksResult: Result<Checks>.Ok(NonGreenRead(kind)));
 
@@ -2025,7 +2061,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             NoFeedback,
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: VerifiedHead,
+            pullRequest: OpenAt(VerifiedHead),
             checksPassed: false,
             checksResult: Result<Checks>.Fail(new Error("Provider.Unavailable", "Checks read failed")));
 
@@ -2046,7 +2082,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             NoFeedback,
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: VerifiedHead,
+            pullRequest: OpenAt(VerifiedHead),
             checksPassed: true,
             checksResult: Result<Checks>.Ok(new Checks.Green()));
 
@@ -2067,7 +2103,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             new ReviewFeedback([new ReviewComment("Please fix")], OmittedCommentCount: 0, NewestCommentAt: Now.AddMinutes(-5)),
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: VerifiedHead,
+            pullRequest: OpenAt(VerifiedHead),
             checksPassed: false,
             checksResult: Result<Checks>.Ok(new Checks.Green()));
 
@@ -2088,7 +2124,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             NoFeedback,
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: MovedHead,
+            pullRequest: OpenAt(MovedHead),
             checksPassed: false,
             checksResult: Result<Checks>.Ok(new Checks.Green()));
 
@@ -2109,7 +2145,7 @@ public sealed class PollAsync : IAsyncDisposable
         (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
             new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null, HeldBackUntil: Now.AddMinutes(2)),
             verifiedHeadSha: VerifiedHead,
-            currentHeadSha: VerifiedHead,
+            pullRequest: OpenAt(VerifiedHead),
             checksPassed: false,
             checksResult: Result<Checks>.Ok(new Checks.Green()));
 
@@ -2124,10 +2160,8 @@ public sealed class PollAsync : IAsyncDisposable
 
     private (RepositoryPoller Sut, StubIssueProvider Provider) BuildReviewSut(
         ReviewFeedback feedback,
-        string? verifiedHeadSha = null,
-        string? currentHeadSha = null,
-        bool isClosed = false,
-        bool isMerged = false,
+        string? verifiedHeadSha = VerifiedHead,
+        Result<PullRequestState>? pullRequest = null,
         bool checksPassed = true,
         Result<Checks>? checksResult = null)
     {
@@ -2141,9 +2175,9 @@ public sealed class PollAsync : IAsyncDisposable
         StubIssueProvider provider = new(
             [],
             isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged, currentHeadSha, IsDraft: false)),
+                [prUrl] = pullRequest ?? OpenAt(VerifiedHead),
             },
             reviewFeedbackResults: new Dictionary<string, Result<ReviewFeedback>>
             {
@@ -2201,16 +2235,16 @@ public sealed class PollAsync : IAsyncDisposable
                     IssueNumber: 42,
                     PullRequestUrl: prUrl,
                     FeedbackCutoffAt: Now,
-                    VerifiedHeadSha: null,
+                    VerifiedHeadSha: VerifiedHead,
                     ChecksPassed: true,
                     IsPullRequestMarkedReady: isMarkedReady),
             ]);
         StubIssueProvider provider = new(
             [],
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(
-                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: isDraft)),
+                [prUrl] = Result<PullRequestState>.Ok(
+                    new PullRequestState.Open(CommitSha.From(VerifiedHead), isDraft)),
             },
             markReadyResult: markReadyResult);
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
@@ -2333,10 +2367,10 @@ public sealed class PollAsync : IAsyncDisposable
             reviewStepIssues: [new ReviewStepIssueInfo(42, GitHubPullRequestUrl)]);
         StubIssueProvider provider = new(
             [],
-            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            pullRequestStateResults: new Dictionary<string, Result<PullRequestState>>
             {
-                [GitHubPullRequestUrl] = Result<PullRequestStatus>.Ok(
-                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: true)),
+                [GitHubPullRequestUrl] = Result<PullRequestState>.Ok(
+                    new PullRequestState.Open(CommitSha.From(VerifiedHead), true)),
             });
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
 
@@ -2352,7 +2386,7 @@ public sealed class PollAsync : IAsyncDisposable
         IReadOnlyList<ProviderIssue> issues,
         IReadOnlyDictionary<int, Result<IReadOnlyList<int>>>? dependencyResults = null,
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
-        IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
+        IReadOnlyDictionary<string, Result<PullRequestState>>? pullRequestStateResults = null,
         IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null,
         Result<BranchProtection>? branchProtectionResult = null,
         bool isComplete = true,
@@ -2419,14 +2453,20 @@ public sealed class PollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
         {
-            if (pullRequestStatusResults is not null
-                && pullRequestStatusResults.TryGetValue(pullRequestUrl, out Result<PullRequestStatus>? result))
+            if (pullRequestStateResults is not null
+                && pullRequestStateResults.TryGetValue(pullRequestUrl, out Result<PullRequestState>? result))
             {
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
+            return Task.FromResult(Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(VerifiedHead), IsDraft: false)));
         }
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
@@ -2537,8 +2577,14 @@ public sealed class PollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<PullRequestStatus>.Fail(error));
+            return Task.FromResult(Result<PullRequestState>.Fail(error));
         }
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(

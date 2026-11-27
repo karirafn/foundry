@@ -5,11 +5,14 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.PullRequestWatch;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+using Watch = Foundry.Modules.Monitoring.Features.PullRequestWatch.PullRequestWatch;
 
 namespace Foundry.Modules.Monitoring.Features.AwaitingInput;
 
@@ -72,24 +75,24 @@ internal sealed class AwaitingInputStep(
             IssueStatus? status = await provider.GetIssueStatusAsync(repository.Slug, info.IssueNumber, cancellationToken)
                 is Result<IssueStatus>.Success { Value: var read } ? read : null;
 
-            PullRequestStatus? pullRequestStatus = await ReadPullRequestStatusAsync(repository, provider, info, status, cancellationToken);
+            PullRequestWayOut? wayOut = await ReadWayOutAsync(repository, provider, info, status, cancellationToken);
 
-            if (FindWayOut(repository, info, status, pullRequestStatus) is { } wayOut)
+            if (FindWayOut(repository, info, status, wayOut) is { } wayOutEvent)
             {
-                events.Add(wayOut);
+                events.Add(wayOutEvent);
                 continue;
             }
 
             switch (info.PostState)
             {
                 case AwaitingInputPostState.Unposted { DueAt: DateTimeOffset dueAt } when dueAt <= now:
-                    BranchHead? headBeforePost = await ReadHeadAsync(repository, provider, info, pullRequestStatus, cancellationToken);
+                    BranchHead? headBeforePost = await ReadHeadAsync(repository, provider, info, wayOut, cancellationToken);
                     await PostQuestionsAsync(repository, provider, info, status, headBeforePost, watches, now, cancellationToken);
                     break;
 
                 case AwaitingInputPostState.Posted posted:
                     IssueWatch watch = WatchOf(repository, info, watches);
-                    BranchHead? head = await ReadHeadAsync(repository, provider, info, pullRequestStatus, cancellationToken);
+                    BranchHead? head = await ReadHeadAsync(repository, provider, info, wayOut, cancellationToken);
                     switch (await ReadInputAsync(repository, provider, info, posted.PostedAt, postedComments, watch, status, head, now, cancellationToken))
                     {
                         case InputSettlement.Settled settled:
@@ -158,59 +161,57 @@ internal sealed class AwaitingInputStep(
     }
 
     /// <summary>
-    /// Reads the pull request's status when the question lives on one and the issue read succeeded; its head is the
-    /// revision's branch head, so the head costs no extra request. Returns <see langword="null"/> otherwise or when the
-    /// read failed (retried on the next run).
+    /// Reads the pull request's way out when the question lives on one and the issue read succeeded; an open pull
+    /// request's head is the revision's branch head, so the head costs no extra request. Returns
+    /// <see langword="null"/> otherwise or when the read failed (retried on the next run).
     /// </summary>
-    private static async Task<PullRequestStatus?> ReadPullRequestStatusAsync(
+    private static async Task<PullRequestWayOut?> ReadWayOutAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
         AwaitingInputIssueInfo info,
         IssueStatus? status,
         CancellationToken cancellationToken)
     {
-        if (info.PullRequestUrl is not { } pullRequestUrl || status is null or { IsClosed: true })
+        if (info.PullRequestUrl is not { } pullRequestUrl || status is null)
         {
             return null;
         }
 
-        return await provider.GetPullRequestStatusAsync(repository.Slug, pullRequestUrl, cancellationToken)
-            is Result<PullRequestStatus>.Success { Value: var pullRequestStatus }
-            ? pullRequestStatus
+        return await Watch.ReadAsync(provider, repository.Slug, status, pullRequestUrl, cancellationToken)
+            is Result<PullRequestWayOut>.Success { Value: var wayOut }
+            ? wayOut
             : null;
     }
 
     /// <summary>
     /// The review pass's ways out: a closed issue completes; a pull request closed without merging fails continuably;
-    /// a merged pull request waits for its issue to close. Returns <see langword="null"/> while the issue keeps waiting
-    /// or a read failed (retried on the next run).
+    /// a merged or open pull request waits for its issue to close. Returns <see langword="null"/> while the issue keeps
+    /// waiting or a read failed (retried on the next run). A wait without a pull request has only its issue's closure.
     /// </summary>
     private static IIntegrationEvent? FindWayOut(
         MonitoredRepository repository,
         AwaitingInputIssueInfo info,
         IssueStatus? status,
-        PullRequestStatus? pullRequestStatus)
-    {
-        if (status is { IsClosed: true })
+        PullRequestWayOut? wayOut) =>
+        wayOut switch
         {
-            return new ProviderIssueClosed(repository.Id, info.IssueNumber);
-        }
-
-        return pullRequestStatus is { IsClosed: true, IsMerged: false }
-            ? new ProviderPullRequestClosed(repository.Id, info.IssueNumber)
-            : null;
-    }
+            PullRequestWayOut.IssueClosed => new ProviderIssueClosed(repository.Id, info.IssueNumber),
+            PullRequestWayOut.PullRequestClosed => new ProviderPullRequestClosed(repository.Id, info.IssueNumber),
+            null when status is { IsClosed: true } =>
+                new ProviderIssueClosed(repository.Id, info.IssueNumber),
+            _ => null,
+        };
 
     /// <summary>
-    /// Reads the resume branch's head (ADR 0096): a revision's is the head of the pull request status already read, a
+    /// Reads the resume branch's head (ADR 0096): a revision's is the head of the open pull request already read, a
     /// continuation's takes one branch read. Returns <see langword="null"/> when the wait has no branch or the read
-    /// failed; a pull request status without a head is a failed read.
+    /// failed; a pull request read that found no open pull request reads no head.
     /// </summary>
     private static async Task<BranchHead?> ReadHeadAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
         AwaitingInputIssueInfo info,
-        PullRequestStatus? pullRequestStatus,
+        PullRequestWayOut? wayOut,
         CancellationToken cancellationToken)
     {
         if (info.BranchName is not { } branchName)
@@ -220,9 +221,7 @@ internal sealed class AwaitingInputStep(
 
         if (info.PullRequestUrl is not null)
         {
-            return pullRequestStatus?.HeadSha is { } sha && !string.IsNullOrWhiteSpace(sha)
-                ? new BranchHead.Present(sha)
-                : null;
+            return wayOut is PullRequestWayOut.Open open ? new BranchHead.Present(open.Head.Value) : null;
         }
 
         return await provider.GetBranchHeadAsync(repository.Slug, branchName, cancellationToken)

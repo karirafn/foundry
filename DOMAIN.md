@@ -1367,6 +1367,23 @@ The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting stat
 For `publish_failed` and `publish_blocked` that close check runs in the listing pass, and only for an issue missing from a complete listing: absence alone cannot tell a closed issue from a removed trigger label, and an issue still in the listing is not asked about. Their completion raises `IssueClosedWithUnpublishedRun`, and Workers discards the run and deletes its Hand-off volume. Until then their run's unpublished work waits in that volume, and an issue still open leaves only when the run is discarded or the volume's time to live expires.
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
+## Pull Request State
+
+The provider's state of a pull request Foundry opened: `Open(Head, IsDraft) | Merged | Closed`, where `Closed` means closed without merging.
+Each provider adapter maps it once, and GitLab `locked` is `Open`.
+An unrecognised state, or an open pull request without a valid head commit, is a failed read rather than a state.
+
+## Pull Request Way Out
+
+The one outcome a watch read reaches for an issue holding a pull request, checked in this order: `IssueClosed` when the provider issue is closed, then `PullRequestClosed`, then `Merged`, then `Open(Head, IsDraft)`.
+A failed read is a failed `Result`, not a way out.
+
+## Pull Request Watch
+
+Reads the issue, then the pull request, and returns the **Pull Request Way Out**.
+A closed issue is never followed by a pull request read: the provider is the authority on issue closure (see Provider as Source of Truth for Issue Closure).
+Each caller owns its reaction to each way out and its failed-read policy.
+
 ## Provider Issue
 
 A DTO representing an issue as returned by a provider's API.

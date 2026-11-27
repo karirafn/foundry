@@ -37,8 +37,8 @@ public sealed class RunAsync : IAsyncDisposable
     private const string PrUrl = "https://github.com/owner/repo/pull/7";
     private const string IssueUrl = "https://github.com/owner/repo/issues/1";
     private const string BranchName = "feat/1-test";
-    private const string PostedHead = "aaa111";
-    private const string PushedHead = "bbb222";
+    private const string PostedHead = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string PushedHead = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     private static readonly DateTimeOffset PostedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 
@@ -384,13 +384,30 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Closed());
 
         // Act
         await RunStepAsync();
 
         // Assert
         _dispatcher.Events.ShouldHaveSingleItem().ShouldBeOfType<ProviderPullRequestClosed>();
+    }
+
+    [Fact]
+    public async Task WhenThePullRequestMerged_KeepsWaitingWithoutReadingAHead()
+    {
+        // Arrange
+        Seed(Builder().AwaitingInputPosted(PostedAt));
+        SeedWatch(issueNumber: 1, baselineBody: null, new BranchHead.Present(PostedHead));
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Merged());
+
+        // Act
+        await RunStepAtAsync(Now);
+
+        // Assert
+        _dispatcher.Events.ShouldBeEmpty();
+        _provider.BranchHeadReads.ShouldBeEmpty();
+        LoadWatch().ShouldNotBeNull().BaselineHead.ShouldBe(new BranchHead.Present(PostedHead));
     }
 
     [Fact]
@@ -850,7 +867,7 @@ public sealed class RunAsync : IAsyncDisposable
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
         SeedWatch(issueNumber: 1, baselineBody: null, new BranchHead.Present(PostedHead));
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: PushedHead, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(PushedHead), IsDraft: false));
         DateTimeOffset firstSeen = Now;
         await RunStepAtAsync(firstSeen);
         _dispatcher.Events.ShouldBeEmpty();
@@ -865,12 +882,12 @@ public sealed class RunAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenARevisionsPullRequestStatusHasNoHead_NothingIsObserved()
+    public async Task WhenARevisionsPullRequestReadFails_NothingIsObserved()
     {
         // Arrange
         Seed(Builder().AwaitingInputPosted(PostedAt));
         SeedWatch(issueNumber: 1, baselineBody: null, baselineHead: null);
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead());
 
         // Act
         await RunStepAtAsync(Now);
@@ -1150,7 +1167,8 @@ public sealed class RunAsync : IAsyncDisposable
 
         public int IssueStatusReads { get; private set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: PostedHead, IsDraft: false);
+        public Result<PullRequestState> PullRequestState { get; set; } =
+            Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(PostedHead), IsDraft: false));
 
         // The branch head a continuation's branch read returns; null makes the read fail.
         public BranchHead? BranchHead { get; set; } = new BranchHead.Present(PostedHead);
@@ -1188,7 +1206,13 @@ public sealed class RunAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(PullRequestStatus));
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(PullRequestState);
 
         public Task<Result<BranchHead>> GetBranchHeadAsync(
             RepositorySlug slug,

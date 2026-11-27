@@ -30,6 +30,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int GetDependenciesCallCount { get; private set; }
     public int IsIssueClosedCallCount { get; private set; }
     public int GetPullRequestStatusCallCount { get; private set; }
+    public int GetPullRequestStateCallCount { get; private set; }
     public int GetReviewFeedbackCallCount { get; private set; }
     public int GetBranchProtectionCallCount { get; private set; }
     public int CreateBranchCallCount { get; private set; }
@@ -104,6 +105,17 @@ internal sealed class CountingIssueProvider : IIssueProvider
         GetPullRequestStatusCallCount++;
         return Task.FromResult(
             Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
+    }
+
+    public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        TotalCalls++;
+        GetPullRequestStateCallCount++;
+        return Task.FromResult(Result<PullRequestState>.Ok(
+            new PullRequestState.Open(CommitSha.From("0123456789abcdef0123456789abcdef01234567"), IsDraft: false)));
     }
 
     public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(

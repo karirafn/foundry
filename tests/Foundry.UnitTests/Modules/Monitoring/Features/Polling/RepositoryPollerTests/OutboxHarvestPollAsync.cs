@@ -354,7 +354,13 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(new string('a', 40)), IsDraft: false)));
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,

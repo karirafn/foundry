@@ -11,11 +11,14 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.PullRequestWatch;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+using Watch = Foundry.Modules.Monitoring.Features.PullRequestWatch.PullRequestWatch;
 
 namespace Foundry.Modules.Monitoring.Features.Polling;
 
@@ -522,46 +525,25 @@ internal sealed class RepositoryPoller(
                 continue;
             }
 
-            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+            Result<PullRequestWayOut> wayOutResult = await Watch.ReadAsync(
+                provider,
                 repository.Slug,
                 reviewIssue.IssueNumber,
-                cancellationToken);
-
-            if (isClosedResult is not Result<bool>.Success isClosedSuccess)
-            {
-                continue;
-            }
-
-            if (isClosedSuccess.Value)
-            {
-                repository.RecordIntegrationEvent(new ProviderIssueClosed(repository.Id, reviewIssue.IssueNumber));
-                changed = true;
-                continue;
-            }
-
-            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
-                repository.Slug,
                 reviewIssue.PullRequestUrl,
                 cancellationToken);
 
-            if (prStatusResult is not Result<PullRequestStatus>.Success prStatusSuccess)
+            if (RecordClosure(repository, reviewIssue.IssueNumber, wayOutResult))
             {
-                continue;
-            }
-
-            if (prStatusSuccess.Value.IsClosed && !prStatusSuccess.Value.IsMerged)
-            {
-                repository.RecordIntegrationEvent(new ProviderPullRequestClosed(repository.Id, reviewIssue.IssueNumber));
                 changed = true;
                 continue;
             }
 
-            if (prStatusSuccess.Value.IsClosed)
+            if (wayOutResult is not Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.Open open })
             {
                 continue;
             }
 
-            await ReconcileMarkedReadyAsync(repository, provider, reviewIssue, prStatusSuccess.Value, cancellationToken);
+            await ReconcileMarkedReadyAsync(repository, provider, reviewIssue, open, cancellationToken);
 
             Result<ReviewFeedback> feedbackResult = await provider.GetReviewFeedbackAsync(
                 repository.Slug,
@@ -597,7 +579,7 @@ internal sealed class RepositoryPoller(
                 changed = true;
             }
             else if (feedbackSuccess.Value.HeldBackUntil is null
-                && HasHeadMoved(reviewIssue.VerifiedHeadSha, prStatusSuccess.Value.HeadSha))
+                && HasHeadMoved(reviewIssue.VerifiedHeadSha, open.Head))
             {
                 // Checked only after feedback: a fix run moves the feedback cutoff to its own start, so a comment
                 // posted with a push must be acted on first; that revision's own path re-checks the new head.
@@ -630,7 +612,7 @@ internal sealed class RepositoryPoller(
         MonitoredRepository repository,
         IIssueProvider provider,
         ReviewIssueInfo reviewIssue,
-        PullRequestStatus status,
+        PullRequestWayOut.Open open,
         CancellationToken cancellationToken)
     {
         if (reviewIssue.IsPullRequestMarkedReady)
@@ -638,7 +620,7 @@ internal sealed class RepositoryPoller(
             return;
         }
 
-        if (status.IsDraft)
+        if (open.IsDraft)
         {
             Result marked = await provider.MarkPullRequestReadyAsync(
                 repository.Slug,
@@ -684,34 +666,14 @@ internal sealed class RepositoryPoller(
                 continue;
             }
 
-            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+            Result<PullRequestWayOut> wayOutResult = await Watch.ReadAsync(
+                provider,
                 repository.Slug,
                 reviewStepIssue.IssueNumber,
-                cancellationToken);
-
-            if (isClosedResult is not Result<bool>.Success isClosedSuccess)
-            {
-                continue;
-            }
-
-            if (isClosedSuccess.Value)
-            {
-                repository.RecordIntegrationEvent(new ProviderIssueClosed(repository.Id, reviewStepIssue.IssueNumber));
-                changed = true;
-                continue;
-            }
-
-            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
-                repository.Slug,
                 reviewStepIssue.PullRequestUrl,
                 cancellationToken);
 
-            if (prStatusResult is Result<PullRequestStatus>.Success { Value: { IsClosed: true, IsMerged: false } })
-            {
-                repository.RecordIntegrationEvent(
-                    new ProviderPullRequestClosed(repository.Id, reviewStepIssue.IssueNumber));
-                changed = true;
-            }
+            changed |= RecordClosure(repository, reviewStepIssue.IssueNumber, wayOutResult);
         }
 
         return changed;
@@ -741,12 +703,12 @@ internal sealed class RepositoryPoller(
                 continue;
             }
 
-            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
+            Result<PullRequestState> stateResult = await provider.GetPullRequestStateAsync(
                 repository.Slug,
                 queuedRevision.PullRequestUrl,
                 cancellationToken);
 
-            if (prStatusResult is Result<PullRequestStatus>.Success { Value: { IsClosed: true, IsMerged: false } })
+            if (stateResult is Result<PullRequestState>.Success { Value: PullRequestState.Closed })
             {
                 repository.RecordIntegrationEvent(
                     new ProviderPullRequestClosed(repository.Id, queuedRevision.IssueNumber));
@@ -779,47 +741,23 @@ internal sealed class RepositoryPoller(
                 continue;
             }
 
-            // Apply the same closed/merged handling as the review pass.
-            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+            Result<PullRequestWayOut> wayOutResult = await Watch.ReadAsync(
+                provider,
                 repository.Slug,
                 checksPendingIssue.IssueNumber,
-                cancellationToken);
-
-            if (isClosedResult is not Result<bool>.Success isClosedSuccess)
-            {
-                continue;
-            }
-
-            if (isClosedSuccess.Value)
-            {
-                repository.RecordIntegrationEvent(
-                    new ProviderIssueClosed(repository.Id, checksPendingIssue.IssueNumber));
-                changed = true;
-                continue;
-            }
-
-            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
-                repository.Slug,
                 checksPendingIssue.PullRequestUrl,
                 cancellationToken);
 
-            if (prStatusResult is not Result<PullRequestStatus>.Success prStatusSuccess)
+            if (RecordClosure(repository, checksPendingIssue.IssueNumber, wayOutResult))
             {
-                continue;
-            }
-
-            if (prStatusSuccess.Value.IsClosed && !prStatusSuccess.Value.IsMerged)
-            {
-                repository.RecordIntegrationEvent(
-                    new ProviderPullRequestClosed(repository.Id, checksPendingIssue.IssueNumber));
                 changed = true;
                 continue;
             }
 
-            if (prStatusSuccess.Value.IsClosed)
+            // A merged pull request raises nothing here: the issue completes on a later poll when the provider issue
+            // closes. A failed read is retried on the next poll.
+            if (wayOutResult is not Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.Open open })
             {
-                // PR merged — no event here; the issue completes on a later poll when the
-                // provider issue closes (IsIssueClosedAsync -> ProviderIssueClosed).
                 continue;
             }
 
@@ -858,9 +796,8 @@ internal sealed class RepositoryPoller(
                 continue;
             }
 
-            string? headSha = prStatusSuccess.Value.HeadSha;
+            string headSha = open.Head.Value;
             if (checksSuccess.Value is Checks.Red { IsInfrastructureFailure: false } owedRed
-                && headSha is not null
                 && string.Equals(checksPendingIssue.OwedChecksRetryHeadSha, headSha, StringComparison.Ordinal))
             {
                 if (await RetryFailingJobsAsync(provider, repository.Slug, owedRed.FailingChecks, cancellationToken))
@@ -886,7 +823,7 @@ internal sealed class RepositoryPoller(
                 checksPendingIssue.IssueNumber,
                 outcome,
                 failingChecks,
-                prStatusSuccess.Value.HeadSha,
+                headSha,
                 repository.MergeWhenChecksPass,
                 repository.ReviewPullRequests));
 
@@ -903,12 +840,37 @@ internal sealed class RepositoryPoller(
 
     /// <summary>
     /// The checks verdict no longer describes the pull request when the provider reports a head other than the
-    /// stored one, or when none was stored (rows that predate the Verified Head). A read that returned no head is
-    /// never a move: there is nothing to compare until a later poll reads one.
+    /// stored one, or when none was stored (rows that predate the Verified Head).
     /// </summary>
-    private static bool HasHeadMoved(string? verifiedHeadSha, string? currentHeadSha) =>
-        currentHeadSha is not null
-        && !string.Equals(currentHeadSha, verifiedHeadSha, StringComparison.Ordinal);
+    private static bool HasHeadMoved(string? verifiedHeadSha, CommitSha currentHead) =>
+        !string.Equals(currentHead.Value, verifiedHeadSha, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Records the event of a way out that ends the issue's current step: a closed provider issue, or a pull request
+    /// closed without merging. Returns whether one was recorded.
+    /// </summary>
+    private static bool RecordClosure(
+        MonitoredRepository repository,
+        int issueNumber,
+        Result<PullRequestWayOut> wayOutResult)
+    {
+        IIntegrationEvent? closure = wayOutResult switch
+        {
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.IssueClosed } =>
+                new ProviderIssueClosed(repository.Id, issueNumber),
+            Result<PullRequestWayOut>.Success { Value: PullRequestWayOut.PullRequestClosed } =>
+                new ProviderPullRequestClosed(repository.Id, issueNumber),
+            _ => null,
+        };
+
+        if (closure is null)
+        {
+            return false;
+        }
+
+        repository.RecordIntegrationEvent(closure);
+        return true;
+    }
 
     /// <summary>
     /// Reads a review issue's checks on its unchanged head. A failed read counts as not green: the next pass asks again.

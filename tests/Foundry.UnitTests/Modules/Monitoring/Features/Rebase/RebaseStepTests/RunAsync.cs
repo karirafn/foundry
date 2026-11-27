@@ -601,7 +601,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Closed());
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -632,7 +632,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Merged());
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -647,7 +647,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false);
+        _provider.PullRequestState = Result<PullRequestState>.Ok(new PullRequestState.Merged());
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -656,6 +656,22 @@ public sealed class RunAsync : IAsyncDisposable
         _provider.RebaseCalls.ShouldBeEmpty();
         _provider.StateCalls.ShouldBe(0);
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPullRequestReadFails_BacksOffWithoutReadingTheRebaseState()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.PullRequestState = Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead());
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        _provider.StateCalls.ShouldBe(0);
+        LoadProgress().TransientFailures.ShouldBe(1);
     }
 
     [Fact]
@@ -911,7 +927,8 @@ public sealed class RunAsync : IAsyncDisposable
 
         public bool IssueClosed { get; set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false);
+        public Result<PullRequestState> PullRequestState { get; set; } =
+            Result<PullRequestState>.Ok(new PullRequestState.Open(CommitSha.From(OldHead), IsDraft: false));
 
         public Exception? ThrowOnState { get; set; }
 
@@ -952,7 +969,13 @@ public sealed class RunAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(PullRequestStatus));
+            => throw new NotSupportedException();
+
+        public Task<Result<PullRequestState>> GetPullRequestStateAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(PullRequestState);
 
         public Task<Result<IssueListing>> GetIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken)
             => throw new NotSupportedException();

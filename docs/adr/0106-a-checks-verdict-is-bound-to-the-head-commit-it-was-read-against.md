@@ -19,7 +19,7 @@ Every checks verdict carries the head commit it was read against, and a `review`
 - **Trigger is the head commit, or a green rerun.** A moved head sends the issue back to `checks_pending`; a newer red pipeline on an unchanged head does not. A non-passed verdict that reads green on an unchanged head also returns the issue to the checks gate, with an exhausted fix budget ([ADR 0108](0108-a-review-issue-whose-checks-pass-on-a-rerun-returns-to-the-checks-gate.md)).
 - **Every outcome stores the commit.** `passed`, `still_failing`, `none_detected`, `unfinished` and `unreadable` all set it, and `ReviewIssue.VerifiedHeadSha` holds it.
 - **One source: the PR status read.** The poller reads status before checks, so the stored commit equals or precedes the verdict's commit, and a race costs one extra re-check.
-- **A null stored commit counts as moved.** Rows that predate the field re-check once; a null *current* head skips detection that poll.
+- **A null stored commit counts as moved.** Rows that predate the field re-check once. A current head that cannot be read is a failed status read, which skips that poll's review pass for the issue.
 - **Feedback first.** The head check runs only when the same review pass found no new or held-back feedback, because a fix run moves the feedback cutoff to its own start.
 - **Fresh fix budget.** The return to `checks_pending` starts `ChecksFixAttempts` at 0, matching every other person-triggered round.
 - **No rebase.** The issue goes straight to `checks_pending`; Foundry still rebases only after its own runs ([ADR 0087](0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)).
@@ -45,3 +45,4 @@ Every checks verdict carries the head commit it was read against, and a `review`
 
 ## Revisions
 - 2026-11-14 — A non-passed verdict that reads green on an unchanged head also returns the issue to the checks gate, with an exhausted fix budget ([ADR 0108](0108-a-review-issue-whose-checks-pass-on-a-rerun-returns-to-the-checks-gate.md)).
+- 2026-11-27 — an open pull request without a valid head is a failed read, so a null current head no longer reaches detection (#1352)
