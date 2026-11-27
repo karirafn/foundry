@@ -177,6 +177,38 @@ public sealed class Parse
     }
 
     [Fact]
+    public void WhenNonZeroWithTheRefusedSentinel_FailsAsAccessRefusedWithTheStepAndGitsError()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "2026-11-27T10:00:00Z FOUNDRY_BOOTSTRAP_FAILED stage=refused detail=could not reach the repository: "
+            + "fatal: repository 'https://gitlab.com/o/r.git/' not found\n",
+            expectsRunBranch: false);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Failed(new FailureReason.AccessRefused(
+            "could not reach the repository: fatal: repository 'https://gitlab.com/o/r.git/' not found")));
+    }
+
+    [Fact]
+    public void WhenTheRefusedSentinelCarriesASecret_ItIsRedacted()
+    {
+        // Arrange
+        string token = "ghp" + "_abcdefghijklmnopqrstuvwxyz0123456789";
+
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            $"FOUNDRY_BOOTSTRAP_FAILED stage=refused detail=fetching the repository failed: remote: {token} denied\n",
+            expectsRunBranch: false);
+
+        // Assert
+        FailureReason reason = outcome.ShouldBeOfType<PrepareOutcome.Failed>().Reason;
+        reason.ShouldBeOfType<FailureReason.AccessRefused>().Detail.ShouldNotContain(token);
+    }
+
+    [Fact]
     public void WhenTheCloneSentinelNamesAFetchFailure_StillFailsTheBootstrap()
     {
         // Act

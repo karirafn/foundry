@@ -59,8 +59,9 @@ internal static partial class PrepareOutputParser
     }
 
     /// <summary>
-    /// The Publisher retried its provider phase itself before printing <c>stage=unreachable</c> or <c>stage=fetch</c>, so
-    /// each of those sentinels is its own reason; every other sentinel is a bootstrap failure.
+    /// The Publisher retried its provider phase itself before printing <c>stage=unreachable</c> or <c>stage=fetch</c>, and
+    /// <c>stage=refused</c> means the provider refused the token, so each of those sentinels is its own reason; every
+    /// other sentinel is a bootstrap failure.
     /// </summary>
     private static FailureReason BootstrapFailure(string sentinel)
     {
@@ -73,8 +74,15 @@ internal static partial class PrepareOutputParser
 
         Match fetch = FetchSentinelPattern().Match(sentinel);
 
-        return fetch.Success
-            ? new FailureReason.FetchFailed(fetch.Groups["detail"].Value)
+        if (fetch.Success)
+        {
+            return new FailureReason.FetchFailed(fetch.Groups["detail"].Value);
+        }
+
+        Match refused = RefusedSentinelPattern().Match(sentinel);
+
+        return refused.Success
+            ? new FailureReason.AccessRefused(refused.Groups["detail"].Value)
             : new FailureReason.WorkerBootstrapFailed(sentinel);
     }
 
@@ -244,4 +252,10 @@ internal static partial class PrepareOutputParser
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex FetchSentinelPattern();
+
+    [GeneratedRegex(
+        @"^FOUNDRY_BOOTSTRAP_FAILED stage=refused detail=(?<detail>.*)$",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex RefusedSentinelPattern();
 }

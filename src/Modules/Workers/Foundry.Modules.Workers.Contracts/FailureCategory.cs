@@ -17,6 +17,7 @@ public sealed record FailureCategory
     public const string ProviderErrorToken = "provider_error";
     public const string ProviderUnreachableToken = "provider_unreachable";
     public const string FetchFailedToken = "fetch_failed";
+    public const string AccessRefusedToken = "access_refused";
     public const string PackageSourceUnreachableToken = "package_source_unreachable";
     public const string PackageRestoreFailedToken = "package_restore_failed";
     public const string TransientApiErrorToken = "transient_api_error";
@@ -62,6 +63,23 @@ public sealed record FailureCategory
     /// </remarks>
     public static readonly FailureCategory FetchFailed = new(
         FetchFailedToken,
+        AutomaticRetrySchedule.Create(
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32)));
+
+    /// <summary>
+    /// The git provider refused the account token access to the repository during Prepare (HTTP 403, or a 404 hiding
+    /// the repository), so the run did no work.
+    /// </summary>
+    /// <remarks>
+    /// It shares the fetch failure's schedule: the refusal has the repository's write access probed again, so a token
+    /// the operator fixes, or a refusal the probe overturns, lets a later retry pass without anyone pressing Retry.
+    /// </remarks>
+    public static readonly FailureCategory AccessRefused = new(
+        AccessRefusedToken,
         AutomaticRetrySchedule.Create(
             TimeSpan.FromMinutes(2),
             TimeSpan.FromMinutes(4),
@@ -139,6 +157,7 @@ public sealed record FailureCategory
             { ProviderErrorToken, ProviderError },
             { ProviderUnreachableToken, ProviderUnreachable },
             { FetchFailedToken, FetchFailed },
+            { AccessRefusedToken, AccessRefused },
             { PackageSourceUnreachableToken, PackageSourceUnreachable },
             { PackageRestoreFailedToken, PackageRestoreFailed },
             { TransientApiErrorToken, TransientApiError },

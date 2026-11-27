@@ -72,6 +72,23 @@ public sealed class AutomaticRetry
     }
 
     [Fact]
+    public void AccessRefused_BacksOffDoublingFromTwoMinutesForFiveRetries()
+    {
+        // Act
+        TimeSpan[] backoffs = [.. FailureCategory.AccessRefused.AutomaticRetry!.Backoffs];
+
+        // Assert
+        backoffs.ShouldBe(
+        [
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromMinutes(8),
+            TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(32),
+        ]);
+    }
+
+    [Fact]
     public void FetchFailed_BacksOffDoublingFromTwoMinutesForFiveRetries()
     {
         // Act
@@ -168,6 +185,7 @@ public sealed class AutomaticRetry
             [
                 FailureCategory.ProviderUnreachable,
                 FailureCategory.FetchFailed,
+                FailureCategory.AccessRefused,
                 FailureCategory.PackageSourceUnreachable,
                 FailureCategory.PackageRestoreFailed,
                 FailureCategory.TransientApiError,
@@ -179,6 +197,7 @@ public sealed class AutomaticRetry
     [InlineData(FailureCategory.TransientApiErrorToken, true)]
     [InlineData(FailureCategory.ProviderUnreachableToken, true)]
     [InlineData(FailureCategory.FetchFailedToken, true)]
+    [InlineData(FailureCategory.AccessRefusedToken, true)]
     [InlineData(FailureCategory.PackageSourceUnreachableToken, true)]
     [InlineData(FailureCategory.PackageRestoreFailedToken, true)]
     [InlineData(FailureCategory.NonZeroExitToken, false)]

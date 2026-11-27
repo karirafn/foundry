@@ -142,6 +142,14 @@ describe('failure-category', () => {
     expect(display).toEqual({ label: 'FETCH FAILED', cssClass: 'badge--failure-provider-unreachable' });
   });
 
+  it('should map access_refused to "ACCESS REFUSED" with the auth-invalid outline', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('access_refused');
+
+    // Assert
+    expect(display).toEqual({ label: 'ACCESS REFUSED', cssClass: 'badge--failure-auth-invalid' });
+  });
+
   it('should map package_source_unreachable to "PACKAGES UNREACHABLE" with the provider-unreachable warning outline', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('package_source_unreachable');

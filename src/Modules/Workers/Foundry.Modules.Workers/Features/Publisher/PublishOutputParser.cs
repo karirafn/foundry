@@ -155,6 +155,7 @@ internal static partial class PublishOutputParser
             "transient" => PublishFailureKind.Transient,
             "permanent" => PublishFailureKind.Permanent,
             "unreachable" => PublishFailureKind.Unreachable,
+            "refused" => PublishFailureKind.Refused,
             _ => null,
         };
 
