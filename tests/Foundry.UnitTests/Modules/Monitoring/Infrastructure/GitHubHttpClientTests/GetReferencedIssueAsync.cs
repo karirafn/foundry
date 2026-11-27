@@ -62,6 +62,7 @@ public sealed class GetReferencedIssueAsync
     [InlineData("""[{"state":"CLOSED"},{"state":"MERGED"}]""", ClosingMergeRequestState.Merged)]
     [InlineData("""[{"state":"CLOSED"},{"state":"OPEN"}]""", ClosingMergeRequestState.Open)]
     [InlineData("""[{"state":"OPEN"},{"state":"MERGED"}]""", ClosingMergeRequestState.Merged)]
+    [InlineData("""[{"state":"UNKNOWN"}]""", ClosingMergeRequestState.None)]
     public async Task WhenClosingPullRequestsExist_ReportsTheStrongestState(
         string closingNodes,
         ClosingMergeRequestState expected)

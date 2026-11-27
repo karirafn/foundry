@@ -119,6 +119,7 @@ public sealed class GetReferencedIssueAsync
     [InlineData("""[{"iid":1,"state":"opened"},{"iid":2,"state":"merged"}]""", ClosingMergeRequestState.Merged)]
     [InlineData("""[{"iid":1,"state":"merged"},{"iid":2,"state":"closed"}]""", ClosingMergeRequestState.Merged)]
     [InlineData("""[{"iid":1,"state":"closed"},{"iid":2,"state":"locked"}]""", ClosingMergeRequestState.Open)]
+    [InlineData("""[{"iid":1,"state":"unknown"}]""", ClosingMergeRequestState.None)]
     public async Task WhenSeveralOrOtherMergeRequestsCloseTheIssue_TheStrongestStateWins(
         string closedBy,
         ClosingMergeRequestState expected)

@@ -70,4 +70,29 @@ internal sealed partial class GitHubHttpClient
 
         return null;
     }
+
+    /// <summary>
+    /// Maps GitHub's REST pull request <c>state</c> (<c>open</c>, <c>closed</c>) and <c>merged_at</c>. REST has no
+    /// merged state, so a set <c>merged_at</c> wins over <c>state</c>. Never returns
+    /// <see cref="MergeRequestPresence.None"/>; any other value is null.
+    /// </summary>
+    internal static MergeRequestPresence? ParseRestPullRequestState(string? state, string? mergedAt)
+    {
+        if (mergedAt is not null)
+        {
+            return MergeRequestPresence.Merged;
+        }
+
+        if (string.Equals(state, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            return MergeRequestPresence.Open;
+        }
+
+        if (string.Equals(state, "closed", StringComparison.OrdinalIgnoreCase))
+        {
+            return MergeRequestPresence.Closed;
+        }
+
+        return null;
+    }
 }

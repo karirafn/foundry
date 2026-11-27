@@ -281,4 +281,25 @@ public sealed class GetPullRequestStateAsync
         // Assert
         presence.ShouldBe(expected);
     }
+
+    [Theory]
+    [InlineData("open", null, MergeRequestPresence.Open)]
+    [InlineData("closed", null, MergeRequestPresence.Closed)]
+    [InlineData("closed", "2026-06-01T10:00:00Z", MergeRequestPresence.Merged)]
+    [InlineData("OPEN", null, MergeRequestPresence.Open)]
+    [InlineData("Closed", null, MergeRequestPresence.Closed)]
+    [InlineData("merged", null, null)]
+    [InlineData("", null, null)]
+    [InlineData(null, null, null)]
+    public void ParseRestPullRequestState_MapsMergedAtFirstThenEachRestStateIgnoringCase(
+        string? state,
+        string? mergedAt,
+        MergeRequestPresence? expected)
+    {
+        // Act
+        MergeRequestPresence? presence = GitHubHttpClient.ParseRestPullRequestState(state, mergedAt);
+
+        // Assert
+        presence.ShouldBe(expected);
+    }
 }
