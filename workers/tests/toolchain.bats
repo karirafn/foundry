@@ -103,7 +103,7 @@ json_of() {
     run_script --separate-stderr
 
     [ "$status" -eq 0 ]
-    json_of "$output" | jq -e 'map(.name) | index("bats") == null and index("corepack") != null and index("playwright-core") != null and length == 11'
+    json_of "$output" | jq -e 'map(.name) | index("bats") == null and index("corepack") != null and index("playwright-core") != null and length == 12'
 }
 
 @test "no tools at all yields an empty list" {
@@ -147,7 +147,7 @@ json_of() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "${lines[0]}" == "FOUNDRY_TOOLCHAIN "* ]]
-    json_of "${lines[0]}" | jq -e 'type == "array" and length == 12'
+    json_of "${lines[0]}" | jq -e 'type == "array" and length == 13'
 }
 
 @test "an unset CHROME_BIN omits chromium" {
