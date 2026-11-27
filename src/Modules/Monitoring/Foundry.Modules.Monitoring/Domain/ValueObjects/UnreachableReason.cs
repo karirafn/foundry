@@ -10,4 +10,7 @@ public enum UnreachableReason
 
     /// <summary>The branch-rules GET failed, preventing a definitive eligibility decision.</summary>
     BranchRulesUnavailable = 2,
+
+    /// <summary>The provider refused the account token when a run used it; the write probe re-runs on the next poll.</summary>
+    AccessRefused = 3,
 }

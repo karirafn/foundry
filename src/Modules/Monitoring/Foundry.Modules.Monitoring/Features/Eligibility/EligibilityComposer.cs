@@ -30,11 +30,7 @@ internal sealed class EligibilityComposer(IIssueProviderFactory providerFactory)
         {
             WriteProbeVerdict.Denied => new RepositoryEligibility.Ineligible(
                 [EligibilityViolation.CannotPush(slug)]),
-            // Map the probe reason to an eligibility reason so callers (and the API surface) can
-            // distinguish a transient transport failure from a GitHub rate-limit exhaustion.
-            WriteProbeVerdict.Unknown { Reason: UnknownReason.RateLimited } =>
-                new RepositoryEligibility.Unreachable(UnreachableReason.RateLimited),
-            WriteProbeVerdict.Unknown => new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed),
+            WriteProbeVerdict.Unknown unknown => FromUnknownReason(unknown.Reason),
             WriteProbeVerdict.Granted => await EvaluateBranchRulesAsync(
                 slug,
                 credential,
@@ -43,6 +39,16 @@ internal sealed class EligibilityComposer(IIssueProviderFactory providerFactory)
             _ => throw new UnreachableException($"Unhandled WriteProbeVerdict variant: {verdict.GetType().Name}"),
         };
     }
+
+    // One arm per reason, so a reason added later fails loudly instead of showing as NeverProbed.
+    private static RepositoryEligibility.Unreachable FromUnknownReason(UnknownReason reason) =>
+        reason switch
+        {
+            UnknownReason.Transport => new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed),
+            UnknownReason.RateLimited => new RepositoryEligibility.Unreachable(UnreachableReason.RateLimited),
+            UnknownReason.AccessRefused => new RepositoryEligibility.Unreachable(UnreachableReason.AccessRefused),
+            _ => throw new UnreachableException($"Unhandled UnknownReason: {reason}"),
+        };
 
     private async Task<RepositoryEligibility> EvaluateBranchRulesAsync(
         RepositorySlug slug,

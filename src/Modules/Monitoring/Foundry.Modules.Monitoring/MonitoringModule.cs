@@ -35,12 +35,14 @@ using Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
 using Foundry.Modules.Monitoring.Features.Webhooks.Ingress;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Modules.Monitoring.Features.Webhooks.Registration;
+using Foundry.Modules.Monitoring.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Features.Webhooks.StatusBroadcast;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Http.Ingress;
@@ -201,6 +203,7 @@ public static class MonitoringModule
         services.AddIntegrationEventHandler<IssueEnteredAwaitingInput, IssueEnteredAwaitingInputHandler>();
         services.AddIntegrationEventHandler<TriageBlockersFound, TriageBlockersFoundHandler>();
         services.AddIntegrationEventHandler<TriageDecisionsRecorded, TriageDecisionsRecordedHandler>();
+        services.AddIntegrationEventHandler<WorkerRunAccessRefused, WorkerRunAccessRefusedHandler>();
 
         services.AddHostedService(sp => new MonitoringService(
             sp.GetRequiredService<IServiceScopeFactory>(),

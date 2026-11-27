@@ -174,6 +174,22 @@ public sealed class ToEligibilityInfo
     }
 
     [Fact]
+    public void WhenEligibilityIsUnreachableWithAccessRefusedReason_ReturnsAccessRefusedToken()
+    {
+        // Arrange
+        RepositoryEligibility.Unreachable unreachable = new(UnreachableReason.AccessRefused);
+
+        // Act
+        RepositoryEligibilityInfo? result = RepositoryMappings.ToEligibilityInfo(unreachable, new WriteProbeVerdict.Unknown(), "github");
+
+        // Assert
+        RepositoryEligibilityInfo info = result.ShouldNotBeNull();
+        info.ShouldSatisfyAllConditions(
+            () => info.Status.ShouldBe("unreachable"),
+            () => info.Reason.ShouldBe("access-refused"));
+    }
+
+    [Fact]
     public void WhenEligibilityIsIneligibleWithUnknownRule_ReturnsNeutralDescription()
     {
         // Arrange
