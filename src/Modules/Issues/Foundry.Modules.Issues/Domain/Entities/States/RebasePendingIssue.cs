@@ -289,7 +289,7 @@ public sealed class RebasePendingIssue : Issue
     private ReviewIssue FailCatchUp(RebaseOutcome rebaseOutcome, DateTimeOffset transitionedAt)
     {
         ReviewIssue review = ReviewIssue.FromFailedCatchUp(this, rebaseOutcome, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId, IssueNumber));
         return review;
     }
 
@@ -301,7 +301,7 @@ public sealed class RebasePendingIssue : Issue
     {
         SpendBeforeReadyRound(rebaseOutcome);
         ReviewIssue review = ReviewIssue.FromBeforeReady(this, rebaseOutcome, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId, IssueNumber));
         return review;
     }
 

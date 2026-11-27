@@ -6,4 +6,5 @@ namespace Foundry.Modules.Issues.Domain.Events;
 
 public sealed record IssueInReview(
     IssueId IssueId,
-    MonitoredRepositoryId MonitoredRepositoryId) : IDomainEvent, IIssueStateChanged;
+    MonitoredRepositoryId MonitoredRepositoryId,
+    int IssueNumber) : IDomainEvent, IIssueStateChanged;

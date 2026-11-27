@@ -83,7 +83,7 @@ public sealed class ImplementsIIssueStateChanged
     public void IssueInReview_ImplementsIIssueStateChanged()
     {
         // Arrange
-        IssueInReview @event = new(AnyIssueId, AnyRepositoryId);
+        IssueInReview @event = new(AnyIssueId, AnyRepositoryId, 42);
 
         // Act
         IIssueStateChanged stateChanged = @event;

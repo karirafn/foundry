@@ -201,7 +201,8 @@ public sealed class ResolveVerdict
         review.ShouldSatisfyAllConditions(
             () => review.ReviewOutcome.ShouldBeNull(),
             () => review.ReviewFixAttempts.ShouldBe(Issue.ReviewMaxFixRuns),
-            () => reviewing.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem());
+            () => reviewing.DomainEvents.OfType<IssueInReview>().ShouldHaveSingleItem()
+                .IssueNumber.ShouldBe(reviewing.IssueNumber));
     }
 
     [Fact]

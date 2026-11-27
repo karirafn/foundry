@@ -120,6 +120,7 @@ public static class IssuesModule
         services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueMergePending>, IssueMergePendingNudgeBridge>();
+        services.AddScoped<IDomainEventHandler<IssueInReview>, IssueReviewNudgeBridge>();
         services.AddScoped<IDomainEventHandler<TriageBlockersNamed>, TriageBlockersFoundBridge>();
         services.AddScoped<IDomainEventHandler<TriageDetailsDecided>, TriageDecisionsRecordedBridge>();
         services.AddScoped<IDomainEventHandler<IssueClosedWithUnpublishedRun>, IssueClosedWithUnpublishedRunBridge>();

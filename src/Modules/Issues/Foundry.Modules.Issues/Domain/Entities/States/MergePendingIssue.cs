@@ -126,7 +126,7 @@ public sealed class MergePendingIssue : Issue
         }
 
         ReviewIssue review = ReviewIssue.FromMergePending(this, mergeOutcome, transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId, IssueNumber));
         return review;
     }
 
