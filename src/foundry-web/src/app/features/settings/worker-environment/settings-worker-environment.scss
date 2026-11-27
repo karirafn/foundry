@@ -1,1 +1,28 @@
-@use '../settings-shared' as *;
+@use '../../../../styles/settings-form' as *;
+
+.general-settings {
+  @include settings-form-section;
+  @include settings-form-field;
+  @include settings-form-field-hint;
+  @include settings-form-inputs(number);
+  @include settings-form-number-input;
+  @include settings-form-errors;
+  @include settings-form-save;
+  @include settings-form-limits;
+}
+
+.worker-env {
+  &__fieldset {
+    border: 0;
+    margin: 0;
+    min-width: 0;
+    padding: 0;
+  }
+
+  &__actions {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+}
