@@ -184,5 +184,6 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
             source.RevertedFiles,
             source.GenericFindings);
         CarryConfirmationFrom(source);
+        StorePullRequestBodyHash(source.PullRequestBodyHash);
     }
 }

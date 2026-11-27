@@ -189,6 +189,13 @@ public sealed class TickAsync : IAsyncDisposable
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<Result> UpdatePullRequestBodyAsync(
+            MonitoredRepositoryId repositoryId,
+            string pullRequestUrl,
+            string body,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result> PostRunSummaryAsync(
             MonitoredRepositoryId repositoryId,
             string pullRequestUrl,

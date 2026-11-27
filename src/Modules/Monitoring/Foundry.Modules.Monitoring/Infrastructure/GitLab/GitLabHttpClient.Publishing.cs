@@ -85,6 +85,59 @@ internal sealed partial class GitLabHttpClient
     }
 
     /// <summary>
+    /// Replaces the description of the merge request at <paramref name="mergeRequestUrl"/>
+    /// (<c>PUT /projects/:id/merge_requests/:merge_request_iid</c> with <c>description</c> only, so the title is kept).
+    /// A 404, or a 403 that is not rate limiting, is a refusal of the token, like opening a merge request.
+    /// </summary>
+    public async Task<Result> UpdateMergeRequestDescriptionAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string mergeRequestUrl,
+        string description,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result.Fail(RunPublishingErrors.Permanent(GitLabErrors.InvalidBaseUrl.Message));
+        }
+
+        if (!TryParseMrIid(mergeRequestUrl, out int mrIid))
+        {
+            return Result.Fail(RunPublishingErrors.Permanent(GitLabErrors.InvalidMergeRequestUrl.Message));
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string action = $"Replacing the description of merge request !{mrIid} on {slug}";
+
+        using HttpRequestMessage request = new(
+            HttpMethod.Put,
+            new Uri(EnsureTrailingSlash(apiBaseUrl), $"projects/{encodedPath}/merge_requests/{mrIid}"));
+        AddCommonHeaders(request, token);
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(new GitLabMergeRequestDescriptionWriteDto(description), JsonOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        Result<HttpResponseMessage> sent = await SendPublishingRequestAsync(request, action, cancellationToken);
+        if (sent is not Result<HttpResponseMessage>.Success { Value: { } response })
+        {
+            return Result.Fail(((Result<HttpResponseMessage>.Failure)sent).Error);
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result.Fail(ClassifyMergeRequestOpenFailure(response, action));
+            }
+
+            RecordRestHeadroom(response);
+            return Result.Ok();
+        }
+    }
+
+    /// <summary>
     /// Lists the web URLs of the open merge requests from <paramref name="sourceBranch"/>
     /// (<c>GET /projects/:id/merge_requests?source_branch=…&amp;state=opened</c>).
     /// </summary>
@@ -329,6 +382,8 @@ internal sealed partial class GitLabHttpClient
         string TargetBranch,
         string Title,
         string Description);
+
+    private sealed record GitLabMergeRequestDescriptionWriteDto(string Description);
 
     private sealed record GitLabCreatedMergeRequestDto(string? WebUrl);
 

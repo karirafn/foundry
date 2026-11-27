@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -17,6 +18,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -28,7 +30,7 @@ using WorkerRunFailedEvent = Foundry.Modules.Workers.Contracts.WorkerRunFailed;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.Publishing.WorkerRunPublisherTests;
 
-public sealed class PublishAsync : WorkerDispatchServiceTestBase
+public sealed partial class PublishAsync : WorkerDispatchServiceTestBase
 {
     private const string Branch = "feat/42-add-retry";
 
@@ -39,6 +41,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         RunBranchHead: null);
 
     private readonly MonitoredRepositoryId _repositoryId = MonitoredRepositoryId.New();
+
+    private readonly IssueId _issueId = IssueId.New();
 
     private readonly CapturingIntegrationEventDispatcher _events = new();
 
@@ -691,7 +695,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     private void SeedPublishingRun(RunExit exit)
     {
         using FoundryDbContext db = CreateDbContext();
-        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
+        StartingRun starting = StartingRun.Begin(_issueId, WorkerRunId.New());
         starting.RecordPreparedBase(Base, MonitoredRepositoryId.New());
         ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), _repositoryId);
         PublishingRun publishing = active.BeginPublishing(
@@ -748,7 +752,9 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         FakePublisher publisher,
         StubPostExitProviderQueries provider,
         string? issueRunKind = IssueSummary.FreshRunKind,
-        RecordingRunPublishingCommands? commands = null)
+        RecordingRunPublishingCommands? commands = null,
+        IIssueContentQueries? contentQueries = null,
+        ILogger<WorkerRunPublisher>? logger = null)
     {
         await using FoundryDbContext db = CreateDbContext();
         DomainEventDispatcher domainEvents = new(new ServiceCollection().BuildServiceProvider());
@@ -759,6 +765,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             StubRepositoryDispatchQueries.WithToken("ghp_test"),
             commands ?? _commands,
             provider,
+            contentQueries ?? new StubIssueContentQueries(),
             new StubIssueQueries(runKind: issueRunKind),
             new StubGlobalSettingsQueries(),
             parser,
@@ -777,7 +784,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             domainEvents,
             _broadcaster,
             TimeProvider.System,
-            NullLogger<WorkerRunPublisher>.Instance);
+            logger ?? NullLogger<WorkerRunPublisher>.Instance);
 
         PublishingRun run = await db.Set<PublishingRun>().SingleAsync(TestContext.Current.CancellationToken);
         await sut.PublishAsync(run, TestContext.Current.CancellationToken);

@@ -116,6 +116,18 @@ public sealed class PublishingInstructions
             "Catch the branch up with the default branch only by `git rebase origin/HEAD`, never by merging it.");
     }
 
+
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void WhenAnyImplementPromptIsBuilt_ItAsksForADescriptionOfTheWholeBranch(string variant)
+    {
+        // Act
+        string prompt = BuildPrompt(variant);
+
+        // Assert
+        prompt.ShouldContain(
+            "- `pullRequest` describes the whole change on the branch as it stands after your commits, not only this run's commits, and repeats every `attention` item that still applies: Foundry may replace the pull request description with it.");
+    }
     [Theory]
     [MemberData(nameof(Variants))]
     public void WhenAnyImplementPromptIsBuilt_ItNoLongerForbidsRebasing(string variant)

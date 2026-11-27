@@ -275,6 +275,15 @@ internal sealed partial class GitLabIssueProvider(
         };
     }
 
+    public Task<Result> UpdatePullRequestBodyAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.UpdateMergeRequestDescriptionAsync(apiBaseUrl, slug, pullRequestUrl, body, token, cancellationToken);
+    }
+
     public Task<Result> MarkPullRequestReadyAsync(
         RepositorySlug slug,
         string pullRequestUrl,

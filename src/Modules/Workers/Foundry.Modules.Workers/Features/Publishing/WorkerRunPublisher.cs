@@ -34,6 +34,7 @@ internal sealed class WorkerRunPublisher(
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IRunPublishingCommands runPublishingCommands,
     IPostExitProviderQueries postExitProviderQueries,
+    IIssueContentQueries issueContentQueries,
     IIssueQueries issueQueries,
     IGlobalSettingsQueries settingsQueries,
     IContainerOutputParser containerOutputParser,
@@ -241,16 +242,7 @@ internal sealed class WorkerRunPublisher(
             return Result.Fail(RunPublishingErrors.Transient("Reading the issue for the pull request failed."));
         }
 
-        PullRequestText text = PullRequestText.Build(
-            KindOf(issue.Kind.Kind),
-            PullRequestSummary.TryCreate(run.PullRequestSummary),
-            PullRequestDescription.TryCreate(run.PullRequestDescriptionDraft),
-            issue.Title,
-            issue.IssueNumber,
-            run.PublishedCommitSubjects,
-            run.RevertedFiles,
-            run.GenericFindings,
-            run.FalsePositiveConfirmation);
+        PullRequestText text = BuildPullRequestText(run, issue, PullRequestDescription.TryCreate(run.PullRequestDescriptionDraft));
 
         Result<string> opened = await runPublishingCommands.OpenPullRequestAsync(
             run.MonitoredRepositoryId,
@@ -264,6 +256,10 @@ internal sealed class WorkerRunPublisher(
             return Result.Fail(new Error(openFailure.Error.Code, $"Opening the pull request failed: {openFailure.Error.Message}"));
         }
 
+        // Also recorded when the provider answered with a pull request already open for the branch: a body Foundry did
+        // not send never hashes to this, so it is never replaced.
+        run.RecordPullRequestBodyHash(PullRequestBodyHash.Hash(text.Body));
+
         logger.LogInformation(
             "Worker run {WorkerRunId} opened pull request {PullRequestUrl}.",
             run.Id,
@@ -271,7 +267,6 @@ internal sealed class WorkerRunPublisher(
         return Result.Ok();
     }
 
-    // A later run on a branch with an open pull request never overwrites the body a reviewer may have edited.
     private async Task<Result> PostSummaryAsync(PublishingRun run, string pullRequestUrl, CancellationToken cancellationToken)
     {
         // The run publishes before its completion moves the issue on, so the issue still reports this run's kind.
@@ -279,6 +274,12 @@ internal sealed class WorkerRunPublisher(
         if (issueResult is not Result<IssueDetail>.Success { Value: { } issue })
         {
             return Result.Fail(RunPublishingErrors.Transient("Reading the issue for the run summary failed."));
+        }
+
+        Result replaced = await ReplaceUneditedBodyAsync(run, issue, pullRequestUrl, cancellationToken);
+        if (replaced is Result.Failure)
+        {
+            return replaced;
         }
 
         string body = PullRequestText.SummaryComment(
@@ -299,6 +300,111 @@ internal sealed class WorkerRunPublisher(
             ? Result.Fail(new Error(postFailure.Error.Code, $"Posting the run summary failed: {postFailure.Error.Message}"))
             : posted;
     }
+
+    /// <summary>
+    /// Replaces the open pull request's body with this run's description while the live body still hashes to the body
+    /// Foundry last wrote (ADR 0100), so the description follows the work and a person's edit is never overwritten.
+    /// </summary>
+    private async Task<Result> ReplaceUneditedBodyAsync(
+        PublishingRun run,
+        IssueDetail issue,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        // Without a description the body would fall back to this run's commits only, narrower than the branch's change.
+        if (PullRequestDescription.TryCreate(run.PullRequestDescriptionDraft) is not { } description)
+        {
+            return Result.Ok();
+        }
+
+        // A retry after this run replaced the body compares with its own hash.
+        PullRequestBodyHash? written = run.PullRequestBodyHash
+            ?? await FindLastWrittenBodyHashAsync(run, cancellationToken);
+        if (written is null)
+        {
+            return Result.Ok();
+        }
+
+        Result<string> live = await issueContentQueries.GetPullRequestDescriptionAsync(
+            run.MonitoredRepositoryId,
+            pullRequestUrl,
+            cancellationToken);
+        if (live is not Result<string>.Success { Value: { } liveBody })
+        {
+            logger.LogWarning(
+                "Worker run {WorkerRunId} left the description of the pull request for issue #{IssueNumber} unchanged: reading it failed: {Error}",
+                run.Id,
+                issue.IssueNumber,
+                ((Result<string>.Failure)live).Error.Message);
+            return Result.Ok();
+        }
+
+        if (PullRequestBodyHash.Hash(liveBody) != written)
+        {
+            return Result.Ok();
+        }
+
+        string body = BuildPullRequestText(run, issue, description).Body;
+
+        Result updated = await runPublishingCommands.UpdatePullRequestBodyAsync(
+            run.MonitoredRepositoryId,
+            pullRequestUrl,
+            body,
+            cancellationToken);
+        if (updated is Result.Failure updateFailure)
+        {
+            return Result.Fail(new Error(
+                updateFailure.Error.Code,
+                $"Replacing the pull request description failed: {updateFailure.Error.Message}"));
+        }
+
+        run.RecordPullRequestBodyHash(PullRequestBodyHash.Hash(body));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Worker run {WorkerRunId} replaced the unedited description of pull request {PullRequestUrl}.",
+            run.Id,
+            pullRequestUrl);
+        return Result.Ok();
+    }
+
+    // Each transition replaces the run's row, and the branch is mapped per state, so the runs are filtered in memory.
+    private async Task<PullRequestBodyHash?> FindLastWrittenBodyHashAsync(PublishingRun run, CancellationToken cancellationToken)
+    {
+        List<WorkerRun> earlier = await dbContext.Set<WorkerRun>()
+            .AsNoTracking()
+            .Where(r => r.IssueId == run.IssueId && r.Id != run.Id && r.PullRequestBodyHash != null)
+            .ToListAsync(cancellationToken);
+
+        return earlier
+            .Where(r => BranchOf(r) == run.BranchName)
+            .OrderByDescending(r => r.CreatedAt)
+            .Select(r => r.PullRequestBodyHash)
+            .FirstOrDefault();
+    }
+
+    private static BranchName? BranchOf(WorkerRun run) => run switch
+    {
+        UnpublishedRun unpublished => unpublished.BranchName,
+        CompletedRun completed => completed.BranchName,
+        FailedRun failed => failed.BranchName,
+        _ => null,
+    };
+
+    private static PullRequestText BuildPullRequestText(
+        PublishingRun run,
+        IssueDetail issue,
+        PullRequestDescription? description) =>
+        PullRequestText.Build(
+            KindOf(issue.Kind.Kind),
+            PullRequestSummary.TryCreate(run.PullRequestSummary),
+            description,
+            issue.Title,
+            issue.IssueNumber,
+            run.PublishedCommitSubjects,
+            run.RevertedFiles,
+            run.GenericFindings,
+            run.FalsePositiveConfirmation);
 
     private async Task<int> CountBranchCommitsAsync(PublishingRun run, CancellationToken cancellationToken)
     {

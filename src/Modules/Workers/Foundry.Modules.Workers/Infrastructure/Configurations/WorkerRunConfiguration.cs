@@ -97,6 +97,7 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
     private const int SourceTokenHashMaxLength = 64;
 
     private const int SpecHashMaxLength = 64;
+    private const int PullRequestBodyHashMaxLength = 64;
 
     private static readonly ValueConverter<BranchDivergenceReason, string> DivergenceReasonConverter = new(
         reason => BranchDivergenceReasonTokens.ToToken(reason),
@@ -263,6 +264,14 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.Property(r => r.PublishedBranchCommitCount)
             .HasColumnName("published_branch_commit_count");
+
+        builder.Property(r => r.PullRequestBodyHash)
+            .HasConversion(new ValueConverter<PullRequestBodyHash?, string?>(
+                hash => hash!.Value,
+                value => PullRequestBodyHash.FromStored(value!)))
+            .HasMaxLength(PullRequestBodyHashMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("pull_request_body_hash");
 
         builder.Property(r => r.DivergedSideBranch)
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
