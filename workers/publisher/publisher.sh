@@ -21,8 +21,10 @@
 #               FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: <git's error>
 #             when the last attempt found the provider unreachable,
 #               FOUNDRY_BOOTSTRAP_FAILED stage=fetch detail=<step>: <git's error>
-#             when the last attempt failed transient, and otherwise (a permanent git failure, a missing branch,
-#             invalid input)
+#             when the last attempt failed transient,
+#               FOUNDRY_BOOTSTRAP_FAILED stage=refused detail=<step>: <git's error>
+#             at once, with no retry, when the provider refused the token (HTTP 403, or a 404 hiding the
+#             repository), and otherwise (a permanent git failure, a missing branch, invalid input)
 #               FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=<detail>
 #   publish — push the worker's Run bundle (<handoff>/out/run.bundle) from a fresh repository; see
 #             publish() below for the steps and the FOUNDRY_PUBLISH result line.
@@ -78,7 +80,8 @@ unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML
 #
 # Prints the bootstrap-failure sentinel (collapsed to one line, so Foundry's line-oriented scan finds it
 # whole) and exits non-zero. Foundry reads stage=unreachable as the provider being unreachable, stage=fetch as a
-# provider transfer that kept failing transiently, and every other stage as a bootstrap failure.
+# provider transfer that kept failing transiently, stage=refused as the provider refusing the token, and every other
+# stage as a bootstrap failure.
 # ---------------------------------------------------------------------------
 fail_at() {
     detail="$(printf '%s' "$2" | tr '\n' ' ')"
@@ -203,7 +206,8 @@ provider_attempt() {
 }
 
 # fetch_from_provider — runs provider_attempt until it succeeds, retrying an unreachable or transient failure (see
-# classify_error) after each of PROVIDER_RETRY_DELAYS. A permanent failure ends Prepare at stage=clone at once. When
+# classify_error) after each of PROVIDER_RETRY_DELAYS. A permanent failure ends Prepare at stage=clone at once, and a
+# refused one at stage=refused. When
 # every attempt failed, the last attempt's classification chooses the stage: unreachable, or fetch for transient.
 fetch_from_provider() {
     # shellcheck disable=SC2086 # split the schedule into its delays, to count them.
@@ -218,6 +222,9 @@ fetch_from_provider() {
         kind="$(classify_error "$(cat "$git_err")")"
         if [ "$kind" = permanent ]; then
             fail "$failed_step: $(last_error)"
+        fi
+        if [ "$kind" = refused ]; then
+            fail_at refused "$failed_step: $(last_error)"
         fi
         if [ -z "$delay" ]; then
             if [ "$kind" = unreachable ]; then
@@ -392,7 +399,7 @@ write_review_packet() {
 #   FOUNDRY_PUBLISH result=nothing_to_publish
 #   FOUNDRY_PUBLISH result=secret_detected findings=<n>
 #   FOUNDRY_PUBLISH result=diverged branch=<branch> side_branch=<side> head=<sha>[ reason=force-push-protected]
-#   FOUNDRY_PUBLISH result=failed kind=permanent|transient|unreachable reason=<one line; the last field, may hold spaces>
+#   FOUNDRY_PUBLISH result=failed kind=permanent|transient|unreachable|refused reason=<one line; the last field, may hold spaces>
 # preceded, for published and diverged, by one line per pushed Run commit, oldest first (Foundry's own
 # merge and revert commits excluded), then one line per file the Diff gate reverted, then one line per generic
 # finding (a match of a rule tagged foundry-generic, which is pushed for review; #956), sorted:
@@ -402,6 +409,8 @@ write_review_packet() {
 # and, for secret_detected, by one line per provider finding, with nothing pushed:
 #   FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path>
 # <n> counts the commits on the pushed branch beyond the default branch. Diagnostics go to stderr.
+# kind=refused means the provider refused the token (HTTP 403, or a 404 hiding the repository): Foundry does not
+# retry it and has the repository's write access probed again. A push a hook or ruleset refuses stays transient.
 # Exit status: 0 for published, nothing_to_publish, diverged and secret_detected; 1 for failed.
 # ===========================================================================
 
@@ -465,12 +474,17 @@ publish_diverged() {
     exit 0
 }
 
-# classify_error <text> — "unreachable", "permanent" or "transient" for a git transfer failure, checked in
-# that order:
+# classify_error <text> — "unreachable", "transient", "permanent" or "refused" for a git transfer failure,
+# checked in this order:
 #   unreachable — git's libcurl transport prefix ("unable to access") with no HTTP status, or with 429 or a
 #                 5xx: DNS, a refused or timed-out connection, or the provider shedding load. Keyed on git's own
 #                 prefix and the status rather than curl's wording, which changes between curl versions.
-#   permanent   — the provider refused the credentials or the repository, or git had no credentials to offer.
+#   transient   — a rate limit.
+#   permanent   — the provider rejected the credentials (HTTP 401), or git had no credentials to offer.
+#   refused     — the provider refused the token access to the repository: HTTP 403, or a 404 where the provider
+#                 hides a repository the token cannot see. A wrong refused costs one write probe, while a missed
+#                 one leaves the repository eligible with every run failing, so 403 and 404 both count.
+#   permanent   — a missing ref or invalid input.
 #   transient   — everything else, so Foundry's bounded retry gets a chance before the run needs attention.
 # Prepare retries unreachable and transient itself; publish reports unreachable as kind=unreachable, which Foundry
 # retries like transient and which also pauses the provider host until a probe reaches it.
@@ -489,7 +503,11 @@ classify_error() {
     esac
     case "$lower" in
         *"rate limit"*) echo transient ;;
-        *"authentication failed"*|*"could not read username"*|*"invalid username or password"*|*"invalid username or token"*|*"returned error: 401"*|*"returned error: 403"*|*"http 401"*|*"http 403"*|*"repository not found"*|*"returned error: 404"*|*"not our ref"*|*"invalid input"*|*"permission denied"*|*"access denied"*)
+        *"authentication failed"*|*"could not read username"*|*"invalid username or password"*|*"invalid username or token"*|*"returned error: 401"*|*"http 401"*)
+            echo permanent ;;
+        *"returned error: 403"*|*"http 403"*|*"permission denied"*|*"access denied"*|*"repository not found"*|*"returned error: 404"*|*"fatal: repository '"*"' not found"*)
+            echo refused ;;
+        *"not our ref"*|*"invalid input"*)
             echo permanent ;;
         *) echo transient ;;
     esac
