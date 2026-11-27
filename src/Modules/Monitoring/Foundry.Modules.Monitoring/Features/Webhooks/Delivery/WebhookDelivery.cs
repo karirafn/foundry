@@ -89,13 +89,15 @@ internal static class WebhookDelivery
         && string.Equals(path.GetString(), repository.Slug.ToString(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Loads what Foundry tracks for the repository. Blockers are loaded only when
-    /// <paramref name="includeBlockers"/> is set (GitHub and GitLab issue events), since they cost an extra query.
+    /// Loads what Foundry tracks for the repository. Blockers, failed triages and spec-watched issues are loaded only
+    /// when <paramref name="isIssueEvent"/> is set (GitHub and GitLab issue events), since they cost extra queries.
     /// </summary>
     internal static async Task<WebhookTrackingContext> LoadTrackingContextAsync(
         IIssueQueries issueQueries,
+        ITriageFailedIssueQueries triageFailedQueries,
+        ISpecWatchedIssueQueries specWatchedQueries,
         MonitoredRepositoryId repositoryId,
-        bool includeBlockers,
+        bool isIssueEvent,
         CancellationToken cancellationToken)
     {
         IReadOnlySet<int> known = await issueQueries.GetKnownIssueNumbersAsync(repositoryId, cancellationToken);
@@ -105,16 +107,22 @@ internal static class WebhookDelivery
             cancellationToken);
 
         IReadOnlySet<int>? blockers = null;
-        if (includeBlockers)
+        IReadOnlySet<int>? triageFailed = null;
+        IReadOnlySet<int>? specWatched = null;
+        if (isIssueEvent)
         {
             IReadOnlyList<DependencyEdge> edges = await issueQueries.GetDependencyGraphAsync(repositoryId, cancellationToken);
             blockers = edges.Select(e => e.BlockedByIssueNumber).ToHashSet();
+            triageFailed = await triageFailedQueries.GetTriageFailedIssueNumbersAsync(repositoryId, cancellationToken);
+            specWatched = (await specWatchedQueries.GetSpecWatchedIssuesAsync(repositoryId, cancellationToken))
+                .Select(issue => issue.IssueNumber)
+                .ToHashSet();
         }
 
         IReadOnlyList<AwaitingInputThread> awaitingInput = [.. (await issueQueries.GetAwaitingInputIssuesAsync(repositoryId, cancellationToken))
             .Select(i => new AwaitingInputThread(i.IssueNumber, i.PullRequestUrl, i.BranchName))];
 
-        return new WebhookTrackingContext(known, review, checksPending, blockers, awaitingInput);
+        return new WebhookTrackingContext(known, review, checksPending, blockers, awaitingInput, triageFailed, specWatched);
     }
 
     private static bool IsWellFormedHookId(string hookId) =>

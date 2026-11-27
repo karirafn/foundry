@@ -9,15 +9,17 @@ using static Foundry.Modules.Monitoring.Features.Webhooks.Delivery.WebhookReleva
 namespace Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
 
 /// <summary>
-/// Maps a verified GitLab delivery to at most one <see cref="NudgeKey"/> (ADR 0085), applying the same
-/// relevance filter as GitHub: a delivery touching nothing Foundry tracks maps to <see langword="null"/>
-/// and is dropped without a provider call. The event is read from the body's <c>object_kind</c>, which
-/// GitLab sets for every hook type (confidential variants share the kind of their public counterpart).
+/// Maps a verified GitLab delivery to the <see cref="NudgeKey"/>s it concerns (ADR 0085), applying the same
+/// relevance filter as GitHub: a delivery touching nothing Foundry tracks maps to no key and is dropped
+/// without a provider call. Only an issue <c>update</c> maps to more than one key. The event is read from the
+/// body's <c>object_kind</c>, which GitLab sets for every hook type (confidential variants share the kind of
+/// their public counterpart).
 /// <list type="table">
 /// <item><term><c>issue</c>, <c>work_item</c></term><description>issue listing — plus the dependency pass
-/// when the issue closing is a blocker of a tracked issue; an <c>update</c> of an issue awaiting input on its own
-/// thread nudges its awaiting-input pass instead (GitLab sends <c>update</c> for label changes too, and the pass's
-/// body read decides)</description></item>
+/// when the issue closing is a blocker of a tracked issue; an <c>update</c> also nudges the issue's awaiting-input
+/// pass (awaiting input on its own thread), its failed-triage edit step (<c>triage_failed</c>) and its spec-rewrite
+/// step (spec watched) — GitLab sends <c>update</c> for label changes too, and each step's body read
+/// decides</description></item>
 /// <item><term><c>merge_request</c>, <c>note</c> (on a merge request)</term><description>review pass for
 /// the owning issue — the checks pass when that issue is checks-pending</description></item>
 /// <item><term><c>note</c> (on a merge request)</term><description>otherwise, awaiting-input pass for the
@@ -104,47 +106,42 @@ internal static partial class GitLabWebhookEventMapper
     public static bool NeedsTrackingContext(string? objectKind) =>
         objectKind is "issue" or "work_item" or "merge_request" or "note" or "pipeline" or "push";
 
-    /// <summary>Whether mapping <paramref name="objectKind"/> needs the blockers of tracked issues.</summary>
-    public static bool NeedsBlockers(string? objectKind) => objectKind is "issue" or "work_item";
+    /// <summary>Whether <paramref name="objectKind"/> is an issue event, whose mapping needs the blockers, failed triages and spec-watched issues.</summary>
+    public static bool IsIssueEvent(string? objectKind) => objectKind is "issue" or "work_item";
 
-    public static NudgeKey? Map(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
+    public static IReadOnlyList<NudgeKey> Map(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
     {
         return GetObjectKind(payload) switch
         {
             "issue" or "work_item" => MapIssue(payload, repositoryId, tracked),
-            "merge_request" => MapMergeRequest(payload, repositoryId, tracked),
-            "note" => MapNote(payload, repositoryId, tracked),
-            "pipeline" => MapPipeline(payload, repositoryId, tracked),
-            "push" => MapPush(repositoryId, tracked, payload),
-            _ => null,
+            "merge_request" => AsKeys(MapMergeRequest(payload, repositoryId, tracked)),
+            "note" => AsKeys(MapNote(payload, repositoryId, tracked)),
+            "pipeline" => AsKeys(MapPipeline(payload, repositoryId, tracked)),
+            "push" => AsKeys(MapPush(repositoryId, tracked, payload)),
+            _ => [],
         };
     }
 
-    private static NudgeKey? MapIssue(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
+    private static IReadOnlyList<NudgeKey> MapIssue(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
     {
         if (!TryGetObject(payload, "object_attributes", out JsonElement attributes)
             || GetInt(attributes, "iid") is not { } iid)
         {
-            return null;
+            return [];
         }
 
-        if (MapBlockerClosed(repositoryId, tracked, iid, GetString(attributes, "action") == "close") is { } blockerClosed)
-        {
-            return blockerClosed;
-        }
+        string? action = GetString(attributes, "action");
 
-        if (MapIssueEdited(repositoryId, tracked, iid, GetString(attributes, "action") == "update") is { } edited)
+        if (MapBlockerClosed(repositoryId, tracked, iid, action == "close") is { } blockerClosed)
         {
-            return edited;
+            return [blockerClosed];
         }
 
         bool hasTriggerLabel = HasTriggerLabel(payload, "labels")
             || HasTriggerLabel(attributes, "labels")
             || HadTriggerLabel(payload);
 
-        return tracked.KnownIssueNumbers.Contains(iid) || hasTriggerLabel
-            ? new NudgeKey(repositoryId, NudgePass.IssueListing)
-            : null;
+        return MapIssueChange(repositoryId, tracked, iid, hasTriggerLabel, isEdit: action == "update");
     }
 
     private static NudgeKey? MapMergeRequest(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)

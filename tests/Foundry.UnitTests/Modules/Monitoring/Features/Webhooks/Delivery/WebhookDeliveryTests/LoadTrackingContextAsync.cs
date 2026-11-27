@@ -27,8 +27,10 @@ public sealed class LoadTrackingContextAsync
         // Act
         WebhookTrackingContext tracked = await WebhookDelivery.LoadTrackingContextAsync(
             queries,
+            new StubTriageFailedIssueQueries(new HashSet<int>()),
+            new StubSpecWatchedIssueQueries([]),
             RepoId,
-            includeBlockers: false,
+            isIssueEvent: false,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -37,6 +39,64 @@ public sealed class LoadTrackingContextAsync
             new AwaitingInputThread(40, null, null),
             new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51", "feat/50-revise"),
         ]);
+    }
+
+    [Fact]
+    public async Task ForAnIssueEvent_CarriesTheTriageFailedAndSpecWatchedIssueNumbers()
+    {
+        // Arrange
+        StubIssueQueries queries = new([]);
+
+        // Act
+        WebhookTrackingContext tracked = await WebhookDelivery.LoadTrackingContextAsync(
+            queries,
+            new StubTriageFailedIssueQueries(new HashSet<int> { 80 }),
+            new StubSpecWatchedIssueQueries([new SpecWatchedIssue(90, null), new SpecWatchedIssue(91, null)]),
+            RepoId,
+            isIssueEvent: true,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        tracked.ShouldSatisfyAllConditions(
+            () => tracked.TriageFailed.ShouldBe(new HashSet<int> { 80 }),
+            () => tracked.SpecWatched.ShouldBe(new HashSet<int> { 90, 91 }, ignoreOrder: true));
+    }
+
+    [Fact]
+    public async Task ForAnyOtherEvent_LoadsNoTriageFailedOrSpecWatchedIssueNumbers()
+    {
+        // Arrange
+        StubIssueQueries queries = new([]);
+
+        // Act
+        WebhookTrackingContext tracked = await WebhookDelivery.LoadTrackingContextAsync(
+            queries,
+            new StubTriageFailedIssueQueries(new HashSet<int> { 80 }),
+            new StubSpecWatchedIssueQueries([new SpecWatchedIssue(90, null)]),
+            RepoId,
+            isIssueEvent: false,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        tracked.ShouldSatisfyAllConditions(
+            () => tracked.TriageFailedIssueNumbers.ShouldBeNull(),
+            () => tracked.SpecWatchedIssueNumbers.ShouldBeNull());
+    }
+
+    private sealed class StubTriageFailedIssueQueries(IReadOnlySet<int> failed) : ITriageFailedIssueQueries
+    {
+        public Task<IReadOnlySet<int>> GetTriageFailedIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(failed);
+    }
+
+    private sealed class StubSpecWatchedIssueQueries(IReadOnlyList<SpecWatchedIssue> watched) : ISpecWatchedIssueQueries
+    {
+        public Task<IReadOnlyList<SpecWatchedIssue>> GetSpecWatchedIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(watched);
     }
 
     private static AwaitingInputIssueInfo Waiting(int issueNumber, string? pullRequestUrl, string? branchName) =>
@@ -89,7 +149,7 @@ public sealed class LoadTrackingContextAsync
         public Task<IReadOnlyList<DependencyEdge>> GetDependencyGraphAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken) =>
-            throw new NotImplementedException();
+            Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
 
         public Task<IReadOnlyList<MergePendingIssueInfo>> GetMergePendingIssuesAsync(
             MonitoredRepositoryId repositoryId,

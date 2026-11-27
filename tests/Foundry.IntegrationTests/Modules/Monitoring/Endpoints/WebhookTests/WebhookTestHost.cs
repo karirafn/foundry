@@ -1,5 +1,6 @@
 using System.Text;
 
+using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
@@ -139,6 +140,14 @@ internal static class WebhookTestHost
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         return await dbContext.Set<MonitoredRepository>().AsNoTracking().SingleAsync(r => r.Id == seeded.Id);
+    }
+
+    internal static async Task SeedIssuesAsync(FoundryWebAppFactory factory, params Issue[] issues)
+    {
+        using IServiceScope scope = factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        dbContext.Set<Issue>().AddRange(issues);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 
     internal static List<Nudge> DrainNudges(FoundryWebAppFactory factory)

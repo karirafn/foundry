@@ -9,13 +9,14 @@ using static Foundry.Modules.Monitoring.Features.Webhooks.Delivery.WebhookReleva
 namespace Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
 
 /// <summary>
-/// Maps a verified GitHub delivery to at most one <see cref="NudgeKey"/> (ADR 0085), applying the
-/// relevance filter: a delivery touching nothing Foundry tracks maps to <see langword="null"/> and is
-/// dropped without a provider call.
+/// Maps a verified GitHub delivery to the <see cref="NudgeKey"/>s it concerns (ADR 0085), applying the
+/// relevance filter: a delivery touching nothing Foundry tracks maps to no key and is dropped without a
+/// provider call. Only an <c>edited</c> issue maps to more than one key.
 /// <list type="table">
 /// <item><term><c>issues</c></term><description>issue listing — plus the dependency pass when the issue
 /// closing is a blocker of a tracked issue (GitHub sends no <c>issue_dependencies</c> delivery then); an
-/// <c>edited</c> issue awaiting input on its own thread nudges its awaiting-input pass instead</description></item>
+/// <c>edited</c> issue also nudges its awaiting-input pass (awaiting input on its own thread), its failed-triage
+/// edit step (<c>triage_failed</c>) and its spec-rewrite step (spec watched)</description></item>
 /// <item><term><c>issue_dependencies</c></term><description>issue listing + dependency pass</description></item>
 /// <item><term><c>pull_request</c>, <c>pull_request_review</c>, <c>pull_request_review_comment</c>,
 /// <c>issue_comment</c> (on a PR)</term><description>review pass for the owning issue — the checks
@@ -66,12 +67,13 @@ internal static partial class GitHubWebhookEventMapper
             or "pull_request_review_comment" or "issue_comment" or "check_suite" or "status" or "push";
 
     /// <summary>
-    /// Whether mapping <paramref name="eventName"/> needs the blockers of tracked issues — only an
-    /// <c>issues</c> close can be a blocker closing.
+    /// Whether <paramref name="eventName"/> is an issue event, whose mapping needs the blockers, failed triages and
+    /// spec-watched issues of the repository: only an <c>issues</c> close can be a blocker closing, and only an
+    /// <c>issues</c> edit can concern the failed-triage edit or spec-rewrite step.
     /// </summary>
-    public static bool NeedsBlockers(string? eventName) => eventName is "issues";
+    public static bool IsIssueEvent(string? eventName) => eventName is "issues";
 
-    public static NudgeKey? Map(
+    public static IReadOnlyList<NudgeKey> Map(
         string eventName,
         JsonElement payload,
         MonitoredRepositoryId repositoryId,
@@ -80,42 +82,36 @@ internal static partial class GitHubWebhookEventMapper
         return eventName switch
         {
             "issues" => MapIssues(payload, repositoryId, tracked),
-            "issue_dependencies" => MapIssueDependencies(payload, repositoryId, tracked),
-            "pull_request" => MapPullRequest(payload, repositoryId, tracked, isComment: false),
-            "pull_request_review" or "pull_request_review_comment" => MapPullRequest(payload, repositoryId, tracked, isComment: true),
-            "issue_comment" => MapIssueComment(payload, repositoryId, tracked),
-            "check_suite" => MapCheckSuite(payload, repositoryId, tracked),
-            "status" => MapStatus(payload, repositoryId, tracked),
-            "branch_protection_rule" or "repository_ruleset" => new NudgeKey(repositoryId, NudgePass.BranchRules),
-            "push" => MapPush(repositoryId, tracked, payload),
-            _ => null,
+            "issue_dependencies" => AsKeys(MapIssueDependencies(payload, repositoryId, tracked)),
+            "pull_request" => AsKeys(MapPullRequest(payload, repositoryId, tracked, isComment: false)),
+            "pull_request_review" or "pull_request_review_comment" => AsKeys(MapPullRequest(payload, repositoryId, tracked, isComment: true)),
+            "issue_comment" => AsKeys(MapIssueComment(payload, repositoryId, tracked)),
+            "check_suite" => AsKeys(MapCheckSuite(payload, repositoryId, tracked)),
+            "status" => AsKeys(MapStatus(payload, repositoryId, tracked)),
+            "branch_protection_rule" or "repository_ruleset" => [new NudgeKey(repositoryId, NudgePass.BranchRules)],
+            "push" => AsKeys(MapPush(repositoryId, tracked, payload)),
+            _ => [],
         };
     }
 
-    private static NudgeKey? MapIssues(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
+    private static IReadOnlyList<NudgeKey> MapIssues(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
     {
         if (!TryGetObject(payload, "issue", out JsonElement issue) || GetInt(issue, "number") is not { } number)
         {
-            return null;
+            return [];
         }
 
-        if (MapBlockerClosed(repositoryId, tracked, number, GetString(payload, "action") == "closed") is { } blockerClosed)
+        string? action = GetString(payload, "action");
+
+        if (MapBlockerClosed(repositoryId, tracked, number, action == "closed") is { } blockerClosed)
         {
-            return blockerClosed;
+            return [blockerClosed];
         }
 
-        if (MapIssueEdited(repositoryId, tracked, number, GetString(payload, "action") == "edited") is { } edited)
-        {
-            return edited;
-        }
-
-        bool isTracked = tracked.KnownIssueNumbers.Contains(number);
         bool hasTriggerLabel = HasLabel(issue, TriggerLabel)
             || (TryGetObject(payload, "label", out JsonElement label) && IsTriggerLabel(label));
 
-        return isTracked || hasTriggerLabel
-            ? new NudgeKey(repositoryId, NudgePass.IssueListing)
-            : null;
+        return MapIssueChange(repositoryId, tracked, number, hasTriggerLabel, isEdit: action == "edited");
     }
 
     private static NudgeKey? MapIssueDependencies(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)

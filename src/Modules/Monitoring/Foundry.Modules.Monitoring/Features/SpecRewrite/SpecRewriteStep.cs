@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -12,21 +13,29 @@ namespace Foundry.Modules.Monitoring.Features.SpecRewrite;
 
 /// <summary>
 /// The spec-rewrite step (ADR 0125): a spec rewritten after an issue has open work sends it back to triage. On every
-/// scheduled poll it reads the body of each issue waiting to start a run or waiting on a person with open work, and
-/// keeps the issue's <see cref="IssueWatch"/> on its <see cref="IssueBodyHash.OfSpec"/> hash: the baseline is the hash
-/// the issue's last triage judged (the first read when none was recorded), a different spec becomes a pending change,
-/// and once that change has outlasted the quiet period it raises <see cref="IssueSpecRewritten"/> and removes the
-/// watch in the same save. Watches of issues no longer in a watched state are removed.
+/// scheduled poll, and on a <see cref="NudgePass.SpecRewrite"/> nudge for one issue, it reads the body of each issue
+/// waiting to start a run or waiting on a person with open work, and keeps the issue's <see cref="IssueWatch"/> on its
+/// <see cref="IssueBodyHash.OfSpec"/> hash: the baseline is the hash the issue's last triage judged (the first read when
+/// none was recorded), a different spec becomes a pending change, and once that change has outlasted the quiet period
+/// it raises <see cref="IssueSpecRewritten"/> and removes the watch in the same save. A change still inside the quiet
+/// period nudges the issue again when it settles. A scheduled run also removes the watches of issues no longer in a
+/// watched state.
 /// </summary>
 internal sealed class SpecRewriteStep(
     ISpecWatchedIssueQueries specWatchedQueries,
     DbContext dbContext,
     IIntegrationEventDispatcher integrationEventDispatcher,
+    WebhookNudgeQueue nudgeQueue,
     ILogger<SpecRewriteStep> logger)
 {
+    /// <summary>
+    /// Runs the step for every spec-watched issue of <paramref name="repository"/>, or only
+    /// <paramref name="issueNumber"/> when supplied (nudged).
+    /// </summary>
     public async Task RunAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
+        int? issueNumber,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -38,12 +47,15 @@ internal sealed class SpecRewriteStep(
             .Where(watch => watch.MonitoredRepositoryId == repository.Id)
             .ToDictionaryAsync(watch => watch.IssueNumber, cancellationToken);
 
-        ForgetWatchesOfIssuesNoLongerWatched(watches, [.. watched.Select(issue => issue.IssueNumber)]);
+        if (issueNumber is null)
+        {
+            ForgetWatchesOfIssuesNoLongerWatched(watches, [.. watched.Select(issue => issue.IssueNumber)]);
+        }
 
         List<IIntegrationEvent> events = [];
 
         // HTTP calls are sequential, one body read per watched issue: issues with open work per repository are few.
-        foreach (SpecWatchedIssue issue in watched)
+        foreach (SpecWatchedIssue issue in watched.Where(issue => issueNumber is null || issue.IssueNumber == issueNumber))
         {
             // A failed read changes nothing; the next poll reads again. A closed issue is left to the listing's close path.
             if (await provider.GetIssueStatusAsync(repository.Slug, issue.IssueNumber, cancellationToken)
@@ -57,15 +69,23 @@ internal sealed class SpecRewriteStep(
 
             watch.ObserveBody(spec, now);
 
-            if (watch.SettleBodyChange(now) is InputSettlement.Settled settled)
+            switch (watch.SettleBodyChange(now))
             {
-                events.Add(new IssueSpecRewritten(repository.Id, issue.IssueNumber, settled.ArrivedAt));
-                dbContext.Set<IssueWatch>().Remove(watch);
-                watches.Remove(issue.IssueNumber);
-                logger.LogInformation(
-                    "The spec of issue #{IssueNumber} in '{Slug}' was rewritten since its last triage; sending it back to triage.",
-                    issue.IssueNumber,
-                    repository.Slug);
+                case InputSettlement.Settled settled:
+                    events.Add(new IssueSpecRewritten(repository.Id, issue.IssueNumber, settled.ArrivedAt));
+                    dbContext.Set<IssueWatch>().Remove(watch);
+                    watches.Remove(issue.IssueNumber);
+                    logger.LogInformation(
+                        "The spec of issue #{IssueNumber} in '{Slug}' was rewritten since its last triage; sending it back to triage.",
+                        issue.IssueNumber,
+                        repository.Slug);
+                    break;
+
+                case InputSettlement.Waiting waiting:
+                    nudgeQueue.TryEnqueue(new Nudge(
+                        new NudgeKey(repository.Id, NudgePass.SpecRewrite, issue.IssueNumber),
+                        waiting.Until));
+                    break;
             }
         }
 

@@ -31,6 +31,12 @@ internal enum NudgePass
 
     /// <summary>The awaiting-input step for one issue: post its questions, or read replies (ADR 0096).</summary>
     AwaitingInput,
+
+    /// <summary>The failed-triage edit step for one issue: an edit sends a failed triage back to triage (issue #773).</summary>
+    TriageFailedEdit,
+
+    /// <summary>The spec-rewrite step for one issue: a rewritten spec sends the issue back to triage (ADR 0125).</summary>
+    SpecRewrite,
 }
 
 /// <summary>

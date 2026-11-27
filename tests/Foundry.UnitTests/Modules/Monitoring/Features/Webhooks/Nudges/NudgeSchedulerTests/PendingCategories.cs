@@ -24,6 +24,8 @@ public sealed class PendingCategories
     [InlineData(NudgePass.Rebase, PollChanges.None)]
     [InlineData(NudgePass.Merge, PollChanges.None)]
     [InlineData(NudgePass.AwaitingInput, PollChanges.None)]
+    [InlineData(NudgePass.TriageFailedEdit, PollChanges.None)]
+    [InlineData(NudgePass.SpecRewrite, PollChanges.None)]
     internal void MapsAPendingPassToItsCategory(NudgePass pass, PollChanges expected)
     {
         // Arrange

@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.TriageFailed;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -36,6 +37,7 @@ public sealed class RunAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher = new();
+    private readonly WebhookNudgeQueue _nudgeQueue = new(NullLogger<WebhookNudgeQueue>.Instance);
     private readonly ScriptedProvider _provider = new();
     private readonly MonitoredRepository _repository;
 
@@ -70,6 +72,7 @@ public sealed class RunAsync : IAsyncDisposable
             new TriageFailedIssueQueries(_dbContext),
             _dbContext,
             _dispatcher,
+            _nudgeQueue,
             NullLogger<TriageFailedEditStep>.Instance);
 
     private void SeedTriageFailed(int issueNumber = 1)
@@ -97,9 +100,9 @@ public sealed class RunAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
     }
 
-    private async Task RunStepAtAsync(DateTimeOffset at)
+    private async Task RunStepAtAsync(DateTimeOffset at, int? issueNumber = null)
     {
-        await BuildSut().RunAsync(_repository, _provider, at, TestContext.Current.CancellationToken);
+        await BuildSut().RunAsync(_repository, _provider, issueNumber, at, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
     }
 
@@ -309,6 +312,80 @@ public sealed class RunAsync : IAsyncDisposable
             () => watch.Wait.ShouldBe(WatchedWait.TriageFailed),
             () => watch.BaselineBodyHash.ShouldBe(IssueBodyHash.Of(OriginalBody)),
             () => _dispatcher.Events.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenABodyChangeIsInsideTheQuietPeriod_EnqueuesANudgeForTheIssueWhenItSettles()
+    {
+        // Arrange
+        SeedTriageFailed();
+        await RunStepAtAsync(Start);
+        _provider.IssueBody = EditedBody;
+
+        // Act
+        await RunStepAtAsync(Start.AddMinutes(1));
+
+        // Assert
+        _nudgeQueue.Reader.TryRead(out Nudge nudge).ShouldBeTrue();
+        nudge.ShouldBe(new Nudge(
+            new NudgeKey(_repository.Id, NudgePass.TriageFailedEdit, 1),
+            Start.AddMinutes(1) + ActionableFeedbackPolicy.QuietPeriod));
+    }
+
+    [Fact]
+    public async Task WhenTheBodyIsUnchanged_EnqueuesNoNudge()
+    {
+        // Arrange
+        SeedTriageFailed();
+
+        // Act
+        await RunStepAtAsync(Start);
+
+        // Assert
+        _nudgeQueue.Reader.TryRead(out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenNudgedForOneFailedTriage_ReadsOnlyThatIssue()
+    {
+        // Arrange
+        SeedTriageFailed(issueNumber: 1);
+        SeedTriageFailed(issueNumber: 2);
+
+        // Act
+        await RunStepAtAsync(Start, issueNumber: 2);
+
+        // Assert
+        _provider.IssueStatusReads.ShouldBe(1);
+        LoadWatch(1).ShouldBeNull();
+        LoadWatch(2).ShouldNotBeNull().Wait.ShouldBe(WatchedWait.TriageFailed);
+    }
+
+    [Fact]
+    public async Task WhenNudgedForAnIssueThatIsNotTriageFailed_ReadsNoIssue()
+    {
+        // Arrange
+        SeedTriageFailed(issueNumber: 1);
+
+        // Act
+        await RunStepAtAsync(Start, issueNumber: 2);
+
+        // Assert
+        _provider.IssueStatusReads.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenNudged_KeepsTheWatchesOfOtherIssuesThatLeftTriageFailed()
+    {
+        // Arrange
+        SeedTriageFailed(issueNumber: 1);
+        SeedFailedTriageWatch(issueNumber: 7);
+
+        // Act
+        await RunStepAtAsync(Start, issueNumber: 1);
+
+        // Assert
+        LoadWatch(7).ShouldNotBeNull();
     }
 
     [Fact]
