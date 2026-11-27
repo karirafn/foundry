@@ -62,6 +62,19 @@ internal interface IIssueProvider
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Reads the state of the pull/merge request at <paramref name="pullRequestUrl"/> as one closed value. An
+    /// unrecognised provider state fails with <see cref="PullRequestStateErrors.UnrecognisedCode"/>, and an open
+    /// pull request without a valid head commit with <see cref="PullRequestStateErrors.MissingHeadCode"/>.
+    /// </summary>
+    /// <remarks>Providers without a state read keep this default, which fails with
+    /// <see cref="TrackerReadErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<PullRequestState>> GetPullRequestStateAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<PullRequestState>.Fail(TrackerReadErrors.NotSupported()));
+
+    /// <summary>
     /// Reads the description of the pull/merge request at <paramref name="pullRequestUrl"/>, live: GitHub's
     /// <c>body</c>, GitLab's <c>description</c>. A pull request without one reads as empty.
     /// </summary>
