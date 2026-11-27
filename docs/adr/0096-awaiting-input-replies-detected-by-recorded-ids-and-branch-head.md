@@ -6,7 +6,7 @@ reaches: external-contract
 
 ## Context
 
-A worker run sometimes needs a person to answer a question before the work can continue, for example an unclear requirement, or a required change under a path workers are denied such as `.github/workflows/**`. Before this decision every "Needs attention" state meant that something finished or broke, and the run either guessed or failed. Under [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) the agent may only return a verdict; code has to own posting the question, recognising the answer, and resuming the work.
+A worker run sometimes needs a person to answer a question before the work can continue, for example an unclear requirement. Before this decision every "Needs attention" state meant that something finished or broke, and the run either guessed or failed. Under [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) the agent may only return a verdict; code has to own posting the question, recognising the answer, and resuming the work.
 
 ## Decision
 
@@ -45,3 +45,4 @@ A run whose verdict is `needs_input` moves the issue to `AwaitingInputIssue` (`a
 - 2026-11-24 — A clarification round is `Asked` (questions, optionally decisions) or `Decided` (triage decisions only, never open); a stored round without a kind reads as `Asked` ([ADR 0123](0123-workers-ask-only-about-uncertain-business-logic-and-decide-the-rest.md)).
 - 2026-11-25 — A clarification round can also be `Requested`: a person's consumed pull request feedback, never open, and the newest person input in the log supersedes the issue text ([ADR 0126](0126-a-persons-pull-request-feedback-is-recorded-on-the-clarification-log-and-supersedes-the-issue.md)).
 - 2026-11-25 — The issue body on a pull-request thread is still not input to the question; a rewritten spec there is detected once the issue resumes into a watched state ([ADR 0125](0125-a-rewritten-spec-sends-an-issue-with-open-work-back-to-triage.md)).
+- 2026-11-27 — The Context no longer cites a `.github/workflows/**` deny as a reason to ask; workers may change CI/CD files ([ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md)).
