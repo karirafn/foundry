@@ -16,14 +16,16 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
 /// <summary>
 /// Receives one GitHub webhook delivery (ADR 0085). Verification fails fast at the boundary: an unknown
 /// hook id is 404; a missing or wrong <c>X-Hub-Signature-256</c> is 401 and the body is never parsed;
-/// a body for another repository is 400. A verified delivery marks the hook healthy, enqueues at most one
-/// nudge and returns 202 without calling the provider.
+/// a body for another repository is 400. A verified delivery marks the hook healthy, enqueues every
+/// nudge it maps to and returns 202 without calling the provider.
 /// </summary>
 internal static class ReceiveGitHubWebhook
 {
     internal sealed class Handler(
         DbContext dbContext,
         IIssueQueries issueQueries,
+        ITriageFailedIssueQueries triageFailedQueries,
+        ISpecWatchedIssueQueries specWatchedQueries,
         WebhookNudgeQueue nudgeQueue,
         ILogger<Handler> logger)
     {
@@ -79,22 +81,27 @@ internal static class ReceiveGitHubWebhook
             WebhookTrackingContext tracked = GitHubWebhookEventMapper.NeedsTrackingContext(eventName)
                 ? await WebhookDelivery.LoadTrackingContextAsync(
                     issueQueries,
+                    triageFailedQueries,
+                    specWatchedQueries,
                     repository.Id,
-                    GitHubWebhookEventMapper.NeedsBlockers(eventName),
+                    GitHubWebhookEventMapper.IsIssueEvent(eventName),
                     cancellationToken)
                 : WebhookTrackingContext.Empty;
 
-            NudgeKey? key = GitHubWebhookEventMapper.Map(eventName, document.RootElement, repository.Id, tracked);
-            if (key is { } nudgeKey)
-            {
-                nudgeQueue.TryEnqueue(new Nudge(nudgeKey));
-            }
-            else
+            IReadOnlyList<NudgeKey> keys = GitHubWebhookEventMapper.Map(eventName, document.RootElement, repository.Id, tracked);
+
+            if (keys.Count == 0)
             {
                 logger.LogDebug(
                     "Dropped irrelevant '{Event}' delivery for repository {Slug}.",
                     eventName,
                     repository.Slug);
+                return Results.Accepted();
+            }
+
+            foreach (NudgeKey key in keys)
+            {
+                nudgeQueue.TryEnqueue(new Nudge(key));
             }
 
             return Results.Accepted();

@@ -18,13 +18,15 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
 /// hook id is 404; a missing or wrong <c>X-Gitlab-Token</c> is 401 and the body is never parsed; a body
 /// whose <c>project.path_with_namespace</c> names another project is 400. GitLab has no <c>ping</c>, so
 /// the first verified delivery of any kind (typically the hook form's "Test" action) activates the hook.
-/// A verified delivery enqueues at most one nudge and returns 202 without calling the provider.
+/// A verified delivery enqueues every nudge it maps to and returns 202 without calling the provider.
 /// </summary>
 internal static class ReceiveGitLabWebhook
 {
     internal sealed class Handler(
         DbContext dbContext,
         IIssueQueries issueQueries,
+        ITriageFailedIssueQueries triageFailedQueries,
+        ISpecWatchedIssueQueries specWatchedQueries,
         WebhookNudgeQueue nudgeQueue,
         ILogger<Handler> logger)
     {
@@ -77,22 +79,27 @@ internal static class ReceiveGitLabWebhook
             WebhookTrackingContext tracked = GitLabWebhookEventMapper.NeedsTrackingContext(objectKind)
                 ? await WebhookDelivery.LoadTrackingContextAsync(
                     issueQueries,
+                    triageFailedQueries,
+                    specWatchedQueries,
                     repository.Id,
-                    GitLabWebhookEventMapper.NeedsBlockers(objectKind),
+                    GitLabWebhookEventMapper.IsIssueEvent(objectKind),
                     cancellationToken)
                 : WebhookTrackingContext.Empty;
 
-            NudgeKey? key = GitLabWebhookEventMapper.Map(document.RootElement, repository.Id, tracked);
-            if (key is { } nudgeKey)
-            {
-                nudgeQueue.TryEnqueue(new Nudge(nudgeKey));
-            }
-            else
+            IReadOnlyList<NudgeKey> keys = GitLabWebhookEventMapper.Map(document.RootElement, repository.Id, tracked);
+
+            if (keys.Count == 0)
             {
                 logger.LogDebug(
                     "Dropped irrelevant '{ObjectKind}' GitLab delivery for repository {Slug}.",
                     objectKind,
                     repository.Slug);
+                return Results.Accepted();
+            }
+
+            foreach (NudgeKey key in keys)
+            {
+                nudgeQueue.TryEnqueue(new Nudge(key));
             }
 
             return Results.Accepted();

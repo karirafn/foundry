@@ -309,18 +309,18 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 await awaitingInputStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
             }
 
-            // The scheduled poll alone watches failed triages for an edit (issue #773): an edit there is not urgent, so no
-            // webhook nudges this pass and a settled edit waits for the next poll.
+            // The scheduled poll is also the failed-triage edit step's backstop (issue #773): it reads the edits whose
+            // TriageFailedEdit nudge was lost and settles the ones whose quiet period ended.
             if (triageFailedEditStep is not null)
             {
-                await triageFailedEditStep.RunAsync(repo, resolvedProvider.Provider, now, cancellationToken);
+                await triageFailedEditStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
             }
 
-            // The scheduled poll alone watches the spec of issues with open work for a rewrite (ADR 0125), for the same
-            // reason: a rewrite there is not urgent.
+            // The scheduled poll is also the spec-rewrite step's backstop (ADR 0125): it reads the
+            // rewrites whose SpecRewrite nudge was lost and settles the ones whose quiet period ended.
             if (specRewriteStep is not null)
             {
-                await specRewriteStep.RunAsync(repo, resolvedProvider.Provider, now, cancellationToken);
+                await specRewriteStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
             }
 
             if (pollResult is Result<PollChanges>.Failure pollFailure)
@@ -376,6 +376,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
         MergeStep? mergeStep = scope.ServiceProvider.GetService<MergeStep>();
         AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
+        TriageFailedEditStep? triageFailedEditStep = scope.ServiceProvider.GetService<TriageFailedEditStep>();
+        SpecRewriteStep? specRewriteStep = scope.ServiceProvider.GetService<SpecRewriteStep>();
 
         Dictionary<MonitoredRepositoryId, MonitoredRepository> repos =
             (await LoadActiveReposAsync(dbContext, cancellationToken)).ToDictionary(r => r.Id);
@@ -406,6 +408,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                     rebaseStep,
                     mergeStep,
                     awaitingInputStep,
+                    triageFailedEditStep,
+                    specRewriteStep,
                     repo,
                     resolvedProvider,
                     key,
@@ -431,6 +435,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         RebaseStep? rebaseStep,
         MergeStep? mergeStep,
         AwaitingInputStep? awaitingInputStep,
+        TriageFailedEditStep? triageFailedEditStep,
+        SpecRewriteStep? specRewriteStep,
         MonitoredRepository repo,
         ResolvedProvider resolved,
         NudgeKey key,
@@ -524,6 +530,22 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 if (awaitingInputStep is not null)
                 {
                     await awaitingInputStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
+                }
+
+                break;
+
+            case NudgePass.TriageFailedEdit:
+                if (triageFailedEditStep is not null)
+                {
+                    await triageFailedEditStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
+                }
+
+                break;
+
+            case NudgePass.SpecRewrite:
+                if (specRewriteStep is not null)
+                {
+                    await specRewriteStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
                 }
 
                 break;

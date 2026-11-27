@@ -19,9 +19,10 @@ public sealed class Map
     // Issue 10 is tracked (detected) and blocked by untracked issue 77; 20 is in review on PR 21 and
     // blocks tracked issue 30; 30 is checks-pending on PR 31; 40 awaits input on its own thread;
     // 50 awaits input on PR 51 of branch feat/50-revise; 70 awaits input on its own thread with commits on
-    // feat/70-continue; 60 is in review with checks that are not passed on PR 61.
+    // feat/70-continue; 60 is in review with checks that are not passed on PR 61; 80 is triage_failed; 90's spec is
+    // watched.
     private static readonly WebhookTrackingContext Tracked = new(
-        new HashSet<int> { 10, 20, 30, 40, 50, 60 },
+        new HashSet<int> { 10, 20, 30, 40, 50, 60, 80, 90 },
         [
             new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At, null, ChecksPassed: true, IsPullRequestMarkedReady: false),
             new ReviewIssueInfo(60, "https://github.com/owner/repo/pull/61", At, null, ChecksPassed: false, IsPullRequestMarkedReady: false),
@@ -32,9 +33,11 @@ public sealed class Map
             new AwaitingInputThread(40, null, null),
             new AwaitingInputThread(50, "https://github.com/owner/repo/pull/51", "feat/50-revise"),
             new AwaitingInputThread(70, null, "feat/70-continue"),
-        ]);
+        ],
+        new HashSet<int> { 80 },
+        new HashSet<int> { 90 });
 
-    private static NudgeKey? MapEvent(string eventName, string json)
+    private static IReadOnlyList<NudgeKey> MapEvent(string eventName, string json)
     {
         using JsonDocument document = JsonDocument.Parse(json);
         return GitHubWebhookEventMapper.Map(eventName, document.RootElement, RepoId, Tracked);
@@ -44,42 +47,42 @@ public sealed class Map
     public void WhenIssuesEventForTrackedIssue_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"edited","issue":{"number":10,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenIssuesEventForUntrackedIssueWithTriggerLabel_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"opened","issue":{"number":99,"labels":[{"name":"Foundry"}]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenIssuesEventLabelsUntrackedIssueWithTriggerLabel_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"labeled","label":{"name":"foundry"},"issue":{"number":99,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenIssuesEventForUntrackedIssueWithoutTriggerLabel_IsDropped()
     {
         MapEvent("issues", """{"action":"opened","issue":{"number":99,"labels":[{"name":"bug"}]}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenIssueDependenciesEventTouchesTrackedIssue_NudgesListingAndDependencies()
     {
         MapEvent("issue_dependencies", """{"action":"blocked_by_added","blocked_issue":{"number":10},"blocking_issue":{"number":77}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies)]);
     }
 
     [Fact]
     public void WhenIssueDependenciesEventTouchesNothingTracked_IsDropped()
     {
         MapEvent("issue_dependencies", """{"action":"blocked_by_added","blocked_issue":{"number":76},"blocking_issue":{"number":77}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Theory]
@@ -89,82 +92,134 @@ public sealed class Map
     public void WhenPullRequestEventForReviewIssue_NudgesReviewPassForOwningIssue(string eventName)
     {
         MapEvent(eventName, """{"pull_request":{"number":21,"head":{"ref":"feat/20-thing"}}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 20));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Review, 20)]);
     }
 
     [Fact]
     public void WhenPullRequestEventForChecksPendingIssue_NudgesChecksPass()
     {
         MapEvent("pull_request", """{"pull_request":{"number":31,"head":{"ref":"feat/30-thing"}}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Checks, 30)]);
     }
 
     [Fact]
     public void WhenPullRequestHeadBranchBelongsToTrackedIssue_MatchesByBranch()
     {
         MapEvent("pull_request", """{"pull_request":{"number":555,"head":{"ref":"fix/20-other"}}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 20));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Review, 20)]);
     }
 
     [Fact]
     public void WhenPullRequestBelongsToNoTrackedIssue_IsDropped()
     {
         MapEvent("pull_request", """{"pull_request":{"number":555,"head":{"ref":"feature/random"}}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenIssueCommentOnTrackedPullRequest_NudgesReviewPass()
     {
         MapEvent("issue_comment", """{"issue":{"number":21,"pull_request":{"url":"x"}}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 20));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Review, 20)]);
     }
 
     [Fact]
     public void WhenIssueCommentOnPlainIssue_IsDropped()
     {
-        MapEvent("issue_comment", """{"issue":{"number":10}}""").ShouldBeNull();
+        MapEvent("issue_comment", """{"issue":{"number":10}}""").ShouldBeEmpty();
     }
 
     [Fact]
-    public void WhenAnIssueAwaitingInputOnItsOwnThreadIsEdited_NudgesItsAwaitingInputPass()
+    public void WhenAnIssueAwaitingInputOnItsOwnThreadIsEdited_NudgesIssueListingAndItsAwaitingInputPass()
     {
         MapEvent("issues", """{"action":"edited","issue":{"number":40,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing), new NudgeKey(RepoId, NudgePass.AwaitingInput, 40)]);
+    }
+
+    [Fact]
+    public void WhenATriageFailedIssueIsEdited_NudgesIssueListingAndItsFailedTriageEditStep()
+    {
+        MapEvent("issues", """{"action":"edited","issue":{"number":80,"labels":[]}}""")
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing), new NudgeKey(RepoId, NudgePass.TriageFailedEdit, 80)]);
+    }
+
+    [Fact]
+    public void WhenASpecWatchedIssueIsEdited_NudgesIssueListingAndItsSpecRewriteStep()
+    {
+        MapEvent("issues", """{"action":"edited","issue":{"number":90,"labels":[]}}""")
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing), new NudgeKey(RepoId, NudgePass.SpecRewrite, 90)]);
+    }
+
+    [Fact]
+    public void WhenAnEditConcernsEveryPerIssueStep_NudgesTheListingThenAwaitingInputThenFailedTriageThenSpecRewrite()
+    {
+        WebhookTrackingContext everyStep = Tracked with
+        {
+            TriageFailedIssueNumbers = new HashSet<int> { 40 },
+            SpecWatchedIssueNumbers = new HashSet<int> { 40 },
+        };
+        using JsonDocument document = JsonDocument.Parse("""{"action":"edited","issue":{"number":40,"labels":[]}}""");
+
+        GitHubWebhookEventMapper.Map("issues", document.RootElement, RepoId, everyStep).ShouldBe(
+        [
+            new NudgeKey(RepoId, NudgePass.IssueListing),
+            new NudgeKey(RepoId, NudgePass.AwaitingInput, 40),
+            new NudgeKey(RepoId, NudgePass.TriageFailedEdit, 40),
+            new NudgeKey(RepoId, NudgePass.SpecRewrite, 40),
+        ]);
+    }
+
+    [Theory]
+    [InlineData(80)]
+    [InlineData(90)]
+    public void WhenAWatchedIssueIsRelabeledWithoutAnEdit_NudgesOnlyIssueListing(int issueNumber)
+    {
+        MapEvent("issues", $$$"""{"action":"labeled","label":{"name":"bug"},"issue":{"number":{{{issueNumber}}},"labels":[]}}""")
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
+    }
+
+    [Fact]
+    public void WhenATriageFailedIssueIsEditedButTheWatchedSetsWereNotLoaded_NudgesOnlyIssueListing()
+    {
+        WebhookTrackingContext withoutWatchedSets = Tracked with { TriageFailedIssueNumbers = null, SpecWatchedIssueNumbers = null };
+        using JsonDocument document = JsonDocument.Parse("""{"action":"edited","issue":{"number":80,"labels":[]}}""");
+
+        GitHubWebhookEventMapper.Map("issues", document.RootElement, RepoId, withoutWatchedSets)
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenAnIssueAwaitingInputOnItsPullRequestIsEdited_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"edited","issue":{"number":50,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenAnIssueAwaitingInputOnItsOwnThreadIsLabeled_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"labeled","label":{"name":"bug"},"issue":{"number":40,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenIssueCommentOnAwaitingInputIssueWithoutPullRequest_NudgesAwaitingInputPass()
     {
         MapEvent("issue_comment", """{"action":"created","issue":{"number":40}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 40));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.AwaitingInput, 40)]);
     }
 
     [Fact]
     public void WhenIssueCommentOnAwaitingInputIssueWhoseQuestionIsOnItsPullRequest_IsDropped()
     {
-        MapEvent("issue_comment", """{"action":"created","issue":{"number":50}}""").ShouldBeNull();
+        MapEvent("issue_comment", """{"action":"created","issue":{"number":50}}""").ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenIssueCommentOnAwaitingInputPullRequest_NudgesAwaitingInputPass()
     {
         MapEvent("issue_comment", """{"action":"created","issue":{"number":51,"pull_request":{"url":"x"}}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 50));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.AwaitingInput, 50)]);
     }
 
     [Theory]
@@ -173,77 +228,77 @@ public sealed class Map
     public void WhenReviewOnAwaitingInputPullRequest_NudgesAwaitingInputPass(string eventName)
     {
         MapEvent(eventName, """{"action":"submitted","pull_request":{"number":51,"head":{"ref":"feat/50-thing"}}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, 50));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.AwaitingInput, 50)]);
     }
 
     [Fact]
     public void WhenPullRequestEventOnAwaitingInputPullRequest_IsDropped()
     {
         MapEvent("pull_request", """{"action":"edited","pull_request":{"number":51,"head":{"ref":"feat/50-thing"}}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenCheckSuiteCompletedForChecksPendingIssue_NudgesChecksPass()
     {
         MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"feat/30-thing","pull_requests":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Checks, 30)]);
     }
 
     [Fact]
     public void WhenCheckSuiteNotCompleted_IsDropped()
     {
         MapEvent("check_suite", """{"action":"requested","check_suite":{"head_branch":"feat/30-thing","pull_requests":[{"number":31}]}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenCheckSuiteForUntrackedBranch_IsDropped()
     {
         MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"main","pull_requests":[]}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenStatusOnChecksPendingIssueBranch_NudgesChecksPass()
     {
         MapEvent("status", """{"state":"success","branches":[{"name":"feat/30-thing"}]}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Checks, 30)]);
     }
 
     [Fact]
     public void WhenCheckSuiteCompletedForReviewPullRequestWithChecksNotPassed_NudgesReviewPass()
     {
         MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"main","pull_requests":[{"number":61}]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 60));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Review, 60)]);
     }
 
     [Fact]
     public void WhenCheckSuiteCompletedForReviewIssueWithChecksPassed_IsDropped()
     {
         MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"feat/20-thing","pull_requests":[{"number":21}]}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenCheckSuiteCompletedMatchesChecksPendingAndReviewIssue_NudgesChecksPass()
     {
         MapEvent("check_suite", """{"action":"completed","check_suite":{"head_branch":"feat/30-thing","pull_requests":[{"number":61}]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Checks, 30));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Checks, 30)]);
     }
 
     [Fact]
     public void WhenStatusOnReviewIssueBranchWithChecksNotPassed_NudgesReviewPass()
     {
         MapEvent("status", """{"state":"success","branches":[{"name":"feat/60-thing"}]}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.Review, 60));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.Review, 60)]);
     }
 
     [Fact]
     public void WhenStatusOnReviewIssueBranchWithChecksPassed_IsDropped()
     {
         MapEvent("status", """{"state":"success","branches":[{"name":"feat/20-thing"}]}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Theory]
@@ -251,7 +306,7 @@ public sealed class Map
     [InlineData("repository_ruleset")]
     public void WhenRulesEvent_NudgesBranchRulesStep(string eventName)
     {
-        MapEvent(eventName, """{"action":"edited"}""").ShouldBe(new NudgeKey(RepoId, NudgePass.BranchRules));
+        MapEvent(eventName, """{"action":"edited"}""").ShouldBe([new NudgeKey(RepoId, NudgePass.BranchRules)]);
     }
 
     [Theory]
@@ -259,42 +314,42 @@ public sealed class Map
     [InlineData("star")]
     public void WhenEventMapsToNoPass_ReturnsNull(string eventName)
     {
-        MapEvent(eventName, """{"zen":"Keep it logically awesome."}""").ShouldBeNull();
+        MapEvent(eventName, """{"zen":"Keep it logically awesome."}""").ShouldBeEmpty();
     }
 
     [Fact]
     public void WhenIssuesEventClosesUntrackedUnlabeledBlocker_NudgesListingAndDependencies()
     {
         MapEvent("issues", """{"action":"closed","issue":{"number":77,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies)]);
     }
 
     [Fact]
     public void WhenIssuesEventClosesTrackedBlocker_NudgesListingAndDependencies()
     {
         MapEvent("issues", """{"action":"closed","issue":{"number":20,"labels":[{"name":"foundry"}]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies)]);
     }
 
     [Fact]
     public void WhenIssuesEventClosesTrackedIssueThatBlocksNothing_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"closed","issue":{"number":10,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenIssuesEventClosesLabeledUntrackedIssueThatBlocksNothing_NudgesIssueListing()
     {
         MapEvent("issues", """{"action":"closed","issue":{"number":99,"labels":[{"name":"foundry"}]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
     public void WhenIssuesEventClosesUnlabeledUntrackedIssueThatBlocksNothing_IsDropped()
     {
         MapEvent("issues", """{"action":"closed","issue":{"number":99,"labels":[]}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Theory]
@@ -305,7 +360,7 @@ public sealed class Map
     public void WhenIssuesEventForUntrackedUnlabeledBlockerIsNotAClose_IsDropped(string action)
     {
         MapEvent("issues", $$$"""{"action":"{{{action}}}","issue":{"number":77,"labels":[]}}""")
-            .ShouldBeNull();
+            .ShouldBeEmpty();
     }
 
     [Theory]
@@ -314,7 +369,7 @@ public sealed class Map
     public void WhenIssuesEventForTrackedBlockerIsNotAClose_NudgesIssueListing(string action)
     {
         MapEvent("issues", $$$"""{"action":"{{{action}}}","issue":{"number":20,"labels":[]}}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.IssueListing)]);
     }
 
     [Fact]
@@ -323,7 +378,7 @@ public sealed class Map
         WebhookTrackingContext withoutBlockers = Tracked with { BlockerIssueNumbers = null };
         using JsonDocument document = JsonDocument.Parse("""{"action":"closed","issue":{"number":77,"labels":[]}}""");
 
-        GitHubWebhookEventMapper.Map("issues", document.RootElement, RepoId, withoutBlockers).ShouldBeNull();
+        GitHubWebhookEventMapper.Map("issues", document.RootElement, RepoId, withoutBlockers).ShouldBeEmpty();
     }
 
     [Theory]
@@ -339,9 +394,9 @@ public sealed class Map
     [InlineData("repository_ruleset", false)]
     [InlineData("push", false)]
     [InlineData("ping", false)]
-    public void NeedsBlockers_IsTrueOnlyForIssuesEvents(string eventName, bool expected)
+    public void IsIssueEvent_IsTrueOnlyForIssuesEvents(string eventName, bool expected)
     {
-        GitHubWebhookEventMapper.NeedsBlockers(eventName).ShouldBe(expected);
+        GitHubWebhookEventMapper.IsIssueEvent(eventName).ShouldBe(expected);
     }
 
     [Theory]
@@ -350,7 +405,7 @@ public sealed class Map
     public void WhenPushMovesTheResumeBranchOfAnAwaitingInputIssue_NudgesItsAwaitingInputPass(string pushedRef, int issueNumber)
     {
         MapEvent("push", $$"""{"ref":"{{pushedRef}}","before":"6113728f27ae82c7b1a177c8d03f9e96e0adf246","after":"0000000000000000000000000000000000000000"}""")
-            .ShouldBe(new NudgeKey(RepoId, NudgePass.AwaitingInput, issueNumber));
+            .ShouldBe([new NudgeKey(RepoId, NudgePass.AwaitingInput, issueNumber)]);
     }
 
     [Theory]
@@ -359,7 +414,7 @@ public sealed class Map
     [InlineData("refs/tags/feat/70-continue")]
     public void WhenPushMovesNoAwaitingInputIssuesBranch_IsDropped(string pushedRef)
     {
-        MapEvent("push", $$"""{"ref":"{{pushedRef}}"}""").ShouldBeNull();
+        MapEvent("push", $$"""{"ref":"{{pushedRef}}"}""").ShouldBeEmpty();
     }
 
     [Fact]

@@ -14,20 +14,28 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks.Delivery;
 /// issue; it is loaded only for issue events (GitHub <c>issues</c>, GitLab <c>issue</c> / <c>work_item</c>),
 /// whose close of a blocker must nudge the dependency pass.
 /// <see cref="AwaitingInputIssues"/> holds the issues waiting for an answer, whose question thread's comments
-/// nudge the awaiting-input pass.
+/// nudge the awaiting-input pass. <see cref="TriageFailedIssueNumbers"/> and <see cref="SpecWatchedIssueNumbers"/> hold
+/// the issues whose description the failed-triage edit and spec-rewrite steps watch; like the blockers, they are
+/// loaded only for issue events.
 /// </summary>
 internal sealed record WebhookTrackingContext(
     IReadOnlySet<int> KnownIssueNumbers,
     IReadOnlyList<ReviewIssueInfo> ReviewIssues,
     IReadOnlyList<ChecksPendingIssueInfo> ChecksPendingIssues,
     IReadOnlySet<int>? BlockerIssueNumbers = null,
-    IReadOnlyList<AwaitingInputThread>? AwaitingInputIssues = null)
+    IReadOnlyList<AwaitingInputThread>? AwaitingInputIssues = null,
+    IReadOnlySet<int>? TriageFailedIssueNumbers = null,
+    IReadOnlySet<int>? SpecWatchedIssueNumbers = null)
 {
     internal static readonly WebhookTrackingContext Empty = new(new HashSet<int>(), [], []);
 
     internal IReadOnlySet<int> Blockers => BlockerIssueNumbers ?? EmptySet;
 
     internal IReadOnlyList<AwaitingInputThread> AwaitingInput => AwaitingInputIssues ?? [];
+
+    internal IReadOnlySet<int> TriageFailed => TriageFailedIssueNumbers ?? EmptySet;
+
+    internal IReadOnlySet<int> SpecWatched => SpecWatchedIssueNumbers ?? EmptySet;
 
     private static readonly IReadOnlySet<int> EmptySet = new HashSet<int>();
 }
@@ -44,9 +52,10 @@ internal sealed record AwaitingInputThread(int IssueNumber, string? PullRequestU
 /// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
 /// issue is checks-pending; a finished checks delivery nudges the checks pass of its checks-pending
 /// owner, or else the review pass of its review owner whose checks verdict is not passed; a comment on an
-/// awaiting-input issue's question thread, an edit of an issue whose question lives on its own thread, or a push to an
-/// awaiting-input issue's resume branch nudges its awaiting-input pass; an issue close of a blocker
-/// nudges the listing plus the dependency pass; anything else maps to <see langword="null"/>.
+/// awaiting-input issue's question thread, or a push to an awaiting-input issue's resume branch nudges its
+/// awaiting-input pass; an edit of an issue nudges the listing plus every per-issue step watching that issue's
+/// description (awaiting input on its own thread, failed triage, spec rewrite); an issue close of a blocker
+/// nudges the listing plus the dependency pass; anything else maps to no key.
 /// </summary>
 internal static partial class WebhookRelevance
 {
@@ -177,16 +186,63 @@ internal static partial class WebhookRelevance
             : null;
 
     /// <summary>
-    /// Maps an edit of an issue whose question lives on its own thread to that issue's awaiting-input pass: the
-    /// edited description may be the answer (ADR 0096). An edit of any other issue maps to <see langword="null"/>,
-    /// and the caller falls back to the listing nudge.
+    /// The per-issue steps an edit of <paramref name="issueNumber"/> concerns, in order: its awaiting-input pass when its
+    /// question lives on its own thread (the edited description may be the answer, ADR 0096), the failed-triage edit
+    /// step when it is <c>triage_failed</c> (issue #773), and the spec-rewrite step when its spec is watched (ADR 0125).
     /// </summary>
-    internal static NudgeKey? MapIssueEdited(
+    internal static IReadOnlyList<NudgeKey> MapIssueEdited(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber)
+    {
+        List<NudgeKey> keys = [];
+
+        if (MapIssueComment(repositoryId, tracked, issueNumber) is { } awaitingInput)
+        {
+            keys.Add(awaitingInput);
+        }
+
+        if (tracked.TriageFailed.Contains(issueNumber))
+        {
+            keys.Add(new NudgeKey(repositoryId, NudgePass.TriageFailedEdit, issueNumber));
+        }
+
+        if (tracked.SpecWatched.Contains(issueNumber))
+        {
+            keys.Add(new NudgeKey(repositoryId, NudgePass.SpecRewrite, issueNumber));
+        }
+
+        return keys;
+    }
+
+    /// <summary>
+    /// Maps an issue delivery that is not a blocker close: the listing when the issue is tracked or carries the trigger
+    /// label, followed on an edit by the per-issue steps the edit concerns (<see cref="MapIssueEdited"/>).
+    /// </summary>
+    internal static IReadOnlyList<NudgeKey> MapIssueChange(
         MonitoredRepositoryId repositoryId,
         WebhookTrackingContext tracked,
         int issueNumber,
-        bool isEdit) =>
-        isEdit ? MapIssueComment(repositoryId, tracked, issueNumber) : null;
+        bool hasTriggerLabel,
+        bool isEdit)
+    {
+        List<NudgeKey> keys = [];
+
+        if (hasTriggerLabel || tracked.KnownIssueNumbers.Contains(issueNumber))
+        {
+            keys.Add(new NudgeKey(repositoryId, NudgePass.IssueListing));
+        }
+
+        if (isEdit)
+        {
+            keys.AddRange(MapIssueEdited(repositoryId, tracked, issueNumber));
+        }
+
+        return keys;
+    }
+
+    /// <summary>A delivery's single key as a list, empty when it maps to none.</summary>
+    internal static IReadOnlyList<NudgeKey> AsKeys(NudgeKey? key) => key is { } single ? [single] : [];
 
     /// <summary>
     /// Maps a push to the awaiting-input pass of the issue whose resume branch it moved: a push while the issue waits

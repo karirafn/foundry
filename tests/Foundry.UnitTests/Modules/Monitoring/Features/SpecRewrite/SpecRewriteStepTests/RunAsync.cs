@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.SpecRewrite;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
@@ -41,6 +42,7 @@ public sealed class RunAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher = new();
+    private readonly WebhookNudgeQueue _nudgeQueue = new(NullLogger<WebhookNudgeQueue>.Instance);
     private readonly ScriptedProvider _provider = new();
     private readonly MonitoredRepository _repository;
 
@@ -77,6 +79,7 @@ public sealed class RunAsync : IAsyncDisposable
             new SpecWatchedIssueQueries(_dbContext),
             _dbContext,
             _dispatcher,
+            _nudgeQueue,
             NullLogger<SpecRewriteStep>.Instance);
 
     private IssueBuilder Builder(int issueNumber) =>
@@ -112,9 +115,9 @@ public sealed class RunAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
     }
 
-    private async Task RunStepAtAsync(DateTimeOffset at)
+    private async Task RunStepAtAsync(DateTimeOffset at, int? issueNumber = null)
     {
-        await BuildSut().RunAsync(_repository, _provider, at, TestContext.Current.CancellationToken);
+        await BuildSut().RunAsync(_repository, _provider, issueNumber, at, TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
     }
 
@@ -416,6 +419,79 @@ public sealed class RunAsync : IAsyncDisposable
 
         // Assert
         _provider.IssueStatusReads.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenARewriteIsInsideTheQuietPeriod_EnqueuesANudgeForTheIssueWhenItSettles()
+    {
+        // Arrange
+        SeedReview();
+        _provider.IssueBody = RewrittenBody;
+
+        // Act
+        await RunStepAtAsync(Start);
+
+        // Assert
+        _nudgeQueue.Reader.TryRead(out Nudge nudge).ShouldBeTrue();
+        nudge.ShouldBe(new Nudge(
+            new NudgeKey(_repository.Id, NudgePass.SpecRewrite, 1),
+            Start + ActionableFeedbackPolicy.QuietPeriod));
+    }
+
+    [Fact]
+    public async Task WhenTheSpecIsUnchanged_EnqueuesNoNudge()
+    {
+        // Arrange
+        SeedReview();
+
+        // Act
+        await RunStepAtAsync(Start);
+
+        // Assert
+        _nudgeQueue.Reader.TryRead(out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenNudgedForOneWatchedIssue_ReadsOnlyThatIssue()
+    {
+        // Arrange
+        SeedReview(issueNumber: 1);
+        SeedReview(issueNumber: 2);
+
+        // Act
+        await RunStepAtAsync(Start, issueNumber: 2);
+
+        // Assert
+        _provider.IssueStatusReads.ShouldBe(1);
+        LoadWatch(1).ShouldBeNull();
+        LoadWatch(2).ShouldNotBeNull().Wait.ShouldBe(WatchedWait.SpecChanged);
+    }
+
+    [Fact]
+    public async Task WhenNudgedForAnIssueThatIsNotWatched_ReadsNoIssue()
+    {
+        // Arrange
+        SeedReview(issueNumber: 1);
+
+        // Act
+        await RunStepAtAsync(Start, issueNumber: 2);
+
+        // Assert
+        _provider.IssueStatusReads.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenNudged_KeepsTheWatchesOfOtherIssuesThatLeftTheWatchedStates()
+    {
+        // Arrange
+        SeedReview(issueNumber: 1);
+        SeedWatch(IssueWatch.StartForSpecChange(_repository.Id, 7, IssueBodyHash.OfSpec(OriginalBody)));
+
+        // Act
+        await RunStepAtAsync(Start, issueNumber: 1);
+
+        // Assert
+        LoadWatch(7).ShouldNotBeNull();
     }
 
     [Fact]

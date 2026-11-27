@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
+using Foundry.Testing;
 
 using Microsoft.AspNetCore.Http;
 
@@ -154,5 +155,64 @@ public sealed class WhenDeliveryArrives : IAsyncDisposable
         // Assert
         response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
         WebhookTestHost.DrainNudges(_factory).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenATriageFailedIssueIsEdited_EnqueuesTheListingAndItsFailedTriageEditNudges()
+    {
+        // Arrange
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, registered: true);
+        await WebhookTestHost.SeedIssuesAsync(
+            _factory,
+            new IssueBuilder().WithMonitoredRepositoryId(repository.Id).WithIssueNumber(12).TriageFailed());
+        string body = """{"action":"edited","issue":{"number":12,"labels":[]},"repository":{"full_name":"owner/repo"}}""";
+
+        // Act
+        HttpContext response = await WebhookTestHost.DeliverAsync(
+            _factory,
+            repository.WebhookHookId,
+            "issues",
+            body,
+            repository.WebhookSecret);
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
+        WebhookTestHost.DrainNudges(_factory).ShouldBe(
+        [
+            new Nudge(new NudgeKey(repository.Id, NudgePass.IssueListing)),
+            new Nudge(new NudgeKey(repository.Id, NudgePass.TriageFailedEdit, 12)),
+        ]);
+    }
+
+    [Fact]
+    public async Task WhenASpecWatchedIssueIsEdited_EnqueuesTheListingAndItsSpecRewriteNudges()
+    {
+        // Arrange
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, registered: true);
+        await WebhookTestHost.SeedIssuesAsync(
+            _factory,
+            new IssueBuilder()
+                .WithMonitoredRepositoryId(repository.Id)
+                .WithIssueNumber(13)
+                .WithBranchName("feat/13-add-retry")
+                .WithPullRequestUrl("https://github.com/owner/repo/pull/14")
+                .Review());
+        string body = """{"action":"edited","issue":{"number":13,"labels":[]},"repository":{"full_name":"owner/repo"}}""";
+
+        // Act
+        HttpContext response = await WebhookTestHost.DeliverAsync(
+            _factory,
+            repository.WebhookHookId,
+            "issues",
+            body,
+            repository.WebhookSecret);
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
+        WebhookTestHost.DrainNudges(_factory).ShouldBe(
+        [
+            new Nudge(new NudgeKey(repository.Id, NudgePass.IssueListing)),
+            new Nudge(new NudgeKey(repository.Id, NudgePass.SpecRewrite, 13)),
+        ]);
     }
 }

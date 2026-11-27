@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -12,20 +13,28 @@ namespace Foundry.Modules.Monitoring.Features.TriageFailed;
 
 /// <summary>
 /// The failed-triage step (issue #773, ADR 0097): an edit to a <c>triage_failed</c> issue's description sends it back
-/// to triage. On every scheduled poll it reads each such issue's body and keeps the issue's <see cref="IssueWatch"/>:
-/// the first successful read is the baseline, a different body becomes a pending change, and once that change has
-/// outlasted the quiet period it raises <see cref="TriageFailedIssueEdited"/> and removes the watch in the same save.
-/// Watches of issues no longer <c>triage_failed</c> are removed.
+/// to triage. On every scheduled poll, and on a <see cref="NudgePass.TriageFailedEdit"/> nudge for one issue, it reads
+/// each such issue's body and keeps the issue's <see cref="IssueWatch"/>: the first successful read is the baseline, a
+/// different body becomes a pending change, and once that change has outlasted the quiet period it raises
+/// <see cref="TriageFailedIssueEdited"/> and removes the watch in the same save. A change still inside the quiet period
+/// nudges the issue again when it settles. A scheduled run also removes the watches of issues no longer
+/// <c>triage_failed</c>.
 /// </summary>
 internal sealed class TriageFailedEditStep(
     ITriageFailedIssueQueries triageFailedQueries,
     DbContext dbContext,
     IIntegrationEventDispatcher integrationEventDispatcher,
+    WebhookNudgeQueue nudgeQueue,
     ILogger<TriageFailedEditStep> logger)
 {
+    /// <summary>
+    /// Runs the step for every <c>triage_failed</c> issue of <paramref name="repository"/>, or only
+    /// <paramref name="issueNumber"/> when supplied (nudged).
+    /// </summary>
     public async Task RunAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
+        int? issueNumber,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -35,15 +44,18 @@ internal sealed class TriageFailedEditStep(
             .Where(watch => watch.MonitoredRepositoryId == repository.Id)
             .ToDictionaryAsync(watch => watch.IssueNumber, cancellationToken);
 
-        ForgetWatchesOfIssuesNoLongerFailed(watches, failed);
+        if (issueNumber is null)
+        {
+            ForgetWatchesOfIssuesNoLongerFailed(watches, failed);
+        }
 
         List<IIntegrationEvent> events = [];
 
         // HTTP calls are sequential: failed triages per repository are few and operator-visible (issue #773).
-        foreach (int issueNumber in failed.Order())
+        foreach (int failedIssue in failed.Where(number => issueNumber is null || number == issueNumber).Order())
         {
             // A failed read changes nothing; the next poll reads again. A closed issue is left to the listing's close path.
-            if (await provider.GetIssueStatusAsync(repository.Slug, issueNumber, cancellationToken)
+            if (await provider.GetIssueStatusAsync(repository.Slug, failedIssue, cancellationToken)
                 is not Result<IssueStatus>.Success { Value: { IsClosed: false } status })
             {
                 continue;
@@ -51,23 +63,31 @@ internal sealed class TriageFailedEditStep(
 
             IssueBodyHash body = IssueBodyHash.Of(status.Body);
 
-            if (!watches.TryGetValue(issueNumber, out IssueWatch? watch) || watch.Wait is not WatchedWait.TriageFailed)
+            if (!watches.TryGetValue(failedIssue, out IssueWatch? watch) || watch.Wait is not WatchedWait.TriageFailed)
             {
-                ReplaceWatch(watches, IssueWatch.StartForFailedTriage(repository.Id, issueNumber, body));
+                ReplaceWatch(watches, IssueWatch.StartForFailedTriage(repository.Id, failedIssue, body));
                 continue;
             }
 
             watch.ObserveBody(body, now);
 
-            if (watch.SettleBodyChange(now) is InputSettlement.Settled settled)
+            switch (watch.SettleBodyChange(now))
             {
-                events.Add(new TriageFailedIssueEdited(repository.Id, issueNumber, settled.ArrivedAt));
-                dbContext.Set<IssueWatch>().Remove(watch);
-                watches.Remove(issueNumber);
-                logger.LogInformation(
-                    "The description of triage-failed issue #{IssueNumber} in '{Slug}' changed; sending it back to triage.",
-                    issueNumber,
-                    repository.Slug);
+                case InputSettlement.Settled settled:
+                    events.Add(new TriageFailedIssueEdited(repository.Id, failedIssue, settled.ArrivedAt));
+                    dbContext.Set<IssueWatch>().Remove(watch);
+                    watches.Remove(failedIssue);
+                    logger.LogInformation(
+                        "The description of triage-failed issue #{IssueNumber} in '{Slug}' changed; sending it back to triage.",
+                        failedIssue,
+                        repository.Slug);
+                    break;
+
+                case InputSettlement.Waiting waiting:
+                    nudgeQueue.TryEnqueue(new Nudge(
+                        new NudgeKey(repository.Id, NudgePass.TriageFailedEdit, failedIssue),
+                        waiting.Until));
+                    break;
             }
         }
 

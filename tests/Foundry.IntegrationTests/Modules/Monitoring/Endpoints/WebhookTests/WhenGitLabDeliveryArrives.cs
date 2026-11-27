@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
+using Foundry.Testing;
 
 using Microsoft.AspNetCore.Http;
 
@@ -187,5 +188,35 @@ public sealed class WhenGitLabDeliveryArrives : IAsyncDisposable
         // Assert
         response.Response.StatusCode.ShouldBe(StatusCodes.Status404NotFound);
         (await WebhookTestHost.LoadRepositoryAsync(_factory, repository)).WebhookStatus.ShouldBe(WebhookStatus.Pending);
+    }
+
+    [Fact]
+    public async Task WhenATriageFailedIssueIsUpdated_EnqueuesTheListingAndItsFailedTriageEditNudges()
+    {
+        // Arrange
+        MonitoredRepository repository = await SeedAsync();
+        await WebhookTestHost.SeedIssuesAsync(
+            _factory,
+            new IssueBuilder().WithMonitoredRepositoryId(repository.Id).WithIssueNumber(12).TriageFailed());
+        string body = """
+            {"object_kind":"issue","project":{"path_with_namespace":"group/sub/project"},
+             "object_attributes":{"iid":12,"action":"update"},"labels":[]}
+            """;
+
+        // Act
+        HttpContext response = await WebhookTestHost.DeliverGitLabAsync(
+            _factory,
+            repository.WebhookHookId,
+            "Issue Hook",
+            body,
+            repository.WebhookSecret);
+
+        // Assert
+        response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
+        WebhookTestHost.DrainNudges(_factory).ShouldBe(
+        [
+            new Nudge(new NudgeKey(repository.Id, NudgePass.IssueListing)),
+            new Nudge(new NudgeKey(repository.Id, NudgePass.TriageFailedEdit, 12)),
+        ]);
     }
 }
