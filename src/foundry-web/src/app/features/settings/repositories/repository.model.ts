@@ -1,6 +1,6 @@
 export type EligibilityStatus = 'eligible' | 'ineligible' | 'unreachable';
 
-export type EligibilityReason = 'never-probed' | 'rate-limited' | 'branch-rules-unavailable';
+export type EligibilityReason = 'never-probed' | 'rate-limited' | 'branch-rules-unavailable' | 'access-refused';
 
 export function eligibilityStatusLabel(status: EligibilityStatus): string {
   switch (status) {

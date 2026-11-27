@@ -222,4 +222,25 @@ public sealed class IsDueForWriteProbe
         // Assert
         result.ShouldBeTrue();
     }
+
+    [Theory]
+    [InlineData(-36500)]
+    [InlineData(0)]
+    [InlineData(36500)]
+    public void WhenVerdictIsUnknownAccessRefusedWithCurrentVersion_ReturnsTrueForAnyNow(int offsetDays)
+    {
+        // Arrange
+        MonitoredRepository repository = CreateRepository();
+        repository.SetWriteProbeVerdict(
+            new WriteProbeVerdict.Unknown(LastAttemptedAt: null, Reason: UnknownReason.AccessRefused)
+            {
+                PermissionListVersion = CurrentVersion,
+            });
+
+        // Act
+        bool result = repository.IsDueForWriteProbe(Now.AddDays(offsetDays), CurrentVersions);
+
+        // Assert
+        result.ShouldBeTrue();
+    }
 }

@@ -120,6 +120,7 @@ internal static class RepositoryMappings
             UnreachableReason.NeverProbed => RepositoryEligibilityInfo.NeverProbedReason,
             UnreachableReason.RateLimited => RepositoryEligibilityInfo.RateLimitedReason,
             UnreachableReason.BranchRulesUnavailable => RepositoryEligibilityInfo.BranchRulesUnavailableReason,
+            UnreachableReason.AccessRefused => RepositoryEligibilityInfo.AccessRefusedReason,
             _ => throw new UnreachableException(),
         };
 }

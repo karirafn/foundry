@@ -13,4 +13,7 @@ public sealed record RepositoryEligibilityInfo(
 
     /// <summary>The branch-rules GET failed, preventing a definitive eligibility decision.</summary>
     public const string BranchRulesUnavailableReason = "branch-rules-unavailable";
+
+    /// <summary>The provider refused the account token when a run used it; write access is re-checked on the next poll.</summary>
+    public const string AccessRefusedReason = "access-refused";
 }

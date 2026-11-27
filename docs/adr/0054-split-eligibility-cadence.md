@@ -26,8 +26,11 @@ The **branch-rules GET** stays an unconditional per-cycle poll step.
 This preserves ADR 0013's auto-heal guarantee: a configuration change on the provider is reflected
 on the next poll without any user action.
 
-The **write probe** becomes event-triggered — it runs on repository add, manual re-check, and
-credential update/rotation.
+The **write probe** becomes event-triggered — it runs on repository add, manual re-check, credential
+update/rotation, and a provider refusal (HTTP 403 or 404) of the account token that a run's Prepare
+fetch, push or pull-request call reports as `WorkerRunAccessRefused`. A refusal resets a `Granted`
+verdict to `Unknown(AccessRefused)`, so dispatch stops in that save and the next poll re-probes; a
+`Denied` or `Unknown` verdict keeps its cooldown.
 The last write-probe result is persisted on `MonitoredRepository` as a `WriteProbeVerdict` value
 object (`Granted` / `Denied` / `Unknown`).
 `WriteProbeVerdict` is composed with the fresh branch-rules result each cycle to produce the
@@ -56,9 +59,8 @@ It realises the "on add or recheck" cadence.
 
 - Steady-state polling issues zero write probes for a granted repository; the GitHub secondary rate
   limit is no longer approached during normal operation.
-- A write-permission loss is picked up by manual re-check or credential update, not automatically
-  on the next poll. No push-failure trigger exists: the worker exit taxonomy has no
-  distinguishable push-permission-failure signal.
+- A write-permission loss is picked up the first time a run's fetch, push or pull-request call is
+  refused. A loss no run exercises is picked up only by manual re-check or credential update.
 - Auto-heal for branch rulesets is unchanged: a protection-rule change is reflected on the very
   next poll cycle.
 - Sizing constraint: while re-probing, a repository issues 3 content-creation POSTs per probe, so
@@ -71,3 +73,4 @@ It realises the "on add or recheck" cadence.
 ## Revisions
 - 2026-08-25 — `Unknown` self-heals: re-probed on the next poll once a 15-minute cooldown has elapsed since its last attempt (#465).
 - 2026-11-18 — A `Denied` verdict is re-probed after a one-hour cooldown, and a verdict taken against an older permission list is re-probed as unprobed ([ADR 0115](0115-one-account-token-verified-against-every-permission-foundry-uses.md)).
+- 2026-11-27 — A provider refusal seen by a run resets a Granted verdict to Unknown so the next poll re-probes (#463).

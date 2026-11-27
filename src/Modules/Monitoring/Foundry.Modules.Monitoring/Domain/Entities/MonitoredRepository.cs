@@ -479,6 +479,27 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         };
     }
 
+    /// <summary>
+    /// Resets a <see cref="WriteProbeVerdict.Granted"/> verdict after the provider refused the account token
+    /// during a run: dispatch stops at once and, with no attempt stamped, <see cref="IsDueForWriteProbe"/> makes
+    /// the next poll re-probe. A <see cref="WriteProbeVerdict.Denied"/> or <see cref="WriteProbeVerdict.Unknown"/>
+    /// verdict is left alone so its cooldown keeps running. Returns whether anything changed.
+    /// </summary>
+    internal bool ResetGrantedWriteProbe()
+    {
+        if (WriteProbeVerdict is not WriteProbeVerdict.Granted granted)
+        {
+            return false;
+        }
+
+        WriteProbeVerdict = new WriteProbeVerdict.Unknown(LastAttemptedAt: null, Reason: UnknownReason.AccessRefused)
+        {
+            PermissionListVersion = granted.PermissionListVersion,
+        };
+        SetEligibility(new RepositoryEligibility.Unreachable(UnreachableReason.AccessRefused));
+        return true;
+    }
+
     private static bool HasCooldownElapsed(DateTimeOffset? lastProbedAt, TimeSpan cooldown, DateTimeOffset now)
         => lastProbedAt is null || lastProbedAt.Value + cooldown < now;
 

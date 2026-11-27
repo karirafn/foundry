@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -64,6 +66,36 @@ public sealed class ComposeAsync
         // Assert
         RepositoryEligibility.Unreachable unreachable = eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
         unreachable.Reason.ShouldBe(UnreachableReason.RateLimited);
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsUnknownAccessRefused_ReturnsUnreachableAccessRefused()
+    {
+        // Arrange
+        (EligibilityComposer composer, GitHubCredential credential) = BuildSut();
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Unknown(Reason: UnknownReason.AccessRefused);
+
+        // Act
+        RepositoryEligibility eligibility = await composer.ComposeAsync(
+            Slug, verdict, credential, "ghp_token", CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Unreachable unreachable = eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+        unreachable.Reason.ShouldBe(UnreachableReason.AccessRefused);
+    }
+
+    [Fact]
+    public async Task WhenVerdictIsUnknownWithUnhandledReason_Throws()
+    {
+        // Arrange
+        (EligibilityComposer composer, GitHubCredential credential) = BuildSut();
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Unknown(Reason: (UnknownReason)int.MaxValue);
+
+        // Act
+        Func<Task> act = () => composer.ComposeAsync(Slug, verdict, credential, "ghp_token", CancellationToken.None);
+
+        // Assert
+        await Should.ThrowAsync<UnreachableException>(act);
     }
 
     [Fact]
