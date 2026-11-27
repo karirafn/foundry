@@ -198,7 +198,8 @@ internal interface IIssueProvider
     /// Opens a draft pull/merge request from <paramref name="sourceBranch"/> into the repository's default branch
     /// and returns its web URL. When the provider refuses because one is already open for the branch, returns that
     /// one's URL, so a retried publish is idempotent. A failure is
-    /// <see cref="RunPublishingErrors.TransientCode"/> or <see cref="RunPublishingErrors.PermanentCode"/>, except
+    /// <see cref="RunPublishingErrors.TransientCode"/>, <see cref="RunPublishingErrors.PermanentCode"/> or, when the
+    /// provider refuses the token, <see cref="RunPublishingErrors.RefusedCode"/>, except
     /// that a failed default-branch read keeps the provider's own error; this call never retries.
     /// </summary>
     /// <remarks>Providers without pull request creation keep this default, which fails permanently without any

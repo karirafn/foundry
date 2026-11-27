@@ -161,7 +161,10 @@ internal sealed class RunPublishingCommands(
     /// </summary>
     private static Error Classify(Error error) => error.Code switch
     {
-        RunPublishingErrors.TransientCode or RunPublishingErrors.PermanentCode or RunPublishingErrors.RefNotFoundCode =>
+        RunPublishingErrors.TransientCode
+            or RunPublishingErrors.PermanentCode
+            or RunPublishingErrors.RefNotFoundCode
+            or RunPublishingErrors.RefusedCode =>
             error,
         CommentPostErrors.TransientCode => RunPublishingErrors.Transient(error.Message),
         CommentPostErrors.PermanentCode => RunPublishingErrors.Permanent(error.Message),

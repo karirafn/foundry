@@ -643,6 +643,22 @@ public sealed class RunAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPullRequestMergedAndIssueStillOpen_StaysIdleAndRequestsNoRebase()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false);
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.RebaseCalls.ShouldBeEmpty();
+        _provider.StateCalls.ShouldBe(0);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenNudgedForAnotherIssue_LeavesThisIssueAlone()
     {
         // Arrange

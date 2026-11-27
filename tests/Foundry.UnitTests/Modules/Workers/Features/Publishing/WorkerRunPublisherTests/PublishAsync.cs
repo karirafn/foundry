@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -262,6 +263,86 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
 
         // Assert
         _events.Captured.OfType<WorkerRunAccessRefused>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ARefusedPullRequestOpen_UsesUpTheRetriesAndFailsThePublish()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
+        RecordingRunPublishingCommands commands = new() { OpenError = RunPublishingErrors.Refused("returned 403.") };
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true), commands: commands);
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<PublishFailedRun>().IsExhausted.ShouldBeTrue();
+        _events.Captured.OfType<WorkerRunFailedEvent>().ShouldHaveSingleItem()
+            .Category.ShouldBe(FailureCategory.PublishFailedToken);
+    }
+
+    [Fact]
+    public async Task ARefusedPullRequestOpen_TellsMonitoringTheRunsRepositoryRefusedAccess()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
+        RecordingRunPublishingCommands commands = new() { OpenError = RunPublishingErrors.Refused("returned 404.") };
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true), commands: commands);
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        WorkerRun run = await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        _events.Captured.OfType<WorkerRunAccessRefused>().ShouldHaveSingleItem()
+            .ShouldBe(new WorkerRunAccessRefused(run.Id, _repositoryId.Value));
+    }
+
+    [Theory]
+    [InlineData(RunPublishingErrors.TransientCode)]
+    [InlineData(RunPublishingErrors.PermanentCode)]
+    public async Task APullRequestOpenTheProviderDidNotRefuse_DoesNotTellMonitoring(string code)
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
+        RecordingRunPublishingCommands commands = new() { OpenError = new Error(code, "returned 422.") };
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true), commands: commands);
+
+        // Assert
+        _events.Captured.OfType<WorkerRunAccessRefused>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ARetryAfterARefusedPullRequestOpen_OpensThePullRequestWithoutPushingAgain()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 2, ["feat: add retry"], [], []));
+        StubPostExitProviderQueries provider = new(hasCommits: true);
+        await RunPublisherAsync(
+            publisher,
+            provider,
+            commands: new RecordingRunPublishingCommands { OpenError = RunPublishingErrors.Refused("returned 403.") });
+        await RequestPublishRetryAsync();
+        RecordingRunPublishingCommands commands = new();
+
+        // Act
+        await RunPublisherAsync(publisher, provider, commands: commands);
+
+        // Assert
+        publisher.PublishRequests.ShouldHaveSingleItem();
+        commands.Opened.ShouldHaveSingleItem().Branch.ShouldBe(Branch);
     }
 
     [Fact]
@@ -622,6 +703,17 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         db.SaveChanges();
     }
 
+    private async Task RequestPublishRetryAsync()
+    {
+        await using FoundryDbContext db = CreateDbContext();
+        PublishFailedRun failed = await db.Set<PublishFailedRun>().SingleAsync(TestContext.Current.CancellationToken);
+        await db.TransitionAsync(
+            failed,
+            failed.RequestRetry(),
+            new DomainEventDispatcher(new ServiceCollection().BuildServiceProvider()),
+            TestContext.Current.CancellationToken);
+    }
+
     private void SeedAskingPublishingRun(bool refusesNeedsInput)
     {
         using FoundryDbContext db = CreateDbContext();
@@ -655,7 +747,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     private async Task RunPublisherAsync(
         FakePublisher publisher,
         StubPostExitProviderQueries provider,
-        string? issueRunKind = IssueSummary.FreshRunKind)
+        string? issueRunKind = IssueSummary.FreshRunKind,
+        RecordingRunPublishingCommands? commands = null)
     {
         await using FoundryDbContext db = CreateDbContext();
         DomainEventDispatcher domainEvents = new(new ServiceCollection().BuildServiceProvider());
@@ -664,7 +757,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             db,
             publisher,
             StubRepositoryDispatchQueries.WithToken("ghp_test"),
-            _commands,
+            commands ?? _commands,
             provider,
             new StubIssueQueries(runKind: issueRunKind),
             new StubGlobalSettingsQueries(),

@@ -1071,6 +1071,37 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewIssueDraftPullRequestIsMergedAndIssueIsOpen_RecordsNothingAndMakesNoProviderWrites()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now, VerifiedHeadSha: null, ChecksPassed: true, IsPullRequestMarkedReady: false);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: [reviewIssue]);
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: true)),
+            });
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: null, CancellationToken.None);
+
+        // Assert
+        provider.ShouldSatisfyAllConditions(
+            () => provider.MarkReadyCalls.ShouldBeEmpty(),
+            () => provider.LastPostedComments.ShouldBeNull(),
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty());
+    }
+
+    [Fact]
     public async Task WhenZeroDispatchCandidates_MakesNoDependencyProviderCallsAndRaisesNoDependenciesDetectedEvent()
     {
         // Arrange
