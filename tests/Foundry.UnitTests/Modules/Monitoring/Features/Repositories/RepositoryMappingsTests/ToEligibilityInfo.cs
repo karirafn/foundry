@@ -264,7 +264,7 @@ public sealed class ToEligibilityInfo
 
         // Assert
         result.ShouldNotBeNull().Violations.ShouldHaveSingleItem().Description.ShouldBe(
-            "Token is missing Only selected projects (select each monitored project individually) and Code: Push for myorg/myrepo.");
+            "Token is missing All groups and projects I have access to, or only selected projects (select each monitored project individually) and Code: Push for myorg/myrepo.");
     }
 
     [Fact]

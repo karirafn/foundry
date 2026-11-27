@@ -546,7 +546,7 @@ public sealed class EvaluateFullyAndStoreAsync
         GitLabTokenGrant grant = GitLabTokenGrant.Create(
         [
             .. FakeGitLabTokenGrantReader.ConformingGrant(FakeGitLabTokenGrantReader.DefaultProjectId).Entries,
-            new GitLabTokenGrantEntry("all_memberships", ["read_project"], ProjectId: null, GroupId: null),
+            new GitLabTokenGrantEntry("personal_projects", ["read_project"], ProjectId: null, GroupId: null),
             new GitLabTokenGrantEntry("user", ["delete_user"], ProjectId: null, GroupId: null),
         ]);
         RepositoryEligibilityEvaluator sut = CreateGitLabSut(new FakeGitLabTokenGrantReader
@@ -560,7 +560,7 @@ public sealed class EvaluateFullyAndStoreAsync
         // Assert
         WriteProbeVerdict.Denied denied = repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>();
         denied.ShouldSatisfyAllConditions(
-            () => denied.BroadReach.ShouldBe(["all_memberships"]),
+            () => denied.BroadReach.ShouldBe(["personal_projects"]),
             () => denied.NotAllowed.ShouldBe(["delete_user"]),
             () => denied.MissingPermissions.ShouldBeEmpty(),
             () => denied.WrongKind.ShouldBeNull());
@@ -604,6 +604,60 @@ public sealed class EvaluateFullyAndStoreAsync
 
         // Assert
         repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBe(["selected_projects"]);
+    }
+
+    private static FakeGitLabTokenGrantReader AllMembershipsReader(Result<int> projectId) =>
+        new()
+        {
+            Self = Result<GitLabTokenSelf>.Ok(new GitLabTokenSelf.FineGrained(
+                FakeGitLabTokenGrantReader.ConformingAllMembershipsGrant(),
+                new TokenExpiry.Never())),
+            ProjectId = projectId,
+        };
+
+    [Fact]
+    public async Task WhenTheGitLabTokenReachesAllMembershipsAndResolvesTheProject_IsGranted()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(AllMembershipsReader(Result<int>.Ok(7)));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Granted>();
+    }
+
+    [Theory]
+    [InlineData(403)]
+    [InlineData(404)]
+    public async Task WhenTheGitLabTokenReachesAllMembershipsAndTheProjectIsHidden_DeniedNamesSelectedProjects(int status)
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(
+            AllMembershipsReader(Result<int>.Fail(GitLabErrors.UnexpectedStatusCode(status))));
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBe(["selected_projects"]);
+    }
+
+    [Fact]
+    public async Task WhenTheGitLabTokenReachesAllMembershipsAndTheRoleIsBelowMaintainer_DeniedNamesTheMaintainerRole()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        RepositoryEligibilityEvaluator sut = CreateGitLabSut(AllMembershipsReader(Result<int>.Ok(7)), canPush: false);
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>().MissingPermissions.ShouldBe(["maintainer_role"]);
     }
 
     [Fact]

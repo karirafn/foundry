@@ -37,6 +37,21 @@ internal sealed class FakeGitLabTokenGrantReader : IGitLabTokenGrantReader
                 GroupId: null),
         ]);
 
+    internal static GitLabTokenGrant ConformingAllMembershipsGrant() =>
+        GitLabTokenGrant.Create(
+        [
+            new GitLabTokenGrantEntry(
+                GitLabTokenGrantEntry.AllMemberships,
+                TokenPermissions.GitLabGrantRequirements.Project,
+                ProjectId: null,
+                GroupId: null),
+            new GitLabTokenGrantEntry(
+                GitLabTokenGrantEntry.User,
+                [.. TokenPermissions.GitLabGrantRequirements.User, .. TokenPermissions.GitLabGrantRequirements.UserWithAllMemberships],
+                ProjectId: null,
+                GroupId: null),
+        ]);
+
     public Task<Result<GitLabTokenSelf>> ReadTokenSelfAsync(
         Uri apiBaseUrl,
         string token,

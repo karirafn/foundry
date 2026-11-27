@@ -43,7 +43,7 @@ public sealed class WhenProviderIsGitLab : IAsyncDisposable
         dto.ShouldNotBeNull();
         dto.ShouldSatisfyAllConditions(
             () => dto.TokenTypeLabel.ShouldBe("GitLab fine-grained personal access token"),
-            () => dto.Permissions.ShouldContain(new TokenPermissionRequirement("Code: Download, Push", "granted", "On each selected project")),
+            () => dto.Permissions.ShouldContain(new TokenPermissionRequirement("Code: Download, Push", "granted", "On each selected project, or on all groups and projects")),
             () => dto.Permissions[^1].ShouldBe(new TokenPermissionRequirement("Maintainer role", "role", "Repository role")),
             () => dto.CreationUrlTemplate.ShouldContain("/-/user_settings/personal_access_tokens"),
             () => dto.ResourceOwnerHint.ShouldBeNull());

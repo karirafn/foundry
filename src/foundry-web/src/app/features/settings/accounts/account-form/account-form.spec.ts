@@ -1730,7 +1730,7 @@ describe('AccountFormComponent', () => {
     // Assert
     const msg = el.querySelector('[role="status"] .account-form__validation-message--error');
     expect(msg?.textContent).toContain(
-      'This token reaches all projects, your personal projects and the whole instance. Foundry needs a token limited to selected projects.',
+      'This token reaches all projects, your personal projects and the whole instance. Foundry needs a token limited to selected projects or reaching all groups and projects.',
     );
     expect((el.querySelector('.account-form__save-btn') as HTMLButtonElement).disabled).toBe(true);
   });

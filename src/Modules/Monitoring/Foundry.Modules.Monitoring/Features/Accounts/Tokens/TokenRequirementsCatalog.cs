@@ -23,7 +23,7 @@ internal static class TokenRequirementsCatalog
                 Permissions: TokenPermissions.RequirementsFor(ProviderTypes.GitLab),
                 CreationUrlTemplate: "{baseUrl}/-/user_settings/personal_access_tokens",
                 ResourceOwnerHint: null,
-                ClosingNote: "Foundry rejects a GitLab token that grants anything else or reaches all projects.",
+                ClosingNote: "Foundry rejects a GitLab token that grants anything else, or that reaches only your personal projects or the whole instance.",
                 // GitLab's creation page cannot preselect fine-grained permissions, so the link only opens it.
                 CreationNote: "Requires GitLab 19.5 or later. On the page, choose Generate token, then Fine-grained token."),
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

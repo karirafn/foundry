@@ -49,7 +49,7 @@ internal static class CredentialErrors
         new(WrongTokenKindCode, "Foundry needs a fine-grained personal access token; this token is of another kind.");
 
     internal static readonly Error NonConformingToken =
-        new(NonConformingTokenCode, "The token grants permissions Foundry doesn't allow or reaches more than selected projects.");
+        new(NonConformingTokenCode, "The token grants permissions Foundry doesn't allow, or reaches personal projects or the instance.");
 
     internal static readonly Error UnresolvedIdentity =
         new(UnresolvedIdentityCode, "Could not resolve the account identity from the provider.");

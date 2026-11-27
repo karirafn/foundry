@@ -324,6 +324,7 @@ function wrongKindLabel(wrongKind: string): string {
 /** How a broad-reach value reads after "This token reaches", or the value itself when Foundry doesn't know it. */
 function broadReachPhrase(value: string): string {
   switch (value) {
+    // The server no longer reports all-projects, but a verdict stored before it accepted such tokens still carries it.
     case 'all-projects':
       return 'all projects';
     case 'personal-projects':
@@ -416,7 +417,7 @@ function remedyText(remedy: MissingPermissionsRemedy, name: string, missingPermi
       return `Create a fine-grained personal access token on GitHub, then replace this one. A classic token can't be converted. ${RECHECK_SENTENCE}`;
     case 'gitlab-token': {
       const create =
-        'Create a fine-grained token on GitLab with exactly the required permissions, on selected projects only, then replace this one.';
+        'Create a fine-grained token on GitLab with exactly the required permissions, on all groups and projects or on selected projects only, then replace this one.';
       return missingPermissions.includes(MAINTAINER_ROLE_LABEL)
         ? `${maintainerSentence(name)} ${create} ${RECHECK_SENTENCE}`
         : `${create} ${RECHECK_SENTENCE}`;
@@ -585,7 +586,7 @@ export function validationBroadReach(result: TokenValidationResult): readonly st
 
 /** The validation result's sentence for a token reaching more than selected projects. */
 export function broadReachMessage(broadReach: readonly string[]): string {
-  return `This token reaches ${joinWithAnd(broadReach.map(broadReachPhrase))}. Foundry needs a token limited to selected projects.`;
+  return `This token reaches ${joinWithAnd(broadReach.map(broadReachPhrase))}. Foundry needs a token limited to selected projects or reaching all groups and projects.`;
 }
 
 /** Whether nothing about an authenticated token needs fixing: no missing, not-allowed or broad-reach finding. */

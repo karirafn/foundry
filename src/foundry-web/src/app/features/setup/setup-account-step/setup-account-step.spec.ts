@@ -746,7 +746,7 @@ describe('SetupAccountStepComponent', () => {
       (m) => m.textContent ?? '',
     );
     expect(errors).toHaveLength(2);
-    expect(errors[0]).toContain('This token reaches all projects. Foundry needs a token limited to selected projects.');
+    expect(errors[0]).toContain('This token reaches all projects. Foundry needs a token limited to selected projects or reaching all groups and projects.');
     expect(errors[1]).toContain("This token grants permissions Foundry doesn't allow:");
     expect(errors[1]).toContain('delete_project');
     expect(el.querySelector('[role="status"]')?.textContent).not.toContain('Authenticated as');

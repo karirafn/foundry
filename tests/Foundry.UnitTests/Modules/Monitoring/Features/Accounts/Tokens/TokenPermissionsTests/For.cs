@@ -48,14 +48,18 @@ public sealed class For
     }
 
     [Fact]
-    public void EveryEntryKey_IsUniqueAcrossProviders()
+    public void EveryEntryKey_IsUniqueAcrossProvidersAndGitLabGrantLevels()
     {
         // Arrange
         IEnumerable<TokenPermission> entries = TokenPermissions.For(ProviderTypes.GitHub)
             .Concat(TokenPermissions.For(ProviderTypes.GitLab));
 
         // Act
-        List<string> keys = entries.Select(entry => entry.Key).ToList();
+        List<string> keys = entries
+            .Select(entry => entry.VerifiedBy is PermissionVerification.GitLabGrant grant
+                ? $"{entry.Key}@{grant.Level}"
+                : entry.Key)
+            .ToList();
 
         // Assert
         keys.ShouldBeUnique();
@@ -261,6 +265,32 @@ public sealed class For
     }
 
     [Fact]
+    public void VersionFor_GitLab_DiffersFromTheListThatAcceptedOnlySelectedProjects()
+    {
+        // Arrange
+        // The version the GitLab list had while it refused tokens reaching all memberships.
+        const string previousGitLabVersion = "gitlab-2209a9fd6e8ce809";
+
+        // Act
+        string version = TokenPermissions.VersionFor(ProviderTypes.GitLab);
+
+        // Assert
+        version.ShouldNotBe(previousGitLabVersion);
+    }
+
+    [Fact]
+    public void LabelsOf_KeyHeldAtTwoGitLabLevels_ReturnsItsLabelOnce()
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> labels = TokenPermissions.LabelsOf(ProviderTypes.GitLab, ["read_project", "read_user"]);
+
+        // Assert
+        labels.ShouldBe(["Project: Read", "User (System Access): Read"]);
+    }
+
+    [Fact]
     public void VersionFor_GitLab_DiffersFromTheListThatCheckedTheApiScope()
     {
         // Arrange
@@ -293,6 +323,7 @@ public sealed class For
                 "read_commit", "download_code", "push_code",
             ]),
             () => requirements.User.ShouldBe(["read_personal_access_token", "read_user"]),
+            () => requirements.UserWithAllMemberships.ShouldBe(["read_project"]),
             () => requirements.GroupAllowed.ShouldBe(["read_package"]));
     }
 
