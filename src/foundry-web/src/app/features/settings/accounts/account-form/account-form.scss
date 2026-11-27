@@ -60,7 +60,7 @@ $text-warning: token.$token-status-warning;
   }
 
   &__field-hint {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.8125rem;
   }
 
@@ -74,7 +74,7 @@ $text-warning: token.$token-status-warning;
     width: 100%;
 
     &::placeholder {
-      color: var(--fd-text-tertiary);
+      color: var(--fd-text-secondary);
     }
 
     &:focus {

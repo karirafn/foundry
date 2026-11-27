@@ -178,7 +178,7 @@ $settings-list-narrow-width: 32.5rem;
     background: var(--fd-border-muted);
     color: var(--fd-text-secondary);
 
-    &::before { background: var(--fd-text-tertiary); }
+    &::before { background: var(--fd-graphic-muted); }
   }
 
   &--inline { display: none; }
@@ -217,7 +217,7 @@ $settings-list-narrow-width: 32.5rem;
   background: none;
   border: 0;
   border-radius: var(--fd-radius-sm);
-  color: var(--fd-text-tertiary);
+  color: var(--fd-graphic-muted);
   cursor: pointer;
   display: inline-flex;
   height: 28px;

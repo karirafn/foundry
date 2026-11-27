@@ -71,7 +71,7 @@
     width: 100%;
 
     &::placeholder {
-      color: var(--fd-text-tertiary);
+      color: var(--fd-text-secondary);
     }
 
     &:focus {
@@ -94,7 +94,7 @@
   }
 
   &__repo-empty {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.875rem;
     padding: var(--fd-spacing-md);
     text-align: center;
@@ -242,7 +242,7 @@
   }
 
   &__result-queued {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.8125rem;
   }
 

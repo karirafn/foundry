@@ -42,7 +42,7 @@
     background: var(--fd-progress-track);
   }
   > [data-lead]::after {
-    background: var(--fd-text-tertiary);
+    background: var(--fd-graphic-muted);
     transform: scaleX(0);
     transform-origin: left;
   }
@@ -62,7 +62,7 @@
   background: linear-gradient(var(--tint), var(--tint)), var(--fd-bg-card);
   border: 1.5px solid var(--fd-border-default);
   border-radius: 50%;
-  color: var(--fd-text-tertiary);
+  color: var(--fd-graphic-muted);
   display: inline-flex;
   height: var(--node);
   justify-content: center;

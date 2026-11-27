@@ -71,3 +71,35 @@ describe('WCAG 1.4.11 Non-text Contrast — --fd-border-control token', () => {
     expect(ratio).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('WCAG contrast — every --fd-text-* and --fd-graphic-* token', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/styles.scss'), 'utf-8');
+  const surfaces: Record<string, string> = {
+    '--fd-bg-page': parseHex(css, '--fd-bg-page'),
+    '--fd-bg-card': parseHex(css, '--fd-bg-card'),
+    '--fd-bg-card-hover': parseHex(css, '--fd-bg-card-hover'),
+  };
+
+  const declarations: { name: string; value: string; minimum: number }[] = [];
+  for (const match of css.matchAll(/(--fd-(?:text|graphic)-[\w-]+)\s*:\s*([^;]+);/g)) {
+    declarations.push({
+      name: match[1],
+      value: match[2].trim().replace(/\s*\/\*.*$/, ''),
+      minimum: match[1].startsWith('--fd-text-') ? 4.5 : 3,
+    });
+  }
+
+  it('finds text and graphic tokens', () => {
+    expect(declarations.some((d) => d.name.startsWith('--fd-text-'))).toBe(true);
+    expect(declarations.some((d) => d.name.startsWith('--fd-graphic-'))).toBe(true);
+  });
+
+  for (const { name, value, minimum } of declarations) {
+    for (const [surfaceName, surface] of Object.entries(surfaces)) {
+      it(`${name} is a hex colour and meets ${minimum}:1 against ${surfaceName}`, () => {
+        expect(value).toMatch(/^#[0-9a-fA-F]{6}$/);
+        expect(contrastRatio(value, surface)).toBeGreaterThanOrEqual(minimum);
+      });
+    }
+  }
+});

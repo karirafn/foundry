@@ -12,12 +12,14 @@
   /* Text */
   --fd-text-primary: #e6edf3;
   --fd-text-secondary: #8b949e;
-  --fd-text-tertiary: #6e7681;
   --fd-text-link: #58a6ff;
+
+  /* Graphics (icons, dots, bars): 3:1 (WCAG 1.4.11) */
+  --fd-graphic-muted: #6e7681;
 
   /* Borders */
   --fd-border-default: #30363d;
-  --fd-border-control: #6e7681; /* deliberate separate literal — control boundary ≠ text colour; currently equals --fd-text-tertiary but must be updated independently */
+  --fd-border-control: #6e7681; /* deliberate separate literal — control boundary ≠ graphic colour; currently equals --fd-graphic-muted but must be updated independently */
   --fd-border-muted: #21262d;
   /* Top-bar placeholders while the live pages wait for the connection (#894) */
   --fd-text-placeholder: #8b949e; /* 5.62:1 on --fd-bg-card */
@@ -173,70 +175,4 @@ body {
 @keyframes fd-skeleton-shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
-}
-
-/* Worker environment page — lives here because the shared settings stylesheet already
-   fills the 10 kB per-component style budget. */
-.worker-env {
-  &__limits {
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  }
-
-  &__fieldset {
-    border: 0;
-    margin: 0;
-    min-width: 0;
-    padding: 0;
-  }
-
-  &__hint {
-    color: var(--fd-text-secondary);
-  }
-
-  .general-settings__number-input {
-    min-height: 44px;
-  }
-
-  &__actions {
-    align-items: flex-start;
-    display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-sm);
-  }
-}
-
-.claude-code {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fd-spacing-lg);
-
-  &__fieldset {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fd-spacing-lg);
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  &__row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--fd-spacing-sm);
-    align-items: start;
-    margin-bottom: var(--fd-spacing-sm);
-  }
-
-  &__empty {
-    margin-bottom: var(--fd-spacing-md);
-  }
-
-  &__actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--fd-spacing-md);
-  }
 }

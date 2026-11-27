@@ -52,7 +52,7 @@
   .agents-chip--idle &,
   .agents-chip--placeholder & {
     background: transparent;
-    border: 1px solid var(--fd-text-tertiary);
+    border: 1px solid var(--fd-graphic-muted);
   }
 
   @media (forced-colors: active) {

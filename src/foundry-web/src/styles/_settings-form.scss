@@ -1,0 +1,260 @@
+// Mixin-only: this file emits no CSS by itself. Each settings page @includes what it needs inside its
+// own .general-settings block, so only the rules it uses land in its compiled stylesheet and its style
+// budget. A rule belongs here only when two or more settings pages use it.
+@use 'sass:list';
+@use 'controls' as *;
+
+/// The selector list '&__<name><suffix>' for each name, so pages that share a rule with a page-only
+/// class keep one grouped rule.
+@function _elements($names, $suffix: '') {
+  $selector: ();
+  @each $name in $names {
+    $selector: list.append($selector, '&__#{$name}#{$suffix}', $separator: comma);
+  }
+  @return $selector;
+}
+
+@mixin settings-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__section {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-md);
+    padding: var(--fd-spacing-xl);
+  }
+
+  &__section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--fd-text-primary);
+    margin: 0 0 var(--fd-spacing-xs) 0;
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__section-description {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0 0 var(--fd-spacing-xl) 0;
+  }
+}
+
+@mixin settings-form-field {
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__field-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--fd-text-secondary);
+  }
+}
+
+@mixin settings-form-field-hint {
+  &__field-hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+  }
+}
+
+/// Declarations of a vertical form column; a page applies them to its own form class.
+@mixin settings-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-md);
+}
+
+// Warning box for the settings callouts. Callouts carry a bold text lead so the meaning survives
+// without colour (WCAG 1.4.1); callout body text uses --fd-text-primary on the amber tint for
+// >= 4.5:1 contrast (WCAG 1.4.3).
+@mixin settings-form-callout {
+  &__callout {
+    align-items: flex-start;
+    border-radius: var(--fd-radius-sm);
+    display: flex;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-sm);
+    overflow-wrap: break-word;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__callout--warning {
+    background: var(--fd-bg-warning-subtle);
+    border: 1px solid var(--fd-border-warning);
+  }
+
+  &__callout-icon,
+  &__callout-lead {
+    color: var(--fd-text-warning);
+  }
+
+  &__callout {
+    color: var(--fd-text-primary);
+    margin: 0;
+
+    &[hidden] { display: none; }
+  }
+
+  &__callout--warning {
+    border-left-width: 4px;
+  }
+
+  &__callout-lead {
+    font-weight: 600;
+  }
+
+  &__callout-icon {
+    flex-shrink: 0;
+  }
+}
+
+/// Base rule of the given text-like inputs, e.g. settings-form-inputs(number, text) for
+/// __number-input and __text-input.
+@mixin settings-form-inputs($kinds...) {
+  #{_elements($kinds, '-input')} {
+    @include input-control;
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    min-height: 40px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &:focus {
+      border-color: var(--fd-text-link);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}
+
+@mixin settings-form-number-input {
+  &__number-input {
+    width: 100%;
+  }
+}
+
+@mixin settings-form-text-input {
+  &__text-input {
+    font-family: var(--fd-font-mono);
+    min-height: 44px;
+    width: 100%;
+
+    &::placeholder {
+      color: var(--fd-text-secondary);
+    }
+  }
+}
+
+/// Error text of __field-error, __save-error and any further __<name>-error passed in.
+@mixin settings-form-errors($also...) {
+  #{_elements(list.join((field, save), $also), '-error')} {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+    overflow-wrap: break-word;
+  }
+}
+
+/// Base rule of the given buttons, e.g. settings-form-buttons(retry) for __retry-btn.
+@mixin settings-form-buttons($kinds...) {
+  #{_elements($kinds, '-btn')} {
+    align-self: flex-start;
+    background: transparent;
+    border-radius: var(--fd-radius-sm);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:disabled { cursor: not-allowed; opacity: 0.5; }
+    &:focus-visible { @include focus-ring; }
+  }
+}
+
+/// __save-success and __save-btn; further buttons passed in share the save button's base rule.
+@mixin settings-form-save($buttons...) {
+  &__save-success {
+    color: var(--fd-text-success);
+    font-size: 0.875rem;
+  }
+
+  @include settings-form-buttons(save, $buttons...);
+
+  &__save-btn {
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
+    transition: background 0.15s ease;
+
+    &:not(:disabled):hover { background: var(--fd-bg-card-hover); }
+  }
+}
+
+/// Colours of __retry-btn; its base rule comes from settings-form-buttons or settings-form-save.
+@mixin settings-form-retry-btn {
+  &__retry-btn {
+    border: 1px solid var(--fd-state-failed);
+    color: var(--fd-text-error);
+    font-weight: 500;
+    transition: background 0.15s ease;
+
+    &:not(:disabled):hover { background: var(--fd-bg-error-subtle); }
+  }
+}
+
+@mixin settings-form-limits {
+  &__limits-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--fd-spacing-md);
+
+    @media (max-width: 30rem) {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+@mixin settings-form-image-status {
+  &__image-status {
+    align-items: center;
+    color: var(--fd-text-secondary);
+    display: flex;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-xs);
+  }
+}
+
+@mixin settings-form-image-actions {
+  &__image-actions {
+    display: flex;
+    gap: var(--fd-spacing-sm);
+  }
+}
+
+// 44px clickable row (WCAG 2.5.5); included under the page's own row class.
+@mixin settings-form-checkbox-row {
+  align-items: center;
+  align-self: flex-start;
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-sm);
+  min-height: 44px;
+
+  input[type='checkbox'] {
+    accent-color: var(--fd-text-link);
+    flex-shrink: 0;
+    height: 16px;
+    margin: 0;
+    width: 16px;
+  }
+}

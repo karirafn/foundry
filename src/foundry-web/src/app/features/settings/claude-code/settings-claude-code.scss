@@ -1,1 +1,236 @@
-@use '../settings-shared' as *;
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/settings-form' as *;
+
+.general-settings {
+  @include settings-form-section;
+
+  &__mode-fieldset {
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__mode-selector {
+    display: flex;
+    gap: var(--fd-spacing-md);
+    margin-bottom: var(--fd-spacing-xl);
+  }
+
+  &__mode-option {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+    cursor: pointer;
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+
+    input[type='radio']:checked + &-label,
+    &:has(input[type='radio']:checked) {
+      color: var(--fd-text-primary);
+    }
+  }
+
+  &__mode-label {
+    color: inherit;
+  }
+
+  @include settings-form-field;
+  @include settings-form-field-hint;
+
+  // WCAG 1.4.3: credential-status notes use --fd-text-secondary (not tertiary) for 4.5:1 at 0.75rem
+  &__field-hint--credential-status {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+  }
+
+  // Same box, tint and text colour as settings-form-callout's warning callout.
+  &__api-key-warning {
+    align-items: flex-start;
+    border-radius: var(--fd-radius-sm);
+    display: flex;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-sm);
+    overflow-wrap: break-word;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__api-key-warning {
+    background: var(--fd-bg-warning-subtle);
+    border: 1px solid var(--fd-border-warning);
+  }
+
+  &__api-key-warning {
+    color: var(--fd-text-warning);
+  }
+
+  &__api-key-warning-icon {
+    flex-shrink: 0;
+  }
+
+  &__api-key-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+  }
+
+  @include settings-form-inputs(api-key, text);
+
+  &__api-key-input {
+    flex: 1;
+    font-family: var(--fd-font-mono);
+
+    &::placeholder {
+      color: var(--fd-text-secondary);
+    }
+  }
+
+  @include settings-form-text-input;
+
+  &__toggle-visibility-btn {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs);
+    width: 44px;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      color: var(--fd-text-primary);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__configured-indicator {
+    color: var(--fd-text-success);
+    font-size: 0.8125rem;
+  }
+
+  @include settings-form-errors(switch);
+  @include settings-form-save(scan, resume);
+
+  &__scan-btn {
+    border: 1px solid var(--fd-border-default);
+    color: var(--fd-text-primary);
+
+    &:not(:disabled):hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+  }
+
+  &__switch-confirm {
+    background: var(--fd-bg-card);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    padding: var(--fd-spacing-md);
+  }
+
+  &__switch-confirm-text {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0 0 var(--fd-spacing-sm) 0;
+  }
+
+  &__switch-confirm-actions {
+    display: flex;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__switch-confirm-btn,
+  &__switch-cancel-btn {
+    background: transparent;
+    border-radius: var(--fd-radius-sm);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &:hover { background: var(--fd-bg-card-hover); }
+    &:focus-visible { @include focus-ring; }
+  }
+
+  &__switch-confirm-btn {
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
+  }
+
+  &__switch-cancel-btn {
+    border: 1px solid var(--fd-border-default);
+    color: var(--fd-text-secondary);
+  }
+
+  &__drain-gate {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-md);
+
+    &--empty {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+  }
+
+  &__resume-btn {
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
+    transition: background 0.15s ease;
+
+    &:not(:disabled):hover { background: var(--fd-bg-card-hover); }
+  }
+
+  &__api-key-form,
+  &__oauth-section {
+    @include settings-form-stack;
+  }
+}
+
+.claude-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-lg);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--fd-spacing-sm);
+    align-items: start;
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
+  &__empty {
+    margin-bottom: var(--fd-spacing-md);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--fd-spacing-md);
+  }
+}

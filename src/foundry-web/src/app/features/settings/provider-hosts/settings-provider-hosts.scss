@@ -1,1 +1,36 @@
-@use '../settings-shared' as *;
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/settings-form' as *;
+
+.general-settings {
+  @include settings-form-section;
+  @include settings-form-field;
+  @include settings-form-field-hint;
+  @include settings-form-errors;
+  @include settings-form-save;
+
+  &__hosts-form {
+    @include settings-form-stack;
+  }
+
+  &__textarea {
+    @include input-control;
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.875rem;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    resize: vertical;
+    width: 100%;
+
+    &::placeholder {
+      color: var(--fd-text-secondary);
+    }
+
+    &:focus {
+      border-color: var(--fd-text-link);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}
