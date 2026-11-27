@@ -233,6 +233,7 @@ public sealed class GetPullRequestStateAsync
         requestBody.ShouldSatisfyAllConditions(
             () => requestBody.ShouldContain("query PrStatus"),
             () => requestBody.ShouldContain("id state merged headRefOid isDraft"),
+            () => requestBody.ShouldContain("rateLimit"),
             () => requestBody.ShouldContain("123"));
     }
 

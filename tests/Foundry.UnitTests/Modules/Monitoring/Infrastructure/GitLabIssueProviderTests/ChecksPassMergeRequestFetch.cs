@@ -110,14 +110,14 @@ public sealed class ChecksPassMergeRequestFetch
         FakeHandler handler = new FakeHandler(HttpStatusCode.OK, OpenMergeRequestWithFailedPipeline)
             .WithRoute("/pipelines/6/jobs", HttpStatusCode.ServiceUnavailable, "{}");
         GitLabIssueProvider sut = CreateProvider(handler);
-        Result<PullRequestState> status = await sut.GetPullRequestStateAsync(Slug, MergeRequestUrl, CancellationToken.None);
+        Result<PullRequestState> state = await sut.GetPullRequestStateAsync(Slug, MergeRequestUrl, CancellationToken.None);
         Result<ProviderChecks> firstChecks = await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
 
         // Act
         await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
 
         // Assert
-        status.ShouldBeOfType<Result<PullRequestState>.Success>();
+        state.ShouldBeOfType<Result<PullRequestState>.Success>();
         firstChecks.ShouldBeOfType<Result<ProviderChecks>.Failure>();
         handler.AllRequests.Count(request => request.RequestUri!.AbsolutePath.EndsWith("/merge_requests/7", StringComparison.Ordinal)).ShouldBe(2);
     }
