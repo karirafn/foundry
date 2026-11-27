@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Features.Polling;
 
 namespace Foundry.Modules.Monitoring.Features.Webhooks.Nudges;
 
@@ -43,6 +44,42 @@ internal sealed class NudgeScheduler
     /// (or <see cref="Add"/>); <see langword="null"/> when nothing is waiting.
     /// </summary>
     internal DateTimeOffset? NextWakeAt { get; private set; }
+
+    /// <summary>
+    /// The change categories of <paramref name="repositoryId"/> for which a nudge is still waiting, pending or
+    /// deferred: a delivery already announced a change there, so a scheduled poll finding one is not missed.
+    /// </summary>
+    internal PollChanges PendingCategories(MonitoredRepositoryId repositoryId)
+    {
+        PollChanges covered = PollChanges.None;
+
+        foreach (NudgeKey key in _pending.Keys)
+        {
+            if (key.RepositoryId == repositoryId)
+            {
+                covered |= CategoryOf(key.Pass);
+            }
+        }
+
+        foreach (Nudge deferred in _deferred)
+        {
+            if (deferred.Key.RepositoryId == repositoryId)
+            {
+                covered |= CategoryOf(deferred.Key.Pass);
+            }
+        }
+
+        return covered;
+    }
+
+    private static PollChanges CategoryOf(NudgePass pass) => pass switch
+    {
+        NudgePass.IssueListing or NudgePass.IssueListingAndDependencies => PollChanges.IssueListing,
+        NudgePass.Review => PollChanges.Review,
+        NudgePass.Checks => PollChanges.Checks,
+        NudgePass.BranchRules => PollChanges.BranchRules,
+        _ => PollChanges.None,
+    };
 
     public void Add(Nudge nudge, DateTimeOffset receivedAt)
     {
