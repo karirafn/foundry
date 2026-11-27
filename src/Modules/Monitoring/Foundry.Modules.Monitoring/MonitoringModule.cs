@@ -199,6 +199,7 @@ public static class MonitoringModule
         services.TryAddSingleton<IWebhookIngressProbe>(static sp => sp.GetRequiredService<WebhookIngressProbe>());
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredRebasePending, IssueEnteredRebasePendingHandler>();
+        services.AddIntegrationEventHandler<IssueEnteredTriageQueue, IssueEnteredTriageQueueHandler>();
         services.AddIntegrationEventHandler<IssueEnteredMergePending, IssueEnteredMergePendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredReview, IssueEnteredReviewHandler>();
         services.AddIntegrationEventHandler<IssueEnteredAwaitingInput, IssueEnteredAwaitingInputHandler>();
