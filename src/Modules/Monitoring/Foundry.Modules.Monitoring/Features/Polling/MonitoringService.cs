@@ -40,12 +40,6 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Delay before the dependency pass that follows a nudged listing which found changes, so the
-    /// outbox relay has created newly detected issues before their blockers are read.
-    /// </summary>
-    internal static readonly TimeSpan DependencyFollowUpDelay = TimeSpan.FromSeconds(10);
-
-    /// <summary>
     /// Floor on scheduler-driven waits, so a nudge pass that keeps failing cannot spin the loop.
     /// A new nudge in the channel still wakes the loop immediately.
     /// </summary>
@@ -462,14 +456,6 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                     && await ConfirmTokenRejectedAsync(services, poller, repo, resolved, now, cancellationToken))
                 {
                     return true;
-                }
-
-                if (listing is Result<bool>.Success { Value: true })
-                {
-                    // Newly detected issues need their blockers read before they can be dispatched.
-                    _scheduler.Add(
-                        new Nudge(new NudgeKey(repo.Id, NudgePass.Dependencies), now + DependencyFollowUpDelay),
-                        now);
                 }
 
                 break;
