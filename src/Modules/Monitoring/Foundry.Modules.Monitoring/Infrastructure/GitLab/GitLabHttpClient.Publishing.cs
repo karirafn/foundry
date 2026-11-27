@@ -20,7 +20,7 @@ internal sealed partial class GitLabHttpClient
     /// <c>remove_source_branch_after_merge</c> and squash from its <c>squash_option</c>, exactly as its own web form
     /// does. GitLab's 409 (an open merge request already exists for the source branch) answers
     /// <see cref="PullRequestCreation.AlreadyOpen"/>; every other failure is a <see cref="RunPublishingErrors"/>
-    /// transient or permanent error.
+    /// transient, permanent or refused error.
     /// </summary>
     public async Task<Result<PullRequestCreation>> CreateMergeRequestAsync(
         Uri apiBaseUrl,
@@ -67,7 +67,7 @@ internal sealed partial class GitLabHttpClient
 
             if (!response.IsSuccessStatusCode)
             {
-                return Result<PullRequestCreation>.Fail(ClassifyPublishingFailure(response, action));
+                return Result<PullRequestCreation>.Fail(ClassifyMergeRequestOpenFailure(response, action));
             }
 
             RecordRestHeadroom(response);
@@ -301,6 +301,17 @@ internal sealed partial class GitLabHttpClient
                 $"{action} did not complete: {ex.GetType().Name}."));
         }
     }
+
+    // GitLab answers 404 for a project the token cannot see, and a 403 that is not rate limiting when the token may
+    // not open merge requests. Either is a refusal of the token, which the caller answers with a write probe.
+    private static Error ClassifyMergeRequestOpenFailure(HttpResponseMessage response, string action) =>
+        IsTokenRefusal(response)
+            ? RunPublishingErrors.Refused($"{action} returned {(int)response.StatusCode}.")
+            : ClassifyPublishingFailure(response, action);
+
+    private static bool IsTokenRefusal(HttpResponseMessage response) =>
+        response.StatusCode is HttpStatusCode.NotFound
+        || (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response));
 
     private static Error ClassifyPublishingFailure(HttpResponseMessage response, string action)
     {

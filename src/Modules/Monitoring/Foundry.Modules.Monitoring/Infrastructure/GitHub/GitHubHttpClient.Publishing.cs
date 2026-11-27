@@ -19,7 +19,7 @@ internal sealed partial class GitHubHttpClient
     /// Opens a draft pull request from <paramref name="headBranch"/> into <paramref name="baseBranch"/>
     /// (<c>POST /repos/{owner}/{repo}/pulls</c>). GitHub's 422 "A pull request already exists" answers
     /// <see cref="PullRequestCreation.AlreadyOpen"/>; every other failure is a <see cref="RunPublishingErrors"/>
-    /// transient or permanent error.
+    /// transient, permanent or refused error.
     /// </summary>
     public async Task<Result<PullRequestCreation>> CreatePullRequestAsync(
         Uri apiBaseUrl,
@@ -66,7 +66,7 @@ internal sealed partial class GitHubHttpClient
 
             if (!response.IsSuccessStatusCode)
             {
-                return Result<PullRequestCreation>.Fail(ClassifyPublishingFailure(response, action));
+                return Result<PullRequestCreation>.Fail(ClassifyPullRequestOpenFailure(response, action));
             }
 
             RecordRestHeadroom(response);
@@ -271,6 +271,17 @@ internal sealed partial class GitHubHttpClient
                 $"{action} did not complete: {ex.GetType().Name}."));
         }
     }
+
+    // GitHub answers 404 for a repository the token cannot see, and a 403 that is not rate limiting when the token
+    // lacks Pull requests write. Either is a refusal of the token, which the caller answers with a write probe.
+    private static Error ClassifyPullRequestOpenFailure(HttpResponseMessage response, string action) =>
+        IsTokenRefusal(response)
+            ? RunPublishingErrors.Refused($"{action} returned {(int)response.StatusCode}.")
+            : ClassifyPublishingFailure(response, action);
+
+    private static bool IsTokenRefusal(HttpResponseMessage response) =>
+        response.StatusCode is HttpStatusCode.NotFound
+        || (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response));
 
     private static Error ClassifyPublishingFailure(HttpResponseMessage response, string action)
     {

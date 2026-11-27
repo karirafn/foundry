@@ -45,6 +45,20 @@ public sealed class OpenPullRequestAsync : RunPublishingCommandsTestBase
     }
 
     [Fact]
+    public async Task WhenTheProviderRefusesTheToken_ReturnsTheRefusalUnchanged()
+    {
+        // Arrange
+        Error error = RunPublishingErrors.Refused("returned 403");
+        Provider.PullRequest = Result<string>.Fail(error);
+
+        // Act
+        Result<string> result = await OpenAsync(await SeedRepoAsync());
+
+        // Assert
+        result.ErrorOrThrow().ShouldBe(error);
+    }
+
+    [Fact]
     public async Task WhenTheProviderFailsUnclassified_FailsTransientKeepingTheMessage()
     {
         // Arrange

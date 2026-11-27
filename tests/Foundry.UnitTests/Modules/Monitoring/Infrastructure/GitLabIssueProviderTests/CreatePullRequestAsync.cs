@@ -143,10 +143,47 @@ public sealed class CreatePullRequestAsync
         RunPublishingErrors.IsTransient(result.ErrorOrThrow()).ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task WhenForbiddenByRateLimit_FailsTransient()
+    {
+        // Arrange
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, ProjectJson, new Dictionary<string, string>()),
+            (HttpStatusCode.Forbidden, """{ "message": "Retry later" }""",
+                new Dictionary<string, string> { ["RateLimit-Remaining"] = "0" }),
+        ]);
+        GitLabIssueProvider sut = BuildSut(handler);
+
+        // Act
+        Result<string> result = await CreateAsync(sut);
+
+        // Assert
+        RunPublishingErrors.IsTransient(result.ErrorOrThrow()).ShouldBeTrue();
+    }
+
     [Theory]
-    [InlineData(HttpStatusCode.BadRequest)]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
+    public async Task WhenProviderRefusesTheToken_FailsRefused(HttpStatusCode statusCode)
+    {
+        // Arrange
+        SequentialFakeHandler handler = new([(HttpStatusCode.OK, ProjectJson), (statusCode, """{ "message": "nope" }""")]);
+        GitLabIssueProvider sut = BuildSut(handler);
+
+        // Act
+        Result<string> result = await CreateAsync(sut);
+
+        // Assert
+        Error error = result.ErrorOrThrow();
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(RunPublishingErrors.RefusedCode),
+            () => error.Message.ShouldContain($"returned {(int)statusCode}"));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.BadRequest)]
     [InlineData(HttpStatusCode.UnprocessableEntity)]
     public async Task WhenProviderRejectsTheRequest_FailsPermanent(HttpStatusCode statusCode)
     {

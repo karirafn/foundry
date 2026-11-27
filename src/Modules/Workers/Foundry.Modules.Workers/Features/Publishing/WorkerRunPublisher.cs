@@ -206,6 +206,12 @@ internal sealed class WorkerRunPublisher(
             _ => Result.Ok(),
         };
 
+        if (step is Result.Failure { Error.Code: RunPublishingErrors.RefusedCode } refused)
+        {
+            await FailRefusedPublishAsync(run, refused.Error.Message, cancellationToken);
+            return false;
+        }
+
         if (step is Result.Failure stepFailure)
         {
             await FailPublishAsync(
