@@ -24,10 +24,10 @@ public sealed class GetOpenIssuesAsync
     private static readonly Uri GitHubComBaseUrl = new("https://api.github.com");
 
     // Captured 2026-11-12 with issues(first: 3, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC})
-    // { pageInfo { hasNextPage endCursor } nodes { number title } } on karirafn/foundry. The rateLimit block is
-    // copied from the captured issueOrPullRequest(number: 847) response, as the query under test asks for it.
+    // { pageInfo { hasNextPage endCursor } nodes { number title } } on karirafn/foundry.
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
     private const string CapturedOpenIssues = """
-        {"data":{"rateLimit":{"cost":1,"limit":5000,"remaining":4986,"resetAt":"2026-11-12T17:16:50Z"},"repository":{"issues":{"pageInfo":{"hasNextPage":true,"endCursor":"Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMlQxNToyMjowMFrPAAAAAXqq0iI="},"nodes":[{"number":867,"title":"feat(monitoring): GitLab names a failed pipeline's failed jobs as failing checks"},{"number":866,"title":"fix(monitoring): GitHub failing checks are named, and a red verdict that names none goes straight to review"},{"number":865,"title":"fix(monitoring): a long comment reaches the run whole, and the prompt fits the clarification log instead of each comment being cut at 4,000 characters"}]}}}}
+        {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issues":{"pageInfo":{"hasNextPage":true,"endCursor":"Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMlQxNToyMjowMFrPAAAAAXqq0iI="},"nodes":[{"number":867,"title":"feat(monitoring): GitLab names a failed pipeline's failed jobs as failing checks"},{"number":866,"title":"fix(monitoring): GitHub failing checks are named, and a red verdict that names none goes straight to review"},{"number":865,"title":"fix(monitoring): a long comment reaches the run whole, and the prompt fits the clarification log instead of each comment being cut at 4,000 characters"}]}}}}
         """;
 
     private static RepositorySlug Slug => RepositorySlug.Create("karirafn/foundry").ValueOrThrow();
@@ -118,7 +118,7 @@ public sealed class GetOpenIssuesAsync
     }
 
     [Fact]
-    public async Task WhenReading_RecordsTheGraphQlHeadroom()
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
     {
         // Arrange
         InMemoryProviderRateBudget budget = new();
@@ -129,6 +129,9 @@ public sealed class GetOpenIssuesAsync
 
         // Assert
         RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
-        reading.Remaining.ShouldBe(4986);
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }

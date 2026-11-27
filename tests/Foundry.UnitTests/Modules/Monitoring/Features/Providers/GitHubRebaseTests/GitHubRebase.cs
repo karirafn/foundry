@@ -26,14 +26,17 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Providers.GitHubRebaseTe
 /// </summary>
 public sealed class GitHubRebase
 {
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+    private const string CapturedRateLimit = """{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"}""";
+
     private static readonly Uri BaseUrl = new("https://api.github.com");
     private const string PrUrl = "https://github.com/owner/repo/pull/42";
     private const string HeadSha = "1111111111111111111111111111111111111111";
 
-    private const string PrStateJson = """
+    private const string PrStateJson = $$"""
         {
           "data": {
-            "rateLimit": { "cost": 1, "remaining": 4999 },
+            "rateLimit":{{CapturedRateLimit}},
             "repository": { "pullRequest": { "id": "PR_kwDOabc", "headRefOid": "1111111111111111111111111111111111111111", "baseRefName": "main" } }
           }
         }
@@ -41,12 +44,12 @@ public sealed class GitHubRebase
 
     private static RepositorySlug Slug => RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(SequenceHandler handler) =>
+    private static GitHubHttpClient BuildSut(SequenceHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
-            new InMemoryProviderRateBudget(),
+            budget ?? new InMemoryProviderRateBudget(),
             TimeProvider.System);
 
     private static string ErrorJson(string type, string message) =>
@@ -236,5 +239,26 @@ public sealed class GitHubRebase
             (HttpStatusCode status, string body) = responses[_index++];
             return new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         }
+    }
+
+    [Fact]
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        SequenceHandler handler = new(
+            (HttpStatusCode.OK, PrStateJson),
+            (HttpStatusCode.OK, """{ "behind_by": 3, "ahead_by": 2 }"""));
+        InMemoryProviderRateBudget budget = new();
+
+        // Act
+        await BuildSut(handler, budget)
+            .GetRebaseStateAsync(BaseUrl, Slug, PrUrl, "ghp_token", TestContext.Current.CancellationToken);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }

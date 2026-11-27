@@ -24,15 +24,16 @@ public sealed class GetIssueStatusAsync
     private static readonly Uri GitHubComBaseUrl = new("https://api.github.com");
 
     // Shaped from the 2026-11-12 capture of the issueOrPullRequest(number: 847) query on karirafn/foundry (see
-    // GetReferencedIssueAsync), reduced to the issue(number:) { state body } fields and the rateLimit block this
-    // query selects.
+    // GetReferencedIssueAsync), reduced to the issue(number:) { state body } fields.
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
     private const string CapturedClosed = """
-        {"data":{"rateLimit":{"cost":1,"remaining":4986},"repository":{"issue":{"state":"CLOSED","body":"## Summary\n\nEvery question a worker run "}}}}
+        {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issue":{"state":"CLOSED","body":"## Summary\n\nEvery question a worker run "}}}}
         """;
 
     // As above, from the 2026-11-12 capture of issueOrPullRequest(number: 865).
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
     private const string CapturedOpen = """
-        {"data":{"rateLimit":{"cost":1,"remaining":4904},"repository":{"issue":{"state":"OPEN","body":"## Summary\n\nBoth provider clients cut ev"}}}}
+        {"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issue":{"state":"OPEN","body":"## Summary\n\nBoth provider clients cut ev"}}}}
         """;
 
     private static RepositorySlug Slug => RepositorySlug.Create("karirafn/foundry").ValueOrThrow();
@@ -104,7 +105,7 @@ public sealed class GetIssueStatusAsync
         handler.AllRequests.Count.ShouldBe(1);
         handler.LastRequest.ShouldNotBeNull().RequestUri.ShouldNotBeNull().AbsolutePath.ShouldBe("/graphql");
         string requestBody = handler.LastRequestBody.ShouldNotBeNull();
-        requestBody.ShouldContain("rateLimit { cost remaining }");
+        requestBody.ShouldContain("rateLimit { cost remaining limit resetAt }");
         requestBody.ShouldContain("issue(number: $number) { state body }");
     }
 
@@ -120,7 +121,10 @@ public sealed class GetIssueStatusAsync
 
         // Assert
         RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
-        reading.Remaining.ShouldBe(4904);
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 
     [Fact]
@@ -143,7 +147,8 @@ public sealed class GetIssueStatusAsync
     public async Task WhenTheResponseNamesNoIssue_Fails()
     {
         // Arrange
-        string json = """{"data":{"rateLimit":{"cost":1,"remaining":4904},"repository":{"issue":null}}}""";
+        // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+        string json = """{"data":{"rateLimit":{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"},"repository":{"issue":null}}}""";
         GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, json));
 
         // Act

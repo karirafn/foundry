@@ -22,28 +22,31 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Providers.GitHubChecksTe
 
 public sealed class GetChecksAsync
 {
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+    private const string CapturedRateLimit = """{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"}""";
+
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
     private const string ValidPullRequestUrl = "https://github.com/owner/repo/pull/42";
 
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(FakeHandler handler) =>
+    private static GitHubHttpClient BuildSut(FakeHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
-            new InMemoryProviderRateBudget(),
+            budget ?? new InMemoryProviderRateBudget(),
             TimeProvider.System);
 
     [Fact]
     public async Task WhenRollupStateIsSuccess_ReturnsGreen()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -85,10 +88,10 @@ public sealed class GetChecksAsync
     {
         // Arrange
         // The FAILURE conclusion is the token GitHub returns, as in the captured response of the test below.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -147,10 +150,10 @@ public sealed class GetChecksAsync
         // The rollup is captured verbatim from GitHub's GraphQL API: pullRequest.commits(last:1).nodes.commit.statusCheckRollup
         // on a pull request in this repository, 2026-11-12, selecting __typename,
         // CheckRun { name conclusion } and StatusContext { context state }.
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -193,10 +196,10 @@ public sealed class GetChecksAsync
     public async Task WhenRollupStateIsPending_ReturnsPending()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -237,10 +240,10 @@ public sealed class GetChecksAsync
     public async Task WhenRollupIsAbsent_ReturnsNoneDetected()
     {
         // Arrange — PR has no statusCheckRollup
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -343,10 +346,10 @@ public sealed class GetChecksAsync
     {
         // Arrange
         // The ERROR token is a StatusState value: https://docs.github.com/en/graphql/reference/commits (StatusState).
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -404,10 +407,10 @@ public sealed class GetChecksAsync
         // Arrange
         // STARTUP_FAILURE is a CheckConclusionState value: https://docs.github.com/en/graphql/reference/checks;
         // FAILURE is a StatusState value: https://docs.github.com/en/graphql/reference/commits (StatusState).
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "pullRequest": {
                     "commits": {
@@ -460,5 +463,46 @@ public sealed class GetChecksAsync
                 new FailingCheck("ci / build", "STARTUP_FAILURE", "https://github.com/owner/repo/actions/runs/1", IsInfrastructureFailure: true),
                 new FailingCheck("ci/jenkins", "FAILURE", "https://jenkins.example.com/job/1"),
             ]);
+    }
+
+    [Fact]
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit":{{CapturedRateLimit}},
+                "repository": {
+                  "pullRequest": {
+                    "commits": {
+                      "nodes": [
+                        {
+                          "commit": {
+                            "statusCheckRollup": {
+                              "state": "SUCCESS",
+                              "contexts": { "nodes": [] }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        InMemoryProviderRateBudget budget = new();
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, json), budget);
+
+        // Act
+        await sut.GetChecksAsync(ValidBaseUrl, ValidSlug, ValidPullRequestUrl, token: "ghp_token", CancellationToken.None);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
     }
 }

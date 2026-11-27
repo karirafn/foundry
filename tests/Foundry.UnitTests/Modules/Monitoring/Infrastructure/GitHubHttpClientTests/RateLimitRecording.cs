@@ -39,14 +39,16 @@ public sealed class RateLimitRecording
     // --- GraphQL: rateLimit block records GitHubGraphQl reading ---
 
     [Fact]
-    public async Task WhenGraphQlResponseHasRateLimitBlock_RecordsReadingUnderGitHubGraphQlKey()
+    public async Task WhenGraphQlDataHasRateLimitBlock_RecordsReadingUnderGitHubGraphQlKey()
     {
         // Arrange
         string responseJson = """
             {
-              "data": { "state": "OPEN" },
-              "errors": null,
-              "rateLimit": { "cost": 1, "remaining": 4200, "limit": 5000, "resetAt": "2026-09-01T12:00:00Z" }
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4200, "limit": 5000, "resetAt": "2026-09-01T12:00:00Z" },
+                "state": "OPEN"
+              },
+              "errors": null
             }
             """;
         FakeHandler handler = new(HttpStatusCode.OK, responseJson);
@@ -92,6 +94,116 @@ public sealed class RateLimitRecording
 
         // Assert
         store.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAMutationShapedResponseCarriesNoRateLimitBlock_RecordsNothingAndReturnsTheData()
+    {
+        // Arrange
+        string responseJson = """{"data": { "markPullRequestReadyForReview": { "pullRequest": { "isDraft": false } } }}""";
+        FakeHandler handler = new(HttpStatusCode.OK, responseJson);
+        InMemoryProviderRateBudget store = new();
+        GitHubHttpClient sut = BuildSut(handler, store);
+
+        // Act
+        Result<MutationData> result = await sut.ExecuteGraphQlAsync<MutationData>(
+            GitHubComBaseUrl,
+            "mutation { markPullRequestReadyForReview(input: {}) { pullRequest { isDraft } } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        store.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldBeNull();
+        result.ShouldBeOfType<Result<MutationData>.Success>()
+            .Value.MarkPullRequestReadyForReview.ShouldNotBeNull()
+            .PullRequest.ShouldNotBeNull()
+            .IsDraft.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenDataIsNullAndErrorsArePresent_RecordsNothingAndFailsWithTheGraphQlError()
+    {
+        // Arrange
+        string responseJson = """{"data": null, "errors": [ { "type": "FORBIDDEN", "message": "Resource not accessible by integration" } ]}""";
+        FakeHandler handler = new(HttpStatusCode.OK, responseJson);
+        InMemoryProviderRateBudget store = new();
+        GitHubHttpClient sut = BuildSut(handler, store);
+
+        // Act
+        Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
+            GitHubComBaseUrl,
+            "query { viewer { login } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        store.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldBeNull();
+        result.ShouldBeOfType<Result<TestData>.Failure>().Error.Code.ShouldBe(GitHubErrors.GraphQlErrorCode);
+    }
+
+    [Fact]
+    public async Task WhenErrorsAccompanyADataRateLimitBlock_RecordsTheReadingAndStillFails()
+    {
+        // Arrange
+        string responseJson = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4200, "limit": 5000, "resetAt": "2026-09-01T12:00:00Z" },
+                "state": null
+              },
+              "errors": [ { "type": "NOT_FOUND", "message": "Could not resolve to an issue." } ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, responseJson);
+        InMemoryProviderRateBudget store = new();
+        GitHubHttpClient sut = BuildSut(handler, store);
+
+        // Act
+        Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
+            GitHubComBaseUrl,
+            "query { viewer { login } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        store.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull().Remaining.ShouldBe(4200);
+        Error error = result.ShouldBeOfType<Result<TestData>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(GitHubErrors.GraphQlErrorCode),
+            () => error.Kind.ShouldBe(ErrorKind.NotFound));
+    }
+
+    [Fact]
+    public async Task WhenARateLimitedErrorAccompaniesADataRateLimitBlock_RecordsTheReadingAndFailsAsExhausted()
+    {
+        // Arrange
+        string responseJson = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 0, "limit": 5000, "resetAt": "2026-09-01T12:00:00Z" },
+                "state": null
+              },
+              "errors": [ { "type": "RATE_LIMITED", "message": "API rate limit exceeded" } ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, responseJson);
+        InMemoryProviderRateBudget store = new();
+        GitHubHttpClient sut = BuildSut(handler, store);
+
+        // Act
+        Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
+            GitHubComBaseUrl,
+            "query { viewer { login } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        store.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull().Remaining.ShouldBe(0);
+        result.ShouldBeOfType<Result<TestData>.Failure>().Error.Code.ShouldBe(GitHubErrors.RateLimitExhausted.Code);
     }
 
     // --- REST: X-RateLimit headers record GitHubRest reading ---
@@ -156,9 +268,11 @@ public sealed class RateLimitRecording
         // Arrange
         string responseJson = """
             {
-              "data": { "state": "OPEN" },
-              "errors": null,
-              "rateLimit": { "cost": 1, "remaining": 4200, "limit": 5000, "resetAt": "2026-09-01T12:00:00Z" }
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4200, "limit": 5000, "resetAt": "2026-09-01T12:00:00Z" },
+                "state": "OPEN"
+              },
+              "errors": null
             }
             """;
         FakeHandler handler = new(HttpStatusCode.OK, responseJson);
@@ -204,6 +318,12 @@ public sealed class RateLimitRecording
     }
 
     internal sealed record TestData(string? State);
+
+    internal sealed record MutationData(MarkReadyPayload? MarkPullRequestReadyForReview);
+
+    internal sealed record MarkReadyPayload(MarkReadyPullRequest? PullRequest);
+
+    internal sealed record MarkReadyPullRequest(bool IsDraft);
 
     /// <summary>
     /// A <see cref="TimeProvider"/> that always returns the same frozen timestamp.

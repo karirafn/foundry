@@ -25,9 +25,9 @@ internal sealed partial class GitHubHttpClient
     /// <summary>GitHub's error message when <c>expectedHeadOid</c> no longer matches the branch head.</summary>
     internal const string StaleHeadMessage = "head sha didn't match the current head ref.";
 
-    private const string PrRebaseStateQuery = """
+    private const string PrRebaseStateQuery = $$"""
         query PrRebaseState($owner: String!, $name: String!, $number: Int!) {
-          rateLimit { cost remaining limit resetAt }
+          {{RateLimitSelection}}
           repository(owner: $owner, name: $name) {
             pullRequest(number: $number) { id headRefOid baseRefName }
           }
@@ -60,8 +60,8 @@ internal sealed partial class GitHubHttpClient
         }
 
         object variables = new { owner = slug.Owner, name = slug.Name, number = prNumber };
-        Result<PrRebaseStateData> dataResult = await ExecuteGraphQlWithUnauthorizedMappingAsync<PrRebaseStateData>(
-            apiBaseUrl, PrRebaseStateQuery, variables, token, cancellationToken);
+        Result<PrRebaseStateData> dataResult = await ExecuteGraphQlAsync<PrRebaseStateData>(
+            apiBaseUrl, PrRebaseStateQuery, variables, token, cancellationToken, ClassifyUnreadable);
 
         if (dataResult is not Result<PrRebaseStateData>.Success dataSuccess)
         {
@@ -139,15 +139,18 @@ internal sealed partial class GitHubHttpClient
         }
 
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        GraphQlEnvelope<UpdatePullRequestBranchData>? envelope =
-            JsonSerializer.Deserialize<GraphQlEnvelope<UpdatePullRequestBranchData>>(responseBody, GraphQlJsonOptions);
+        GraphQlEnvelope? envelope = JsonSerializer.Deserialize<GraphQlEnvelope>(responseBody, GraphQlJsonOptions);
 
         if (envelope?.Errors is { Count: > 0 } errors)
         {
             return ClassifyRebaseErrors(errors.Select(e => (e.Type, e.Message)).ToList());
         }
 
-        if (envelope?.Data?.UpdatePullRequestBranch is null)
+        UpdatePullRequestBranchData? data = envelope?.Data is { ValueKind: JsonValueKind.Object } dataElement
+            ? dataElement.Deserialize<UpdatePullRequestBranchData>(GraphQlJsonOptions)
+            : null;
+
+        if (data?.UpdatePullRequestBranch is null)
         {
             return Result<RebaseRequestOutcome>.Fail(
                 GitHubErrors.ProviderError("updatePullRequestBranch returned neither data nor errors."));
@@ -225,7 +228,7 @@ internal sealed partial class GitHubHttpClient
         return Result<T>.Ok(refused(reason));
     }
 
-    private sealed record PrRebaseStateData(GraphQlRateLimit? RateLimit, PrRebaseStateRepository? Repository);
+    private sealed record PrRebaseStateData(PrRebaseStateRepository? Repository);
 
     private sealed record PrRebaseStateRepository(PrRebaseStatePullRequest? PullRequest);
 

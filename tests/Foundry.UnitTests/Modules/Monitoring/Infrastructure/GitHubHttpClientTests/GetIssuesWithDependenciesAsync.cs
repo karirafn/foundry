@@ -22,16 +22,19 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTe
 
 public sealed class GetIssuesWithDependenciesAsync
 {
+    // rateLimit block from the 2026-11-27 `gh api graphql` capture on karirafn/foundry.
+    private const string CapturedRateLimit = """{"cost":1,"remaining":4990,"limit":5000,"resetAt":"2026-11-27T10:23:06Z"}""";
+
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
 
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(HttpMessageHandler handler) =>
+    private static GitHubHttpClient BuildSut(HttpMessageHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), budget ?? new InMemoryProviderRateBudget(), TimeProvider.System);
 
     // --- Issue field mapping ---
 
@@ -39,10 +42,10 @@ public sealed class GetIssuesWithDependenciesAsync
     public async Task WhenGraphQlReturnsIssues_ParsesFieldsIdenticalToRestPath()
     {
         // Arrange
-        string json = """
+        string json = $$"""
             {
               "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "defaultBranchRef": { "name": "main" },
                   "issues": {
@@ -978,13 +981,61 @@ public sealed class GetIssuesWithDependenciesAsync
         result.ShouldBeOfType<Result<IssueListingWithDependencies>.Failure>();
     }
 
+    [Fact]
+    public async Task WhenReading_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        InMemoryProviderRateBudget budget = new();
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, BuildSinglePageResponse(1)), budget);
+
+        // Act
+        await sut.GetIssuesWithDependenciesAsync(ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task WhenReadingABlockedByPage_RecordsTheGraphQlHeadroomFromTheData()
+    {
+        // Arrange
+        // The issue page carries no rateLimit block, so a reading can only come from the blocked-by page.
+        string issuePage = BuildIssuePageWithTruncatedBlockedBy(
+            issueNumber: 10,
+            initialBlockerNumber: 1,
+            blockedByHasNextPage: true,
+            blockedByCursor: "bb-cursor-1");
+        string blockedByPage = BuildBlockedByFollowUpResponse(issueNumber: 10, blockerNumber: 2, hasNextPage: false);
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, issuePage),
+            (HttpStatusCode.OK, blockedByPage),
+        ]);
+        InMemoryProviderRateBudget budget = new();
+        GitHubHttpClient sut = BuildSut(handler, budget);
+
+        // Act
+        await sut.GetIssuesWithDependenciesAsync(ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        RateBudgetReading reading = budget.TryGet(ProviderBudgetKey.GitHubGraphQl).ShouldNotBeNull();
+        reading.ShouldSatisfyAllConditions(
+            () => reading.Remaining.ShouldBe(4990),
+            () => reading.Limit.ShouldBe(5000),
+            () => reading.ResetAt.ShouldBe(new DateTimeOffset(2026, 11, 27, 10, 23, 6, TimeSpan.Zero)));
+    }
+
     // --- Helpers ---
 
-    private static GitHubHttpClient BuildSut(SequentialFakeHandler handler) =>
+    private static GitHubHttpClient BuildSut(SequentialFakeHandler handler, InMemoryProviderRateBudget? budget = null) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), budget ?? new InMemoryProviderRateBudget(), TimeProvider.System);
 
     private static string BuildSinglePageResponse(int issueCount, int startIndex = 0)
     {
@@ -1004,6 +1055,7 @@ public sealed class GetIssuesWithDependenciesAsync
         return $$"""
             {
               "data": {
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "defaultBranchRef": { "name": "main" },
                   "issues": {
@@ -1109,6 +1161,7 @@ public sealed class GetIssuesWithDependenciesAsync
         return $$"""
             {
               "data": {
+                "rateLimit":{{CapturedRateLimit}},
                 "repository": {
                   "issue": {
                     "blockedBy": {
