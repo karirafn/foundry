@@ -995,6 +995,33 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenChecksPendingIssuePullRequestIsMergedAndIssueIsOpen_ReadsNoChecks()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue(issueNumber: 55, pullRequestUrl: prUrl);
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        StubIssueProvider provider = new(
+            isClosedResults: new Dictionary<int, Result<bool>>
+            {
+                [55] = Result<bool>.Ok(false),
+            },
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null, IsDraft: false)),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        provider.GetChecksCalls.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenGetChecksFailsForChecksPendingIssue_SkipsThatIssueAndContinues()
     {
         // Arrange
@@ -1137,6 +1164,8 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
     {
         public List<string> MarkReadyCalls { get; } = [];
 
+        public List<string> GetChecksCalls { get; } = [];
+
         public List<long> RetriedJobIds { get; } = [];
 
         public Task<Result<CiJobLookup>> ResolveCiJobAsync(
@@ -1257,6 +1286,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             string pullRequestUrl,
             CancellationToken cancellationToken)
         {
+            GetChecksCalls.Add(pullRequestUrl);
             if (checksResults is not null && checksResults.TryGetValue(pullRequestUrl, out Result<Checks>? result))
             {
                 return Task.FromResult(result);
