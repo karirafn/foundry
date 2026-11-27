@@ -314,6 +314,32 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(explanation?.textContent?.toLowerCase()).toContain('check');
   });
 
+  it('should say the provider refused the account token when reason is access-refused', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'access-refused', providerType: 'gitlab' });
+
+    // Assert
+    const heading = el.querySelector('.repository-eligibility-details__heading');
+    expect(heading?.textContent?.trim()).toBe('GitLab refused the account token');
+    const explanation = el.querySelector('.repository-eligibility-details__explanation');
+    expect(explanation?.textContent?.trim()).toBe(
+      'GitLab refused the account token when a run used it. Foundry re-checks write access on the next poll.',
+    );
+  });
+
+  it('should keep the Re-check button enabled when reason is access-refused', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'access-refused' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(false);
+  });
+
   // Cycle 16: unreachable + reason=null (absent) — falls back to the existing "check access" explanation
   it('should fall back to the existing explanation when reason is null', () => {
     // Arrange

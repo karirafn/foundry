@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { providerDisplayName } from '../../../../shared/utils/provider.util';
 import { unreachablePackageSourceUrl } from '../../package-sources/package-source.model';
 import { isCannotPushViolation } from '../repository-add-outcome/repository-add-outcome';
+import { unreachableExplanation } from '../repository-eligibility-unreachable.util';
 
 @Component({
   selector: 'fd-repository-eligibility-details',
@@ -82,16 +83,22 @@ export class RepositoryEligibilityDetailsComponent {
     if (this.status() !== 'unreachable') {
       return "Why this repository can't be dispatched to";
     }
-    switch (this.reason()) {
+    const reason = this.reason();
+    if (reason === null) {
+      return 'Branch protection could not be verified';
+    }
+    switch (reason) {
       case 'rate-limited':
         return `${providerDisplayName(this.providerType())} API rate limit reached`;
       case 'never-probed':
         return 'Eligibility not yet checked';
       case 'branch-rules-unavailable':
         return 'Branch protection could not be verified';
-      default:
-        return 'Branch protection could not be verified';
+      case 'access-refused':
+        return `${providerDisplayName(this.providerType())} refused the account token`;
     }
+    const exhaustive: never = reason;
+    return exhaustive;
   }
 
   _rateLimitTitle(): string {
@@ -99,15 +106,6 @@ export class RepositoryEligibilityDetailsComponent {
   }
 
   _unreachableExplanation(): string {
-    switch (this.reason()) {
-      case 'rate-limited':
-        return `The ${providerDisplayName(this.providerType())} API rate limit has been reached. Foundry will retry automatically.`;
-      case 'never-probed':
-        return 'Eligibility has not been checked yet. Foundry will probe automatically.';
-      case 'branch-rules-unavailable':
-        return 'Foundry could not read branch-protection settings for this repository. Check the account\'s access, then re-check.';
-      default:
-        return 'Foundry could not read branch-protection settings for this repository. Check the account\'s access, then re-check.';
-    }
+    return unreachableExplanation(this.reason(), this.providerType());
   }
 }
