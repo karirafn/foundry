@@ -23,16 +23,16 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.RepositoryPollerTests;
 
 /// <summary>
-/// Nudge-cap invariance (ADR 0085): N webhook deliveries for one nudge key within one poll interval
+/// Nudge-floor bound (ADR 0085): N webhook deliveries for one nudge key within one floor window
 /// produce at most two provider runs of that pass — the leading run and one coalesced trailing run —
-/// so webhook mode never exceeds the call rate of normal polling. Drives the real
+/// regardless of the repository's poll interval (a five-minute one here). Drives the real
 /// <see cref="NudgeScheduler"/> on a simulated clock and runs the real <see cref="RepositoryPoller"/>
 /// per-pass entry point against a <see cref="CountingIssueProvider"/>.
 /// </summary>
 public sealed class NudgeCallCap : IAsyncDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
     private const int IssueNumber = 7;
 
     private readonly SqliteConnection _connection;
@@ -60,7 +60,7 @@ public sealed class NudgeCallCap : IAsyncDisposable
     [Theory]
     [InlineData(5)]
     [InlineData(50)]
-    public async Task WhenNDeliveriesForListingKeyWithinOneInterval_AtMostTwoListingRuns(int deliveries)
+    public async Task WhenNDeliveriesForListingKeyWithinOneFloorWindow_AtMostTwoListingRuns(int deliveries)
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
@@ -79,7 +79,7 @@ public sealed class NudgeCallCap : IAsyncDisposable
     [Theory]
     [InlineData(5)]
     [InlineData(50)]
-    public async Task WhenNDeliveriesForChecksKeyWithinOneInterval_AtMostTwoChecksRuns(int deliveries)
+    public async Task WhenNDeliveriesForChecksKeyWithinOneFloorWindow_AtMostTwoChecksRuns(int deliveries)
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
@@ -102,17 +102,17 @@ public sealed class NudgeCallCap : IAsyncDisposable
     }
 
     /// <summary>
-    /// Spreads <paramref name="deliveries"/> nudges for <paramref name="key"/> evenly across one poll
-    /// interval, then advances the clock second by second for two intervals, running the pass for every
+    /// Spreads <paramref name="deliveries"/> nudges for <paramref name="key"/> evenly across one floor
+    /// window, then advances the clock second by second for two floor windows, running the pass for every
     /// key the scheduler releases.
     /// </summary>
     private static async Task SimulateAsync(NudgeKey key, int deliveries, Func<DateTimeOffset, Task> runPass)
     {
         NudgeScheduler scheduler = new();
-        TimeSpan spacing = (PollInterval - TimeSpan.FromSeconds(1)) / deliveries;
+        TimeSpan spacing = (NudgeScheduler.RateFloor - TimeSpan.FromSeconds(1)) / deliveries;
         List<DateTimeOffset> arrivals = Enumerable.Range(0, deliveries).Select(i => T0 + (spacing * i)).ToList();
 
-        for (DateTimeOffset now = T0; now <= T0 + (PollInterval * 2); now += TimeSpan.FromSeconds(1))
+        for (DateTimeOffset now = T0; now <= T0 + (NudgeScheduler.RateFloor * 2); now += TimeSpan.FromSeconds(1))
         {
             foreach (DateTimeOffset arrival in arrivals.Where(a => a <= now).ToList())
             {
@@ -120,7 +120,7 @@ public sealed class NudgeCallCap : IAsyncDisposable
                 arrivals.Remove(arrival);
             }
 
-            foreach (NudgeKey _ in scheduler.TakeDue(now, _ => PollInterval))
+            foreach (NudgeKey _ in scheduler.TakeDue(now, _ => true))
             {
                 await runPass(now);
             }
