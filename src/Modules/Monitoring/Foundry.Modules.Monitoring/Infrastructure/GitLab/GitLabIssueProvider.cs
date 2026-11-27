@@ -118,6 +118,29 @@ internal sealed partial class GitLabIssueProvider(
         return Result<PullRequestStatus>.Ok(success.Value.Status);
     }
 
+    public async Task<Result<PullRequestState>> GetPullRequestStateAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        Result<MergeRequestSnapshot> snapshot = await httpClient.GetMergeRequestSnapshotAsync(
+            apiBaseUrl,
+            slug,
+            pullRequestUrl,
+            token,
+            cancellationToken);
+
+        if (snapshot is not Result<MergeRequestSnapshot>.Success success)
+        {
+            _snapshotsReadWithStatus.Remove(pullRequestUrl);
+            return Result<PullRequestState>.Fail(((Result<MergeRequestSnapshot>.Failure)snapshot).Error);
+        }
+
+        // Cached even when the state does not map, so the checks read that follows still costs no second fetch.
+        _snapshotsReadWithStatus[pullRequestUrl] = success.Value;
+        return GitLabHttpClient.ToPullRequestState(success.Value);
+    }
+
     public Task<Result<string>> GetPullRequestBodyAsync(
         RepositorySlug slug,
         string pullRequestUrl,

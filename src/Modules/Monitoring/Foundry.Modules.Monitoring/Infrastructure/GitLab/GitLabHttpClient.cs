@@ -558,6 +558,7 @@ internal sealed partial class GitLabHttpClient(
 
         return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
             new PullRequestStatus(isClosed, isMerged, dto?.Sha, dto?.Draft ?? false),
+            dto?.State,
             dto?.HeadPipeline?.Id,
             dto?.HeadPipeline?.Status));
     }

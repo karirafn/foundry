@@ -172,6 +172,56 @@ public sealed class ChecksPassMergeRequestFetch
         value.IsMerged.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task WhenStateThenChecksForSameMergeRequest_FetchesMergeRequestOnce()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, """{"iid":7,"state":"opened","sha":"8888888888888888888888888888888888888888","head_pipeline":{"status":"success"}}""");
+        GitLabIssueProvider sut = CreateProvider(handler);
+
+        // Act
+        Result<PullRequestState> state = await sut.GetPullRequestStateAsync(Slug, MergeRequestUrl, CancellationToken.None);
+        Result<ProviderChecks> checks = await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Assert
+        state.ShouldBeOfType<Result<PullRequestState>.Success>().Value.ShouldBeOfType<PullRequestState.Open>();
+        checks.ShouldBeOfType<Result<ProviderChecks>.Success>().Value.ShouldBeOfType<ProviderChecks.Green>();
+        handler.AllRequests.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenStateReadsAnOpenMergeRequestWithoutHead_FailsAndChecksStillUseTheSameFetch()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, OpenMergeRequestWithGreenPipeline);
+        GitLabIssueProvider sut = CreateProvider(handler);
+
+        // Act
+        Result<PullRequestState> state = await sut.GetPullRequestStateAsync(Slug, MergeRequestUrl, CancellationToken.None);
+        Result<ProviderChecks> checks = await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Assert
+        state.ShouldBeOfType<Result<PullRequestState>.Failure>().Error.Code.ShouldBe(PullRequestStateErrors.MissingHeadCode);
+        checks.ShouldBeOfType<Result<ProviderChecks>.Success>().Value.ShouldBeOfType<ProviderChecks.Green>();
+        handler.AllRequests.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenStateReadFails_PropagatesFailureAndChecksFetchesAgain()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.InternalServerError, "{}");
+        GitLabIssueProvider sut = CreateProvider(handler);
+
+        // Act
+        Result<PullRequestState> state = await sut.GetPullRequestStateAsync(Slug, MergeRequestUrl, CancellationToken.None);
+        await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Assert
+        state.ShouldBeOfType<Result<PullRequestState>.Failure>();
+        handler.AllRequests.Count.ShouldBe(2);
+    }
+
     private static GitLabIssueProvider CreateProvider(FakeHandler handler)
     {
         HttpClient httpClient = new(handler);
