@@ -101,6 +101,7 @@ public sealed class Parse
     [InlineData("transient", PublishFailureKind.Transient)]
     [InlineData("permanent", PublishFailureKind.Permanent)]
     [InlineData("unreachable", PublishFailureKind.Unreachable)]
+    [InlineData("refused", PublishFailureKind.Refused)]
     public void AFailedLine_KeepsItsKindAndTheWholeReason(string kind, PublishFailureKind expected)
     {
         // Act
@@ -131,6 +132,7 @@ public sealed class Parse
 
     [Theory]
     [InlineData("transient")]
+    [InlineData("refused")]
     [InlineData("permanent")]
     public void AnyOtherFailure_IsNotMarkedUnreachable(string kind)
     {
@@ -139,6 +141,34 @@ public sealed class Parse
 
         // Assert
         result.ShouldBeOfType<PublishResult.Failed>().Unreachable.ShouldBeFalse();
+    }
+
+    // A refused token waits for Retry publish, like a permanent failure, and has the repository probed again.
+    [Fact]
+    public void ARefusedFailure_IsNotTransientAndIsMarkedRefused()
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(
+            1,
+            "FOUNDRY_PUBLISH result=failed kind=refused reason=could not reach the repository: fatal: repository 'x' not found\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Failed>().ShouldSatisfyAllConditions(
+            failed => failed.Transient.ShouldBeFalse(),
+            failed => failed.Refused.ShouldBeTrue());
+    }
+
+    [Theory]
+    [InlineData("transient")]
+    [InlineData("permanent")]
+    [InlineData("unreachable")]
+    public void AnyOtherFailure_IsNotMarkedRefused(string kind)
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(1, $"FOUNDRY_PUBLISH result=failed kind={kind} reason=x\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Failed>().Refused.ShouldBeFalse();
     }
 
     [Fact]

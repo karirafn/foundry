@@ -105,6 +105,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void AccessRefused_ValueIsAccessRefused()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.AccessRefused;
+
+        // Assert
+        category.Value.ShouldBe("access_refused");
+    }
+
+    [Fact]
     public void FetchFailed_ValueIsFetchFailed()
     {
         // Arrange

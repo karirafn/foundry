@@ -15,6 +15,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
 [JsonDerivedType(typeof(ProviderUnreachable), typeDiscriminator: FailureReason.ProviderUnreachableToken)]
 [JsonDerivedType(typeof(FetchFailed), typeDiscriminator: FailureReason.FetchFailedToken)]
+[JsonDerivedType(typeof(AccessRefused), typeDiscriminator: FailureReason.AccessRefusedToken)]
 [JsonDerivedType(typeof(PackageSourceUnreachable), typeDiscriminator: FailureReason.PackageSourceUnreachableToken)]
 [JsonDerivedType(typeof(PackageRestoreFailed), typeDiscriminator: FailureReason.PackageRestoreFailedToken)]
 [JsonDerivedType(typeof(TransientApiError), typeDiscriminator: FailureReason.TransientApiErrorToken)]
@@ -39,6 +40,7 @@ public abstract record FailureReason
     public const string ProviderErrorToken = FailureCategory.ProviderErrorToken;
     public const string ProviderUnreachableToken = FailureCategory.ProviderUnreachableToken;
     public const string FetchFailedToken = FailureCategory.FetchFailedToken;
+    public const string AccessRefusedToken = FailureCategory.AccessRefusedToken;
     public const string PackageSourceUnreachableToken = FailureCategory.PackageSourceUnreachableToken;
     public const string PackageRestoreFailedToken = FailureCategory.PackageRestoreFailedToken;
     public const string TransientApiErrorToken = FailureCategory.TransientApiErrorToken;
@@ -68,6 +70,7 @@ public abstract record FailureReason
         ProviderError => ProviderErrorToken,
         ProviderUnreachable => ProviderUnreachableToken,
         FetchFailed => FetchFailedToken,
+        AccessRefused => AccessRefusedToken,
         PackageSourceUnreachable => PackageSourceUnreachableToken,
         PackageRestoreFailed => PackageRestoreFailedToken,
         TransientApiError => TransientApiErrorToken,
@@ -96,6 +99,7 @@ public abstract record FailureReason
         ProviderError providerError => providerError.Message,
         ProviderUnreachable providerUnreachable => $"Could not reach the git provider: {providerUnreachable.Detail}",
         FetchFailed fetchFailed => $"Fetching the repository failed: {fetchFailed.Detail}",
+        AccessRefused accessRefused => $"The provider refused the account token: {accessRefused.Detail}",
         PackageSourceUnreachable packageSourceUnreachable => $"Could not reach the package proxy: {packageSourceUnreachable.Detail}",
         PackageRestoreFailed packageRestoreFailed => $"Could not restore packages: {packageRestoreFailed.Detail}",
         TransientApiError => "Transient Anthropic API fault",
@@ -149,6 +153,13 @@ public abstract record FailureReason
     /// truncated pack, an early EOF). <see cref="Detail"/> carries git's last error, redacted.
     /// </summary>
     public sealed record FetchFailed(string Detail) : FailureReason;
+
+    /// <summary>
+    /// The git provider refused the account token access to the repository during Prepare (HTTP 403, or a 404 hiding a
+    /// repository the token cannot see), so the Publisher stopped without retrying. <see cref="Detail"/> carries the
+    /// failed step and git's last error, redacted.
+    /// </summary>
+    public sealed record AccessRefused(string Detail) : FailureReason;
 
     /// <summary>
     /// The worker's entrypoint got no HTTP response from the Package Source Proxy before its agent started (ADR 0112),

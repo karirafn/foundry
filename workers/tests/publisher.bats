@@ -51,10 +51,32 @@ GIT_HTTP_429="fatal: unable to access '$AUTH_URL/': The requested URL returned e
 GIT_HTTP_403="fatal: unable to access '$AUTH_URL/': The requested URL returned error: 403"
 GIT_NO_CREDENTIALS="fatal: could not read Username for 'https://git.example.test': terminal prompts disabled"
 
+# Git 2.53's stderr when GitHub or GitLab refuses the token (HTTP 403, or a 404 hiding the repository) or rejects
+# it (HTTP 401), with the repository, account, host and port swapped for the test's.
+GITHUB_PUSH_403="remote: Permission to owner/repo.git denied to bot.
+$GIT_HTTP_403"
+GITLAB_PUSH_403="remote: You are not allowed to push code to this project.
+$GIT_HTTP_403"
+GITHUB_NOT_FOUND="remote: Repository not found.
+fatal: repository '$AUTH_URL/' not found"
+GITLAB_NOT_FOUND="remote: The project you were looking for could not be found or you don't have permission to view it.
+fatal: repository '$AUTH_URL/' not found"
+GITLAB_AUTHENTICATION_FAILED="remote: HTTP Basic: Access denied. If a password was provided for Git authentication, the password was incorrect or you're required to use a token instead of a password. If a token was provided, it was either incorrect, expired, or improperly scoped.
+fatal: Authentication failed for '$AUTH_URL/'"
+
 # provider_errors <stderr>... — the next git transfers with the provider each fail with one <stderr> line, in order;
 # transfers after them reach the remote.
 provider_errors() {
     printf '%s\n' "$@" >> "$BATS_TEST_TMPDIR/provider_errors"
+}
+
+# provider_failure <stderr> — the next git transfer with the provider fails with the whole, possibly multi-line,
+# <stderr>, before any provider_errors line is used.
+provider_failure() {
+    mkdir -p "$BATS_TEST_TMPDIR/provider_failures"
+    local count
+    count="$(find "$BATS_TEST_TMPDIR/provider_failures" -type f | wc -l)"
+    printf '%s\n' "$1" > "$BATS_TEST_TMPDIR/provider_failures/$(printf '%04d' "$count")"
 }
 
 # provider_errors_on <subcommand> <stderr>... — the next git <subcommand> transfers with the provider (ls-remote or
@@ -106,14 +128,27 @@ prepare_gives_up_unreachable() {
     [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
 }
 
-# prepare_fails_without_retry <stderr> — Prepare fails at stage=clone on its first attempt, carrying <stderr>.
+# prepare_fails_without_retry <stage> <stderr> — Prepare fails at <stage> on its first attempt, carrying <stderr>.
 prepare_fails_without_retry() {
-    provider_errors "$1"
+    provider_errors "$2"
 
     run sh "$PUBLISHER" prepare
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: $1"* ]]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=$1 detail=could not reach the repository: $2"* ]]
+    [ "$(ls_remote_count)" -eq 1 ]
+    [ -z "$(sleeps)" ]
+}
+
+# prepare_fails_on_failure_without_retry <stage> <last line> <stderr> — Prepare meets the multi-line <stderr> on its
+# first attempt and fails at <stage> carrying git's <last line>, without a retry.
+prepare_fails_on_failure_without_retry() {
+    provider_failure "$3"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=$1 detail=could not reach the repository: $2"* ]]
     [ "$(ls_remote_count)" -eq 1 ]
     [ -z "$(sleeps)" ]
 }
@@ -162,6 +197,12 @@ for arg in "\$@"; do
         if [ -n "\$subcommand" ] && [ -s "$BATS_TEST_TMPDIR/provider_errors.\$subcommand" ]; then
             head -n 1 "$BATS_TEST_TMPDIR/provider_errors.\$subcommand" >&2
             sed -i 1d "$BATS_TEST_TMPDIR/provider_errors.\$subcommand"
+            exit 128
+        fi
+        failure="\$(find "$BATS_TEST_TMPDIR/provider_failures" -type f 2> /dev/null | sort | head -n 1)"
+        if [ -n "\$failure" ]; then
+            cat "\$failure" >&2
+            rm "\$failure"
             exit 128
         fi
         if [ -s "$BATS_TEST_TMPDIR/provider_errors" ]; then
@@ -315,12 +356,32 @@ bundle_heads() {
     prepare_gives_up_unreachable "$GIT_HTTP_429"
 }
 
-@test "an HTTP 403 is not retried and fails at stage=clone" {
-    prepare_fails_without_retry "$GIT_HTTP_403"
+@test "an HTTP 403 is not retried and fails at stage=refused" {
+    prepare_fails_without_retry refused "$GIT_HTTP_403"
 }
 
 @test "git finding no credentials is not retried and fails at stage=clone" {
-    prepare_fails_without_retry "$GIT_NO_CREDENTIALS"
+    prepare_fails_without_retry clone "$GIT_NO_CREDENTIALS"
+}
+
+@test "GitHub refusing the token with 403 is not retried and fails at stage=refused" {
+    prepare_fails_on_failure_without_retry refused "$GIT_HTTP_403" "$GITHUB_PUSH_403"
+}
+
+@test "GitLab refusing the token with 403 is not retried and fails at stage=refused" {
+    prepare_fails_on_failure_without_retry refused "$GIT_HTTP_403" "$GITLAB_PUSH_403"
+}
+
+@test "GitHub hiding the repository with 404 is not retried and fails at stage=refused" {
+    prepare_fails_on_failure_without_retry refused "fatal: repository '$AUTH_URL/' not found" "$GITHUB_NOT_FOUND"
+}
+
+@test "GitLab hiding the repository with 404 is not retried and fails at stage=refused" {
+    prepare_fails_on_failure_without_retry refused "fatal: repository '$AUTH_URL/' not found" "$GITLAB_NOT_FOUND"
+}
+
+@test "GitLab rejecting the token with 401 is not retried and fails at stage=clone" {
+    prepare_fails_on_failure_without_retry clone "fatal: Authentication failed for '$AUTH_URL/'" "$GITLAB_AUTHENTICATION_FAILED"
 }
 
 @test "a rate limit without git's transport prefix is retried, then fails at stage=fetch" {
@@ -372,13 +433,13 @@ bundle_heads() {
     [ "$(sleeps)" = "$(printf '5\n15')" ]
 }
 
-@test "a permanent failure on a retry ends the retries at stage=clone" {
+@test "a refused failure on a retry ends the retries at stage=refused" {
     provider_errors "$GIT_DNS_FAILURE" "$GIT_HTTP_403"
 
     run sh "$PUBLISHER" prepare
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: $GIT_HTTP_403"* ]]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=refused detail=could not reach the repository: $GIT_HTTP_403"* ]]
     [[ "$output" != *"stage=unreachable"* ]]
     [ "$(ls_remote_count)" -eq 2 ]
     [ "$(sleeps)" = "5" ]
@@ -467,13 +528,13 @@ GIT_TRUNCATED_PACK="fatal: fetch-pack: invalid index-pack output"
     [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
 }
 
-@test "a permanent fetch failure is not retried and fails at stage=clone" {
+@test "a refused fetch is not retried and fails at stage=refused" {
     provider_errors_on fetch "$GIT_HTTP_403"
 
     run sh "$PUBLISHER" prepare
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=fetching the repository failed: $GIT_HTTP_403"* ]]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=refused detail=fetching the repository failed: $GIT_HTTP_403"* ]]
     [ "$(fetch_count)" -eq 1 ]
     [ -z "$(sleeps)" ]
 }
@@ -1522,7 +1583,7 @@ EOF
     [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=unreachable reason="*"returned error: 429" ]]
 }
 
-@test "publish: an HTTP 403 behind git's transport prefix is a permanent failure" {
+@test "publish: an HTTP 403 behind git's transport prefix is a refused failure" {
     start_run
     wcommit a.txt a "first"
     worker_bundle
@@ -1531,7 +1592,53 @@ EOF
     publish
 
     [ "$status" -eq 1 ]
-    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason="*"returned error: 403" ]]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=refused reason="*"returned error: 403" ]]
+}
+
+# publish_fails_on_failure <kind> <last line> <stderr> — publish meets the multi-line <stderr> on its first transfer
+# with the provider and fails <kind>, carrying git's <last line>.
+publish_fails_on_failure() {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    provider_failure "$3"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=$1 reason=could not reach the repository: $2" ]
+}
+
+@test "publish: GitHub refusing the token with 403 is a refused failure" {
+    publish_fails_on_failure refused "$GIT_HTTP_403" "$GITHUB_PUSH_403"
+}
+
+@test "publish: GitLab refusing the token with 403 is a refused failure" {
+    publish_fails_on_failure refused "$GIT_HTTP_403" "$GITLAB_PUSH_403"
+}
+
+@test "publish: GitHub hiding the repository with 404 is a refused failure" {
+    publish_fails_on_failure refused "fatal: repository '$AUTH_URL/' not found" "$GITHUB_NOT_FOUND"
+}
+
+@test "publish: GitLab hiding the repository with 404 is a refused failure" {
+    publish_fails_on_failure refused "fatal: repository '$AUTH_URL/' not found" "$GITLAB_NOT_FOUND"
+}
+
+@test "publish: GitLab rejecting the token with 401 is a permanent failure" {
+    publish_fails_on_failure permanent "fatal: Authentication failed for '$AUTH_URL/'" "$GITLAB_AUTHENTICATION_FAILED"
+}
+
+@test "publish: a push a hook refuses with permission denied stays a transient failure" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    refuse_pushes "Permission denied by a repository rule."
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=pushing $RUN_BRANCH_NAME failed: the provider refused the push (pre-receive hook declined): Permission denied by a repository rule." ]
 }
 
 @test "publish: a rate limit without git's transport prefix is a transient failure" {

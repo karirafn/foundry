@@ -2375,6 +2375,47 @@ public sealed partial class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPrepareIsRefused_TellsMonitoringTheRunsRepositoryRefusedAccessAndPausesNoHost()
+    {
+        // Arrange
+        await SeedDispatchPauseAsync();
+        CapturingSystemNotificationBroadcaster broadcaster = new();
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        FailureReason reason = new FailureReason.AccessRefused(
+            "could not reach the repository: fatal: unable to access 'x': The requested URL returned error: 403");
+        IssueClaimedHandler sut = BuildHandler(
+            publisher: new FakePublisher(new PrepareOutcome.Failed(reason)),
+            broadcaster: broadcaster);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(monitoredRepositoryId: repositoryId), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        DispatchPause settings = await _dbContext.Set<DispatchPause>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<FailedRun>().Reason.ShouldBe(reason);
+        _integrationEvents.DispatchedEvents.OfType<WorkerRunAccessRefused>().ShouldHaveSingleItem()
+            .ShouldBe(new WorkerRunAccessRefused(run.Id, repositoryId.Value));
+        settings.HostPauses.ShouldBeEmpty();
+        broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenPrepareFailsForAnotherReason_DoesNotTellMonitoring()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.WorkerBootstrapFailed("FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=401");
+        IssueClaimedHandler sut = BuildHandler(publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        _integrationEvents.DispatchedEvents.OfType<WorkerRunAccessRefused>().ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenPrepareSucceeds_TheRunRecordsTheRepositoryItWasPreparedFrom()
     {
         // Arrange

@@ -200,6 +200,14 @@ internal sealed class IssueClaimedHandler(
                 ? await StageHostPauseAsync(dispatchInfo.Host, cancellationToken)
                 : null;
 
+            // Dispatched before the transition so Monitoring's re-probe commits in the run's failure save (ADR 0054).
+            if (prepareFailure.Reason is FailureReason.AccessRefused)
+            {
+                await integrationEventDispatcher.DispatchAsync(
+                    [new WorkerRunAccessRefused(startingRun.Id, claimed.MonitoredRepositoryId.Value)],
+                    cancellationToken);
+            }
+
             FailedRun failedRun = startingRun.Fail(prepareFailure.Reason);
             await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
 

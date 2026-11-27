@@ -3,7 +3,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 /// <summary>How a publish attempt failed, as the Publisher's <c>kind=</c> field names it.</summary>
 public enum PublishFailureKind
 {
-    /// <summary>A retry would fail the same way (an invalid bundle, a refused token), so it waits for an operator.</summary>
+    /// <summary>A retry would fail the same way (an invalid bundle, a rejected token), so it waits for an operator.</summary>
     Permanent,
 
     /// <summary>A retry may succeed (a moved branch, a provider hiccup), so it is retried with backoff.</summary>
@@ -14,4 +14,10 @@ public enum PublishFailureKind
     /// <see cref="Transient"/>, and it pauses the run's provider host until a probe reaches it again (#885).
     /// </summary>
     Unreachable,
+
+    /// <summary>
+    /// The provider refused the account token (HTTP 403, or a 404 hiding the repository). It waits for Retry publish,
+    /// like <see cref="Permanent"/>, and triggers a write probe of the run's repository.
+    /// </summary>
+    Refused,
 }

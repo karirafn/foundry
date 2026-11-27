@@ -52,12 +52,16 @@ public abstract record PublishResult
 
     /// <summary>
     /// Publishing failed. A transient failure (network, provider outage) is retried with backoff; a permanent one (an
-    /// invalid bundle, a refused token) is not. An unreachable provider is transient and also pauses its host (#885).
+    /// invalid bundle, a token the provider refused) is not. An unreachable provider is transient and also pauses its
+    /// host.
     /// </summary>
     public sealed record Failed(string Reason, PublishFailureKind Kind) : PublishResult
     {
         /// <summary>Whether a retry may succeed, so the failure is retried with backoff.</summary>
-        public bool Transient => Kind is not PublishFailureKind.Permanent;
+        public bool Transient => Kind is PublishFailureKind.Transient or PublishFailureKind.Unreachable;
+
+        /// <summary>Whether the provider refused the account token, so the run's repository is probed again.</summary>
+        public bool Refused => Kind is PublishFailureKind.Refused;
 
         /// <summary>Whether the provider could not be reached, which pauses the run's provider host.</summary>
         public bool Unreachable => Kind is PublishFailureKind.Unreachable;

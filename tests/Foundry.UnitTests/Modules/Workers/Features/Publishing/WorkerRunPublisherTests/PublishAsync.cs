@@ -37,6 +37,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         CommitSha.From("1111111111111111111111111111111111111111"),
         RunBranchHead: null);
 
+    private readonly MonitoredRepositoryId _repositoryId = MonitoredRepositoryId.New();
+
     private readonly CapturingIntegrationEventDispatcher _events = new();
 
     private readonly RecordingRunPublishingCommands _commands = new();
@@ -204,6 +206,62 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             failed => failed.Category.ShouldBe(FailureCategory.PublishFailedToken),
             failed => failed.BranchName.ShouldBe(Branch));
         (await db.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task ARefusedToken_UsesUpTheRetriesAndFailsThePublish()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Failed("could not reach the repository: fatal: repository 'x' not found", PublishFailureKind.Refused));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<PublishFailedRun>().IsExhausted.ShouldBeTrue();
+        _events.Captured.OfType<WorkerRunFailedEvent>().ShouldHaveSingleItem()
+            .Category.ShouldBe(FailureCategory.PublishFailedToken);
+    }
+
+    [Fact]
+    public async Task ARefusedToken_TellsMonitoringTheRunsRepositoryRefusedAccess()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Failed("could not reach the repository: The requested URL returned error: 403", PublishFailureKind.Refused));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        WorkerRun run = await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        _events.Captured.OfType<WorkerRunAccessRefused>().ShouldHaveSingleItem()
+            .ShouldBe(new WorkerRunAccessRefused(run.Id, _repositoryId.Value));
+    }
+
+    [Theory]
+    [InlineData(PublishFailureKind.Transient)]
+    [InlineData(PublishFailureKind.Permanent)]
+    [InlineData(PublishFailureKind.Unreachable)]
+    public async Task AFailureTheProviderDidNotRefuse_DoesNotTellMonitoring(PublishFailureKind kind)
+    {
+        // Arrange
+        SeedDispatchPause();
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Failed("the publish failed", kind));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        _events.Captured.OfType<WorkerRunAccessRefused>().ShouldBeEmpty();
     }
 
     [Fact]
@@ -419,6 +477,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     [Theory]
     [InlineData(PublishFailureKind.Transient)]
     [InlineData(PublishFailureKind.Permanent)]
+    [InlineData(PublishFailureKind.Refused)]
     public async Task AFailureThatReachedTheProvider_DoesNotPauseTheHost(PublishFailureKind kind)
     {
         // Arrange
@@ -553,7 +612,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         using FoundryDbContext db = CreateDbContext();
         StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
         starting.RecordPreparedBase(Base, MonitoredRepositoryId.New());
-        ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), MonitoredRepositoryId.New());
+        ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), _repositoryId);
         PublishingRun publishing = active.BeginPublishing(
             exit,
             containerOutput: null,

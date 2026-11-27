@@ -146,6 +146,12 @@ internal sealed class WorkerRunPublisher(
             return false;
         }
 
+        if (result is PublishResult.Failed { Refused: true } refused)
+        {
+            await FailRefusedPublishAsync(run, refused.Reason, cancellationToken);
+            return false;
+        }
+
         if (result is PublishResult.Failed failed)
         {
             await FailPublishAsync(run, failed.Reason, failed.Transient, cancellationToken);
@@ -405,6 +411,19 @@ internal sealed class WorkerRunPublisher(
                 host);
             await HostPauseBroadcast.SendAsync(broadcaster, hostPaused: true, logger, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// The provider refused the account token: the attempt fails permanently, so the run waits for Retry publish, and
+    /// Monitoring is told in the same save, so it re-probes the repository's write access (ADR 0054).
+    /// </summary>
+    private async Task FailRefusedPublishAsync(PublishingRun run, string reason, CancellationToken cancellationToken)
+    {
+        await integrationEventDispatcher.DispatchAsync(
+            [new WorkerRunAccessRefused(run.Id, run.MonitoredRepositoryId.Value)],
+            cancellationToken);
+
+        await FailPublishAsync(run, reason, transient: false, cancellationToken);
     }
 
     private async Task FailPublishAsync(PublishingRun run, string reason, bool transient, CancellationToken cancellationToken)
