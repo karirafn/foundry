@@ -79,6 +79,7 @@ fi
 report docker docker --version
 report_package playwright-core "$CLAUDE_CODE_DIR/node_modules/playwright-core/package.json"
 report_package corepack "$CLAUDE_CODE_DIR/node_modules/corepack/package.json"
+report_package bats "$CLAUDE_CODE_DIR/node_modules/bats/package.json"
 report gh gh --version
 report glab glab --version
 report git git --version
