@@ -78,7 +78,7 @@
     width: 100%;
 
     &::placeholder {
-      color: var(--fd-text-tertiary);
+      color: var(--fd-text-secondary);
     }
 
     &:focus {
@@ -99,7 +99,7 @@
   &__oauth-note {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
-    line-height: var(--fd-line-height-base, 1.5);
+    line-height: 1.5;
   }
 
   &__note--warning {

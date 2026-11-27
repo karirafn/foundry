@@ -21,7 +21,7 @@
 
   // The rail's done-connector colour: the working accent would read as "Claude is working".
   &[data-status='done'] {
-    background: var(--fd-text-tertiary);
+    background: var(--fd-graphic-muted);
   }
 
   &[data-status='off'],
@@ -49,7 +49,7 @@
 
   &[data-motion='fill']::after {
     animation: fd-task-segment-fill var(--fd-motion-glide) var(--fd-ease-glide) both;
-    background: var(--fd-text-tertiary);
+    background: var(--fd-graphic-muted);
     border-radius: inherit;
     content: '';
     inset: 0;

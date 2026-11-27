@@ -36,7 +36,7 @@
       width: 2px;
     }
     &[data-line]::after {
-      background: var(--fd-text-tertiary);
+      background: var(--fd-graphic-muted);
       transform: scaleY(0);
       transform-origin: top;
     }

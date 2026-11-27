@@ -12,12 +12,14 @@
   /* Text */
   --fd-text-primary: #e6edf3;
   --fd-text-secondary: #8b949e;
-  --fd-text-tertiary: #6e7681;
   --fd-text-link: #58a6ff;
+
+  /* Graphics (icons, dots, bars): 3:1 (WCAG 1.4.11) */
+  --fd-graphic-muted: #6e7681;
 
   /* Borders */
   --fd-border-default: #30363d;
-  --fd-border-control: #6e7681; /* deliberate separate literal — control boundary ≠ text colour; currently equals --fd-text-tertiary but must be updated independently */
+  --fd-border-control: #6e7681; /* deliberate separate literal — control boundary ≠ graphic colour; currently equals --fd-graphic-muted but must be updated independently */
   --fd-border-muted: #21262d;
   /* Top-bar placeholders while the live pages wait for the connection (#894) */
   --fd-text-placeholder: #8b949e; /* 5.62:1 on --fd-bg-card */
