@@ -4,6 +4,7 @@
   @include settings-form-section;
   @include settings-form-field;
   @include settings-form-field-hint;
+  @include settings-form-inputs(number);
   @include settings-form-number-input;
   @include settings-form-errors;
   @include settings-form-save;

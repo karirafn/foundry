@@ -5,16 +5,21 @@
   @include settings-form-section;
   @include settings-form-field;
   @include settings-form-field-hint;
+  @include settings-form-inputs(number, text);
   @include settings-form-number-input;
   @include settings-form-text-input;
   @include settings-form-errors;
   @include settings-form-save;
-  @include settings-form-limits;
-  @include settings-form-checkbox-row;
 
-  &__dispatch-form,
-  &__limits-form {
+  &__limits-form,
+  &__dispatch-form {
     @include settings-form-stack;
+  }
+
+  @include settings-form-limits;
+
+  &__checkbox-label {
+    @include settings-form-checkbox-row;
   }
 
   &__webhook-port {

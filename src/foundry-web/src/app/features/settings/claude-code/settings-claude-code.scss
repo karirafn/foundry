@@ -3,34 +3,6 @@
 
 .general-settings {
   @include settings-form-section;
-  @include settings-form-field;
-  @include settings-form-field-hint;
-  @include settings-form-text-input;
-  @include settings-form-errors;
-  @include settings-form-save;
-
-  // WCAG 1.4.3: credential-status notes use --fd-text-secondary (not tertiary) for 4.5:1 at 0.75rem
-  &__field-hint--credential-status {
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
-  }
-
-  &__api-key-warning {
-    align-items: flex-start;
-    background: var(--fd-bg-warning-subtle);
-    border: 1px solid var(--fd-border-warning);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-warning);
-    display: flex;
-    font-size: 0.8125rem;
-    gap: var(--fd-spacing-sm);
-    overflow-wrap: break-word;
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-  }
-
-  &__api-key-warning-icon {
-    flex-shrink: 0;
-  }
 
   &__mode-fieldset {
     border: none;
@@ -62,14 +34,48 @@
     color: inherit;
   }
 
+  @include settings-form-field;
+  @include settings-form-field-hint;
+
+  // WCAG 1.4.3: credential-status notes use --fd-text-secondary (not tertiary) for 4.5:1 at 0.75rem
+  &__field-hint--credential-status {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+  }
+
+  // Same box, tint and text colour as settings-form-callout's warning callout.
+  &__api-key-warning {
+    align-items: flex-start;
+    border-radius: var(--fd-radius-sm);
+    display: flex;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-sm);
+    overflow-wrap: break-word;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__api-key-warning {
+    background: var(--fd-bg-warning-subtle);
+    border: 1px solid var(--fd-border-warning);
+  }
+
+  &__api-key-warning {
+    color: var(--fd-text-warning);
+  }
+
+  &__api-key-warning-icon {
+    flex-shrink: 0;
+  }
+
   &__api-key-wrapper {
     display: flex;
     align-items: center;
     gap: var(--fd-spacing-sm);
   }
 
+  @include settings-form-inputs(api-key, text);
+
   &__api-key-input {
-    @include settings-form-input-control;
     flex: 1;
     font-family: var(--fd-font-mono);
 
@@ -77,6 +83,8 @@
       color: var(--fd-text-tertiary);
     }
   }
+
+  @include settings-form-text-input;
 
   &__toggle-visibility-btn {
     align-items: center;
@@ -106,25 +114,8 @@
     font-size: 0.8125rem;
   }
 
-  &__switch-error {
-    color: var(--fd-text-error);
-    font-size: 0.875rem;
-    overflow-wrap: break-word;
-  }
-
-  &__scan-btn,
-  &__resume-btn {
-    align-self: flex-start;
-    background: transparent;
-    border-radius: var(--fd-radius-sm);
-    cursor: pointer;
-    font-size: 0.875rem;
-    min-height: 44px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
-
-    &:disabled { cursor: not-allowed; opacity: 0.5; }
-    &:focus-visible { @include focus-ring; }
-  }
+  @include settings-form-errors(switch);
+  @include settings-form-save(scan, resume);
 
   &__scan-btn {
     border: 1px solid var(--fd-border-default);
