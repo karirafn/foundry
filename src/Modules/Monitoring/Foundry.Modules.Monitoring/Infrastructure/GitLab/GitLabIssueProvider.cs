@@ -96,28 +96,6 @@ internal sealed partial class GitLabIssueProvider(
         return httpClient.GetBranchHeadAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
-    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        RepositorySlug slug,
-        string pullRequestUrl,
-        CancellationToken cancellationToken)
-    {
-        Result<MergeRequestSnapshot> snapshot = await httpClient.GetMergeRequestSnapshotAsync(
-            apiBaseUrl,
-            slug,
-            pullRequestUrl,
-            token,
-            cancellationToken);
-
-        if (snapshot is not Result<MergeRequestSnapshot>.Success success)
-        {
-            _snapshotsReadWithStatus.Remove(pullRequestUrl);
-            return Result<PullRequestStatus>.Fail(((Result<MergeRequestSnapshot>.Failure)snapshot).Error);
-        }
-
-        _snapshotsReadWithStatus[pullRequestUrl] = success.Value;
-        return Result<PullRequestStatus>.Ok(success.Value.Status);
-    }
-
     public async Task<Result<PullRequestState>> GetPullRequestStateAsync(
         RepositorySlug slug,
         string pullRequestUrl,

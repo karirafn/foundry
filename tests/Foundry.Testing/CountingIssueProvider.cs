@@ -29,7 +29,6 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int GetIssuesCallCount { get; private set; }
     public int GetDependenciesCallCount { get; private set; }
     public int IsIssueClosedCallCount { get; private set; }
-    public int GetPullRequestStatusCallCount { get; private set; }
     public int GetPullRequestStateCallCount { get; private set; }
     public int GetReviewFeedbackCallCount { get; private set; }
     public int GetBranchProtectionCallCount { get; private set; }
@@ -94,17 +93,6 @@ internal sealed class CountingIssueProvider : IIssueProvider
         TotalCalls++;
         IsIssueClosedCallCount++;
         return Task.FromResult(Result<bool>.Ok(false));
-    }
-
-    public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        RepositorySlug slug,
-        string pullRequestUrl,
-        CancellationToken cancellationToken)
-    {
-        TotalCalls++;
-        GetPullRequestStatusCallCount++;
-        return Task.FromResult(
-            Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
     }
 
     public Task<Result<PullRequestState>> GetPullRequestStateAsync(

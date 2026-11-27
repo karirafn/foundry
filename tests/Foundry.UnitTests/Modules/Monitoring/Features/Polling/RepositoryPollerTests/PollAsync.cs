@@ -2449,12 +2449,6 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.FromResult(Result<bool>.Ok(false));
         }
 
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            CancellationToken cancellationToken)
-            => throw new NotSupportedException();
-
         public Task<Result<PullRequestState>> GetPullRequestStateAsync(
             RepositorySlug slug,
             string pullRequestUrl,
@@ -2572,12 +2566,6 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<bool>.Fail(error));
         }
-
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            CancellationToken cancellationToken)
-            => throw new NotSupportedException();
 
         public Task<Result<PullRequestState>> GetPullRequestStateAsync(
             RepositorySlug slug,

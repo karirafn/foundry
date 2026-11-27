@@ -56,11 +56,6 @@ internal interface IIssueProvider
         CancellationToken cancellationToken)
         => Task.FromResult(Result<BranchHead>.Fail(TrackerReadErrors.NotSupported()));
 
-    Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        RepositorySlug slug,
-        string pullRequestUrl,
-        CancellationToken cancellationToken);
-
     /// <summary>
     /// Reads the state of the pull/merge request at <paramref name="pullRequestUrl"/> as one closed value. An
     /// unrecognised provider state fails with <see cref="PullRequestStateErrors.UnrecognisedCode"/>, and an open

@@ -38,12 +38,6 @@ internal sealed class ScriptedIssueProvider : IIssueProvider
         return Task.FromResult(PullRequestStateResult);
     }
 
-    public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-        RepositorySlug slug,
-        string pullRequestUrl,
-        CancellationToken cancellationToken)
-        => throw new NotSupportedException();
-
     public Task<Result<IssueListing>> GetIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

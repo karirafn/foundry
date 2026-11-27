@@ -39,8 +39,8 @@ internal sealed partial class GitLabHttpClient
         {
             MergeRequestPresence.Merged => Result<PullRequestState>.Ok(new PullRequestState.Merged()),
             MergeRequestPresence.Closed => Result<PullRequestState>.Ok(new PullRequestState.Closed()),
-            MergeRequestPresence.Open when CommitSha.TryFrom(snapshot.Status.HeadSha, out CommitSha head) =>
-                Result<PullRequestState>.Ok(new PullRequestState.Open(head, snapshot.Status.IsDraft)),
+            MergeRequestPresence.Open when CommitSha.TryFrom(snapshot.HeadSha, out CommitSha head) =>
+                Result<PullRequestState>.Ok(new PullRequestState.Open(head, snapshot.IsDraft)),
             MergeRequestPresence.Open => Result<PullRequestState>.Fail(PullRequestStateErrors.MissingHead()),
             _ => Result<PullRequestState>.Fail(PullRequestStateErrors.Unrecognised(snapshot.State)),
         };

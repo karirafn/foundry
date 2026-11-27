@@ -169,12 +169,6 @@ public sealed class WhenWriteProbeVerdictIsNull : IAsyncDisposable
             CancellationToken cancellationToken) =>
             Task.FromResult(Result<bool>.Ok(false));
 
-        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
-            RepositorySlug slug,
-            string pullRequestUrl,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null, IsDraft: false)));
-
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,
             string pullRequestUrl,

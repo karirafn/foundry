@@ -1,14 +1,13 @@
-using Foundry.Modules.Monitoring.Features.Providers;
-
 namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 /// <summary>
-/// One read of a GitLab merge request: its open/closed/merged status, its raw <c>state</c>, and the id and
+/// One read of a GitLab merge request: its raw <c>state</c>, head <c>sha</c>, draft flag, and the id and
 /// status of its <c>head_pipeline</c>, all from the same <c>GET projects/:id/merge_requests/:iid</c> response.
-/// The pipeline's failed jobs are not read here, so a status read stays a single request.
+/// The pipeline's failed jobs are not read here, so one read stays a single request.
 /// </summary>
 internal sealed record MergeRequestSnapshot(
-    PullRequestStatus Status,
     string? State,
+    string? HeadSha,
+    bool IsDraft,
     long? HeadPipelineId,
     string? HeadPipelineStatus);
