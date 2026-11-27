@@ -943,12 +943,7 @@ internal sealed partial class GitLabHttpClient(
 
     private static MergeRequestCandidate ToCandidate(GitLabMergeRequestStateDto dto)
     {
-        MergeRequestPresence presence = dto.State.ToLowerInvariant() switch
-        {
-            "merged" => MergeRequestPresence.Merged,
-            "opened" => MergeRequestPresence.Open,
-            _ => MergeRequestPresence.Closed,
-        };
+        MergeRequestPresence presence = ParsePullRequestState(dto.State) ?? MergeRequestPresence.Closed;
         CommitSha? head = CommitSha.TryFrom(dto.Sha, out CommitSha sha) ? sha : null;
 
         return new MergeRequestCandidate(presence, dto.WebUrl, dto.UpdatedAt, head);

@@ -467,4 +467,17 @@ public sealed class GetMergeRequestByBranchAsync
         // Assert
         result.ShouldBe(new MergeRequestByBranch(MergeRequestPresence.None, null));
     }
+
+    [Fact]
+    public async Task WhenOnlyMrIsLocked_ReturnsPresenceOpen()
+    {
+        // Act
+        MergeRequestByBranch result = await LookUpWithPublishedHeadAsync(
+            MergeRequestJson(5, "locked", "2026-06-01T10:00:00.000Z", OtherSha));
+
+        // Assert
+        result.ShouldBe(new MergeRequestByBranch(
+            MergeRequestPresence.Open,
+            "https://gitlab.com/group/project/-/merge_requests/5"));
+    }
 }

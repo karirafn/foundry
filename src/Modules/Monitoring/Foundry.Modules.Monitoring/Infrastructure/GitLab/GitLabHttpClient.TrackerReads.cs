@@ -15,9 +15,6 @@ internal sealed partial class GitLabHttpClient
     private const int OpenIssuesPerPage = 100;
     private const int IssueLinksPerPage = 100;
     private const string OpenedState = "opened";
-    private const string LockedState = "locked";
-    private const string MergedState = "merged";
-    private const string ClosedState = "closed";
 
     /// <summary>
     /// Reads the links of <paramref name="issueNumber"/> (<c>GET /projects/:id/issues/:issue_iid/links</c>),
@@ -218,11 +215,11 @@ internal sealed partial class GitLabHttpClient
         IReadOnlyList<GitLabClosingMergeRequestDto> closingMergeRequests)
     {
         return closingMergeRequests
-            .Select(mergeRequest => mergeRequest.State switch
+            .Select(mergeRequest => ParsePullRequestState(mergeRequest.State) switch
             {
-                MergedState => ClosingMergeRequestState.Merged,
-                OpenedState or LockedState => ClosingMergeRequestState.Open,
-                ClosedState => ClosingMergeRequestState.Closed,
+                MergeRequestPresence.Merged => ClosingMergeRequestState.Merged,
+                MergeRequestPresence.Open => ClosingMergeRequestState.Open,
+                MergeRequestPresence.Closed => ClosingMergeRequestState.Closed,
                 _ => ClosingMergeRequestState.None,
             })
             .DefaultIfEmpty(ClosingMergeRequestState.None)

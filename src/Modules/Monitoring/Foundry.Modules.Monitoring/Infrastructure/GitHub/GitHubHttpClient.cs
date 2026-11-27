@@ -1550,11 +1550,8 @@ internal sealed partial class GitHubHttpClient(
 
     private static MergeRequestCandidate ToCandidate(GitHubPullRequestStateDto dto)
     {
-        MergeRequestPresence presence = dto.MergedAt is not null
-            ? MergeRequestPresence.Merged
-            : string.Equals(dto.State, "open", StringComparison.OrdinalIgnoreCase)
-                ? MergeRequestPresence.Open
-                : MergeRequestPresence.Closed;
+        MergeRequestPresence presence =
+            ParseRestPullRequestState(dto.State, dto.MergedAt) ?? MergeRequestPresence.Closed;
         CommitSha? head = CommitSha.TryFrom(dto.Head?.Sha, out CommitSha sha) ? sha : null;
 
         return new MergeRequestCandidate(presence, dto.HtmlUrl, dto.UpdatedAt, head);

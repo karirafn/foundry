@@ -207,11 +207,11 @@ internal sealed partial class GitHubHttpClient
         IReadOnlyList<ReferencedIssueClosingPullRequest> closingPullRequests)
     {
         return closingPullRequests
-            .Select(pullRequest => pullRequest.State switch
+            .Select(pullRequest => ParseGraphQlPullRequestState(pullRequest.State) switch
             {
-                "MERGED" => ClosingMergeRequestState.Merged,
-                "OPEN" => ClosingMergeRequestState.Open,
-                "CLOSED" => ClosingMergeRequestState.Closed,
+                MergeRequestPresence.Merged => ClosingMergeRequestState.Merged,
+                MergeRequestPresence.Open => ClosingMergeRequestState.Open,
+                MergeRequestPresence.Closed => ClosingMergeRequestState.Closed,
                 _ => ClosingMergeRequestState.None,
             })
             .DefaultIfEmpty(ClosingMergeRequestState.None)
