@@ -181,7 +181,25 @@ public sealed class CreatePullRequestAsync
     [Theory]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
+    public async Task WhenProviderRefusesTheToken_FailsRefused(HttpStatusCode statusCode)
+    {
+        // Arrange
+        SequentialFakeHandler handler = new([(HttpStatusCode.OK, RepoJson), (statusCode, """{ "message": "nope" }""")]);
+        GitHubIssueProvider sut = BuildSut(handler);
+
+        // Act
+        Result<string> result = await CreateAsync(sut);
+
+        // Assert
+        Error error = result.ErrorOrThrow();
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(RunPublishingErrors.RefusedCode),
+            () => error.Message.ShouldContain($"returned {(int)statusCode}"));
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.BadRequest)]
     public async Task WhenProviderRejectsTheRequest_FailsPermanent(HttpStatusCode statusCode)
     {
         // Arrange
